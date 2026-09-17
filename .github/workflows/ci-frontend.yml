@@ -42,7 +42,7 @@ jobs:
           SUPABASE_STAGING_PROJECT_ID: ${{ secrets.SUPABASE_STAGING_PROJECT_ID }}
 
       - name: Environment and report regression tests
-        run: node --test scripts/edge-deploy-plan.test.mjs scripts/deploy-edge.test.mjs supabase/functions/_shared/staging-outbound.test.mjs src/lib/reportRecords.test.ts src/lib/leadTableLayout.test.ts
+        run: node --test scripts/edge-deploy-plan.test.mjs scripts/deploy-edge.test.mjs supabase/functions/_shared/staging-outbound.test.mjs src/lib/reportRecords.test.ts src/lib/leadTableLayout.test.ts src/lib/leadTableColumns.test.ts
 
       - name: Mirror contract tests
         run: python3 -m unittest discover -s scripts -p 'test_staging_mirror.py'

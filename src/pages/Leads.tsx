@@ -76,6 +76,7 @@ import { ChatTagsManager } from "@/components/chat/ChatTagsManager";
 import { ImportLeadsSheet } from "@/components/forms/ImportLeadsSheet";
 import { FollowUpDatePicker } from "@/components/leads/FollowUpDatePicker";
 import { LeadsChatView } from "@/components/leads/LeadsChatView";
+import { LeadTableColumnsDialog } from "@/components/leads/LeadTableColumnsDialog";
 import { archiveLeads, excludeArchivedLeads } from "@/lib/leadArchive";
 import { leadSearchOrFilter } from "@/lib/leadPhone";
 import {
@@ -99,6 +100,7 @@ import {
   type SurfaceSalesPerson,
   LEAD_TABLE_LAYOUT_STORAGE_KEY,
 } from "@/lib/leadTableLayout";
+import { isLeadTableColumnVisible } from "@/lib/leadTableColumns";
 
 
 // Lets nested cards/table rows ask the page to open a lead in the chat view (instead of a modal).
@@ -723,7 +725,7 @@ export default function Leads() {
   const { toast } = useToast();
   const { selectedAgency, setSelectedAgency, agencies } = useAgency();
   const { userAgencyIds } = useUserAgencies();
-  const { isOwner } = useUserRole();
+  const { isOwner, isSuperAdmin } = useUserRole();
   const { tenantId } = useCurrentTenant();
   const { userId } = useCurrentUser();
   const { activeStatuses: leadStatuses } = useLeadStatuses();
@@ -2510,7 +2512,10 @@ export default function Leads() {
         </div>
 
         {viewMode === "table" && (
-          <LeadTableLayoutToggle value={tableLayout} onChange={setTableLayout} />
+          <div className="flex items-center gap-2">
+            <LeadTableLayoutToggle value={tableLayout} onChange={setTableLayout} />
+            {(isOwner || isSuperAdmin) && <LeadTableColumnsDialog />}
+          </div>
         )}
         {viewMode === "table" && (
           <div className="sticky top-0 z-30 bg-background">
@@ -2686,6 +2691,9 @@ export default function Leads() {
           />
           
           <div className="flex shrink-0 items-center gap-2">
+            {viewMode === "table" && (isOwner || isSuperAdmin) && (
+              <LeadTableColumnsDialog />
+            )}
             <ManageLeadStatusesDialog 
               trigger={
                 <Button variant="outline" size="icon" className="h-9 w-9 shrink-0" title="ניהול סטטוסי לידים">
@@ -3193,7 +3201,7 @@ function TableWithStickyScroll({ stageLeads, totalLeadsCount, overallTotalCount 
   const { selectedAgency } = useAgency();
   const { activeStatuses: leadStatuses, isLoading: isStatusesLoading } = useLeadStatuses();
   const { activeStages: pipelineStagesData } = useLeadPipelineStages();
-  const { isFieldVisible } = useCustomFieldLabels('lead');
+  const { isFieldVisible, getFieldLabel } = useCustomFieldLabels('lead');
   const { tenantId } = useCurrentTenant();
 
   // Fetch sales people for assignment
@@ -3690,7 +3698,7 @@ function TableWithStickyScroll({ stageLeads, totalLeadsCount, overallTotalCount 
           columns={[
             { 
               id: "name", 
-              label: "שם", 
+              label: getFieldLabel("contact_name", "שם"), 
               width: 120, 
               sticky: true,
               render: (lead: any) => (
@@ -3700,23 +3708,23 @@ function TableWithStickyScroll({ stageLeads, totalLeadsCount, overallTotalCount 
                 </div>
               )
             },
-            {
+            ...(isLeadTableColumnVisible("created_at", isFieldVisible) ? [{
               id: "created_at",
-              label: "תאריך",
+              label: getFieldLabel("created_at", "תאריך"),
               width: 160,
               render: (lead: any) => <LeadCreatedAtLines lead={lead} compact />
-            },
-            {
+            }] : []),
+            ...(isLeadTableColumnVisible("sales_person", isFieldVisible) ? [{
               id: "sales_person",
-              label: "משתמש",
+              label: getFieldLabel("sales_person", "משתמש"),
               width: 140,
               render: (lead: any) => (
                 <span className="truncate">{lead.sales_people?.full_name || "ללא שיוך"}</span>
               )
-            },
-            { 
+            }] : []),
+            ...(isLeadTableColumnVisible("phone", isFieldVisible) ? [{ 
               id: "phone", 
-              label: "טלפון", 
+              label: getFieldLabel("phone", "טלפון"), 
               width: 130,
               render: (lead: any) => lead.phone ? (
                 <a href={`tel:${lead.phone}`} className="hover:underline flex items-center gap-1">
@@ -3724,10 +3732,10 @@ function TableWithStickyScroll({ stageLeads, totalLeadsCount, overallTotalCount 
                   <span className="truncate">{lead.phone}</span>
                 </a>
               ) : "-"
-            },
-            ...(isFieldVisible('company_name') ? [{ 
+            }] : []),
+            ...(isLeadTableColumnVisible("company_name", isFieldVisible) ? [{ 
               id: "company", 
-              label: "שם חברה", 
+              label: getFieldLabel("company_name", "שם חברה"), 
               width: 170,
               render: (lead: any) => (
                 <div className="flex items-center gap-2">
@@ -3736,9 +3744,9 @@ function TableWithStickyScroll({ stageLeads, totalLeadsCount, overallTotalCount 
                 </div>
               )
             }] : []),
-            ...(isFieldVisible('campaign_name') ? [{
+            ...(isLeadTableColumnVisible("campaign_name", isFieldVisible) ? [{
               id: "campaign_name",
-              label: "שם קמפיין",
+              label: getFieldLabel("campaign_name", "שם קמפיין"),
               width: 180,
               render: (lead: any) => (
                 <span className="truncate" title={lead.campaign_name || ""}>
@@ -3746,17 +3754,17 @@ function TableWithStickyScroll({ stageLeads, totalLeadsCount, overallTotalCount 
                 </span>
               )
             }] : []),
-            {
+            ...(isLeadTableColumnVisible("source", isFieldVisible) ? [{
               id: "source",
-              label: "מקור הליד",
+              label: getFieldLabel("source", "מקור הליד"),
               width: 140,
               render: (lead: any) => (
                 <LeadSourceLines lead={lead} compact showCampaign={false} />
               )
-            },
-            { 
+            }] : []),
+            ...(isLeadTableColumnVisible("status", isFieldVisible) ? [{ 
               id: "status", 
-              label: "שלב במשפך", 
+              label: getFieldLabel("status", "שלב במשפך"), 
               width: 150,
               render: (lead: any) => {
                 const stage = PIPELINE_STAGES.find(s => s.id === lead.status);
@@ -3806,10 +3814,10 @@ function TableWithStickyScroll({ stageLeads, totalLeadsCount, overallTotalCount 
                   </Select>
                 );
               }
-            },
-            { 
+            }] : []),
+            ...(isLeadTableColumnVisible("response_status", isFieldVisible) ? [{ 
               id: "response_status", 
-              label: "סטטוס", 
+              label: getFieldLabel("response_status", "סטטוס"), 
               width: 150,
               render: (lead: any) => {
                 const status = findLeadStatus(lead.response_status, leadStatuses);
@@ -3869,10 +3877,10 @@ function TableWithStickyScroll({ stageLeads, totalLeadsCount, overallTotalCount 
                   </Select>
                 );
               }
-            },
-            { 
+            }] : []),
+            ...(isLeadTableColumnVisible("tags", isFieldVisible) ? [{ 
               id: "tags", 
-              label: "תגיות", 
+              label: getFieldLabel("tags", "תגיות"), 
               width: 200,
               render: (lead: any) => {
                 const tagIds = leadsTagsMap[lead.id] || [];
@@ -3890,10 +3898,10 @@ function TableWithStickyScroll({ stageLeads, totalLeadsCount, overallTotalCount 
                   </div>
                 );
               }
-            },
-            { 
+            }] : []),
+            ...(isLeadTableColumnVisible("follow_up_date", isFieldVisible) ? [{ 
               id: "follow_up_date", 
-              label: "תאריך לחזרה", 
+              label: getFieldLabel("follow_up_date", "תאריך לחזרה"), 
               width: 150,
               render: (lead: any) => (
                 <FollowUpDatePicker 
@@ -3901,10 +3909,10 @@ function TableWithStickyScroll({ stageLeads, totalLeadsCount, overallTotalCount 
                   currentDate={lead.follow_up_date}
                 />
               )
-            },
+            }] : []),
             { 
               id: "actions", 
-              label: "פעולות", 
+              label: getFieldLabel("actions", "פעולות"), 
               width: 120,
               render: (lead: any) => (
                 <div className="flex justify-center gap-1">
