@@ -10,6 +10,11 @@ import {
   linkTaskToGoal,
   logGoalEvent,
 } from "../_shared/goal-execution.ts";
+import {
+  createAutonomousGoal,
+  getAutonomousGoalStatus,
+  runGoalIteration,
+} from "../_shared/autonomous-goal-engine.ts";
 
 const cors = {
   "Access-Control-Allow-Origin": "*",
@@ -151,6 +156,42 @@ serve(async (req) => {
     if (action === "report") {
       const report = await getGoalExecutionReport(supabase, tenantId, String(body.id), Number(body.since_hours) || 24);
       return json({ report });
+    }
+
+    if (action === "autonomous_create") {
+      const title = String(body.title || "").trim();
+      if (!title) return json({ error: "title required" }, 400);
+      const result = await createAutonomousGoal(supabase, {
+        tenantId,
+        title,
+        objective: body.objective,
+        description: body.description,
+        constraints: body.constraints,
+        scope: body.scope,
+        riskLevel: body.risk_level,
+        successCriteria: body.success_criteria,
+        agentId: body.agent_id,
+        actorUserId: userId,
+        priority: body.priority,
+      });
+      return json(result);
+    }
+
+    if (action === "autonomous_status") {
+      const id = String(body.id || body.goal_id || "");
+      if (!id) return json({ error: "id required" }, 400);
+      const status = await getAutonomousGoalStatus(supabase, tenantId, id);
+      if (!status) return json({ error: "goal not found" }, 404);
+      return json({ status });
+    }
+
+    if (action === "autonomous_run_iteration") {
+      const id = String(body.id || body.goal_id || "");
+      if (!id) return json({ error: "id required" }, 400);
+      const holder = userId ? `user:${userId}` : "api";
+      const outcome = await runGoalIteration(supabase, tenantId, id, holder);
+      const status = await getAutonomousGoalStatus(supabase, tenantId, id);
+      return json({ outcome, status });
     }
 
     return json({ error: `unknown action: ${action}` }, 400);
