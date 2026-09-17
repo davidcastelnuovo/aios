@@ -12,6 +12,7 @@ import AddTaskForm from "@/components/forms/AddTaskForm";
 import { TaskDetailDialog } from "@/components/tasks/TaskDetailDialog";
 import { EntityTaskCard } from "@/components/tasks/EntityTaskCard";
 import { withTaskCreatorNames } from "@/lib/taskCreators";
+import { chunkIds } from "@/lib/taskFilters";
 import { useCurrentTenant } from "@/hooks/useCurrentTenant";
 import { useCrossTenantAgencyIds } from "@/hooks/useCrossTenantAgencyIds";
 
@@ -32,45 +33,62 @@ export function CampaignerTasksTab({ campaignerId, campaignerName }: CampaignerT
   const { data: tasks, isLoading } = useQuery({
     queryKey: ["campaigner-tasks", tenantId, campaignerId, dateFilter, crossTenantAgencyIds.join(",")],
     queryFn: async () => {
-      let query = supabase
-        .from("tasks")
-        .select(`
+      const TASK_SELECT = `
           *,
           campaigners (full_name),
           agencies (name),
           clients (name),
           leads (company_name)
-        `)
-        .order("due_date", { ascending: false });
+        `;
 
       const { data: collabRows } = await supabase
         .from("task_collaborators")
         .select("task_id")
         .eq("campaigner_id", campaignerId);
       const collaboratorTaskIds = Array.from(new Set((collabRows || []).map((row) => row.task_id)));
-      query = collaboratorTaskIds.length > 0
-        ? query.or(`campaigner_id.eq.${campaignerId},id.in.(${collaboratorTaskIds.join(",")})`)
-        : query.eq("campaigner_id", campaignerId);
 
-      if (crossTenantAgencyIds.length > 0) {
-        query = query.or(`tenant_id.eq.${tenantId},agency_id.in.(${crossTenantAgencyIds.join(",")})`);
-      } else {
-        query = query.eq("tenant_id", tenantId!);
-      }
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const applyTabFilters = (q: any) => {
+        if (crossTenantAgencyIds.length > 0) {
+          q = q.or(`tenant_id.eq.${tenantId},agency_id.in.(${crossTenantAgencyIds.join(",")})`);
+        } else {
+          q = q.eq("tenant_id", tenantId!);
+        }
+        if (dateFilter === "week") {
+          const weekAgo = new Date();
+          weekAgo.setDate(weekAgo.getDate() - 7);
+          q = q.gte("created_at", weekAgo.toISOString());
+        } else if (dateFilter === "month") {
+          const monthAgo = new Date();
+          monthAgo.setDate(monthAgo.getDate() - 30);
+          q = q.gte("created_at", monthAgo.toISOString());
+        }
+        return q;
+      };
 
-      if (dateFilter === "week") {
-        const weekAgo = new Date();
-        weekAgo.setDate(weekAgo.getDate() - 7);
-        query = query.gte("created_at", weekAgo.toISOString());
-      } else if (dateFilter === "month") {
-        const monthAgo = new Date();
-        monthAgo.setDate(monthAgo.getDate() - 30);
-        query = query.gte("created_at", monthAgo.toISOString());
-      }
-
-      const { data, error } = await query;
+      const { data, error } = await applyTabFilters(
+        supabase
+          .from("tasks")
+          .select(TASK_SELECT)
+          .eq("campaigner_id", campaignerId)
+          .order("due_date", { ascending: false }),
+      );
       if (error) throw error;
-      return withTaskCreatorNames(data || []);
+      let rows = data || [];
+      const have = new Set(rows.map((task: { id: string }) => task.id));
+      const missing = collaboratorTaskIds.filter((id) => !have.has(id));
+      for (const chunk of chunkIds(missing)) {
+        const { data: extra, error: extraError } = await applyTabFilters(
+          supabase
+            .from("tasks")
+            .select(TASK_SELECT)
+            .in("id", chunk)
+            .order("due_date", { ascending: false }),
+        );
+        if (extraError) throw extraError;
+        rows = rows.concat(extra || []);
+      }
+      return withTaskCreatorNames(rows);
     },
     enabled: !!campaignerId && !!tenantId,
   });

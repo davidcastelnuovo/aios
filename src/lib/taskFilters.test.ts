@@ -13,6 +13,7 @@ import {
   isMineQueueFilter,
   taskMatchesActivityPeriod,
   taskTouchesCampaigner,
+  chunkIds,
 } from "./taskFilters.ts";
 
 test("the tasks board opens on my tasks and tasks I assigned", () => {
@@ -72,6 +73,29 @@ test("filterTasksByCampaignerBoardFilter keeps only mine assignments", () => {
     filterTasksByCampaignerBoardFilter(rows, "staff-other", mine).map((task) => task.id),
     ["2"],
   );
+});
+
+test("chunkIds splits long id lists for PostgREST .in()", () => {
+  assert.deepEqual(chunkIds(["a", "b", "c"], 2), [["a", "b"], ["c"]]);
+  assert.deepEqual(chunkIds([], 80), []);
+});
+
+test("collaborator_for_me keeps a task in mine without embed rows", () => {
+  const rows = [
+    { id: "collab", campaigner_id: "staff-other", sales_person_id: null, created_by: "user-other", collaborator_for_me: true },
+    { id: "unrelated", campaigner_id: "staff-other", sales_person_id: null, created_by: "user-other" },
+  ];
+  const mine = {
+    kind: "assigned" as const,
+    campaignerId: "staff-itay",
+    userId: "user-itay",
+    campaignerIds: ["staff-itay"],
+  };
+  assert.deepEqual(
+    filterTasksByCampaignerBoardFilter(rows, "mine", mine).map((task) => task.id),
+    ["collab"],
+  );
+  assert.equal(taskTouchesCampaigner(rows[0], "staff-itay"), true);
 });
 
 test("mine includes tasks where I am a collaborator", () => {

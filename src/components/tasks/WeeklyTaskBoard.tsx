@@ -55,6 +55,7 @@ import {
 import { fetchActiveCampaigners } from "@/lib/taskCampaigners";
 import { buildMineQueueOrFilter, fetchMineTaskIdentity } from "@/lib/mineTaskIdentity";
 import {
+  chunkIds,
   filterTasksByCampaignerBoardFilter,
   filterTasksByRelatedEntity,
   filterTasksForBoardUserPreview,
@@ -250,7 +251,7 @@ export function WeeklyTaskBoard() {
           clients (name, agency_id),
           campaigners (full_name),
           task_updates (count),
-          task_collaborators (campaigner_id)
+          task_collaborators (count)
         `)
         .eq("id", linkedTaskId)
         .maybeSingle();
@@ -406,16 +407,16 @@ export function WeeklyTaskBoard() {
       const rangeStartStr = format(dateRange.start, "yyyy-MM-dd");
       const rangeEndStr = format(dateRange.end, "yyyy-MM-dd");
       
-      let query = supabase
-        .from("tasks")
-        .select(`
+      const TASK_BOARD_SELECT = `
           *,
           clients (name, agency_id),
           leads (company_name, contact_name),
           campaigners (full_name),
           task_updates (count),
-          task_collaborators (campaigner_id)
-        `);
+          task_collaborators (count)
+        `;
+
+      let query = supabase.from("tasks").select(TASK_BOARD_SELECT);
 
       // Tenant scope only. The header agency is applied after the fetch, on the
       // task's effective agency (its client's agency when it has one), because
@@ -462,64 +463,104 @@ export function WeeklyTaskBoard() {
       );
 
       // Personal queue: assigned to me ("mine") or assigned to me + created by me.
+      // Collaborator tasks are fetched in a second query — do not stuff hundreds of
+      // UUIDs into this .or() or PostgREST 400s and the board never loads.
+      let skipAssignedQuery = false;
       if (isMineQueueFilter(effectiveCampaignerFilter)) {
         const mine = mineIdentity!;
         const mode = effectiveCampaignerFilter === "mine_assigned" ? "mine_assigned" : "mine";
         const queueOr = buildMineQueueOrFilter(mine, mode);
-        const mineParts: string[] = [];
-        if (queueOr) mineParts.push(queueOr);
-        if (collaboratorTaskIds.length > 0) {
-          mineParts.push(`id.in.(${collaboratorTaskIds.join(",")})`);
-        }
-        if (mineParts.length > 0) {
+        if (queueOr) {
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          query = (query as any).or(mineParts.join(","));
-        } else {
-          // No staff row linked and no created_by fallback — would otherwise return the tenant.
+          query = (query as any).or(queueOr);
+        } else if (collaboratorTaskIds.length === 0) {
           return [];
+        } else {
+          skipAssignedQuery = true;
         }
       } else if (effectiveCampaignerFilter === "none") {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         query = (query as any).is("campaigner_id", null);
       } else if (effectiveCampaignerFilter !== "all") {
-        const namedParts = [`campaigner_id.eq.${effectiveCampaignerFilter}`];
-        if (collaboratorTaskIds.length > 0) {
-          namedParts.push(`id.in.(${collaboratorTaskIds.join(",")})`);
-        }
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        query = (query as any).or(namedParts.join(","));
+        query = (query as any).eq("campaigner_id", effectiveCampaignerFilter);
       }
 
-      // Apply task type filter
-      if (filters.taskType !== "all") {
-        query = query.eq("task_type", filters.taskType as "campaign" | "collection" | "creative" | "other");
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const applyBoardFilters = (q: any) => {
+        if (filters.taskType !== "all") {
+          q = q.eq("task_type", filters.taskType as "campaign" | "collection" | "creative" | "other");
+        }
+        if (filters.relatedKind === "client" && filters.relatedId) {
+          q = q.eq("client_id", filters.relatedId);
+        } else if (filters.relatedKind === "lead" && filters.relatedId) {
+          q = q.eq("lead_id", filters.relatedId);
+        } else if (filters.relatedKind === "none") {
+          q = q.is("client_id", null).is("lead_id", null);
+        } else if (filters.association === "clients") {
+          q = q.not("client_id", "is", null);
+        } else if (filters.association === "leads") {
+          q = q.not("lead_id", "is", null);
+        } else if (filters.association === "general") {
+          q = q.is("client_id", null).is("lead_id", null);
+        } else if (filters.association === "unassigned") {
+          q = q.is("client_id", null);
+        }
+        return q;
+      };
+
+      query = applyBoardFilters(query);
+
+      let taskRows: FullTask[] = [];
+      if (!skipAssignedQuery) {
+        const { data, error } = await query
+          .order("due_date", { ascending: true })
+          .order("created_at", { ascending: true })
+          .order("sort_order", { ascending: true });
+
+        if (error) throw error;
+        taskRows = (data || []) as FullTask[];
       }
 
-      // Apply association filter
-      if (filters.relatedKind === "client" && filters.relatedId) {
-        query = query.eq("client_id", filters.relatedId);
-      } else if (filters.relatedKind === "lead" && filters.relatedId) {
-        query = query.eq("lead_id", filters.relatedId);
-      } else if (filters.relatedKind === "none") {
-        query = query.is("client_id", null).is("lead_id", null);
-      } else if (filters.association === "clients") {
-        query = query.not("client_id", "is", null);
-      } else if (filters.association === "leads") {
-        query = query.not("lead_id", "is", null);
-      } else if (filters.association === "general") {
-        query = query.is("client_id", null).is("lead_id", null);
-      } else if (filters.association === "unassigned") {
-        query = query.is("client_id", null);
+      if (collaboratorTaskIds.length > 0) {
+        const have = new Set(taskRows.map((task) => task.id));
+        const missing = collaboratorTaskIds.filter((id) => !have.has(id));
+        const dueOr = viewMode === "chat"
+          ? buildChatTaskOrFilter({
+              today,
+              doneSince: activitySince ?? format(addDays(startOfDay(new Date()), -14), "yyyy-MM-dd"),
+              activitySince,
+            })
+          : buildTaskDueDateOrFilter({
+              rangeStart: rangeStartStr,
+              rangeEnd: rangeEndStr,
+              today,
+            });
+        for (const chunk of chunkIds(missing)) {
+          const extraQuery = applyBoardFilters(
+            supabase
+              .from("tasks")
+              .select(TASK_BOARD_SELECT)
+              .in("id", chunk)
+              .or(buildTasksBoardScopeOrFilter(boardScope))
+              .or(dueOr),
+          );
+          const { data: extra, error: extraError } = await extraQuery;
+          if (extraError) throw extraError;
+          taskRows = taskRows.concat((extra || []) as FullTask[]);
+        }
       }
 
+      const seen = new Set<string>();
+      const collabSet = new Set(collaboratorTaskIds);
+      taskRows = taskRows.filter((task) => {
+        if (seen.has(task.id)) return false;
+        seen.add(task.id);
+        return true;
+      }).map((task) => (
+        collabSet.has(task.id) ? { ...task, collaborator_for_me: true } : task
+      ));
 
-      const { data, error } = await query
-        .order("due_date", { ascending: true })
-        .order("created_at", { ascending: true })
-        .order("sort_order", { ascending: true });
-
-      if (error) throw error;
-      const taskRows = (data || []) as FullTask[];
       const creatorIds = Array.from(new Set(
         taskRows.map((task) => task.created_by).filter((id): id is string => Boolean(id))
       ));

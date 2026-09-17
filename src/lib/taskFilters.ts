@@ -197,11 +197,19 @@ export type MineTaskIdentity = MineTaskAssignee & {
 };
 
 type CampaignerBoardTask = {
+  id?: string;
   campaigner_id?: string | null;
   sales_person_id?: string | null;
   created_by?: string | null;
   task_collaborators?: { campaigner_id?: string | null }[] | null;
+  collaborator_for_me?: boolean;
 };
+
+export function chunkIds(ids: string[], size = 80): string[][] {
+  const chunks: string[][] = [];
+  for (let i = 0; i < ids.length; i += size) chunks.push(ids.slice(i, i + size));
+  return chunks;
+}
 
 export function taskCollaboratorCampaignerIds(
   task: Pick<CampaignerBoardTask, "task_collaborators">,
@@ -215,6 +223,7 @@ export function taskTouchesCampaigner(
   task: CampaignerBoardTask,
   campaignerId: string,
 ): boolean {
+  if (task.collaborator_for_me) return true;
   if (!campaignerId) return false;
   if (task.campaigner_id === campaignerId) return true;
   return taskCollaboratorCampaignerIds(task).includes(campaignerId);
@@ -227,6 +236,7 @@ export function matchesMineQueueTask(
   mode: "mine" | "mine_assigned",
 ): boolean {
   const campaignerIds = new Set(mine.campaignerIds);
+  if (task.collaborator_for_me) return true;
   if (task.campaigner_id && campaignerIds.has(task.campaigner_id)) return true;
   if (taskCollaboratorCampaignerIds(task).some((id) => campaignerIds.has(id))) return true;
   if (mine.kind === "assigned" && mine.salesPersonId && task.sales_person_id === mine.salesPersonId) {
@@ -264,6 +274,7 @@ export function filterTasksForBoardUserPreview<T extends CampaignerBoardTask>(
   const campaignerIds = new Set(mine.campaignerIds);
   return tasks.filter((task) => {
     if (task.created_by === boardUserId) return true;
+    if (task.collaborator_for_me) return true;
     if (task.campaigner_id && campaignerIds.has(task.campaigner_id)) return true;
     if (taskCollaboratorCampaignerIds(task).some((id) => campaignerIds.has(id))) return true;
     if (mine.kind === "assigned" && mine.salesPersonId && task.sales_person_id === mine.salesPersonId) {
