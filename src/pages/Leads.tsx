@@ -613,6 +613,44 @@ function LeadTableLayoutToggle({
   );
 }
 
+function LeadsPaginationBar({
+  page,
+  totalPages,
+  isFetching,
+  onPageChange,
+}: {
+  page: number;
+  totalPages: number;
+  isFetching: boolean;
+  onPageChange: (nextPage: number) => void;
+}) {
+  if (totalPages <= 1) return null;
+  return (
+    <div className="flex flex-wrap justify-center items-center gap-3 py-2">
+      <Button
+        variant="outline"
+        size="sm"
+        onClick={() => onPageChange(Math.max(1, page - 1))}
+        disabled={page === 1 || isFetching}
+      >
+        הקודם →
+      </Button>
+      <span className="text-sm text-muted-foreground whitespace-nowrap">
+        עמוד {page} מתוך {totalPages}
+        {isFetching ? <span className="animate-pulse mr-2">טוען...</span> : null}
+      </span>
+      <Button
+        variant="outline"
+        size="sm"
+        onClick={() => onPageChange(Math.min(totalPages, page + 1))}
+        disabled={page === totalPages || isFetching}
+      >
+        ← הבא
+      </Button>
+    </div>
+  );
+}
+
 // Bubble pop animation
 const playBubbleAnimation = () => {
   // Create bubble sound using Web Audio API
@@ -1363,6 +1401,11 @@ export default function Leads() {
 
   const totalPages = Math.ceil(totalLeadsCount / TABLE_LEADS_PER_PAGE);
   const hasMorePages = page < totalPages;
+
+  const goToPage = (nextPage: number) => {
+    setPage(nextPage);
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  };
 
   // 🔒 SECURITY GUARD: Filter leads by current tenant and accessible agencies
   const secureFilteredLeads = useMemo(() => {
@@ -2463,38 +2506,21 @@ export default function Leads() {
                 <MessageCircle className="h-4 w-4" />
               </Button>
             </div>
-
-            {/* Mobile Pagination (Table view only) */}
-            {!isKanbanView && totalPages > 1 && (
-              <div className="flex items-center gap-1">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setPage((p) => Math.max(1, p - 1))}
-                  disabled={page === 1 || isFetching}
-                  className="h-8 px-2"
-                >
-                  ←
-                </Button>
-                <span className="text-xs text-muted-foreground whitespace-nowrap px-1">
-                  {page}/{totalPages}
-                </span>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-                  disabled={page === totalPages || isFetching}
-                  className="h-8 px-2"
-                >
-                  →
-                </Button>
-              </div>
-            )}
           </div>
         </div>
 
         {viewMode === "table" && (
           <LeadTableLayoutToggle value={tableLayout} onChange={setTableLayout} />
+        )}
+        {viewMode === "table" && (
+          <div className="sticky top-0 z-30 bg-background">
+            <LeadsPaginationBar
+              page={page}
+              totalPages={totalPages}
+              isFetching={isFetching}
+              onPageChange={goToPage}
+            />
+          </div>
         )}
 
         <div
@@ -2566,31 +2592,6 @@ export default function Leads() {
                 <>מציג: {filteredLeads?.length || 0} {totalPages > 1 && `(מתוך ${totalLeadsCount})`}</>
               )}
             </Badge>
-            
-            {/* Pagination controls in header */}
-            {totalPages > 1 && (
-              <div className="flex items-center gap-2 mr-4 border-r pr-4">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setPage(p => Math.max(1, p - 1))}
-                  disabled={page === 1 || isFetching}
-                >
-                  הקודם →
-                </Button>
-                <span className="text-sm text-muted-foreground whitespace-nowrap">
-                  עמוד {page} מתוך {totalPages}
-                </span>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setPage(p => Math.min(totalPages, p + 1))}
-                  disabled={page === totalPages || isFetching}
-                >
-                  ← הבא
-                </Button>
-              </div>
-            )}
           </div>
           <div className="flex gap-3 items-center">
             {/* View mode toggle */}
@@ -2711,6 +2712,14 @@ export default function Leads() {
             </Button>
           </div>
         </div>
+        {viewMode === "table" && (
+          <LeadsPaginationBar
+            page={page}
+            totalPages={totalPages}
+            isFetching={isFetching}
+            onPageChange={goToPage}
+          />
+        )}
       </div>
       
       {/* Filters Dialog */}
@@ -3135,43 +3144,27 @@ export default function Leads() {
       )}
 
       {/* Pagination Controls */}
-      {totalPages > 1 && (
-        <div className="flex justify-center items-center gap-4 py-4 border-t">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => setPage(p => Math.max(1, p - 1))}
-            disabled={page === 1 || isFetching}
-          >
-            הקודם →
-          </Button>
-          <div className="flex items-center gap-2 text-sm text-muted-foreground">
-            <span>עמוד {page} מתוך {totalPages}</span>
-            {isFetching && <span className="animate-pulse">טוען...</span>}
-          </div>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => setPage(p => Math.min(totalPages, p + 1))}
-            disabled={page === totalPages || isFetching}
-          >
-            ← הבא
-          </Button>
-        </div>
-      )}
-
-      {/* Load All Button - for users who want all data */}
-      {hasMorePages && !isFetching && (
-        <div className="flex justify-center pb-4">
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => setPage(totalPages)}
-            className="text-muted-foreground"
-          >
-            טען את כל {totalLeadsCount} הלידים (עמוד אחרון)
-          </Button>
-        </div>
+      {viewMode === "table" && (
+        <>
+          <LeadsPaginationBar
+            page={page}
+            totalPages={totalPages}
+            isFetching={isFetching}
+            onPageChange={goToPage}
+          />
+          {hasMorePages && !isFetching && (
+            <div className="flex justify-center pb-4">
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => goToPage(totalPages)}
+                className="text-muted-foreground"
+              >
+                טען את כל {totalLeadsCount} הלידים (עמוד אחרון)
+              </Button>
+            </div>
+          )}
+        </>
       )}
 
       {/* Auto-open lead dialog from URL parameter */}
