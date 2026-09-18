@@ -184,7 +184,7 @@ export function GscIntegration({
     }
 
     const explicitlySelected = selectedIntegrationId
-      ? usableIntegrations.find((i: any) => i.id === selectedIntegrationId)
+      ? usableIntegrations.find((i) => i.id === selectedIntegrationId)
       : null;
     if (explicitlySelected) return explicitlySelected;
 
@@ -639,8 +639,10 @@ export function GscIntegration({
                   <SelectValue placeholder="בחר חשבון Google" />
                 </SelectTrigger>
                 <SelectContent>
-                  {gscIntegrations.map((integration: any) => {
-                    const email = integration?.settings?.google_email || "חשבון Google";
+                  {gscIntegrations.map((integration) => {
+                    const integrationSettings =
+                      (integration.settings || {}) as Record<string, unknown>;
+                    const email = String(integrationSettings.google_email || "חשבון Google");
                     const owner = integration._isOwn
                       ? "שלי"
                       : integration._sharedByName || "משותף";

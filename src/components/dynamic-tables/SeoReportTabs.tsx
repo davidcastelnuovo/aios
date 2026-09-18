@@ -357,8 +357,10 @@ export function SeoReportTabs({ tenantId, clientId }: SeoReportTabsProps) {
                         <SelectValue placeholder="בחר משתמש Google" />
                       </SelectTrigger>
                       <SelectContent>
-                        {gscUserIntegrations.map((integration: any) => {
-                          const email = integration?.settings?.google_email || "חשבון Google";
+                        {gscUserIntegrations.map((integration) => {
+                          const integrationSettings =
+                            (integration.settings || {}) as Record<string, unknown>;
+                          const email = String(integrationSettings.google_email || "חשבון Google");
                           const owner = integration._isOwn
                             ? "שלי"
                             : integration._sharedByName || "משותף";
