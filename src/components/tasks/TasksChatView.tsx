@@ -138,6 +138,8 @@ interface TasksChatViewProps {
   defaultCampaignerId?: string | null;
   openClosedFilter?: OpenClosedFilter;
   onOpenClosedFilterChange?: (value: OpenClosedFilter) => void;
+  showAllRecurring?: boolean;
+  onShowAllRecurringChange?: (value: boolean) => void;
   listSearch?: string;
   onListSearchChange?: (value: string) => void;
   hideListSearch?: boolean;
@@ -157,6 +159,8 @@ export function TasksChatView({
   defaultCampaignerId,
   openClosedFilter = "open",
   onOpenClosedFilterChange,
+  showAllRecurring = false,
+  onShowAllRecurringChange,
   listSearch: listSearchProp,
   onListSearchChange,
   hideListSearch = false,
@@ -261,6 +265,22 @@ export function TasksChatView({
                 );
               })}
             </div>
+            {onShowAllRecurringChange && (
+              <button
+                type="button"
+                onClick={() => onShowAllRecurringChange(!showAllRecurring)}
+                className={cn(
+                  "w-full h-7 rounded-md text-[11px] font-semibold transition-colors inline-flex items-center justify-center gap-1 px-2",
+                  showAllRecurring
+                    ? "bg-violet-100 text-violet-900 border border-violet-300"
+                    : "text-muted-foreground hover:bg-muted/60 border border-transparent",
+                )}
+                title="הצג משימות חוזרות גם לפני מועד הביצוע"
+              >
+                <Repeat className="h-3 w-3 shrink-0" />
+                משימות חוזרות
+              </button>
+            )}
             {onAddTask && (
               <QuickTaskInput
                 onAddTask={onAddTask}
