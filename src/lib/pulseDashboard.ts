@@ -269,6 +269,8 @@ function applyFreshCampaignGoalClassification(
       campaign_objective: row.campaign_objective,
       optimization_goal: row.optimization_goal,
       campaign_type: row.campaign_type_hint,
+      result_kind: row.result_kind,
+      campaign_name: row.campaign_name,
     },
     tableClassificationContext(table),
   );
@@ -295,6 +297,8 @@ export function pulseClientsWithStaleCampaignGoals(
         campaign_objective: row.campaign_objective,
         optimization_goal: row.optimization_goal,
         campaign_type: row.campaign_type_hint,
+        result_kind: row.result_kind,
+        campaign_name: row.campaign_name,
       },
       tableClassificationContext(table),
     );

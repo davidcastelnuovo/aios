@@ -30,6 +30,7 @@ export type PulseCampaignGoalRow = {
   campaign_objective?: string | null;
   optimization_goal?: string | null;
   campaign_type_hint?: string | null;
+  result_kind?: string | null;
   outcome_kind: string | null;
   status: "healthy" | "warning" | "critical" | "no_data";
   status_tier: "normal" | "watch" | "exception" | "missing_data" | "needs_classification";

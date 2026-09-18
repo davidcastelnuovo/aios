@@ -458,6 +458,12 @@ export function buildInsightRecord(
   ) {
     results = optimizationUpper.includes('LANDING_PAGE') ? landingPageViews : linkClicks;
     resultKind = optimizationUpper.includes('LANDING_PAGE') ? 'landing_page_views' : 'link_clicks';
+  } else if (isEcommerceObjective || optimizationUpper.includes('PURCHASE') || optimizationUpper.includes('VALUE')) {
+    results = purchases > 0 ? purchases : null;
+    resultKind = 'purchases';
+  } else if (isLeadObjective || optimizationUpper.includes('LEAD')) {
+    results = leads > 0 ? leads : null;
+    resultKind = 'leads';
   }
 
   const hasEcommerceSignal =

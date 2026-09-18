@@ -56,6 +56,95 @@ test('classifies campaign objective and never defaults an unknown campaign to le
   )
 })
 
+test('classifies from synced result_kind and Hebrew campaign names', () => {
+  assert.equal(
+    classifyPulseCampaignGoal({ result_kind: 'purchases' }).goal,
+    'ecommerce',
+  )
+  assert.equal(
+    classifyPulseCampaignGoal({ result_kind: 'video_views' }).goal,
+    'engagement',
+  )
+  assert.equal(
+    classifyPulseCampaignGoal({ campaign_name: 'קמפיין מכירות | מבצעים ספטמבר' }).goal,
+    'ecommerce',
+  )
+  assert.equal(
+    classifyPulseCampaignGoal({ campaign_name: 'קמפיין מעורבות | סרטונים חדש' }).goal,
+    'engagement',
+  )
+  assert.equal(
+    classifyPulseCampaignGoal({ campaign_name: 'קמפיין לידים | דרושים' }).goal,
+    'leads',
+  )
+})
+
+test('Avieli Tayg-style mixed Meta account splits into leads, engagement, and ecommerce', () => {
+  const tables = [{
+    id: 't-meta',
+    client_id: 'avieli',
+    integration_type: 'facebook_ecommerce',
+    integration_settings: {},
+  }]
+  const dates = ['2026-09-11', '2026-09-12', '2026-09-13', '2026-09-14', '2026-09-15', '2026-09-16', '2026-09-17']
+  const specs = [
+    {
+      campaign_id: 'eng',
+      campaign_name: 'קמפיין מעורבות | סרטונים חדש',
+      campaign_objective: 'OUTCOME_ENGAGEMENT',
+      optimization_goal: 'THRUPLAY',
+      spend: 10,
+      video_views: 20,
+    },
+    {
+      campaign_id: 'sale',
+      campaign_name: 'קמפיין מכירות | מבצעים ספטמבר',
+      campaign_objective: 'OUTCOME_SALES',
+      optimization_goal: 'OFFSITE_CONVERSIONS',
+      spend: 50,
+      purchases: 1,
+      purchase_value: 100,
+    },
+    {
+      campaign_id: 'wa',
+      campaign_name: 'קמפיין ווטסאפ | ברזל',
+      campaign_objective: 'OUTCOME_ENGAGEMENT',
+      optimization_goal: 'CONVERSATIONS',
+      spend: 30,
+      conversations: 4,
+    },
+    {
+      campaign_id: 'lead',
+      campaign_name: 'קמפיין לידים | דרושים',
+      campaign_objective: 'OUTCOME_LEADS',
+      optimization_goal: 'LEAD_GENERATION',
+      spend: 5,
+      leads: 1,
+    },
+    {
+      campaign_id: 'off',
+      campaign_name: 'קמפיין מכירות | מבצעים אוגוסט 2',
+      campaign_objective: 'OUTCOME_SALES',
+      effective_status: 'PAUSED',
+      spend: 0,
+    },
+  ]
+  const records = []
+  for (const date of dates) {
+    for (const spec of specs) {
+      records.push({
+        table_id: 't-meta',
+        data: { date, entity_level: 'campaign', ...spec },
+      })
+    }
+  }
+  const rows = buildPulseCampaignRows({ records, tables, nowYmd: '2026-09-18' })
+  assert.deepEqual(rows.map((row) => row.goal).sort(), ['ecommerce', 'ecommerce', 'engagement', 'engagement', 'leads'])
+  const spending = rows.filter((row) => row.spend_7d > 0)
+  assert.equal(spending.length, 4)
+  assert.equal(spending.find((row) => row.campaign_id === 'off'), undefined)
+})
+
 test('ecommerce report tables classify purchase campaigns and rebuild mixed clients', () => {
   const tables = [{
     id: 't-ecom',

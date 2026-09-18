@@ -82,6 +82,26 @@ function goalFromListedObjective(objective) {
   return null
 }
 
+function goalFromResultKind(resultKind) {
+  const kind = String(resultKind || '').trim().toLowerCase()
+  if (!kind) return null
+  if (kind === 'purchases') return 'ecommerce'
+  if (kind === 'leads') return 'leads'
+  if (['video_views', 'conversations', 'engagements', 'link_clicks', 'landing_page_views', 'results'].includes(kind)) {
+    return 'engagement'
+  }
+  return null
+}
+
+function goalFromCampaignName(name) {
+  const raw = String(name || '').trim()
+  if (!raw) return null
+  if (/מכירות|sales|purchase|רכיש/i.test(raw)) return 'ecommerce'
+  if (/מעורבות|סרטון|video|thruplay|ווטסאפ|whatsapp|message|שיח/i.test(raw)) return 'engagement'
+  if (/ליד|lead/i.test(raw)) return 'leads'
+  return null
+}
+
 function goalFromOptimizationGoal(optimizationGoal) {
   const normalized = String(optimizationGoal || '').trim().toUpperCase()
   if (!normalized) return null
@@ -137,6 +157,9 @@ export function classifyPulseCampaignGoal(data = {}, context = {}) {
   const optimizationGoal = goalFromOptimizationGoal(data.optimization_goal)
   if (optimizationGoal) return { goal: optimizationGoal, source: 'platform_goal' }
 
+  const resultKindGoal = goalFromResultKind(data.result_kind)
+  if (resultKindGoal) return { goal: resultKindGoal, source: 'platform_goal' }
+
   const platform = normalizedTerms(
     data.conversion_action_category,
     data.bidding_strategy_type,
@@ -163,6 +186,9 @@ export function classifyPulseCampaignGoal(data = {}, context = {}) {
   }
 
   const reportDefault = tableReportDefaultGoal(ctx)
+  const nameGoal = goalFromCampaignName(data.campaign_name)
+  if (nameGoal) return { goal: nameGoal, source: 'explicit_mapping' }
+
   const derived = goalFromDerivedCampaignType(data.campaign_type)
   if (derived) {
     // Ecommerce report tables: ignore fbInsights "lead" heuristic unless objective confirms leads.
@@ -586,6 +612,7 @@ export function buildPulseCampaignRows({
       campaign_objective: sample.record.data.campaign_objective || sample.record.data.objective || null,
       optimization_goal: sample.record.data.optimization_goal || null,
       campaign_type_hint: sample.record.data.campaign_type || null,
+      result_kind: sample.record.data.result_kind || null,
       delivery_status: deliveryStatus,
       classification_source: classification.source,
       outcome_kind: outcome.kind,
