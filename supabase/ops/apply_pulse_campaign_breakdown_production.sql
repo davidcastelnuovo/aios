@@ -105,8 +105,7 @@ BEGIN
   LIMIT 1;
 
   IF project_url IS NULL OR worker_secret IS NULL THEN
-    RAISE NOTICE 'Operational campaign checks not scheduled: project URL or service role secret missing';
-    RETURN;
+    RAISE EXCEPTION 'Operational campaign checks not scheduled: project URL or service role secret missing';
   END IF;
 
   FOR existing_job IN
@@ -158,16 +157,19 @@ BEGIN
 END;
 $operational_crons$;
 
--- Verification. The Management API returns only the last statement, so the
--- column check runs last and lands in the apply logs.
-SELECT jobname, schedule, active
-FROM cron.job
-WHERE jobname IN ('meta-operational-check-2h', 'google-ads-operational-check-2h')
-ORDER BY jobname;
-
-SELECT table_name, column_name
-FROM information_schema.columns
-WHERE table_schema = 'public'
-  AND table_name IN ('campaign_pulse_snapshots', 'pulse_instant_alert_log')
-  AND column_name IN ('campaign_breakdown', 'campaign_key', 'fingerprint', 'severity_score', 'evidence')
-ORDER BY table_name, column_name;
+-- Verification. The Management API returns only the last statement, so report the
+-- columns and the crons together in one row.
+SELECT jsonb_build_object(
+  'columns', (
+    SELECT jsonb_agg(table_name::text || '.' || column_name::text ORDER BY table_name, column_name)
+    FROM information_schema.columns
+    WHERE table_schema = 'public'
+      AND table_name IN ('campaign_pulse_snapshots', 'pulse_instant_alert_log')
+      AND column_name IN ('campaign_breakdown', 'campaign_key', 'fingerprint', 'severity_score', 'evidence')
+  ),
+  'crons', (
+    SELECT jsonb_agg(jsonb_build_object('jobname', jobname, 'schedule', schedule, 'active', active) ORDER BY jobname)
+    FROM cron.job
+    WHERE jobname IN ('meta-operational-check-2h', 'google-ads-operational-check-2h')
+  )
+) AS pulse_apply_verification;
