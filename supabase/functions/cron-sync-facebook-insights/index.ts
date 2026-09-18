@@ -2,12 +2,15 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.75.0';
 import { fireIntegrationAlert } from '../_shared/fireIntegrationAlert.ts';
 import {
   buildAllLevelInsightRecords,
+  buildCampaignOptimizationGoalMap,
   buildResultLeadTypeMap,
   type CampaignStatus,
   type InsightRecord,
   FB_INSIGHTS_FIELD_KEYS,
   FB_INSIGHTS_FIELD_NAMES,
   FB_INSIGHTS_FIELD_TYPES,
+  fetchLastMetaCampaignActivity,
+  latestCampaignUpdatedTime,
 } from '../_shared/fbInsights.ts';
 
 
@@ -235,6 +238,7 @@ Deno.serve(async (req) => {
         const campaignObjectives: Record<string, string | null | undefined> = {};
         for (const c of Object.values(campaignStatuses)) campaignObjectives[c.id] = c.objective;
         const resultLeadTypes = buildResultLeadTypeMap(adsets, campaignObjectives);
+        const optimizationGoals = buildCampaignOptimizationGoalMap(adsets);
 
         // Also fetch ad account status
         const accountUrl = `https://graph.facebook.com/v21.0/${adAccountId}?fields=account_status,disable_reason,name&access_token=${accessToken}`;
@@ -263,6 +267,7 @@ Deno.serve(async (req) => {
           accessToken,
           campaignStatuses,
           resultLeadTypes,
+          optimizationGoals,
         );
         const campaignInsights = insights.filter((row) => (row.entity_level || 'campaign') === 'campaign');
         console.log(`[cron-sync-facebook-insights] ${table.name}: synced ${insights.length} rows`, levelCounts);
@@ -308,6 +313,9 @@ Deno.serve(async (req) => {
           }
         }
 
+        const lastCampaignUpdatedAt = latestCampaignUpdatedTime(campaignStatuses);
+        const lastMetaActivity = await fetchLastMetaCampaignActivity(accessToken, adAccountId);
+
         // Update last_sync_at and account status
         await supabase
           .from('crm_tables')
@@ -315,6 +323,9 @@ Deno.serve(async (req) => {
             integration_settings: {
               ...settings,
               last_sync_at: new Date().toISOString(),
+              last_insights_until: untilStr,
+              last_campaign_updated_at: lastCampaignUpdatedAt,
+              last_meta_activity: lastMetaActivity,
               account_status: accountStatus,
               account_disable_reason: accountDisableReason,
             }

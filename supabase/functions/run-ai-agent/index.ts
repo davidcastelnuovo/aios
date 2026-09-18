@@ -75,7 +75,7 @@ import {
 import {
   addGoalBlocker,
   addGoalMilestone,
-  createExecutionGoal,
+  createUnifiedGoal,
   findDuplicateGoals,
   getGoalExecutionReport,
   linkTaskToGoal,
@@ -811,11 +811,12 @@ const ALL_TOOLS = [
   { name: 'create_goal', description: 'יצירת יעד חדש במערכת היעדים ההיררכית', parameters: { type: 'object', properties: { title: { type: 'string' }, description: { type: 'string' }, parent_goal_id: { type: 'string', description: 'מזהה יעד-אב (אופציונלי)' }, due_date: { type: 'string' }, owner_type: { type: 'string', enum: ['agent', 'campaigner'] }, owner_id: { type: 'string' } }, required: ['title'] } },
   { name: 'list_goals', description: 'רשימת יעדים עם אחוז התקדמות', parameters: { type: 'object', properties: { status: { type: 'string' }, limit: { type: 'integer' } } } },
   { name: 'find_execution_goal_duplicates', description: 'חיפוש יעדי ביצוע פתוחים דומים (דדופ לפני יצירה).', parameters: { type: 'object', properties: { title: { type: 'string' } }, required: ['title'] } },
-  { name: 'create_execution_goal', description: 'יצירת יעד ביצוע במרכז הפיקוד — כולל אבני דרך, קריטריוני השלמה, דדופ. פעולות פיננסיות/פרודקשן/קמפיינים דורשות execute_pending_approval.', parameters: { type: 'object', properties: { title: { type: 'string' }, description: { type: 'string' }, due_date: { type: 'string' }, priority: { type: 'string', enum: ['urgent', 'high', 'normal', 'low'] }, completion_criteria: { type: 'string' }, next_action: { type: 'string' }, milestones: { type: 'array', items: { type: 'object', properties: { title: { type: 'string' }, description: { type: 'string' }, due_date: { type: 'string' } }, required: ['title'] } } }, required: ['title'] } },
+  { name: 'create_execution_goal', description: 'יצירת יעד במרכז הפיקוד. autonomous=true: לולאה אוטונומית עם Completion Gate + worker. autonomous=false (ברירת מחדל): ניהול ידני עם אבני דרך. פעולות פיננסיות/פרודקשן דורשות execute_pending_approval.', parameters: { type: 'object', properties: { title: { type: 'string' }, description: { type: 'string' }, due_date: { type: 'string' }, priority: { type: 'string', enum: ['urgent', 'high', 'normal', 'low'] }, completion_criteria: { type: 'string' }, next_action: { type: 'string' }, autonomous: { type: 'boolean', description: 'true = Autonomous Goal Engine (worker + evidence gate)' }, objective: { type: 'string' }, risk_level: { type: 'string', enum: ['READ', 'SAFE_WRITE', 'REVERSIBLE', 'PRODUCTION', 'DESTRUCTIVE'] }, success_criteria: { type: 'array', items: { type: 'object', properties: { key: { type: 'string' }, description: { type: 'string' }, required: { type: 'boolean' } }, required: ['description'] } }, milestones: { type: 'array', items: { type: 'object', properties: { title: { type: 'string' }, description: { type: 'string' }, due_date: { type: 'string' } }, required: ['title'] } } }, required: ['title'] } },
   { name: 'get_execution_goal_report', description: 'דוח ביצוע יעד: מה השתנה, חסמים, מה ממתין לאישור דוד, 3 פעולות הבאות.', parameters: { type: 'object', properties: { goal_id: { type: 'string' }, since_hours: { type: 'integer' } }, required: ['goal_id'] } },
   { name: 'add_goal_milestone', description: 'הוספת אבן דרך ליעד ביצוע.', parameters: { type: 'object', properties: { goal_id: { type: 'string' }, title: { type: 'string' }, description: { type: 'string' }, due_date: { type: 'string' } }, required: ['goal_id', 'title'] } },
   { name: 'add_goal_blocker', description: 'רישום חסם על יעד ביצוע (מעדכן סטטוס ל-blocked).', parameters: { type: 'object', properties: { goal_id: { type: 'string' }, title: { type: 'string' }, description: { type: 'string' } }, required: ['goal_id', 'title'] } },
   { name: 'link_task_to_execution_goal', description: 'קישור משימת tasks קיימת ליעד ביצוע.', parameters: { type: 'object', properties: { goal_id: { type: 'string' }, task_id: { type: 'string' } }, required: ['goal_id', 'task_id'] } },
+  { name: 'get_autonomous_goal_status', description: 'סטטוס יעד (כולל אוטונומי): engine_status, קריטריונים, Evidence, Completion Gate. alias ל-get_execution_goal_report על יעד אוטונומי.', parameters: { type: 'object', properties: { goal_id: { type: 'string' } }, required: ['goal_id'] } },
   // AGENT TASK OWNERSHIP
   { name: 'take_task', description: 'כרמן לוקחת בעלות על משימה - מעדכנת assigned_agent וסטטוס ל-agent_working', parameters: { type: 'object', properties: { task_id: { type: 'string' }, agent_name: { type: 'string', description: 'שם הסוכן שלוקח את המשימה (ברירת מחדל: כרמן)' } }, required: ['task_id'] } },
   { name: 'assign_task_to_cursor', description: 'מקצה משימה ל-Cursor (תור פיתוח). מעדכן assigned_agent=Cursor ומפעיל dispatch אוטומטי אם אין משימה אחרת ב-in_progress.', parameters: { type: 'object', properties: { task_id: { type: 'string' }, notes: { type: 'string', description: 'הערות נוספות למשימה' } }, required: ['task_id'] } },
@@ -2764,6 +2765,7 @@ async function executeTool(name: string, args: Record<string, any>, supabase: an
     case 'get_latest_campaign_pulse': {
       const PULSE_BASE_COLUMNS = 'tenant_id, calculated_at, data_fresh_through, status, campaign_goal_mode, is_ecommerce, spend_7d, lead_spend_7d, ecommerce_spend_7d, leads_7d, cpl_7d, cpl_change_pct, purchases_7d, revenue_7d, roas_7d, roas_change_pct, lead_goal_status, ecommerce_goal_status, flags, source, last_meta_change_at, last_meta_change_type, last_meta_change_actor, last_meta_change_object, meta_change_availability, client_id, agency_id, clients(name), agencies(name)'
       const PULSE_CALL_COLUMNS = 'last_client_call_at, last_client_call_by'
+      const PULSE_CAMPAIGN_COLUMNS = 'campaign_breakdown'
       const loadPulse = async (columns: string) => {
         let query = supabase
           .from('campaign_pulse_snapshots')
@@ -2779,7 +2781,11 @@ async function executeTool(name: string, args: Record<string, any>, supabase: an
         }
         return await query
       }
-      let { data, error } = await loadPulse(`${PULSE_BASE_COLUMNS}, ${PULSE_CALL_COLUMNS}`)
+      let { data, error } = await loadPulse(`${PULSE_BASE_COLUMNS}, ${PULSE_CALL_COLUMNS}, ${PULSE_CAMPAIGN_COLUMNS}`)
+      if (error && /campaign_breakdown/.test(error.message)) {
+        // Campaign breakdown not deployed yet — serve the client-level pulse.
+        ({ data, error } = await loadPulse(`${PULSE_BASE_COLUMNS}, ${PULSE_CALL_COLUMNS}`))
+      }
       if (error && /last_client_call/.test(error.message)) {
         // Call-freshness columns not deployed yet — still serve the pulse.
         ({ data, error } = await loadPulse(PULSE_BASE_COLUMNS))
@@ -4507,16 +4513,24 @@ async function executeTool(name: string, args: Record<string, any>, supabase: an
       const duplicates = await findDuplicateGoals(supabase, tenantId, title)
       return { duplicates: duplicates.map((d) => ({ id: d.goal.id, title: d.goal.title, status: d.goal.status, score: d.score })) }
     }
-    case 'create_execution_goal': {
+    case 'create_execution_goal':
+    case 'create_autonomous_goal': {
       const title = String(args.title || '').trim()
       if (!title) throw new Error('title required')
+      const autonomous = name === 'create_autonomous_goal' || !!args.autonomous
       const duplicates = await findDuplicateGoals(supabase, tenantId, title)
-      const goal = await createExecutionGoal(supabase, {
+      const { goal, criteria } = await createUnifiedGoal(supabase, {
         tenantId, title, description: args.description, dueDate: args.due_date,
         priority: args.priority, completionCriteria: args.completion_criteria,
         nextAction: args.next_action, ownerUserId: actorUserId, actorUserId,
+        autonomous,
+        objective: args.objective,
+        constraints: args.constraints,
+        scope: args.scope,
+        riskLevel: args.risk_level,
+        successCriteria: args.success_criteria,
       })
-      if (Array.isArray(args.milestones)) {
+      if (!autonomous && Array.isArray(args.milestones)) {
         for (const [i, m] of args.milestones.entries()) {
           if (m?.title) {
             await addGoalMilestone(supabase, {
@@ -4526,7 +4540,7 @@ async function executeTool(name: string, args: Record<string, any>, supabase: an
           }
         }
       }
-      return { goal, possible_duplicates: duplicates.slice(0, 5) }
+      return { goal, criteria, possible_duplicates: duplicates.slice(0, 5) }
     }
     case 'get_execution_goal_report': {
       const report = await getGoalExecutionReport(supabase, tenantId, String(args.goal_id), Number(args.since_hours) || 24)
@@ -4551,6 +4565,11 @@ async function executeTool(name: string, args: Record<string, any>, supabase: an
         tenantId, goalId: String(args.goal_id), taskId: String(args.task_id), actorUserId,
       })
       return { task }
+    }
+    case 'get_autonomous_goal_status': {
+      const report = await getGoalExecutionReport(supabase, tenantId, String(args.goal_id))
+      if (!report?.goal) throw new Error('goal not found')
+      return { report }
     }
     // AGENT TASK OWNERSHIP
     case 'take_task': {
