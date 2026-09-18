@@ -313,7 +313,7 @@ export function SearchConsoleDashboard({
           <span>טווח: <strong>{DATE_FILTER_LABELS[dateFilter]}</strong></span>
         </div>
         <Select value={dateFilter} onValueChange={(v) => setDateFilter(v as GscDateFilter)}>
-          <SelectTrigger className="h-8 text-xs w-[160px]">
+          <SelectTrigger className="h-8 text-xs w-full min-w-0 sm:w-[160px]">
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
@@ -436,11 +436,11 @@ export function SearchConsoleDashboard({
                 {trackedKeywordsData.map((item, index) => (
                   <div 
                     key={index} 
-                    className={`flex items-center justify-between p-3 rounded-lg transition-colors ${
+                    className={`flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between p-3 rounded-lg transition-colors ${
                       item.found ? 'bg-muted/30 hover:bg-muted/50' : 'bg-destructive/10 hover:bg-destructive/20'
                     }`}
                   >
-                    <div className="flex items-center gap-3 flex-1 min-w-0">
+                    <div className="flex items-center gap-3 flex-1 min-w-0 w-full">
                       <Button
                         variant="ghost"
                         size="sm"
@@ -455,16 +455,16 @@ export function SearchConsoleDashboard({
                     </div>
                     
                     {item.found && item.data ? (
-                      <div className="flex items-center gap-4 text-sm shrink-0">
-                        <div className="text-center min-w-[60px]">
+                      <div className="flex flex-wrap items-center gap-3 sm:gap-4 text-sm w-full sm:w-auto sm:shrink-0">
+                        <div className="text-center min-w-[56px]">
                           <span className="text-muted-foreground text-xs">חשיפות</span>
                           <p className="font-medium">{formatNumber(item.data.impressions)}</p>
                         </div>
-                        <div className="text-center min-w-[50px]">
+                        <div className="text-center min-w-[48px]">
                           <span className="text-muted-foreground text-xs">קליקים</span>
                           <p className="font-medium">{formatNumber(item.data.clicks)}</p>
                         </div>
-                        <div className="text-center min-w-[50px]">
+                        <div className="text-center min-w-[48px]">
                           <span className="text-muted-foreground text-xs">CTR</span>
                           <p className="font-medium">{formatGscCtrPercent(item.data.ctr) ?? "—"}</p>
                         </div>
@@ -551,7 +551,7 @@ export function SearchConsoleDashboard({
                 placeholder="חפש ביטוי..."
                 value={searchFilter}
                 onChange={(e) => setSearchFilter(e.target.value)}
-                className="h-8 w-[220px] text-sm font-normal"
+                className="h-8 w-full min-w-0 sm:w-[220px] text-sm font-normal"
               />
             </div>
           </CardTitle>

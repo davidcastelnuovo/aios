@@ -1,4 +1,10 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.75.0';
+import {
+  campaignStateMap,
+  evaluateGoogleOperationalIssues,
+  type OperationalCampaignState,
+} from '../_shared/campaign-operational-health.ts';
+import { fireIntegrationAlert } from '../_shared/fireIntegrationAlert.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -110,7 +116,7 @@ Deno.serve(async (req) => {
       user = authedUser;
     }
 
-    const { table_id } = await req.json();
+    const { table_id, operational_only = false } = await req.json();
     
     if (!table_id) {
       return new Response(JSON.stringify({ error: 'table_id required' }), {
@@ -500,6 +506,82 @@ Deno.serve(async (req) => {
 
     // Use manager_id (MCC) as login-customer-id if available, otherwise use customerId
     let loginCustomerId = settings.manager_id || customerId;
+
+    if (operational_only) {
+      const statusQuery = `
+        SELECT
+          campaign.id,
+          campaign.name,
+          campaign.status,
+          campaign.primary_status,
+          campaign.primary_status_reasons
+        FROM campaign
+        WHERE campaign.status != 'REMOVED'
+      `;
+      const batches = await runGaqlSearch(statusQuery);
+      const campaigns: OperationalCampaignState[] = batches.flatMap((batch: any) =>
+        (batch.results || []).map((result: any) => ({
+          id: String(result.campaign?.id || ''),
+          name: String(result.campaign?.name || result.campaign?.id || ''),
+          status: String(result.campaign?.status || ''),
+          primary_status: result.campaign?.primaryStatus || null,
+          primary_status_reasons: result.campaign?.primaryStatusReasons || [],
+        })).filter((campaign: OperationalCampaignState) => campaign.id),
+      );
+      const previous =
+        settings.operational_campaign_states && typeof settings.operational_campaign_states === 'object'
+          ? settings.operational_campaign_states
+          : null;
+      const issues = evaluateGoogleOperationalIssues(previous, campaigns);
+      const checkedAt = new Date().toISOString();
+      await patchIntegrationSettings(supabaseAdmin, table_id, {
+        operational_campaign_states: campaignStateMap(campaigns),
+        operational_status_checked_at: checkedAt,
+      }, settings);
+
+      for (const issue of issues) {
+        const { data: existing } = await supabaseAdmin
+          .from('campaign_alerts')
+          .select('id')
+          .eq('tenant_id', tableTenantId)
+          .eq('campaign_id', issue.campaign_id)
+          .eq('alert_type', issue.alert_type)
+          .is('resolved_at', null)
+          .gte('created_at', new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString())
+          .limit(1)
+          .maybeSingle();
+        if (existing) continue;
+        await supabaseAdmin.from('campaign_alerts').insert({
+          tenant_id: tableTenantId,
+          client_id: table.client_id || null,
+          campaign_id: issue.campaign_id,
+          campaign_name: issue.campaign_name,
+          ad_account_id: String(customerId),
+          alert_type: issue.alert_type,
+          severity: issue.severity,
+          details: issue.details,
+        });
+        await fireIntegrationAlert({
+          tenant_id: tableTenantId,
+          provider: 'google_ads',
+          alert_type: 'blocked',
+          account_id: String(customerId),
+          account_name: issue.campaign_name,
+          client_id: table.client_id || null,
+          reason: (issue.details.primary_status_reasons as string[] | undefined)?.join(', ')
+            || String(issue.details.primary_status || issue.details.status || 'campaign_not_serving'),
+          throttleHours: 2,
+        });
+      }
+
+      return new Response(JSON.stringify({
+        success: true,
+        operational_only: true,
+        campaigns_scanned: campaigns.length,
+        alerts_created: issues.length,
+        checked_at: checkedAt,
+      }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+    }
 
     let searchResponse = await adsFetch(
       `https://googleads.googleapis.com/v23/customers/${customerId}/googleAds:searchStream`,

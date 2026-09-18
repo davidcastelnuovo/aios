@@ -9,6 +9,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { MessageSquare, Users } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { embedCount } from "@/lib/embedCount";
+import { generateWorkdayTimeSlots } from "@/lib/taskWorkdayHours";
 
 interface Task {
   id: string;
@@ -25,7 +26,7 @@ interface Task {
   tenant_id: string | null;
   clients?: { name: string } | null;
   task_updates?: { id: string }[];
-  task_collaborators?: { id: string }[];
+  task_collaborators?: { id?: string; campaigner_id?: string }[];
 }
 
 interface DailyViewProps {
@@ -36,20 +37,7 @@ interface DailyViewProps {
   onDropOnSlot: (taskId: string, time: string) => void;
 }
 
-// Generate time slots from 06:00 to 23:30
-const generateTimeSlots = () => {
-  const slots: string[] = [];
-  for (let hour = 6; hour <= 23; hour++) {
-    for (let minute = 0; minute < 60; minute += 30) {
-      const h = hour.toString().padStart(2, "0");
-      const m = minute.toString().padStart(2, "0");
-      slots.push(`${h}:${m}`);
-    }
-  }
-  return slots;
-};
-
-const TIME_SLOTS = generateTimeSlots();
+const TIME_SLOTS = generateWorkdayTimeSlots();
 
 function DraggableTask({
   task,

@@ -306,6 +306,35 @@ html:has(.cc-root) body {
 .cc-seat-buttons::-webkit-scrollbar {
   display: none;
 }
+/* Form controls inside HUD panels */
+.cc-root .cc-form-input {
+  position: relative;
+  z-index: 2;
+  min-width: 0;
+  width: 100%;
+  border-radius: 0.375rem;
+  border: 1px solid var(--cc-line);
+  background: rgba(8, 16, 34, 0.92);
+  color: var(--cc-text);
+  padding: 0.375rem 0.5rem;
+  font-size: 0.875rem;
+  line-height: 1.35;
+  pointer-events: auto;
+}
+.cc-root .cc-form-input::placeholder {
+  color: var(--cc-text-dim);
+  opacity: 0.85;
+}
+.cc-root .cc-form-input:focus {
+  outline: none;
+  border-color: var(--cc-line-strong);
+  box-shadow: 0 0 0 1px rgba(76, 195, 255, 0.25);
+}
+.cc-root .cc-form-textarea {
+  resize: vertical;
+  min-height: 4.5rem;
+}
+
 .cc-seat-status {
   border-bottom: 1px solid var(--cc-line);
   background: rgba(5, 10, 22, 0.65);

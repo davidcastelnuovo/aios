@@ -9,7 +9,7 @@
     "build:dev": "vite build --mode development",
     "lint": "eslint .",
     "preview": "vite preview",
-    "test:guards": "node scripts/check-shared-agency-dashboards.mjs && node scripts/check-permission-personas.mjs"
+    "test:guards": "node scripts/check-shared-agency-dashboards.mjs && node scripts/check-permission-personas.mjs && node scripts/check-edge-function-syntax.mjs"
   },
   "dependencies": {
     "@blocknote/core": "^0.51.4",

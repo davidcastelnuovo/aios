@@ -31,10 +31,27 @@ export async function fetchCarmenAutomationConfig(
     .eq("step_type", "trigger")
     .eq("action_type", "carmen_whatsapp_session");
   if (error) throw error;
-  const cfg = (steps || [])
+
+  const configs = (steps || [])
     .map((s: { configuration?: CarmenAutomationConfig }) => s.configuration)
-    .find((c) => c?.agent_id === agentId || !c?.agent_id);
-  return cfg || ((steps?.[0] as { configuration?: CarmenAutomationConfig })?.configuration ?? null);
+    .filter((c): c is CarmenAutomationConfig => !!c)
+    .filter((c) => !c.agent_id || c.agent_id === agentId);
+
+  if (!configs.length) return null;
+
+  // Prefer the private-phone trigger when Carmen has both a private and a group
+  // trigger — otherwise an unordered `.find()` can pick the group-only step and
+  // the Agent Hub allowlist looks empty even though private replies work.
+  const withPhones = configs.filter((c) => (c.carmen_allowed_phones || []).length > 0);
+  const preferred = withPhones[0] || configs[0];
+  const mergedPhones = [...new Set(
+    configs.flatMap((c) => (c.carmen_allowed_phones || []).map((p) => String(p).replace(/\D/g, "")).filter(Boolean)),
+  )];
+
+  return {
+    ...preferred,
+    carmen_allowed_phones: mergedPhones.length ? mergedPhones : preferred.carmen_allowed_phones,
+  };
 }
 
 export function resolveAutomationGroupIds(

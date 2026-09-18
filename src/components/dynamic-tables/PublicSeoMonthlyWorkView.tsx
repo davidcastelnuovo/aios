@@ -13,9 +13,9 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import {
-  SeoMonthlySlideshow,
-  SeoMonthlySlideshowCaptureStack,
-} from "@/components/seo/SeoMonthlySlideshow";
+  SeoMonthlyLandingPage,
+  SeoMonthlyLandingPageCapture,
+} from "@/components/seo/SeoMonthlyLandingPage";
 import {
   applyLiveWorkToShareSnapshot,
   buildSeoMonthlyShareSnapshot,
@@ -240,7 +240,7 @@ export function PublicSeoMonthlyWorkView({
             </CardTitle>
             <div className="flex flex-wrap items-center gap-2">
               <Select value={selected?.month || selectedMonth} onValueChange={setSelectedMonth}>
-                <SelectTrigger className="h-8 w-[180px] text-sm">
+                <SelectTrigger className="h-8 w-full min-w-0 sm:w-[180px] text-sm">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -282,18 +282,17 @@ export function PublicSeoMonthlyWorkView({
           </CardContent>
         </Card>
       ) : (
-        <div className="overflow-hidden rounded-xl border bg-[#071820]">
-          <div className="h-[min(70vh,640px)] w-full">
-            <SeoMonthlySlideshow
+        <div className="max-h-[75vh] overflow-y-auto rounded-xl border bg-[#f6f8f5]">
+          <div className="w-full">
+            <SeoMonthlyLandingPage
               key={`${snapshot.month}-${snapshot.generatedAt}`}
               snapshot={snapshot}
-              className="h-full"
             />
           </div>
         </div>
       )}
 
-      <SeoMonthlySlideshowCaptureStack snapshot={snapshot} stackRef={captureStackRef} />
+      <SeoMonthlyLandingPageCapture snapshot={snapshot} reportRef={captureStackRef} />
     </div>
   );
 }

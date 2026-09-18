@@ -7,6 +7,7 @@
 // known-good monolithic version from main; CI redeploys it via the Supabase CLI. (re-deploy: a stray placeholder bundle had overwritten v40).
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.75.0'
 import { resolveModelId } from '../_shared/models.ts'
+import { isCachedPulseRequest } from '../_shared/pulse-request.mjs'
 import { assertCallerCanAccessClient, assertCallerCanAccessEntityClient } from '../_shared/auth-helpers.ts'
 import { summarizeAndStoreAgentMemory, recallAgentMemory, recallAgentMemoryFTS, saveAgentMemory } from '../_shared/agent-memory.ts'
 import { buildCarmenV2SystemPrompt, shouldUseV2Prompt } from '../_shared/carmen-prompt-v2.ts'
@@ -25,9 +26,11 @@ import {
   shouldUseTokenOptimize,
 } from '../_shared/carmen-token-optimizer.ts'
 import { aiEmbed, aiEmbedBatch, resolveOpenAIKey } from '../_shared/ai.ts'
-import { asUuidOrNull } from '../_shared/uuid.ts'
+import { fireTaskPeerNotification } from '../_shared/notify-task-peers.ts'
 import { normalizeAdCopyVariants, summarizeSourceAd } from '../_shared/fb-ad-duplicate.ts'
 import { loadDevEscalationTierFromDb } from '../_shared/carmen-access-policy.ts'
+import {
+  buildDevEscalationPromptRule,
   DEV_ESCALATION_REFUSAL_HE,
   DEV_ESCALATION_BUGFIX_ONLY_REFUSAL_HE,
   getDevEscalationTier,
@@ -72,7 +75,7 @@ import {
 import {
   addGoalBlocker,
   addGoalMilestone,
-  createExecutionGoal,
+  createUnifiedGoal,
   findDuplicateGoals,
   getGoalExecutionReport,
   linkTaskToGoal,
@@ -782,7 +785,7 @@ const ALL_TOOLS = [
   { name: 'kb_learn', description: 'שמירת ידע פרוצדורלי/אפיזודי חדש (לקח שנלמד, נוהל, סיכום שיחה חשובה). שונה מ-save_memory: זה נכנס לממלכת הידע עם embedding לחיפוש סמנטי. שמור פה דברים שכרמן צריכה לזכור לטווח ארוך עם הקשר.', parameters: { type: 'object', properties: { topic: { type: 'string' }, summary: { type: 'string' }, topic_tags: { type: 'array', items: { type: 'string' } }, importance: { type: 'integer', description: '1-10' }, source_table: { type: 'string' }, source_ids: { type: 'array', items: { type: 'string' } } }, required: ['topic','summary'] } },
   // CHAT HISTORY
   { name: 'get_chat_history', description: 'שליפת היסטוריית שיחות WhatsApp עם ליד או לקוח', parameters: { type: 'object', properties: { contact_type: { type: 'string', enum: ['lead', 'client'] }, contact_id: { type: 'string' }, limit: { type: 'integer' } }, required: ['contact_type', 'contact_id'] } },
-  { name: 'search_conversation_history', description: 'שליפה מכל היסטוריית ההתכתבויות של הארגון (WhatsApp) — ללא מגבלת סשן. שני מצבים: (1) חיפוש מילות מפתח — "מה המייל של פליקס", שם לקוח, נושא. חשוב: חפשי מילות תוכן בלבד (שם/מייל/נושא) — לעולם לא מילות זמן כמו "אתמול"/"בערב", הן לא מופיעות בהודעות! (2) דפדוף לפי זמן — לשאלות "מה דיברנו אתמול/בשבוע שעבר": קראי בלי query עם days_back מתאים ו-only_carmen_chats=true, ותקבלי את השיחות איתך כרונולוגית. אם חיפוש לא מצא — נסי מילה אחרת או עברי לדפדוף לפני שאת אומרת שאין.', parameters: { type: 'object', properties: { query: { type: 'string', description: 'מילות תוכן לחיפוש (עד 4, כולן חייבות להופיע). השמיטי לדפדוף לפי זמן.' }, days_back: { type: 'integer', description: 'כמה ימים אחורה (ברירת מחדל 180; לדפדוף "אתמול" השתמשי ב-2)' }, only_carmen_chats: { type: 'boolean', description: 'רק שיחות בערוץ של כרמן (ברירת מחדל true בדפדוף בלי query)' }, with_phone: { type: 'string', description: 'סינון לשיחות עם מספר טלפון מסוים' }, limit: { type: 'integer', description: 'מקסימום תוצאות (ברירת מחדל 20, בדפדוף 40)' } } } },
+  { name: 'search_conversation_history', description: 'שליפת היסטוריית WhatsApp. כברירת מחדל בשיחת WhatsApp פעילה — רק הצ׳אט הנוכחי (chat_id). לדפדוף בכל הארגון: browse_all_chats=true. מצבים: (1) חיפוש מילות תוכן (לא מילות זמן כמו אתמול) (2) דפדוף לפי זמן בלי query.', parameters: { type: 'object', properties: { query: { type: 'string', description: 'מילות תוכן לחיפוש (עד 4). השמיטי לדפדוף לפי זמן.' }, days_back: { type: 'integer', description: 'כמה ימים אחורה (ברירת מחדל 180; לדפדוף אתמול השתמשי ב-2)' }, only_carmen_chats: { type: 'boolean', description: 'רק ערוץ manus_wa (ברירת מחדל true בדפדוף)' }, with_phone: { type: 'string', description: 'סינון למספר טלפון' }, browse_all_chats: { type: 'boolean', description: 'true = חפשי בכל שיחות הארגון, לא רק הצ׳אט הנוכחי' }, limit: { type: 'integer', description: 'מקסימום תוצאות (ברירת מחדל 20, בדפדוף 40)' } } } },
   { name: 'get_recent_inbound_messages', description: 'שליפת הודעות נכנסות אחרונות מכל השיחות', parameters: { type: 'object', properties: { limit: { type: 'integer' }, hours: { type: 'integer', description: 'כמה שעות אחורה (ברירת מחדל 24)' } } } },
   // FINANCE
   { name: 'list_finance', description: 'רשימת תנועות מטבלת finance הישנה (legacy). להנהלת חשבונות האמיתית השתמשי ב-get_accounting_overview / list_one_time_incomes / list_income_payments.', parameters: { type: 'object', properties: { client_id: { type: 'string' }, type: { type: 'string', enum: ['income', 'expense'] }, limit: { type: 'integer' } } } },
@@ -808,11 +811,12 @@ const ALL_TOOLS = [
   { name: 'create_goal', description: 'יצירת יעד חדש במערכת היעדים ההיררכית', parameters: { type: 'object', properties: { title: { type: 'string' }, description: { type: 'string' }, parent_goal_id: { type: 'string', description: 'מזהה יעד-אב (אופציונלי)' }, due_date: { type: 'string' }, owner_type: { type: 'string', enum: ['agent', 'campaigner'] }, owner_id: { type: 'string' } }, required: ['title'] } },
   { name: 'list_goals', description: 'רשימת יעדים עם אחוז התקדמות', parameters: { type: 'object', properties: { status: { type: 'string' }, limit: { type: 'integer' } } } },
   { name: 'find_execution_goal_duplicates', description: 'חיפוש יעדי ביצוע פתוחים דומים (דדופ לפני יצירה).', parameters: { type: 'object', properties: { title: { type: 'string' } }, required: ['title'] } },
-  { name: 'create_execution_goal', description: 'יצירת יעד ביצוע במרכז הפיקוד — כולל אבני דרך, קריטריוני השלמה, דדופ. פעולות פיננסיות/פרודקשן/קמפיינים דורשות execute_pending_approval.', parameters: { type: 'object', properties: { title: { type: 'string' }, description: { type: 'string' }, due_date: { type: 'string' }, priority: { type: 'string', enum: ['urgent', 'high', 'normal', 'low'] }, completion_criteria: { type: 'string' }, next_action: { type: 'string' }, milestones: { type: 'array', items: { type: 'object', properties: { title: { type: 'string' }, description: { type: 'string' }, due_date: { type: 'string' } }, required: ['title'] } } }, required: ['title'] } },
+  { name: 'create_execution_goal', description: 'יצירת יעד במרכז הפיקוד. autonomous=true: לולאה אוטונומית עם Completion Gate + worker. autonomous=false (ברירת מחדל): ניהול ידני עם אבני דרך. פעולות פיננסיות/פרודקשן דורשות execute_pending_approval.', parameters: { type: 'object', properties: { title: { type: 'string' }, description: { type: 'string' }, due_date: { type: 'string' }, priority: { type: 'string', enum: ['urgent', 'high', 'normal', 'low'] }, completion_criteria: { type: 'string' }, next_action: { type: 'string' }, autonomous: { type: 'boolean', description: 'true = Autonomous Goal Engine (worker + evidence gate)' }, objective: { type: 'string' }, risk_level: { type: 'string', enum: ['READ', 'SAFE_WRITE', 'REVERSIBLE', 'PRODUCTION', 'DESTRUCTIVE'] }, success_criteria: { type: 'array', items: { type: 'object', properties: { key: { type: 'string' }, description: { type: 'string' }, required: { type: 'boolean' } }, required: ['description'] } }, milestones: { type: 'array', items: { type: 'object', properties: { title: { type: 'string' }, description: { type: 'string' }, due_date: { type: 'string' } }, required: ['title'] } } }, required: ['title'] } },
   { name: 'get_execution_goal_report', description: 'דוח ביצוע יעד: מה השתנה, חסמים, מה ממתין לאישור דוד, 3 פעולות הבאות.', parameters: { type: 'object', properties: { goal_id: { type: 'string' }, since_hours: { type: 'integer' } }, required: ['goal_id'] } },
   { name: 'add_goal_milestone', description: 'הוספת אבן דרך ליעד ביצוע.', parameters: { type: 'object', properties: { goal_id: { type: 'string' }, title: { type: 'string' }, description: { type: 'string' }, due_date: { type: 'string' } }, required: ['goal_id', 'title'] } },
   { name: 'add_goal_blocker', description: 'רישום חסם על יעד ביצוע (מעדכן סטטוס ל-blocked).', parameters: { type: 'object', properties: { goal_id: { type: 'string' }, title: { type: 'string' }, description: { type: 'string' } }, required: ['goal_id', 'title'] } },
   { name: 'link_task_to_execution_goal', description: 'קישור משימת tasks קיימת ליעד ביצוע.', parameters: { type: 'object', properties: { goal_id: { type: 'string' }, task_id: { type: 'string' } }, required: ['goal_id', 'task_id'] } },
+  { name: 'get_autonomous_goal_status', description: 'סטטוס יעד (כולל אוטונומי): engine_status, קריטריונים, Evidence, Completion Gate. alias ל-get_execution_goal_report על יעד אוטונומי.', parameters: { type: 'object', properties: { goal_id: { type: 'string' } }, required: ['goal_id'] } },
   // AGENT TASK OWNERSHIP
   { name: 'take_task', description: 'כרמן לוקחת בעלות על משימה - מעדכנת assigned_agent וסטטוס ל-agent_working', parameters: { type: 'object', properties: { task_id: { type: 'string' }, agent_name: { type: 'string', description: 'שם הסוכן שלוקח את המשימה (ברירת מחדל: כרמן)' } }, required: ['task_id'] } },
   { name: 'assign_task_to_cursor', description: 'מקצה משימה ל-Cursor (תור פיתוח). מעדכן assigned_agent=Cursor ומפעיל dispatch אוטומטי אם אין משימה אחרת ב-in_progress.', parameters: { type: 'object', properties: { task_id: { type: 'string' }, notes: { type: 'string', description: 'הערות נוספות למשימה' } }, required: ['task_id'] } },
@@ -2761,6 +2765,7 @@ async function executeTool(name: string, args: Record<string, any>, supabase: an
     case 'get_latest_campaign_pulse': {
       const PULSE_BASE_COLUMNS = 'tenant_id, calculated_at, data_fresh_through, status, campaign_goal_mode, is_ecommerce, spend_7d, lead_spend_7d, ecommerce_spend_7d, leads_7d, cpl_7d, cpl_change_pct, purchases_7d, revenue_7d, roas_7d, roas_change_pct, lead_goal_status, ecommerce_goal_status, flags, source, last_meta_change_at, last_meta_change_type, last_meta_change_actor, last_meta_change_object, meta_change_availability, client_id, agency_id, clients(name), agencies(name)'
       const PULSE_CALL_COLUMNS = 'last_client_call_at, last_client_call_by'
+      const PULSE_CAMPAIGN_COLUMNS = 'campaign_breakdown'
       const loadPulse = async (columns: string) => {
         let query = supabase
           .from('campaign_pulse_snapshots')
@@ -2776,7 +2781,11 @@ async function executeTool(name: string, args: Record<string, any>, supabase: an
         }
         return await query
       }
-      let { data, error } = await loadPulse(`${PULSE_BASE_COLUMNS}, ${PULSE_CALL_COLUMNS}`)
+      let { data, error } = await loadPulse(`${PULSE_BASE_COLUMNS}, ${PULSE_CALL_COLUMNS}, ${PULSE_CAMPAIGN_COLUMNS}`)
+      if (error && /campaign_breakdown/.test(error.message)) {
+        // Campaign breakdown not deployed yet — serve the client-level pulse.
+        ({ data, error } = await loadPulse(`${PULSE_BASE_COLUMNS}, ${PULSE_CALL_COLUMNS}`))
+      }
       if (error && /last_client_call/.test(error.message)) {
         // Call-freshness columns not deployed yet — still serve the pulse.
         ({ data, error } = await loadPulse(PULSE_BASE_COLUMNS))
@@ -3644,6 +3653,12 @@ async function executeTool(name: string, args: Record<string, any>, supabase: an
       await assertCallerCanAccessEntityClient(supabase, 'tasks', args.task_id, callerScope)
       const { data, error } = await supabase.from('task_updates').insert({ task_id: args.task_id, user_id: userId, tenant_id: tenantId, content: args.content }).select('id').single()
       if (error) throw error
+      void fireTaskPeerNotification({
+        supabaseUrl: SUPABASE_URL,
+        serviceKey: Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!,
+        triggerType: 'task_update_added',
+        data: { task_id: args.task_id, user_id: userId, update_content: args.content },
+      })
       return { update_id: data.id }
     }
     case 'manage_task_collaborators': {
@@ -3652,6 +3667,12 @@ async function executeTool(name: string, args: Record<string, any>, supabase: an
           task_id: args.task_id, campaigner_id: args.campaigner_id, tenant_id: tenantId,
         }).select('id').single()
         if (error) throw error
+        void fireTaskPeerNotification({
+          supabaseUrl: SUPABASE_URL,
+          serviceKey: Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!,
+          triggerType: 'task_collaborator_added',
+          data: { task_id: args.task_id, notify_campaigner_id: args.campaigner_id, user_id: userId },
+        })
         return { success: true, action: 'added', collaborator_id: data.id }
       } else {
         const { error } = await supabase.from('task_collaborators').delete()
@@ -4155,8 +4176,32 @@ async function executeTool(name: string, args: Record<string, any>, supabase: an
       const daysBack = Math.min(Number(args.days_back) > 0 ? Number(args.days_back) : 180, 730)
       const since = new Date(Date.now() - daysBack * 24 * 60 * 60 * 1000).toISOString()
       const defaultLimit = browseMode ? 40 : 20
-      const withPhone = String(args.with_phone || '').replace(/\D/g, '')
+      let withPhone = String(args.with_phone || '').replace(/\D/g, '')
       const onlyCarmen = args.only_carmen_chats === true || (browseMode && args.only_carmen_chats !== false)
+      const browseAll = args.browse_all_chats === true
+      // Default: stay inside the active WhatsApp chat_id (private or group).
+      let scopeGroupId: string | null = null
+      let scopeNote = 'current_chat'
+      if (!browseAll && waNotify?.chat_id) {
+        const chatId = String(waNotify.chat_id)
+        const isGroupChat = /@g\.us/i.test(chatId) || waNotify.is_group === true
+        if (isGroupChat) {
+          const { data: g } = await supabase
+            .from('whatsapp_groups')
+            .select('id')
+            .eq('tenant_id', tenantId)
+            .eq('group_chat_id', chatId)
+            .maybeSingle()
+          scopeGroupId = g?.id || null
+          if (!scopeGroupId) {
+            return { count: 0, mode: browseMode ? 'browse' : 'keyword_search', note: 'הקבוצה הנוכחית לא נמצאה — נסי browse_all_chats=true אם צריך חיפוש ארגוני.' }
+          }
+        } else if (!withPhone) {
+          withPhone = chatId.split('@')[0].replace(/\D/g, '')
+        }
+      } else if (browseAll) {
+        scopeNote = 'all_chats'
+      }
       let q = supabase.from('chat_messages')
         .select('message_text, direction, sender_name, sender_phone, created_at, group_id, provider, clients(name)')
         .in('tenant_id', accessibleTenantIds)
@@ -4166,17 +4211,21 @@ async function executeTool(name: string, args: Record<string, any>, supabase: an
         .limit(Math.min(Number(args.limit) > 0 ? Number(args.limit) : defaultLimit, 60))
       for (const t of tokens) q = q.ilike('message_text', `%${t}%`)
       if (onlyCarmen) q = q.eq('provider', 'manus_wa')
-      if (withPhone) q = q.ilike('sender_phone', `%${withPhone}%`)
+      if (scopeGroupId) q = q.eq('group_id', scopeGroupId)
+      else if (withPhone && !browseAll) q = q.is('group_id', null).ilike('sender_phone', `%${withPhone.slice(-9)}%`)
+      else if (withPhone) q = q.ilike('sender_phone', `%${withPhone}%`)
       const { data, error } = await q
       if (error) throw error
       const fmt = (iso: string) => new Date(iso).toLocaleString('he-IL', { timeZone: 'Asia/Jerusalem', dateStyle: 'short', timeStyle: 'short' })
       return {
         count: data.length,
         mode: browseMode ? 'browse' : 'keyword_search',
+        scope: scopeNote,
+        chat_id: waNotify?.chat_id || null,
         note: data.length === 0
           ? (browseMode
-              ? 'אין הודעות בחלון הזמן — נסי days_back גדול יותר או only_carmen_chats=false.'
-              : 'אין תוצאות — נסי מילת תוכן אחרת (שם פרטי בלבד, חלק מהמייל, מילה נרדפת) או דפדוף בלי query.')
+              ? 'אין הודעות בחלון הזמן בצ׳אט הנוכחי — נסי days_back גדול יותר או browse_all_chats=true.'
+              : 'אין תוצאות בצ׳אט הנוכחי — נסי מילת תוכן אחרת או browse_all_chats=true.')
           : undefined,
         messages: data.reverse().map((m: any) => ({
           when_israel: fmt(m.created_at),
@@ -4464,16 +4513,24 @@ async function executeTool(name: string, args: Record<string, any>, supabase: an
       const duplicates = await findDuplicateGoals(supabase, tenantId, title)
       return { duplicates: duplicates.map((d) => ({ id: d.goal.id, title: d.goal.title, status: d.goal.status, score: d.score })) }
     }
-    case 'create_execution_goal': {
+    case 'create_execution_goal':
+    case 'create_autonomous_goal': {
       const title = String(args.title || '').trim()
       if (!title) throw new Error('title required')
+      const autonomous = name === 'create_autonomous_goal' || !!args.autonomous
       const duplicates = await findDuplicateGoals(supabase, tenantId, title)
-      const goal = await createExecutionGoal(supabase, {
+      const { goal, criteria } = await createUnifiedGoal(supabase, {
         tenantId, title, description: args.description, dueDate: args.due_date,
         priority: args.priority, completionCriteria: args.completion_criteria,
         nextAction: args.next_action, ownerUserId: actorUserId, actorUserId,
+        autonomous,
+        objective: args.objective,
+        constraints: args.constraints,
+        scope: args.scope,
+        riskLevel: args.risk_level,
+        successCriteria: args.success_criteria,
       })
-      if (Array.isArray(args.milestones)) {
+      if (!autonomous && Array.isArray(args.milestones)) {
         for (const [i, m] of args.milestones.entries()) {
           if (m?.title) {
             await addGoalMilestone(supabase, {
@@ -4483,7 +4540,7 @@ async function executeTool(name: string, args: Record<string, any>, supabase: an
           }
         }
       }
-      return { goal, possible_duplicates: duplicates.slice(0, 5) }
+      return { goal, criteria, possible_duplicates: duplicates.slice(0, 5) }
     }
     case 'get_execution_goal_report': {
       const report = await getGoalExecutionReport(supabase, tenantId, String(args.goal_id), Number(args.since_hours) || 24)
@@ -4508,6 +4565,11 @@ async function executeTool(name: string, args: Record<string, any>, supabase: an
         tenantId, goalId: String(args.goal_id), taskId: String(args.task_id), actorUserId,
       })
       return { task }
+    }
+    case 'get_autonomous_goal_status': {
+      const report = await getGoalExecutionReport(supabase, tenantId, String(args.goal_id))
+      if (!report?.goal) throw new Error('goal not found')
+      return { report }
     }
     // AGENT TASK OWNERSHIP
     case 'take_task': {
@@ -7360,16 +7422,9 @@ ${relevantLongTermMemory.map((item: any) => `• [${item.label}] ${item.text}`).
     // - On 'task' surface (a subagent itself running via run-agent-task): hide delegation tools entirely
     //   so a subagent can't recursively spawn more subagents.
     const cmd = (command_text || '').toString()
-    // "דופק" is intentionally sufficient: speech transcription frequently
-    // mangles the word before it ("ביגת דופק", "מדיקת דופק"). A pulse request
-    // must never depend on the model deciding whether to call the data tool.
-    const isStoredPulseRequest = !pinSkillsOnly
-      && (
-        /\bדופק\b|\bpulse\s*check\b/i.test(cmd)
-        || /בדיקת\s*(דוח|דופק)/i.test(cmd)
-        || /מצב\s*קמפיינים|סיכום\s*קמפיינים/i.test(cmd)
-      ) && !/(רעננ|חדש|עכשיו|בזמן\s*אמת|תריצ|תבצע)/i.test(cmd)
-      && !/תקינות\s*מערכות/i.test(cmd)
+    // Only unqualified summaries use empty tool args; scoped requests must
+    // retain their client/agency filters through normal tool routing.
+    const isStoredPulseRequest = !pinSkillsOnly && isCachedPulseRequest(cmd)
     const userAskedBackground = /\b(ברקע|תמשיכ[יה]\s+לבד|background|אל\s+תחכ[יה]|תעדכנ[יה]\s+אחר[\s-]?כך|תרוצ[יה]\s+ברקע)\b/i.test(cmd)
     const userAskedManus = /\b(manus|מנוס|מאנוס|מנואס)\b/i.test(cmd)
     const userAskedGithubAgent = /\b(github|גיטהאב|גיט\s*האב|שגיאת\s*קוד|תמיכה\s*טכנית|אגנט\s*קוד)\b/i.test(cmd)

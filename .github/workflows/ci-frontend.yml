@@ -42,10 +42,13 @@ jobs:
           SUPABASE_STAGING_PROJECT_ID: ${{ secrets.SUPABASE_STAGING_PROJECT_ID }}
 
       - name: Environment and report regression tests
-        run: node --test scripts/edge-deploy-plan.test.mjs scripts/deploy-edge.test.mjs supabase/functions/_shared/staging-outbound.test.mjs src/lib/reportRecords.test.ts
+        run: node --test scripts/edge-deploy-plan.test.mjs scripts/deploy-edge.test.mjs supabase/functions/_shared/staging-outbound.test.mjs supabase/functions/_shared/meeting-summary-prompts.test.ts src/lib/reportRecords.test.ts src/lib/leadTableLayout.test.ts src/lib/leadTableColumns.test.ts src/lib/leadViewMode.test.ts src/lib/recordingSummaryTarget.test.ts
 
       - name: Mirror contract tests
         run: python3 -m unittest discover -s scripts -p 'test_staging_mirror.py'
+
+      - name: Carmen pulse regression tests
+        run: node --test supabase/functions/_shared/pulse-foundation.test.mjs
 
       - name: Build frontend
         run: pnpm build

@@ -2,9 +2,11 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Link, useSearchParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { CarmenLoadingScreen } from "@/components/shared/CarmenLoadingScreen";
+import { isQueryResolving } from "@/lib/queryUi";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Mail, Phone, ExternalLink, Trash2, Building2, DollarSign, LayoutGrid, Table as TableIcon, GripVertical, ChevronDown, ChevronUp, User, Calendar as CalendarIcon, Search, X, Settings2, CheckSquare, Download, Clock, Tag, Filter, FileSpreadsheet, MessageCircle, Pencil, Archive, Loader2 } from "lucide-react";
+import { Mail, Phone, ExternalLink, Trash2, Building2, DollarSign, LayoutGrid, GripVertical, ChevronDown, ChevronUp, User, Users, Calendar as CalendarIcon, Search, X, Settings2, CheckSquare, Download, Clock, Tag, Filter, FileSpreadsheet, Pencil, Archive, Loader2, ChevronLeft, ChevronRight } from "lucide-react";
 import confetti from "canvas-confetti";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
@@ -55,7 +57,6 @@ import { CSS } from "@dnd-kit/utilities";
 import { useState, ReactNode, useRef, useEffect, useMemo, createContext, useContext } from "react";
 import {
   Collapsible,
-  CollapsibleContent,
   CollapsibleTrigger,
 } from "@/components/ui/collapsible";
 import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area";
@@ -76,6 +77,9 @@ import { ChatTagsManager } from "@/components/chat/ChatTagsManager";
 import { ImportLeadsSheet } from "@/components/forms/ImportLeadsSheet";
 import { FollowUpDatePicker } from "@/components/leads/FollowUpDatePicker";
 import { LeadsChatView } from "@/components/leads/LeadsChatView";
+import { LeadTableColumnsDialog } from "@/components/leads/LeadTableColumnsDialog";
+import { LeadViewModeToggle } from "@/components/leads/LeadViewModeToggle";
+import { useLeadsViewMode } from "@/hooks/useLeadsViewMode";
 import { archiveLeads, excludeArchivedLeads } from "@/lib/leadArchive";
 import { leadSearchOrFilter } from "@/lib/leadPhone";
 import {
@@ -91,6 +95,15 @@ import {
   fetchAllLeadsForExport,
   writeLeadExportFile,
 } from "@/lib/exportLeads";
+import {
+  groupLeadsBySurfaceUsers,
+  parseLeadTableLayout,
+  sortLeadsByDate,
+  type LeadTableLayout,
+  type SurfaceSalesPerson,
+  LEAD_TABLE_LAYOUT_STORAGE_KEY,
+} from "@/lib/leadTableLayout";
+import { isLeadTableColumnVisible } from "@/lib/leadTableColumns";
 
 
 // Lets nested cards/table rows ask the page to open a lead in the chat view (instead of a modal).
@@ -524,37 +537,147 @@ function SortableLeadCard({
   );
 }
 
-function StageTable({ stage, stageLeads, isOpen, onToggle, totalLeadsCount, overallTotalCount }: { 
-  stage: any; 
-  stageLeads: any[]; 
-  isOpen: boolean; 
+function LeadsGroupTable({
+  label,
+  leads,
+  isOpen,
+  onToggle,
+  emptyMessage,
+  totalLeadsCount,
+  overallTotalCount,
+}: {
+  label: string;
+  leads: any[];
+  isOpen: boolean;
   onToggle: (open: boolean) => void;
+  emptyMessage: string;
   totalLeadsCount?: number;
   overallTotalCount?: number;
 }) {
   return (
-    <Collapsible open={isOpen} onOpenChange={onToggle}>
-      <Card className={`border-r-4 ${stage.borderColor} bg-card`}>
+    <Collapsible
+      open={isOpen}
+      onOpenChange={onToggle}
+      className={cn("flex flex-col", isOpen ? "min-h-0 flex-1 overflow-hidden" : "shrink-0")}
+    >
+      <Card className={cn(
+        "flex flex-col overflow-hidden border-r-4 border-primary/40 bg-card",
+        isOpen && "min-h-0 flex-1",
+      )}>
         <CollapsibleTrigger asChild>
-          <CardHeader className="cursor-pointer hover:bg-muted/50 transition-colors">
-            <CardTitle className="text-xl flex items-center justify-between">
-              <span>{stage.label}</span>
-              <ChevronDown className={`h-5 w-5 transition-transform ${isOpen ? '' : '-rotate-90'}`} />
+          <CardHeader className="shrink-0 cursor-pointer px-3 py-2 hover:bg-muted/50 transition-colors">
+            <CardTitle className="flex items-center justify-between text-sm font-semibold">
+              <span className="flex items-center gap-2">
+                {label}
+                <Badge variant="secondary" className="text-xs font-normal">
+                  {leads.length}
+                </Badge>
+              </span>
+              <ChevronDown className={`h-4 w-4 transition-transform ${isOpen ? '' : '-rotate-90'}`} />
             </CardTitle>
           </CardHeader>
         </CollapsibleTrigger>
-        
-        <CollapsibleContent>
-          <CardContent>
-            {stageLeads.length === 0 ? (
-              <p className="text-muted-foreground text-center py-4">אין לידים בשלב זה</p>
+        {isOpen && (
+          <CardContent className="min-h-0 flex-1 overflow-hidden p-0">
+            {leads.length === 0 ? (
+              <p className="text-muted-foreground text-center py-4">{emptyMessage}</p>
             ) : (
-              <TableWithStickyScroll stageLeads={stageLeads} totalLeadsCount={totalLeadsCount} overallTotalCount={overallTotalCount} />
+              <TableWithStickyScroll
+                fillHeight
+                stageLeads={leads}
+                totalLeadsCount={totalLeadsCount}
+                overallTotalCount={overallTotalCount}
+              />
             )}
           </CardContent>
-        </CollapsibleContent>
+        )}
       </Card>
     </Collapsible>
+  );
+}
+
+function LeadTableLayoutToggle({
+  value,
+  onChange,
+}: {
+  value: LeadTableLayout;
+  onChange: (layout: LeadTableLayout) => void;
+}) {
+  return (
+    <div className="flex gap-1 border rounded-md p-1">
+      <Button
+        variant={value === "by_user" ? "default" : "ghost"}
+        size="sm"
+        onClick={() => onChange("by_user")}
+        title="לפי משתמשים במשטח"
+        className="gap-1 h-8"
+      >
+        <Users className="h-4 w-4" />
+        <span className="hidden sm:inline">לפי משתמשים</span>
+      </Button>
+      <Button
+        variant={value === "by_date" ? "default" : "ghost"}
+        size="sm"
+        onClick={() => onChange("by_date")}
+        title="טבלה אחת לפי תאריך"
+        className="gap-1 h-8"
+      >
+        <CalendarIcon className="h-4 w-4" />
+        <span className="hidden sm:inline">לפי תאריך</span>
+      </Button>
+    </div>
+  );
+}
+
+function LeadsPaginationBar({
+  page,
+  totalPages,
+  isFetching,
+  onPageChange,
+  totalLeadsCount,
+}: {
+  page: number;
+  totalPages: number;
+  isFetching: boolean;
+  onPageChange: (nextPage: number) => void;
+  totalLeadsCount?: number;
+}) {
+  if (totalPages <= 1) return null;
+  return (
+    <div className="flex flex-wrap items-center justify-center gap-1.5">
+      <Button
+        variant="outline"
+        size="sm"
+        onClick={() => onPageChange(Math.max(1, page - 1))}
+        disabled={page === 1 || isFetching}
+        className="h-7 px-2 text-xs"
+      >
+        הקודם →
+      </Button>
+      <span className="text-xs text-muted-foreground whitespace-nowrap px-1">
+        עמוד {page} מתוך {totalPages}
+        {isFetching ? <span className="animate-pulse mr-1">טוען...</span> : null}
+      </span>
+      <Button
+        variant="outline"
+        size="sm"
+        onClick={() => onPageChange(Math.min(totalPages, page + 1))}
+        disabled={page === totalPages || isFetching}
+        className="h-7 px-2 text-xs"
+      >
+        ← הבא
+      </Button>
+      {page < totalPages && !isFetching && totalLeadsCount != null && (
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={() => onPageChange(totalPages)}
+          className="h-7 px-2 text-xs text-muted-foreground"
+        >
+          עמוד אחרון ({totalLeadsCount})
+        </Button>
+      )}
+    </div>
   );
 }
 
@@ -630,9 +753,10 @@ export default function Leads() {
   const { toast } = useToast();
   const { selectedAgency, setSelectedAgency, agencies } = useAgency();
   const { userAgencyIds } = useUserAgencies();
-  const { isOwner } = useUserRole();
+  const { isOwner, isSuperAdmin } = useUserRole();
   const { tenantId } = useCurrentTenant();
   const { userId } = useCurrentUser();
+  const isMobile = useIsMobile();
   const { activeStatuses: leadStatuses } = useLeadStatuses();
   const { activeStages: pipelineStagesData } = useLeadPipelineStages();
   const { isFieldVisible } = useCustomFieldLabels('lead');
@@ -682,15 +806,15 @@ export default function Leads() {
 
   const queryClient = useQueryClient();
   const [activeId, setActiveId] = useState<string | null>(null);
-  const [viewMode, setViewModeState] = useState<"kanban" | "table" | "chat">(() => {
-    if (typeof window === "undefined") return "kanban";
-    const saved = window.localStorage.getItem("leads-view-mode");
-    return saved === "kanban" || saved === "table" || saved === "chat" ? saved : "kanban";
+  const { viewMode, setViewMode, defaultView, setDefaultView } = useLeadsViewMode(userId);
+  const [tableLayout, setTableLayoutState] = useState<LeadTableLayout>(() => {
+    if (typeof window === "undefined") return "by_user";
+    return parseLeadTableLayout(window.localStorage.getItem(LEAD_TABLE_LAYOUT_STORAGE_KEY));
   });
-  const setViewMode = (mode: "kanban" | "table" | "chat") => {
-    setViewModeState(mode);
+  const setTableLayout = (layout: LeadTableLayout) => {
+    setTableLayoutState(layout);
     try {
-      window.localStorage.setItem("leads-view-mode", mode);
+      window.localStorage.setItem(LEAD_TABLE_LAYOUT_STORAGE_KEY, layout);
     } catch {}
   };
   const [pendingChatLeadId, setPendingChatLeadId] = useState<string | null>(null);
@@ -706,7 +830,7 @@ export default function Leads() {
   
   // Pagination state
   const [page, setPage] = useState(1);
-  const TABLE_LEADS_PER_PAGE = 50;
+  const TABLE_LEADS_PER_PAGE = 100;
   const KANBAN_LEADS_PER_STAGE_LIMIT = 50;
   const CHAT_LEADS_PER_STAGE_LIMIT = 100;
   const leadsPerStageLimit = viewMode === "chat" ? CHAT_LEADS_PER_STAGE_LIMIT : KANBAN_LEADS_PER_STAGE_LIMIT;
@@ -736,7 +860,7 @@ export default function Leads() {
     setPage(1);
     setStageOffsets({});
     setAccumulatedLeads({});
-  }, [selectedAgency, searchQuery, filterSalesPersonIds, filterStage, filterResponseStatus, filterTagIds, filterFollowUpToday, startDate, endDate, viewMode]);
+  }, [selectedAgency, searchQuery, filterSalesPersonIds, filterStage, filterResponseStatus, filterTagIds, filterFollowUpToday, startDate, endDate, viewMode, tableLayout]);
   
   // Kanban limiting state - how many leads to SHOW per stage initially (can expand)
   const KANBAN_LEADS_PER_STAGE_DISPLAY = 20;
@@ -810,7 +934,7 @@ export default function Leads() {
 
   // Fetch total count for pagination - skip for Kanban view (not needed)
   const { data: totalLeadsCount = 0 } = useQuery({
-    queryKey: ["leads-count", tenantId, selectedAgency, searchQuery, filterSalesPersonIds, filterStage, filterResponseStatus, filterTagIds, filterFollowUpToday, startDate?.toISOString(), endDate?.toISOString(), isViewingAs, viewAsSalesPersonId],
+    queryKey: ["leads-count", tenantId, selectedAgency, searchQuery, filterSalesPersonIds, filterStage, filterResponseStatus, filterTagIds, filterFollowUpToday, startDate?.toISOString(), endDate?.toISOString(), isViewingAs, viewAsSalesPersonId, isOwner],
     queryFn: async () => {
       if (!tenantId) return 0;
       
@@ -836,8 +960,14 @@ export default function Leads() {
           .select("id", { count: 'exact', head: true })
       );
 
-      // Base tenant/agency filter
-      if (selectedAgency && selectedAgency !== "all") {
+      // Base tenant/agency filter. Owners stay on the current tenant so a
+      // page of 100 is 100 of their leads, not a mixed batch later trimmed.
+      if (isOwner) {
+        query = query.eq("tenant_id", tenantId);
+        if (selectedAgency && selectedAgency !== "all") {
+          query = query.eq("agency_id", selectedAgency);
+        }
+      } else if (selectedAgency && selectedAgency !== "all") {
         query = query.or(`tenant_id.eq.${tenantId},agency_id.eq.${selectedAgency}`);
       } else if (agencies && agencies.length > 0) {
         const agencyIds = agencies.map((a) => a.id);
@@ -1086,7 +1216,7 @@ export default function Leads() {
   
   // Table view: use regular paginated query
   const { data: tableLeads, isLoading: isTableLoading, refetch: refetchTable, isFetching: isTableFetching } = useQuery({
-    queryKey: ["leads-table", tenantId, selectedAgency, effectivePage, searchQuery, filterSalesPersonIds, filterStage, filterResponseStatus, filterTagIds, filterFollowUpToday, startDate?.toISOString(), endDate?.toISOString(), isViewingAs, viewAsSalesPersonId],
+    queryKey: ["leads-table", tenantId, selectedAgency, effectivePage, effectiveLimit, searchQuery, filterSalesPersonIds, filterStage, filterResponseStatus, filterTagIds, filterFollowUpToday, startDate?.toISOString(), endDate?.toISOString(), isViewingAs, viewAsSalesPersonId, isOwner],
     queryFn: async () => {
       if (!tenantId) return [] as any[];
       
@@ -1186,7 +1316,12 @@ export default function Leads() {
       ).order("created_at", { ascending: false });
 
       // 🔒 CRITICAL SECURITY: Filter by tenant_id OR accessible agencies
-      if (selectedAgency && selectedAgency !== "all") {
+      if (isOwner) {
+        query = query.eq("tenant_id", tenantId);
+        if (selectedAgency && selectedAgency !== "all") {
+          query = query.eq("agency_id", selectedAgency);
+        }
+      } else if (selectedAgency && selectedAgency !== "all") {
         query = query.or(`tenant_id.eq.${tenantId},agency_id.eq.${selectedAgency}`);
       } else if (agencies && agencies.length > 0) {
         const agencyIds = agencies.map((a) => a.id);
@@ -1283,6 +1418,10 @@ export default function Leads() {
     return allLeads;
   }, [isKanbanView, tableLeads, kanbanStageData, accumulatedLeads]);
 
+  // The lists default to [] while the query runs — gate the empty state on that.
+  const hasLeadSource = isKanbanView ? !!kanbanStageData : !!tableLeads;
+  const leadsResolving = !hasLeadSource && isQueryResolving(isLoading, isLoading, isFetching);
+
   // Calculate total leads count for Kanban view from RPC data
   const kanbanTotalLeadsCount = useMemo(() => {
     if (!kanbanStageData) return 0;
@@ -1297,7 +1436,11 @@ export default function Leads() {
   const displayTotalCount = isKanbanView ? kanbanTotalLeadsCount : totalLeadsCount;
 
   const totalPages = Math.ceil(totalLeadsCount / TABLE_LEADS_PER_PAGE);
-  const hasMorePages = page < totalPages;
+
+  const goToPage = (nextPage: number) => {
+    setPage(nextPage);
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  };
 
   // 🔒 SECURITY GUARD: Filter leads by current tenant and accessible agencies
   const secureFilteredLeads = useMemo(() => {
@@ -1321,19 +1464,26 @@ export default function Leads() {
     });
   }, [leads, tenantId, userAgencyIds, isOwner]);
 
-  // Fetch sales people for filter
+  // Fetch sales people for filter + table grouping by users on this surface
   const { data: salesPeople } = useQuery({
     queryKey: ["sales-people-filter", tenantId],
     queryFn: async () => {
-      if (!tenantId) return [] as any[];
+      if (!tenantId) return [] as SurfaceSalesPerson[];
       const { data, error } = await supabase
         .from("sales_people")
-        .select("id, full_name")
+        .select("id, full_name, agency_id, sales_person_agencies(agency_id)")
         .eq("tenant_id", tenantId)
         .eq("active", true)
         .order("full_name");
       if (error) throw error;
-      return data;
+      return (data || []).map((person: any) => ({
+        id: person.id,
+        full_name: person.full_name,
+        agency_id: person.agency_id,
+        agencyIds: (person.sales_person_agencies || [])
+          .map((row: { agency_id?: string | null }) => row.agency_id)
+          .filter(Boolean),
+      })) as SurfaceSalesPerson[];
     },
     enabled: !!tenantId,
     staleTime: 1000 * 60 * 10, // 10 minutes - sales people rarely change
@@ -1875,6 +2025,19 @@ export default function Leads() {
     return result;
   }, [secureFilteredLeads, filterTagIds, filterResponseStatus, filterStage, leadsTagsMap, optimisticStatusByLeadId]);
 
+  const dateSortedLeads = useMemo(
+    () => sortLeadsByDate(filteredLeads || []),
+    [filteredLeads],
+  );
+
+  const tableUserGroups = useMemo(() => {
+    const people = (salesPeople || []) as SurfaceSalesPerson[];
+    const surfacePeople = isViewingAs && viewAsSalesPersonId
+      ? people.filter((person) => person.id === viewAsSalesPersonId)
+      : people;
+    return groupLeadsBySurfaceUsers(dateSortedLeads, surfacePeople, selectedAgency);
+  }, [dateSortedLeads, salesPeople, isViewingAs, viewAsSalesPersonId, selectedAgency]);
+
   // Helper to check if any filters are active
   const hasActiveFilters = useMemo(() => {
     return filterSalesPersonIds.length > 0 ||
@@ -2317,158 +2480,164 @@ export default function Leads() {
 
   return (
     <LeadEditContext.Provider value={openLeadInChat}>
-    <div className={viewMode === "chat" ? "flex h-full min-h-0 max-h-full flex-col gap-4 overflow-hidden p-4" : "space-y-6 p-3 md:p-6"}>
+    <div className={
+      isMobile || viewMode === "chat" || viewMode === "table"
+        ? cn(
+            "flex h-full min-h-0 max-h-full flex-col overflow-hidden",
+            isMobile ? "p-1.5" : viewMode === "chat" ? "gap-4 p-4" : "p-2 md:px-3 md:py-2",
+          )
+        : "space-y-6 p-3 md:p-6"
+    }>
       {/* View As Banner - shows when viewing as another user */}
       {isViewingAs && (
-        <div className="bg-warning/20 border border-warning text-warning-foreground px-4 py-3 rounded-lg flex items-center gap-2 text-sm">
+        <div className="bg-warning/20 border border-warning text-warning-foreground px-4 py-2 rounded-lg flex items-center gap-2 text-sm shrink-0">
           <span className="font-medium">📊 מצב צפייה:</span>
           <span>אתה צופה בלידים של <strong>{viewAsUserName}</strong> בלבד</span>
         </div>
       )}
       
-      {/* Mobile Header */}
-      <div className="block md:hidden space-y-4">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <h1 className="text-2xl font-bold">לידים - Pipeline</h1>
-            <Badge variant="secondary" className="text-sm px-2 py-0.5">
-              {isFetching ? (
-                '...'
-              ) : isKanbanView ? (
-                `סה"כ: ${displayTotalCount.toLocaleString()}`
-              ) : (
-                `${filteredLeads?.length || 0}${totalPages > 1 ? ` / ${totalLeadsCount}` : ''}`
-              )}
-            </Badge>
-            <Button variant="outline" size="sm" asChild className="h-8 px-2">
-              <Link to="archive" title="ארכיון לידים">
-                <Archive className="h-4 w-4" />
-              </Link>
+      {/* Mobile Header — one slim row; tools live in a sheet */}
+      <div className="flex md:hidden shrink-0 items-center gap-1">
+        <Badge variant="secondary" className="h-6 px-1.5 text-[11px]">
+          {isFetching
+            ? "..."
+            : isKanbanView
+              ? displayTotalCount.toLocaleString()
+              : `${filteredLeads?.length || 0}${totalPages > 1 ? ` · ${page}/${totalPages}` : ""}`}
+        </Badge>
+        <LeadViewModeToggle
+          compact
+          hideDefaultMenu
+          viewMode={viewMode}
+          defaultView={defaultView}
+          onViewModeChange={setViewMode}
+          onDefaultViewChange={setDefaultView}
+        />
+        {viewMode === "table" && totalPages > 1 && (
+          <div className="flex items-center">
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-7 w-7"
+              onClick={() => goToPage(Math.max(1, page - 1))}
+              disabled={page === 1 || isFetching}
+              title="הקודם"
+            >
+              <ChevronRight className="h-4 w-4" />
+            </Button>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-7 w-7"
+              onClick={() => goToPage(Math.min(totalPages, page + 1))}
+              disabled={page === totalPages || isFetching}
+              title="הבא"
+            >
+              <ChevronLeft className="h-4 w-4" />
             </Button>
           </div>
-
-          <div className="flex items-center gap-2">
-            {/* View mode toggle (was desktop-only) */}
-            <div className="flex gap-1 border rounded-md p-1">
-              <Button
-                variant={viewMode === "kanban" ? "default" : "ghost"}
-                size="sm"
-                onClick={() => setViewMode("kanban")}
-                className="h-8 w-8 p-0"
-                title="קנבן"
-              >
-                <LayoutGrid className="h-4 w-4" />
-              </Button>
-              <Button
-                variant={viewMode === "table" ? "default" : "ghost"}
-                size="sm"
-                onClick={() => setViewMode("table")}
-                className="h-8 w-8 p-0"
-                title="טבלה"
-              >
-                <TableIcon className="h-4 w-4" />
-              </Button>
-              <Button
-                variant={viewMode === "chat" ? "default" : "ghost"}
-                size="sm"
-                onClick={() => setViewMode("chat")}
-                className="h-8 w-8 p-0"
-                title="תצוגת צ'אט"
-              >
-                <MessageCircle className="h-4 w-4" />
-              </Button>
-            </div>
-
-            {/* Mobile Pagination (Table view only) */}
-            {!isKanbanView && totalPages > 1 && (
-              <div className="flex items-center gap-1">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setPage((p) => Math.max(1, p - 1))}
-                  disabled={page === 1 || isFetching}
-                  className="h-8 px-2"
-                >
-                  ←
-                </Button>
-                <span className="text-xs text-muted-foreground whitespace-nowrap px-1">
-                  {page}/{totalPages}
-                </span>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-                  disabled={page === totalPages || isFetching}
-                  className="h-8 px-2"
-                >
-                  →
+        )}
+        <Sheet>
+          <SheetTrigger asChild>
+            <Button
+              variant="outline"
+              size="icon"
+              className="relative ms-auto h-8 w-8"
+              title="חיפוש וסינון"
+            >
+              <Filter className="h-4 w-4" />
+              {(hasActiveFilters || !!searchQuery) && (
+                <span className="absolute top-1 left-1 h-1.5 w-1.5 rounded-full bg-primary" />
+              )}
+            </Button>
+          </SheetTrigger>
+          <SheetContent side="bottom" className="max-h-[80vh] overflow-y-auto">
+            <SheetHeader>
+              <SheetTitle>חיפוש וסינון</SheetTitle>
+            </SheetHeader>
+            <div className="mt-4 space-y-4" dir="rtl">
+              <div className="relative">
+                <Search className="absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                <Input
+                  type="text"
+                  placeholder="חיפוש לפי שם, טלפון או חברה..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="h-9 pr-10"
+                />
+                {searchQuery && (
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => setSearchQuery("")}
+                    className="absolute left-1 top-1/2 h-7 w-7 -translate-y-1/2"
+                  >
+                    <X className="h-4 w-4" />
+                  </Button>
+                )}
+              </div>
+              <LeadFilterPresetTabs
+                activePresetId={activePresetId}
+                onPresetSelect={handlePresetSelect}
+                onOpenFiltersDialog={() => {
+                  setEditingPreset(null);
+                  setFiltersDialogOpen(true);
+                }}
+                onEditPreset={handleEditPreset}
+                hasActiveFilters={hasActiveFilters}
+                pipelineStages={PIPELINE_STAGES}
+                activeStageId={filterStage}
+                onStageSelect={handleStageSelect}
+                stageCounts={stagePresetCounts}
+              />
+              {viewMode === "table" && (
+                <div className="flex flex-wrap items-center gap-2">
+                  <LeadTableLayoutToggle value={tableLayout} onChange={setTableLayout} />
+                  {(isOwner || isSuperAdmin) && <LeadTableColumnsDialog />}
+                </div>
+              )}
+              {viewMode === "table" && (
+                <LeadsPaginationBar
+                  page={page}
+                  totalPages={totalPages}
+                  isFetching={isFetching}
+                  onPageChange={goToPage}
+                  totalLeadsCount={totalLeadsCount}
+                />
+              )}
+              <div className="space-y-2">
+                <p className="text-xs text-muted-foreground">תצוגת ברירת מחדל</p>
+                <LeadViewModeToggle
+                  viewMode={viewMode}
+                  defaultView={defaultView}
+                  onViewModeChange={setViewMode}
+                  onDefaultViewChange={setDefaultView}
+                />
+              </div>
+              <div className="flex flex-wrap gap-2 border-t pt-3">
+                <AddLeadForm />
+                <ImportLeadsWithMapping />
+                <Button variant="outline" size="sm" asChild>
+                  <Link to="archive" className="gap-2">
+                    <Archive className="h-4 w-4" />
+                    ארכיון
+                  </Link>
                 </Button>
               </div>
-            )}
-          </div>
-        </div>
-
-        <div
-          className="grid w-full min-w-0 items-center gap-2"
-          style={{ gridTemplateColumns: "minmax(8rem, 12rem) minmax(0, 1fr)" }}
-        >
-          <div className="relative min-w-0">
-            <Search className="absolute right-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-            <Input
-              type="text"
-              placeholder="חיפוש..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="pr-10 h-8"
-            />
-          </div>
-          <LeadFilterPresetTabs
-            activePresetId={activePresetId}
-            onPresetSelect={handlePresetSelect}
-            onOpenFiltersDialog={() => {
-              setEditingPreset(null);
-              setFiltersDialogOpen(true);
-            }}
-            onEditPreset={handleEditPreset}
-            hasActiveFilters={hasActiveFilters}
-            pipelineStages={PIPELINE_STAGES}
-            activeStageId={filterStage}
-            onStageSelect={handleStageSelect}
-            stageCounts={stagePresetCounts}
-          />
-        </div>
-        <div className="flex gap-2 flex-wrap">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => syncFacebookLeadsMutation.mutate()}
-            disabled={syncFacebookLeadsMutation.isPending}
-            className="gap-1"
-          >
-            <Download className={`h-4 w-4 ${syncFacebookLeadsMutation.isPending ? 'animate-spin' : ''}`} />
-            {syncFacebookLeadsMutation.isPending ? 'מסנכרן...' : 'סנכרן מפייסבוק'}
-          </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={handleExportExcel}
-            disabled={isExporting}
-            className="gap-1"
-          >
-            {isExporting ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileSpreadsheet className="h-4 w-4" />}
-            {isExporting ? "מייצא…" : "ייצוא Excel"}
-          </Button>
-          <AddLeadForm />
-          <ImportLeadsWithMapping />
-        </div>
+            </div>
+          </SheetContent>
+        </Sheet>
       </div>
 
       {/* Desktop Header - Sticky */}
-      <div className="hidden md:block sticky top-0 z-40 bg-background pb-4 space-y-4">
-        <div className="flex justify-between items-center">
-          <div className="flex items-center gap-3">
-            <h1 className="text-3xl font-bold">לידים - Pipeline</h1>
-            <Badge variant="secondary" className="text-base px-3 py-1">
+      <div className={cn(
+        "hidden md:block bg-background",
+        viewMode === "table" ? "shrink-0 space-y-2 pb-1.5" : "sticky top-0 z-40 space-y-4 pb-4",
+      )}>
+        <div className="flex flex-wrap justify-between items-center gap-2">
+          <div className="flex min-w-0 items-center gap-2">
+            <h1 className={viewMode === "table" ? "text-xl font-bold" : "text-3xl font-bold"}>לידים - Pipeline</h1>
+            <Badge variant="secondary" className={viewMode === "table" ? "text-sm px-2 py-0.5" : "text-base px-3 py-1"}>
               {isFetching ? (
                 <span className="animate-pulse">טוען...</span>
               ) : isKanbanView ? (
@@ -2477,59 +2646,28 @@ export default function Leads() {
                 <>מציג: {filteredLeads?.length || 0} {totalPages > 1 && `(מתוך ${totalLeadsCount})`}</>
               )}
             </Badge>
-            
-            {/* Pagination controls in header */}
-            {totalPages > 1 && (
-              <div className="flex items-center gap-2 mr-4 border-r pr-4">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setPage(p => Math.max(1, p - 1))}
-                  disabled={page === 1 || isFetching}
-                >
-                  הקודם →
-                </Button>
-                <span className="text-sm text-muted-foreground whitespace-nowrap">
-                  עמוד {page} מתוך {totalPages}
-                </span>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setPage(p => Math.min(totalPages, p + 1))}
-                  disabled={page === totalPages || isFetching}
-                >
-                  ← הבא
-                </Button>
-              </div>
+            {viewMode === "table" && (
+              <LeadsPaginationBar
+                page={page}
+                totalPages={totalPages}
+                isFetching={isFetching}
+                onPageChange={goToPage}
+                totalLeadsCount={totalLeadsCount}
+              />
             )}
           </div>
-          <div className="flex gap-3 items-center">
-            {/* View mode toggle */}
-            <div className="flex gap-1 border rounded-md p-1">
-              <Button
-                variant={viewMode === "kanban" ? "default" : "ghost"}
-                size="sm"
-                onClick={() => setViewMode("kanban")}
-              >
-                <LayoutGrid className="h-4 w-4" />
-              </Button>
-              <Button
-                variant={viewMode === "table" ? "default" : "ghost"}
-                size="sm"
-                onClick={() => setViewMode("table")}
-              >
-                <TableIcon className="h-4 w-4" />
-              </Button>
-              <Button
-                variant={viewMode === "chat" ? "default" : "ghost"}
-                size="sm"
-                onClick={() => setViewMode("chat")}
-              >
-                <MessageCircle className="h-4 w-4" />
-              </Button>
-            </div>
+          <div className="flex gap-2 items-center shrink-0">
+            <LeadViewModeToggle
+              viewMode={viewMode}
+              defaultView={defaultView}
+              onViewModeChange={setViewMode}
+              onDefaultViewChange={setDefaultView}
+            />
+            {viewMode === "table" && (
+              <LeadTableLayoutToggle value={tableLayout} onChange={setTableLayout} />
+            )}
             <div className="flex gap-2">
-              <Button variant="outline" asChild>
+              <Button variant="outline" size={viewMode === "table" ? "sm" : "default"} asChild>
                 <Link to="archive" className="gap-2">
                   <Archive className="h-4 w-4" />
                   ארכיון
@@ -2537,6 +2675,7 @@ export default function Leads() {
               </Button>
               <Button
                 variant="outline"
+                size={viewMode === "table" ? "sm" : "default"}
                 onClick={() => syncFacebookLeadsMutation.mutate()}
                 disabled={syncFacebookLeadsMutation.isPending}
                 className="gap-2"
@@ -2553,8 +2692,8 @@ export default function Leads() {
         
         {/* Search + saved filters + stages — one row */}
         <div
-          className="grid w-full min-w-0 items-center gap-3"
-          style={{ gridTemplateColumns: "18rem minmax(0, 1fr) auto" }}
+          className="grid w-full min-w-0 items-center gap-2"
+          style={{ gridTemplateColumns: viewMode === "table" ? "14rem minmax(0, 1fr) auto" : "18rem minmax(0, 1fr) auto" }}
         >
           <div className="relative min-w-0">
             <Search className="absolute right-4 top-1/2 transform -translate-y-1/2 h-5 w-5 text-muted-foreground" />
@@ -2563,7 +2702,10 @@ export default function Leads() {
               placeholder="חיפוש לפי שם, טלפון או חברה..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="pr-12 h-9 text-base font-medium shadow-sm border-2 focus:border-primary"
+              className={cn(
+                "pr-12 font-medium shadow-sm border-2 focus:border-primary",
+                viewMode === "table" ? "h-8 text-sm" : "h-9 text-base",
+              )}
             />
             {searchQuery && (
               <Button
@@ -2593,16 +2735,19 @@ export default function Leads() {
           />
           
           <div className="flex shrink-0 items-center gap-2">
+            {viewMode === "table" && (isOwner || isSuperAdmin) && (
+              <LeadTableColumnsDialog />
+            )}
             <ManageLeadStatusesDialog 
               trigger={
-                <Button variant="outline" size="icon" className="h-9 w-9 shrink-0" title="ניהול סטטוסי לידים">
+                <Button variant="outline" size="icon" className={cn("shrink-0", viewMode === "table" ? "h-8 w-8" : "h-9 w-9")} title="ניהול סטטוסי לידים">
                   <Settings2 className="h-4 w-4" />
                 </Button>
               }
             />
             <ChatTagsManager 
               trigger={
-                <Button variant="outline" size="icon" className="h-9 w-9 shrink-0" title="ניהול תגיות">
+                <Button variant="outline" size="icon" className={cn("shrink-0", viewMode === "table" ? "h-8 w-8" : "h-9 w-9")} title="ניהול תגיות">
                   <Tag className="h-4 w-4" />
                 </Button>
               }
@@ -2610,7 +2755,7 @@ export default function Leads() {
             <Button 
               variant="outline" 
               size="icon"
-              className="h-9 w-9 shrink-0"
+              className={cn("shrink-0", viewMode === "table" ? "h-8 w-8" : "h-9 w-9")}
               onClick={handleExportExcel}
               disabled={isExporting}
               title="ייצוא כל הלידים לפי הסינון לקובץ Excel"
@@ -2642,7 +2787,12 @@ export default function Leads() {
         }}
       />
 
-      {leads?.length === 0 ? (
+      {leadsResolving ? (
+        <CarmenLoadingScreen
+          variant="card"
+          messages={["כרמן מושכת את הלידים…", "מסדרת לפי שלב בצינור…"]}
+        />
+      ) : leads?.length === 0 ? (
         <Card>
           <CardContent className="py-12 text-center">
             <p className="text-muted-foreground mb-4">
@@ -2652,7 +2802,7 @@ export default function Leads() {
           </CardContent>
         </Card>
       ) : viewMode === "kanban" ? (
-        <>
+        <div className="relative min-h-0 flex-1 overflow-y-auto">
           {/* Mobile Kanban - Single Stage with Floating Button */}
           <div className="block md:hidden relative pb-20">
             <DndContext
@@ -2964,7 +3114,7 @@ export default function Leads() {
               ) : null}
             </DragOverlay>
           </DndContext>
-        </>
+        </div>
       ) : viewMode === "chat" ? (
         <div className="flex-1 min-h-0 overflow-hidden">
         <LeadsChatView
@@ -3000,62 +3150,36 @@ export default function Leads() {
         />
         </div>
       ) : (
-        <div className="space-y-6">
-          {PIPELINE_STAGES.map((stage) => {
-            const stageLeads = getLeadsByStage(stage.id);
-            const stageCount = getLeadsCountByStage(stage.id);
-            return (
-              <StageTable 
-                key={stage.id}
-                stage={stage}
-                stageLeads={stageLeads}
-                isOpen={openTables[stage.id]}
-                onToggle={(open) => setOpenTables(prev => ({ ...prev, [stage.id]: open }))}
-                totalLeadsCount={stageCount}
+        <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+          {tableLayout === "by_date" ? (
+            dateSortedLeads.length === 0 ? (
+              <p className="text-muted-foreground text-center py-8">אין לידים להצגה</p>
+            ) : (
+              <TableWithStickyScroll
+                fillHeight
+                stageLeads={dateSortedLeads}
+                totalLeadsCount={dateSortedLeads.length}
                 overallTotalCount={totalLeadsCount}
               />
-            );
-          })}
-        </div>
-      )}
-
-      {/* Pagination Controls */}
-      {totalPages > 1 && (
-        <div className="flex justify-center items-center gap-4 py-4 border-t">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => setPage(p => Math.max(1, p - 1))}
-            disabled={page === 1 || isFetching}
-          >
-            הקודם →
-          </Button>
-          <div className="flex items-center gap-2 text-sm text-muted-foreground">
-            <span>עמוד {page} מתוך {totalPages}</span>
-            {isFetching && <span className="animate-pulse">טוען...</span>}
-          </div>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => setPage(p => Math.min(totalPages, p + 1))}
-            disabled={page === totalPages || isFetching}
-          >
-            ← הבא
-          </Button>
-        </div>
-      )}
-
-      {/* Load All Button - for users who want all data */}
-      {hasMorePages && !isFetching && (
-        <div className="flex justify-center pb-4">
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => setPage(totalPages)}
-            className="text-muted-foreground"
-          >
-            טען את כל {totalLeadsCount} הלידים (עמוד אחרון)
-          </Button>
+            )
+          ) : tableUserGroups.length === 0 ? (
+            <p className="text-muted-foreground text-center py-8">אין לידים להצגה</p>
+          ) : (
+            <div className="flex min-h-0 flex-1 flex-col gap-2 overflow-hidden">
+              {tableUserGroups.map((group) => (
+                <LeadsGroupTable
+                  key={group.id}
+                  label={group.label}
+                  leads={group.leads}
+                  isOpen={openTables[group.id] ?? group.leads.length > 0}
+                  onToggle={(open) => setOpenTables(prev => ({ ...prev, [group.id]: open }))}
+                  emptyMessage="אין לידים למשתמש זה"
+                  totalLeadsCount={group.leads.length}
+                  overallTotalCount={totalLeadsCount}
+                />
+              ))}
+            </div>
+          )}
         </div>
       )}
 
@@ -3072,7 +3196,17 @@ export default function Leads() {
   );
 }
 
-function TableWithStickyScroll({ stageLeads, totalLeadsCount, overallTotalCount }: { stageLeads: any[]; totalLeadsCount?: number; overallTotalCount?: number }) {
+function TableWithStickyScroll({
+  stageLeads,
+  totalLeadsCount,
+  overallTotalCount,
+  fillHeight = false,
+}: {
+  stageLeads: any[];
+  totalLeadsCount?: number;
+  overallTotalCount?: number;
+  fillHeight?: boolean;
+}) {
   const { toast } = useToast();
   const openLeadInChat = useContext(LeadEditContext);
   const queryClient = useQueryClient();
@@ -3085,7 +3219,7 @@ function TableWithStickyScroll({ stageLeads, totalLeadsCount, overallTotalCount 
   const { selectedAgency } = useAgency();
   const { activeStatuses: leadStatuses, isLoading: isStatusesLoading } = useLeadStatuses();
   const { activeStages: pipelineStagesData } = useLeadPipelineStages();
-  const { isFieldVisible } = useCustomFieldLabels('lead');
+  const { isFieldVisible, getFieldLabel } = useCustomFieldLabels('lead');
   const { tenantId } = useCurrentTenant();
 
   // Fetch sales people for assignment
@@ -3495,10 +3629,10 @@ function TableWithStickyScroll({ stageLeads, totalLeadsCount, overallTotalCount 
   const showSelectAllButton = isAllPageSelected && !isAllLeadsSelected && overallTotalCount && overallTotalCount > stageLeads.length;
 
   return (
-    <div className="relative">
+    <div className={cn("relative", fillHeight && "flex h-full min-h-0 flex-col")}>
       {/* Bulk Actions Toolbar */}
       {selectedLeads.length > 0 && (
-        <div className="bg-primary text-primary-foreground p-3 rounded-lg mb-3 flex flex-col gap-2">
+        <div className="bg-primary text-primary-foreground p-2 rounded-lg mb-2 flex flex-col gap-2 shrink-0">
           <div className="flex items-center justify-between gap-3">
             <div className="flex items-center gap-2">
               <span className="font-semibold">{selectedLeads.length} לידים נבחרו</span>
@@ -3577,12 +3711,12 @@ function TableWithStickyScroll({ stageLeads, totalLeadsCount, overallTotalCount 
       )}
 
       {/* Resizable Table */}
-      <div className="h-[540px]" dir="rtl">
+      <div className={fillHeight ? "min-h-0 flex-1" : "h-[min(75vh,880px)]"} dir="rtl">
         <ResizableTable
           columns={[
             { 
               id: "name", 
-              label: "שם", 
+              label: getFieldLabel("contact_name", "שם"), 
               width: 120, 
               sticky: true,
               render: (lead: any) => (
@@ -3592,9 +3726,23 @@ function TableWithStickyScroll({ stageLeads, totalLeadsCount, overallTotalCount 
                 </div>
               )
             },
-            { 
+            ...(isLeadTableColumnVisible("created_at", isFieldVisible) ? [{
+              id: "created_at",
+              label: getFieldLabel("created_at", "תאריך"),
+              width: 160,
+              render: (lead: any) => <LeadCreatedAtLines lead={lead} compact />
+            }] : []),
+            ...(isLeadTableColumnVisible("sales_person", isFieldVisible) ? [{
+              id: "sales_person",
+              label: getFieldLabel("sales_person", "משתמש"),
+              width: 140,
+              render: (lead: any) => (
+                <span className="truncate">{lead.sales_people?.full_name || "ללא שיוך"}</span>
+              )
+            }] : []),
+            ...(isLeadTableColumnVisible("phone", isFieldVisible) ? [{ 
               id: "phone", 
-              label: "טלפון", 
+              label: getFieldLabel("phone", "טלפון"), 
               width: 130,
               render: (lead: any) => lead.phone ? (
                 <a href={`tel:${lead.phone}`} className="hover:underline flex items-center gap-1">
@@ -3602,10 +3750,10 @@ function TableWithStickyScroll({ stageLeads, totalLeadsCount, overallTotalCount 
                   <span className="truncate">{lead.phone}</span>
                 </a>
               ) : "-"
-            },
-            ...(isFieldVisible('company_name') ? [{ 
+            }] : []),
+            ...(isLeadTableColumnVisible("company_name", isFieldVisible) ? [{ 
               id: "company", 
-              label: "שם חברה", 
+              label: getFieldLabel("company_name", "שם חברה"), 
               width: 170,
               render: (lead: any) => (
                 <div className="flex items-center gap-2">
@@ -3614,9 +3762,9 @@ function TableWithStickyScroll({ stageLeads, totalLeadsCount, overallTotalCount 
                 </div>
               )
             }] : []),
-            ...(isFieldVisible('campaign_name') ? [{
+            ...(isLeadTableColumnVisible("campaign_name", isFieldVisible) ? [{
               id: "campaign_name",
-              label: "שם קמפיין",
+              label: getFieldLabel("campaign_name", "שם קמפיין"),
               width: 180,
               render: (lead: any) => (
                 <span className="truncate" title={lead.campaign_name || ""}>
@@ -3624,17 +3772,17 @@ function TableWithStickyScroll({ stageLeads, totalLeadsCount, overallTotalCount 
                 </span>
               )
             }] : []),
-            {
+            ...(isLeadTableColumnVisible("source", isFieldVisible) ? [{
               id: "source",
-              label: "מקור הליד",
+              label: getFieldLabel("source", "מקור הליד"),
               width: 140,
               render: (lead: any) => (
                 <LeadSourceLines lead={lead} compact showCampaign={false} />
               )
-            },
-            { 
+            }] : []),
+            ...(isLeadTableColumnVisible("status", isFieldVisible) ? [{ 
               id: "status", 
-              label: "שלב במשפך", 
+              label: getFieldLabel("status", "שלב במשפך"), 
               width: 150,
               render: (lead: any) => {
                 const stage = PIPELINE_STAGES.find(s => s.id === lead.status);
@@ -3684,10 +3832,10 @@ function TableWithStickyScroll({ stageLeads, totalLeadsCount, overallTotalCount 
                   </Select>
                 );
               }
-            },
-            { 
+            }] : []),
+            ...(isLeadTableColumnVisible("response_status", isFieldVisible) ? [{ 
               id: "response_status", 
-              label: "סטטוס", 
+              label: getFieldLabel("response_status", "סטטוס"), 
               width: 150,
               render: (lead: any) => {
                 const status = findLeadStatus(lead.response_status, leadStatuses);
@@ -3747,10 +3895,10 @@ function TableWithStickyScroll({ stageLeads, totalLeadsCount, overallTotalCount 
                   </Select>
                 );
               }
-            },
-            { 
+            }] : []),
+            ...(isLeadTableColumnVisible("tags", isFieldVisible) ? [{ 
               id: "tags", 
-              label: "תגיות", 
+              label: getFieldLabel("tags", "תגיות"), 
               width: 200,
               render: (lead: any) => {
                 const tagIds = leadsTagsMap[lead.id] || [];
@@ -3768,10 +3916,10 @@ function TableWithStickyScroll({ stageLeads, totalLeadsCount, overallTotalCount 
                   </div>
                 );
               }
-            },
-            { 
+            }] : []),
+            ...(isLeadTableColumnVisible("follow_up_date", isFieldVisible) ? [{ 
               id: "follow_up_date", 
-              label: "תאריך לחזרה", 
+              label: getFieldLabel("follow_up_date", "תאריך לחזרה"), 
               width: 150,
               render: (lead: any) => (
                 <FollowUpDatePicker 
@@ -3779,10 +3927,10 @@ function TableWithStickyScroll({ stageLeads, totalLeadsCount, overallTotalCount 
                   currentDate={lead.follow_up_date}
                 />
               )
-            },
+            }] : []),
             { 
               id: "actions", 
-              label: "פעולות", 
+              label: getFieldLabel("actions", "פעולות"), 
               width: 120,
               render: (lead: any) => (
                 <div className="flex justify-center gap-1">

@@ -33,9 +33,20 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { TaskRecurrenceFields, type TaskRecurrenceValue } from "@/components/tasks/TaskRecurrenceFields";
+import {
+  collectTaskAssigneeIds,
+  shouldFanOutRecurringTasks,
+} from "@/lib/recurringTaskAssignees";
+import {
+  computeFirstOccurrenceDate,
+  formatLocalDate,
+  type RecurrenceFrequency,
+} from "@/lib/taskRecurrence";
 import { toast } from "sonner";
 import { ChevronDown, ChevronUp, Check, ChevronsUpDown, Plus } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { priorityBarColor } from "@/lib/taskPriority";
 import {
   Command,
   CommandEmpty,
@@ -67,6 +78,11 @@ const formSchema = z.object({
   lead_id: z.string().optional(),
   agency_id: z.string().optional(),
   due_date: z.string().optional(),
+  due_time: z.string().optional(),
+  recurrence_frequency: z.enum(["daily", "weekly", "monthly"]).nullable().default(null),
+  recurrence_weekday: z.number().min(0).max(6).nullable().default(null),
+  recurrence_monthday: z.number().min(1).max(31).nullable().default(null),
+  collaborator_ids: z.array(z.string()).default([]),
   self_reminder_enabled: z.boolean().default(false),
   self_reminder_at: z.string().optional(),
   status: z.enum(["open", "in_progress", "done"]),
@@ -152,6 +168,11 @@ export default function AddTaskForm({ clientId, leadId, agencyId, defaultCampaig
       lead_id: leadId || "",
       agency_id: agencyId || "",
       due_date: "",
+      due_time: "",
+      recurrence_frequency: null,
+      recurrence_weekday: null,
+      recurrence_monthday: null,
+      collaborator_ids: [],
       self_reminder_enabled: false,
       self_reminder_at: "",
       status: "open",
@@ -186,6 +207,26 @@ export default function AddTaskForm({ clientId, leadId, agencyId, defaultCampaig
   const selfReminderEnabled = useWatch({
     control: form.control,
     name: "self_reminder_enabled",
+  });
+  const recurrenceFrequency = useWatch({
+    control: form.control,
+    name: "recurrence_frequency",
+  });
+  const recurrenceWeekday = useWatch({
+    control: form.control,
+    name: "recurrence_weekday",
+  });
+  const recurrenceMonthday = useWatch({
+    control: form.control,
+    name: "recurrence_monthday",
+  });
+  const dueTime = useWatch({
+    control: form.control,
+    name: "due_time",
+  });
+  const collaboratorIds = useWatch({
+    control: form.control,
+    name: "collaborator_ids",
   });
   const isSelfAssigned = Boolean(userCampaignerId && selectedCampaignerId === userCampaignerId);
 
@@ -395,7 +436,20 @@ export default function AddTaskForm({ clientId, leadId, agencyId, defaultCampaig
       const currentUserId = sessionData?.session?.user?.id;
       const effectiveCreatorId = isViewingAs && viewAsUserId ? viewAsUserId : currentUserId;
 
-      const taskPayload = {
+      let dueDate = values.due_date || null;
+      let dueTimeValue = values.due_time || null;
+      if (values.recurrence_frequency) {
+        const first = computeFirstOccurrenceDate({
+          frequency: values.recurrence_frequency as RecurrenceFrequency,
+          weekday: values.recurrence_weekday,
+          monthday: values.recurrence_monthday,
+          preferredDate: values.due_date ? new Date(`${values.due_date}T12:00:00`) : null,
+        });
+        dueDate = formatLocalDate(first);
+        dueTimeValue = values.due_time || null;
+      }
+
+      const taskPayload: Record<string, unknown> = {
         title: values.title,
         notes: values.notes || null,
         campaigner_id: finalCampaignerId || null,
@@ -403,7 +457,8 @@ export default function AddTaskForm({ clientId, leadId, agencyId, defaultCampaig
         client_id: values.task_category === "client" ? values.client_id : null,
         lead_id: values.task_category === "lead" ? values.lead_id : null,
         agency_id: finalAgencyId,
-        due_date: values.due_date || null,
+        due_date: dueDate,
+        due_time: dueTimeValue ? (dueTimeValue.length === 5 ? `${dueTimeValue}:00` : dueTimeValue) : null,
         self_reminder_at:
           isSelfAssigned && values.self_reminder_enabled && values.self_reminder_at
             ? new Date(values.self_reminder_at).toISOString()
@@ -419,24 +474,70 @@ export default function AddTaskForm({ clientId, leadId, agencyId, defaultCampaig
         created_by: effectiveCreatorId,
         impersonated_by: isViewingAs ? currentUserId : null,
       };
+      // Only send recurrence columns when configured — avoids insert failures
+      // before the recurring-tasks migration has been applied.
+      if (values.recurrence_frequency) {
+        taskPayload.recurrence_frequency = values.recurrence_frequency;
+        taskPayload.recurrence_interval = 1;
+        taskPayload.recurrence_weekday =
+          values.recurrence_frequency === "weekly" ? values.recurrence_weekday : null;
+        taskPayload.recurrence_monthday =
+          values.recurrence_frequency === "monthly" ? values.recurrence_monthday : null;
+      }
 
-      const { error } = await supabase.from("tasks").insert([taskPayload]);
-      if (error) throw error;
+      const assigneeIds = collectTaskAssigneeIds(finalCampaignerId, values.collaborator_ids);
+      const fanOut = shouldFanOutRecurringTasks(values.recurrence_frequency, assigneeIds);
+
+      if (fanOut) {
+        const payloads = assigneeIds.map((campaignerId) => ({
+          ...taskPayload,
+          campaigner_id: campaignerId,
+          sales_person_id: null,
+        }));
+        const { error } = await supabase.from("tasks").insert(payloads as any);
+        if (error) throw error;
+      } else {
+        const { data: created, error } = await supabase
+          .from("tasks")
+          .insert([taskPayload as any])
+          .select("id")
+          .single();
+        if (error) throw error;
+
+        const uniqueCollaborators = Array.from(
+          new Set((values.collaborator_ids || []).filter((id) => id && id !== finalCampaignerId)),
+        );
+        if (uniqueCollaborators.length > 0 && created?.id) {
+          const { error: collabError } = await supabase.from("task_collaborators").insert(
+            uniqueCollaborators.map((campaignerCollaboratorId) => ({
+              task_id: created.id,
+              campaigner_id: campaignerCollaboratorId,
+              tenant_id: tenantId,
+              added_by: effectiveCreatorId,
+            })),
+          );
+          if (collabError) throw collabError;
+        }
+      }
 
       // task_assigned is fired by trg_notify_task_notification_worker.
       // (AFTER INSERT OR UPDATE OF campaigner_id ON public.tasks). Do not invoke it
       // from the client to avoid duplicate notifications.
+      return fanOut ? { fanOutCount: assigneeIds.length } : null;
     },
-    onSuccess: () => {
+    onSuccess: (result) => {
       queryClient.invalidateQueries({ queryKey: ["tasks", currentTenantId] });
       queryClient.invalidateQueries({ queryKey: ["lead-tasks"] });
       queryClient.invalidateQueries({ queryKey: ["client-tasks"] });
       queryClient.invalidateQueries({ queryKey: ["campaigner-tasks"] });
       queryClient.invalidateQueries({ queryKey: ["client-onboarding", currentTenantId] });
+      const fanOutCount = result?.fanOutCount;
       toast.success(
-        isViewingAs
-          ? `המשימה נוספה כ-${viewAsUserName || "המשתמש הנבחר"} ותופיע במודול משימות`
-          : "המשימה נוספה בהצלחה ותופיע במודול משימות"
+        fanOutCount
+          ? `נוצרו ${fanOutCount} משימות חוזרות — אחת לכל איש צוות`
+          : isViewingAs
+            ? `המשימה נוספה כ-${viewAsUserName || "המשתמש הנבחר"} ותופיע במודול משימות`
+            : "המשימה נוספה בהצלחה ותופיע במודול משימות",
       );
       form.reset();
       setOpen(false);
@@ -632,10 +733,7 @@ export default function AddTaskForm({ clientId, leadId, agencyId, defaultCampaig
                     control={form.control}
                     name="priority"
                     render={({ field }) => {
-                      const getPriorityColor = (priority: number) => {
-                        const hue = 240 - ((priority - 1) / 9) * 240;
-                        return `hsl(${hue}, 70%, 50%)`;
-                      };
+                      const getPriorityColor = (priority: number) => priorityBarColor(priority);
                       
                       const getPriorityText = (priority: number) => {
                         if (priority >= 8) return "דחיפות גבוהה";
@@ -741,10 +839,7 @@ export default function AddTaskForm({ clientId, leadId, agencyId, defaultCampaig
                     control={form.control}
                     name="priority"
                     render={({ field }) => {
-                      const getPriorityColor = (priority: number) => {
-                        const hue = 240 - ((priority - 1) / 9) * 240;
-                        return `hsl(${hue}, 70%, 50%)`;
-                      };
+                      const getPriorityColor = (priority: number) => priorityBarColor(priority);
                       
                       const getPriorityText = (priority: number) => {
                         if (priority >= 8) return "דחיפות גבוהה";
@@ -884,6 +979,67 @@ export default function AddTaskForm({ clientId, leadId, agencyId, defaultCampaig
                   משימה עצמית לא שולחת התראות אוטומטיות. כרמן תזכיר לך רק אם תבחר מועד.
                 </p>
               </div>
+            )}
+
+            <FormField
+              control={form.control}
+              name="recurrence_frequency"
+              render={() => (
+                <FormItem>
+                  <FormLabel>משימה קבועה</FormLabel>
+                  <TaskRecurrenceFields
+                    value={{
+                      frequency: recurrenceFrequency,
+                      weekday: recurrenceWeekday,
+                      monthday: recurrenceMonthday,
+                      time: dueTime || null,
+                    }}
+                    onChange={(next: TaskRecurrenceValue) => {
+                      form.setValue("recurrence_frequency", next.frequency);
+                      form.setValue("recurrence_weekday", next.weekday);
+                      form.setValue("recurrence_monthday", next.monthday);
+                      form.setValue("due_time", next.time || "");
+                    }}
+                  />
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            {visibleCampaigners && visibleCampaigners.length > 0 && (
+              <FormItem>
+                <FormLabel>אנשים נוספים על המשימה</FormLabel>
+                <div className="flex flex-wrap gap-1.5 rounded-md border p-2">
+                  {visibleCampaigners
+                    .filter((campaigner) => campaigner.id !== selectedCampaignerId)
+                    .map((campaigner) => {
+                      const selected = (collaboratorIds || []).includes(campaigner.id);
+                      return (
+                        <button
+                          key={campaigner.id}
+                          type="button"
+                          className={cn(
+                            "rounded-full border px-2.5 py-1 text-xs transition-colors",
+                            selected
+                              ? "border-primary bg-primary/10 text-foreground"
+                              : "border-border text-muted-foreground hover:border-primary/40",
+                          )}
+                          onClick={() => {
+                            const current = form.getValues("collaborator_ids") || [];
+                            form.setValue(
+                              "collaborator_ids",
+                              selected
+                                ? current.filter((id) => id !== campaigner.id)
+                                : [...current, campaigner.id],
+                            );
+                          }}
+                        >
+                          {campaigner.full_name}
+                        </button>
+                      );
+                    })}
+                </div>
+              </FormItem>
             )}
 
             {/* Show additional fields for client/lead tasks */}

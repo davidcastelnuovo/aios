@@ -2,7 +2,10 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { startOfDay } from "date-fns";
 import {
+  buildChatTaskOrFilter,
   buildTaskDueDateOrFilter,
+  filterTasksForChatSearch,
+  sortTasksForChatList,
   taskAppearsOnTimeGrid,
 } from "./taskBoardQuery.ts";
 
@@ -79,4 +82,51 @@ test("taskAppearsOnTimeGrid requires date, time, in-range, and not overdue", () 
     ),
     false,
   );
+});
+
+test("buildChatTaskOrFilter pulls all open work plus recently done", () => {
+  const filter = buildChatTaskOrFilter({
+    today: "2026-09-17",
+    doneSince: "2026-09-03",
+  });
+  assert.equal(filter, "status.neq.done,and(status.eq.done,updated_at.gte.2026-09-03)");
+  assert.equal(filter.includes("due_date.gte"), false);
+});
+
+test("buildChatTaskOrFilter activity period uses created_at", () => {
+  const filter = buildChatTaskOrFilter({
+    today: "2026-09-17",
+    doneSince: "2026-09-03",
+    activitySince: "2026-09-01",
+  });
+  assert.equal(filter, "created_at.gte.2026-09-01");
+});
+
+test("filterTasksForChatSearch matches title, client, lead, and campaigner", () => {
+  const tasks = [
+    { title: "לסגור קמפיין", notes: null, clients: { name: "דלתא" }, campaigners: { full_name: "נועה" } },
+    { title: "שיחה", notes: "לקוח ויזה", clients: { name: "אחר" }, campaigners: { full_name: "דוד" } },
+    { title: "ליד חדש", notes: null, leads: { company_name: "אורבן", contact_name: "מיכל" }, campaigners: { full_name: "נועה" } },
+  ];
+  assert.equal(filterTasksForChatSearch(tasks, "קמפיין").length, 1);
+  assert.equal(filterTasksForChatSearch(tasks, "דלתא")[0].title, "לסגור קמפיין");
+  assert.equal(filterTasksForChatSearch(tasks, "דוד")[0].title, "שיחה");
+  assert.equal(filterTasksForChatSearch(tasks, "אורבן")[0].title, "ליד חדש");
+  assert.equal(filterTasksForChatSearch(tasks, "מיכל")[0].title, "ליד חדש");
+  assert.equal(filterTasksForChatSearch(tasks, "   ").length, 3);
+});
+
+test("sortTasksForChatList puts overdue and high priority first", () => {
+  const today = startOfDay(new Date("2026-09-17"));
+  const sorted = sortTasksForChatList(
+    [
+      { id: "done", status: "done", priority: 10, due_date: "2026-09-16", created_at: "2026-09-01" },
+      { id: "open-low", status: "open", priority: 2, due_date: "2026-09-20", created_at: "2026-09-01" },
+      { id: "overdue", status: "open", priority: 3, due_date: "2026-09-10", created_at: "2026-09-01" },
+      { id: "progress", status: "in_progress", priority: 5, due_date: "2026-09-18", created_at: "2026-09-01" },
+      { id: "open-high", status: "open", priority: 9, due_date: "2026-09-21", created_at: "2026-09-01" },
+    ],
+    today,
+  ).map((task) => task.id);
+  assert.deepEqual(sorted, ["overdue", "progress", "open-high", "open-low", "done"]);
 });

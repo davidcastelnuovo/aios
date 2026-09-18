@@ -3,6 +3,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { notifyTaskUpdateAdded } from "@/lib/notifyTaskPeers";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -70,6 +71,9 @@ import { useCurrentUser } from "@/hooks/useCurrentUser";
 import { useTerminology } from "@/hooks/useTerminology";
 import { useCrossTenantAgencyIds } from "@/hooks/useCrossTenantAgencyIds";
 import { useCampaigners, useSalesPeople } from "@/hooks/useEntityLists";
+import { priorityBarColor } from "@/lib/taskPriority";
+import { TaskRecurrenceFields, type TaskRecurrenceValue } from "@/components/tasks/TaskRecurrenceFields";
+import type { RecurrenceFrequency } from "@/lib/taskRecurrence";
 
 const formSchema = z.object({
   title: z.string().min(1, "שם המשימה הוא שדה חובה"),
@@ -78,6 +82,10 @@ const formSchema = z.object({
   sales_person_id: z.string().optional(),
   client_id: z.string().optional(),
   due_date: z.string().optional(),
+  due_time: z.string().optional(),
+  recurrence_frequency: z.enum(["daily", "weekly", "monthly"]).nullable().default(null),
+  recurrence_weekday: z.number().min(0).max(6).nullable().default(null),
+  recurrence_monthday: z.number().min(1).max(31).nullable().default(null),
   status: z.enum(["open", "in_progress", "done"]),
   priority: z.number().min(1).max(10),
 }).refine((data) => {
@@ -226,10 +234,19 @@ export default function EditTaskDialog({ task, open, onOpenChange }: EditTaskDia
       sales_person_id: task.sales_person_id || "",
       client_id: task.client_id || "",
       due_date: task.due_date || "",
+      due_time: task.due_time ? String(task.due_time).substring(0, 5) : "",
+      recurrence_frequency: task.recurrence_frequency || null,
+      recurrence_weekday: task.recurrence_weekday ?? null,
+      recurrence_monthday: task.recurrence_monthday ?? null,
       status: task.status || "open",
       priority: task.priority || 5,
     },
   });
+
+  const recurrenceFrequency = form.watch("recurrence_frequency");
+  const recurrenceWeekday = form.watch("recurrence_weekday");
+  const recurrenceMonthday = form.watch("recurrence_monthday");
+  const dueTime = form.watch("due_time");
 
   const mutation = useMutation({
     mutationFn: async (values: z.infer<typeof formSchema>) => {
@@ -243,7 +260,7 @@ export default function EditTaskDialog({ task, open, onOpenChange }: EditTaskDia
         agencyId = selectedClient.agency_id;
       }
 
-      const updateData = {
+      const updateData: Record<string, unknown> = {
         title: values.title,
         notes: values.notes || null,
         campaigner_id: values.campaigner_id || null,
@@ -251,15 +268,26 @@ export default function EditTaskDialog({ task, open, onOpenChange }: EditTaskDia
         client_id: values.client_id || null,
         agency_id: agencyId,
         due_date: values.due_date || null,
+        due_time: values.due_time
+          ? (values.due_time.length === 5 ? `${values.due_time}:00` : values.due_time)
+          : null,
         status: values.status,
         priority: values.priority,
         task_type: "other" as const,
       };
+      if (values.recurrence_frequency || task.recurrence_frequency) {
+        updateData.recurrence_frequency = values.recurrence_frequency;
+        updateData.recurrence_interval = 1;
+        updateData.recurrence_weekday =
+          values.recurrence_frequency === "weekly" ? values.recurrence_weekday : null;
+        updateData.recurrence_monthday =
+          values.recurrence_frequency === "monthly" ? values.recurrence_monthday : null;
+      }
       
 
       const { data, error } = await supabase
         .from("tasks")
-        .update(updateData)
+        .update(updateData as any)
         .eq("id", task.id)
         .select();
         
@@ -331,6 +359,13 @@ export default function EditTaskDialog({ task, open, onOpenChange }: EditTaskDia
           attachments,
         });
       if (error) throw error;
+      if (userId) {
+        void notifyTaskUpdateAdded({
+          taskId: task.id,
+          userId,
+          updateContent: content,
+        });
+      }
     },
     onSuccess: () => {
       refetchUpdates();
@@ -1302,10 +1337,7 @@ export default function EditTaskDialog({ task, open, onOpenChange }: EditTaskDia
                 control={form.control}
                 name="priority"
                 render={({ field }) => {
-                  const getPriorityColor = (priority: number) => {
-                    const hue = 240 - ((priority - 1) / 9) * 240;
-                    return `hsl(${hue}, 70%, 50%)`;
-                  };
+                  const getPriorityColor = (priority: number) => priorityBarColor(priority);
                   
                   const getPriorityText = (priority: number) => {
                     if (priority >= 8) return "דחיפות גבוהה";
@@ -1350,6 +1382,31 @@ export default function EditTaskDialog({ task, open, onOpenChange }: EditTaskDia
                     <FormControl>
                       <Input type="date" {...field} />
                     </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name="recurrence_frequency"
+                render={() => (
+                  <FormItem>
+                    <FormLabel className="text-right block">משימה קבועה</FormLabel>
+                    <TaskRecurrenceFields
+                      value={{
+                        frequency: recurrenceFrequency,
+                        weekday: recurrenceWeekday,
+                        monthday: recurrenceMonthday,
+                        time: dueTime || null,
+                      }}
+                      onChange={(next: TaskRecurrenceValue) => {
+                        form.setValue("recurrence_frequency", next.frequency);
+                        form.setValue("recurrence_weekday", next.weekday);
+                        form.setValue("recurrence_monthday", next.monthday);
+                        form.setValue("due_time", next.time || "");
+                      }}
+                    />
                     <FormMessage />
                   </FormItem>
                 )}

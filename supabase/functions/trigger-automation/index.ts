@@ -10,7 +10,11 @@ import {
   queueLeadAlertFailureNotification,
 } from '../_shared/lead-alert-failure-notify.ts'
 import { withManyChatDestinationLock } from '../_shared/manychat-destination-lock.ts'
-import { formatTaskNotificationMessage } from '../_shared/task-notification-message.ts'
+import {
+  formatTaskNotificationMessage,
+  resolveTaskNotificationLinkTenantId,
+  resolveTaskNotificationSenderTenantIds,
+} from '../_shared/task-notification-message.ts'
 import { resolveTenantHomeAgencyId } from '../_shared/resolve-tenant-agency.ts'
 import { claimFacebookLeadAutomationRun, claimFacebookLeadWhatsAppSend, claimIdenticalWhatsAppSend, releaseFacebookLeadAutomationRun, releaseFacebookLeadWhatsAppSend } from '../_shared/facebook-lead-dedup.ts'
 import {
@@ -574,12 +578,88 @@ const TASK_NOTIFICATION_TYPES = new Set([
   'task_self_reminder',
   'task_overdue',
   'task_overdue_sent',
+  'task_collaborator_added',
+  'task_update_added',
 ])
 
 const CLIENT_FOLLOW_UP_NOTIFICATION_TYPES = new Set([
   'client_follow_up_reminder',
   'client_follow_up_reminder_manager',
 ])
+
+async function resolveCarmenSenderForTenant(
+  supabase: any,
+  tenantId: string,
+): Promise<{ carmenStep: any | null; integration: any | null; reason?: string }> {
+  const { data: triggerSteps, error: triggerStepsError } = await supabase
+    .from('automation_flow_steps')
+    .select('automation_id, configuration, created_at')
+    .eq('tenant_id', tenantId)
+    .eq('step_type', 'trigger')
+    .eq('action_type', 'carmen_whatsapp_session')
+    .order('created_at', { ascending: true })
+  if (triggerStepsError) throw triggerStepsError
+
+  const automationIds = [...new Set((triggerSteps || []).map((step: any) => step.automation_id))]
+  if (!automationIds.length) {
+    return { carmenStep: null, integration: null, reason: 'no Carmen flow' }
+  }
+
+  const { data: activeAutomations, error: automationsError } = await supabase
+    .from('automations')
+    .select('id, name')
+    .in('id', automationIds)
+    .eq('active', true)
+  if (automationsError) throw automationsError
+
+  const activeIds = new Set((activeAutomations || []).map((automation: any) => automation.id))
+  const rankedSteps = (triggerSteps || [])
+    .filter((step: any) => activeIds.has(step.automation_id))
+    .sort((a: any, b: any) => {
+      const aAll = (a.configuration?.carmen_scope_mode || 'all') === 'all' ? 0 : 1
+      const bAll = (b.configuration?.carmen_scope_mode || 'all') === 'all' ? 0 : 1
+      return aAll - bAll
+    })
+  const carmenStep = rankedSteps[0]
+  if (!carmenStep) {
+    return { carmenStep: null, integration: null, reason: 'tenant Carmen flow is inactive' }
+  }
+
+  const { data: actionStep, error: actionStepError } = await supabase
+    .from('automation_flow_steps')
+    .select('configuration')
+    .eq('automation_id', carmenStep.automation_id)
+    .eq('step_type', 'action')
+    .in('action_type', ['send_manus_message', 'send_greenapi_message', 'send_green_api_message'])
+    .order('created_at', { ascending: true })
+    .limit(1)
+    .maybeSingle()
+  if (actionStepError) throw actionStepError
+
+  const integrationId = actionStep?.configuration?.green_api_integration_id
+    || actionStep?.configuration?.integration_id
+    || carmenStep.configuration?.carmen_integration_id
+    || null
+
+  let integrationQuery = supabase
+    .from('tenant_integrations')
+    .select('id, user_id')
+    .eq('tenant_id', tenantId)
+    .eq('is_active', true)
+  integrationQuery = integrationId
+    ? integrationQuery.eq('id', integrationId)
+    : integrationQuery.in('integration_type', ['green_api', 'greenapi', 'manus_wa', 'manuswa']).order('created_at', { ascending: false }).limit(1)
+  const { data: integrations, error: integrationError } = await integrationQuery
+  if (integrationError) throw integrationError
+
+  const integration = integrations?.[0]
+  if (!integration?.user_id) {
+    return { carmenStep, integration: null, reason: 'Carmen integration missing' }
+  }
+
+  return { carmenStep, integration }
+}
+
 async function sendTaskNotificationFromTenantCarmen(supabase: any, requestBody: any) {
   const taskId = String(requestBody?.data?.task_id || '').trim()
   if (!taskId) return { handled: false }
@@ -593,6 +673,58 @@ async function sendTaskNotificationFromTenantCarmen(supabase: any, requestBody: 
     .maybeSingle()
   if (taskError) throw taskError
   if (!task) return { handled: true, sent: false, reason: 'task not found' }
+
+  const overrideCampaignerId = String(requestBody?.data?.notify_campaigner_id || '').trim()
+  if (notificationType === 'task_update_added' && !overrideCampaignerId) {
+    const authorUserId = String(requestBody?.data?.user_id || '').trim()
+    let authorCampaignerId: string | null = null
+    let updaterName = String(requestBody?.data?.updater_name || '').trim()
+    if (authorUserId) {
+      const { data: authorProfile, error: authorError } = await supabase
+        .from('profiles')
+        .select('campaigner_id, full_name')
+        .eq('id', authorUserId)
+        .maybeSingle()
+      if (authorError) throw authorError
+      authorCampaignerId = authorProfile?.campaigner_id || null
+      updaterName = updaterName || String(authorProfile?.full_name || '').trim()
+    }
+    const recipientIds = new Set<string>()
+    if (task.campaigner_id && task.campaigner_id !== authorCampaignerId) {
+      recipientIds.add(task.campaigner_id)
+    }
+    const { data: collabs, error: collabError } = await supabase
+      .from('task_collaborators')
+      .select('campaigner_id')
+      .eq('task_id', task.id)
+    if (collabError) throw collabError
+    for (const row of collabs || []) {
+      if (row.campaigner_id && row.campaigner_id !== authorCampaignerId) {
+        recipientIds.add(row.campaigner_id)
+      }
+    }
+    if (recipientIds.size === 0) {
+      return { handled: true, sent: false, reason: 'no peer recipients for task update', task_id: task.id }
+    }
+    const results = []
+    for (const recipientId of recipientIds) {
+      results.push(await sendTaskNotificationFromTenantCarmen(supabase, {
+        ...requestBody,
+        data: {
+          ...(requestBody?.data || {}),
+          notify_campaigner_id: recipientId,
+          updater_name: updaterName,
+        },
+      }))
+    }
+    return {
+      handled: true,
+      sent: results.some((result) => result.sent),
+      task_id: task.id,
+      notification_type: notificationType,
+      recipients: results,
+    }
+  }
 
   // The client is the source of truth for the Carmen identity. A task can be
   // created while an owner is viewing another tenant, or for a cross-tenant
@@ -610,7 +742,7 @@ async function sendTaskNotificationFromTenantCarmen(supabase: any, requestBody: 
   const notificationTenantId = client?.tenant_id || task.tenant_id
   if (!notificationTenantId) return { handled: true, sent: false, reason: 'task tenant is missing' }
 
-  let campaignerId = task.campaigner_id
+  let campaignerId = overrideCampaignerId || task.campaigner_id
   if (!campaignerId && !task.sales_person_id && client?.id) {
     const today = new Date().toISOString().slice(0, 10)
     const { data: team } = await supabase
@@ -629,7 +761,7 @@ async function sendTaskNotificationFromTenantCarmen(supabase: any, requestBody: 
   if (campaignerId) {
     const { data, error: campaignerError } = await supabase
       .from('campaigners')
-      .select('id, full_name, phone, active')
+      .select('id, full_name, phone, active, tenant_id')
       .eq('id', campaignerId)
       .maybeSingle()
     if (campaignerError) throw campaignerError
@@ -640,7 +772,7 @@ async function sendTaskNotificationFromTenantCarmen(supabase: any, requestBody: 
   if (!campaigner && task.sales_person_id) {
     const { data, error: salesPersonError } = await supabase
       .from('sales_people')
-      .select('id, full_name, phone, active')
+      .select('id, full_name, phone, active, tenant_id')
       .eq('id', task.sales_person_id)
       .maybeSingle()
     if (salesPersonError) throw salesPersonError
@@ -650,6 +782,7 @@ async function sendTaskNotificationFromTenantCarmen(supabase: any, requestBody: 
   let creatorProfile: any = null
   let creatorName = ''
   let creatorPhone = ''
+  let creatorHomeTenantId: string | null = null
   if (task.created_by) {
     const { data: profile, error: profileError } = await supabase
       .from('profiles')
@@ -660,25 +793,46 @@ async function sendTaskNotificationFromTenantCarmen(supabase: any, requestBody: 
     creatorProfile = profile
     creatorName = String(profile?.full_name || '').trim()
     creatorPhone = String(profile?.phone || '').trim()
-    if (profile?.campaigner_id && (!creatorName || !creatorPhone)) {
+    if (profile?.campaigner_id) {
       const { data: creatorCampaigner, error: creatorCampaignerError } = await supabase
         .from('campaigners')
-        .select('full_name, phone')
+        .select('full_name, phone, tenant_id')
         .eq('id', profile.campaigner_id)
         .maybeSingle()
       if (creatorCampaignerError) throw creatorCampaignerError
       creatorName = creatorName || String(creatorCampaigner?.full_name || '').trim()
       creatorPhone = creatorPhone || String(creatorCampaigner?.phone || '').trim()
+      creatorHomeTenantId = creatorCampaigner?.tenant_id || null
     }
-    if (profile?.sales_person_id && (!creatorName || !creatorPhone)) {
+    if (profile?.sales_person_id && (!creatorName || !creatorPhone || !creatorHomeTenantId)) {
       const { data: creatorSalesPerson, error: creatorSalesPersonError } = await supabase
         .from('sales_people')
-        .select('full_name, phone')
+        .select('full_name, phone, tenant_id')
         .eq('id', profile.sales_person_id)
         .maybeSingle()
       if (creatorSalesPersonError) throw creatorSalesPersonError
       creatorName = creatorName || String(creatorSalesPerson?.full_name || '').trim()
       creatorPhone = creatorPhone || String(creatorSalesPerson?.phone || '').trim()
+      creatorHomeTenantId = creatorHomeTenantId || creatorSalesPerson?.tenant_id || null
+    }
+  }
+
+  if (notificationType === 'task_collaborator_added') {
+    if (!overrideCampaignerId) {
+      return { handled: true, sent: false, reason: 'notify_campaigner_id missing', task_id: task.id }
+    }
+    const adderUserId = String(requestBody?.data?.user_id || '').trim()
+    if (adderUserId) {
+      const { data: adderProfile, error: adderError } = await supabase
+        .from('profiles')
+        .select('full_name, campaigner_id')
+        .eq('id', adderUserId)
+        .maybeSingle()
+      if (adderError) throw adderError
+      if (adderProfile?.full_name) creatorName = String(adderProfile.full_name).trim()
+      if (adderProfile?.campaigner_id && adderProfile.campaigner_id === (overrideCampaignerId || task.campaigner_id)) {
+        return { handled: true, sent: false, reason: 'self collaborator skip', task_id: task.id }
+      }
     }
   }
 
@@ -716,71 +870,64 @@ async function sendTaskNotificationFromTenantCarmen(supabase: any, requestBody: 
     }
   }
 
-  // Select Carmen inside the client's tenant. Prefer the general tenant Carmen
-  // flow over phone/group-specific variants, then dispatch through that flow's
-  // own WhatsApp action step so DMM and Marketing Captain never share a sender.
-  const { data: triggerSteps, error: triggerStepsError } = await supabase
-    .from('automation_flow_steps')
-    .select('automation_id, configuration, created_at')
-    .eq('tenant_id', notificationTenantId)
-    .eq('step_type', 'trigger')
-    .eq('action_type', 'carmen_whatsapp_session')
-    .order('created_at', { ascending: true })
-  if (triggerStepsError) throw triggerStepsError
+  // Carmen sender = the recipient's own tenant line whenever that tenant runs an
+  // active Carmen flow, with the client/task tenant as fallback. Routing purely by
+  // the client tenant made a Marketing Captain teammate hear about his own task
+  // from the DMM Carmen number, which reads as "nothing was sent".
+  const senderTenantCandidates = resolveTaskNotificationSenderTenantIds({
+    notifyCreator,
+    creatorHomeTenantId,
+    campaignerTenantId: campaigner?.tenant_id || null,
+    salesPersonTenantId: salesPerson?.tenant_id || null,
+    fallbackTenantId: notificationTenantId,
+  })
 
-  const automationIds = [...new Set((triggerSteps || []).map((step: any) => step.automation_id))]
-  if (!automationIds.length) {
+  let senderTenantId: string | null = null
+  let carmenStep: any = null
+  let integration: any = null
+  const senderReasons = new Map<string, string>()
+
+  for (const candidateTenantId of senderTenantCandidates) {
+    const resolved = await resolveCarmenSenderForTenant(supabase, candidateTenantId)
+    if (resolved.carmenStep && resolved.integration?.user_id) {
+      senderTenantId = candidateTenantId
+      carmenStep = resolved.carmenStep
+      integration = resolved.integration
+      break
+    }
+    if (resolved.reason) senderReasons.set(candidateTenantId, resolved.reason)
+  }
+
+  if (!senderTenantId || !carmenStep || !integration) {
+    const reason = senderReasons.get(notificationTenantId)
+      || [...senderReasons.values()].pop()
+      || null
+    if (reason === 'tenant Carmen flow is inactive') {
+      return { handled: true, sent: false, reason, tenant_id: notificationTenantId }
+    }
     // Let the regular task_assigned automation path handle tenants that do not
     // use a Carmen WhatsApp flow.
     return { handled: false }
   }
-  const { data: activeAutomations, error: automationsError } = await supabase
-    .from('automations')
-    .select('id, name')
-    .in('id', automationIds)
-    .eq('active', true)
-  if (automationsError) throw automationsError
-  const activeIds = new Set((activeAutomations || []).map((automation: any) => automation.id))
-  const rankedSteps = (triggerSteps || [])
-    .filter((step: any) => activeIds.has(step.automation_id))
-    .sort((a: any, b: any) => {
-      const aAll = (a.configuration?.carmen_scope_mode || 'all') === 'all' ? 0 : 1
-      const bAll = (b.configuration?.carmen_scope_mode || 'all') === 'all' ? 0 : 1
-      return aAll - bAll
-    })
-  const carmenStep = rankedSteps[0]
-  if (!carmenStep) {
-    return { handled: true, sent: false, reason: 'tenant Carmen flow is inactive', tenant_id: notificationTenantId }
-  }
 
-  const { data: actionStep, error: actionStepError } = await supabase
-    .from('automation_flow_steps')
-    .select('configuration')
-    .eq('automation_id', carmenStep.automation_id)
-    .eq('step_type', 'action')
-    .in('action_type', ['send_manus_message', 'send_greenapi_message', 'send_green_api_message'])
-    .order('created_at', { ascending: true })
-    .limit(1)
-    .maybeSingle()
-  if (actionStepError) throw actionStepError
-  const integrationId = actionStep?.configuration?.green_api_integration_id
-    || actionStep?.configuration?.integration_id
-    || carmenStep.configuration?.carmen_integration_id
-    || null
-
-  let integrationQuery = supabase
-    .from('tenant_integrations')
-    .select('id, user_id')
-    .eq('tenant_id', notificationTenantId)
-    .eq('is_active', true)
-  integrationQuery = integrationId
-    ? integrationQuery.eq('id', integrationId)
-    : integrationQuery.in('integration_type', ['green_api', 'greenapi', 'manus_wa', 'manuswa']).order('created_at', { ascending: false }).limit(1)
-  const { data: integrations, error: integrationError } = await integrationQuery
-  if (integrationError) throw integrationError
-  const integration = integrations?.[0]
-  if (!integration?.user_id) {
-    return { handled: false }
+  // Link tenant = recipient's home board (campaigner tenant), never Carmen/DMM
+  // just because she is the sender. Fallback only if the recipient has no home tenant.
+  const linkTenantId = resolveTaskNotificationLinkTenantId({
+    notifyCreator,
+    creatorHomeTenantId,
+    campaignerTenantId: campaigner?.tenant_id || null,
+    salesPersonTenantId: salesPerson?.tenant_id || null,
+    fallbackTenantId: notificationTenantId,
+  })
+  let recipientTenantSlug: string | null = null
+  if (linkTenantId) {
+    const { data: linkTenant, error: linkTenantError } = await supabase
+      .from('tenants')
+      .select('slug')
+      .eq('id', linkTenantId)
+      .maybeSingle()
+    if (linkTenantError) throw linkTenantError
+    recipientTenantSlug = linkTenant?.slug || null
   }
 
   const message = formatTaskNotificationMessage(
@@ -790,11 +937,16 @@ async function sendTaskNotificationFromTenantCarmen(supabase: any, requestBody: 
     campaigner?.full_name || salesPerson?.full_name || '',
     recipient.full_name,
     creatorName,
+    recipientTenantSlug,
+    {
+      updateContent: requestBody?.data?.update_content,
+      updaterName: requestBody?.data?.updater_name,
+    },
   )
   const sent = await sendCarmenReplyViaActionStep({
     supabase,
     automationId: carmenStep.automation_id,
-    tenantId: notificationTenantId,
+    tenantId: senderTenantId,
     connectionUserId: integration.user_id,
     chatId: `${String(recipient.phone).replace(/\D/g, '')}@c.us`,
     phoneNumber: recipient.phone,
@@ -807,6 +959,9 @@ async function sendTaskNotificationFromTenantCarmen(supabase: any, requestBody: 
     task_id: task.id,
     client_id: client?.id || null,
     tenant_id: notificationTenantId,
+    sender_tenant_id: senderTenantId,
+    link_tenant_id: linkTenantId,
+    recipient_tenant_slug: recipientTenantSlug,
     campaigner_id: campaigner?.id || null,
     recipient_id: recipient.id,
     sent,
@@ -818,6 +973,9 @@ async function sendTaskNotificationFromTenantCarmen(supabase: any, requestBody: 
     notification_type: notificationType,
     client_id: client?.id || null,
     tenant_id: notificationTenantId,
+    sender_tenant_id: senderTenantId,
+    link_tenant_id: linkTenantId,
+    recipient_tenant_slug: recipientTenantSlug,
     campaigner_id: campaigner?.id || null,
     recipient_id: recipient.id,
   }

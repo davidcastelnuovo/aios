@@ -1,10 +1,28 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Settings2, GripVertical, Plus, Trash2, Search } from "lucide-react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { useLeadPipelineStages, useLeadPipelineStageMutations, LeadPipelineStage } from "@/hooks/useLeadPipelineStages";
+import { cn } from "@/lib/utils";
+import {
+  DndContext,
+  closestCenter,
+  KeyboardSensor,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  DragEndEvent,
+} from "@dnd-kit/core";
+import {
+  arrayMove,
+  SortableContext,
+  sortableKeyboardCoordinates,
+  useSortable,
+  verticalListSortingStrategy,
+} from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
 
 const PRESET_COLORS = [
   "#ef4444", "#f97316", "#f59e0b", "#eab308", "#84cc16",
@@ -18,6 +36,7 @@ function ColorPicker({ color, onChange }: { color: string; onChange: (c: string)
     <Popover>
       <PopoverTrigger asChild>
         <button
+          type="button"
           className="w-6 h-6 rounded border border-border shrink-0"
           style={{ backgroundColor: color }}
         />
@@ -27,6 +46,7 @@ function ColorPicker({ color, onChange }: { color: string; onChange: (c: string)
           {PRESET_COLORS.map((c) => (
             <button
               key={c}
+              type="button"
               className="w-6 h-6 rounded border border-border hover:scale-110 transition-transform"
               style={{ backgroundColor: c }}
               onClick={() => onChange(c)}
@@ -45,16 +65,33 @@ function ColorPicker({ color, onChange }: { color: string; onChange: (c: string)
   );
 }
 
-function StageRow({ 
-  stage, 
-  onUpdate, 
-  onDelete 
-}: { 
-  stage: LeadPipelineStage; 
+function SortableStageRow({
+  stage,
+  onUpdate,
+  onDelete,
+}: {
+  stage: LeadPipelineStage;
   onUpdate: (updates: Partial<LeadPipelineStage>) => void;
   onDelete: () => void;
 }) {
   const [label, setLabel] = useState(stage.label);
+  useEffect(() => {
+    setLabel(stage.label);
+  }, [stage.label]);
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({ id: stage.id });
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.5 : 1,
+  };
 
   const handleBlur = () => {
     if (label !== stage.label) {
@@ -63,8 +100,23 @@ function StageRow({
   };
 
   return (
-    <div className="flex items-center gap-2 p-2 rounded border border-border bg-background">
-      <GripVertical className="w-4 h-4 text-muted-foreground cursor-grab" />
+    <div
+      ref={setNodeRef}
+      style={style}
+      className={cn(
+        "flex items-center gap-2 p-2 rounded border border-border bg-background",
+        isDragging && "shadow-lg ring-2 ring-primary/20 z-10",
+      )}
+    >
+      <button
+        type="button"
+        className="cursor-grab touch-none active:cursor-grabbing text-muted-foreground hover:text-foreground"
+        aria-label="גרור לשינוי סדר"
+        {...attributes}
+        {...listeners}
+      >
+        <GripVertical className="w-4 h-4" />
+      </button>
       <ColorPicker
         color={stage.color}
         onChange={(color) => onUpdate({ color })}
@@ -115,9 +167,41 @@ export function ManagePipelineStagesDialog({
   const [newLabel, setNewLabel] = useState("");
   const [newColor, setNewColor] = useState("#3b82f6");
   const [searchQuery, setSearchQuery] = useState("");
+  const [localStages, setLocalStages] = useState<LeadPipelineStage[]>([]);
 
   const { stages, isLoading } = useLeadPipelineStages();
-  const { updateStage, createStage, deleteStage } = useLeadPipelineStageMutations();
+  const { updateStage, createStage, deleteStage, updateSortOrders } = useLeadPipelineStageMutations();
+
+  useEffect(() => {
+    setLocalStages(stages);
+  }, [stages]);
+
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
+    useSensor(KeyboardSensor, {
+      coordinateGetter: sortableKeyboardCoordinates,
+    }),
+  );
+
+  const visibleStages = localStages.filter((stage) =>
+    stage.label.toLowerCase().includes(searchQuery.toLowerCase()),
+  );
+
+  const handleDragEnd = (event: DragEndEvent) => {
+    const { active, over } = event;
+    if (!over || active.id === over.id) return;
+
+    const oldIndex = localStages.findIndex((stage) => stage.id === active.id);
+    const newIndex = localStages.findIndex((stage) => stage.id === over.id);
+    if (oldIndex < 0 || newIndex < 0) return;
+
+    const newOrder = arrayMove(localStages, oldIndex, newIndex);
+    setLocalStages(newOrder);
+    updateSortOrders.mutate(newOrder.map((stage, index) => ({
+      id: stage.id,
+      sort_order: index,
+    })));
+  };
 
   const handleAddStage = () => {
     if (!newLabel.trim()) return;
@@ -148,7 +232,7 @@ export function ManagePipelineStagesDialog({
           <DialogTitle>ניהול שלבי משפך</DialogTitle>
         </DialogHeader>
         
-        {stages.length > 3 && (
+        {localStages.length > 3 && (
           <div className="relative">
             <Search className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
             <Input
@@ -165,16 +249,25 @@ export function ManagePipelineStagesDialog({
           {isLoading ? (
             <p className="text-sm text-muted-foreground">טוען...</p>
           ) : (
-            stages
-              .filter(stage => stage.label.toLowerCase().includes(searchQuery.toLowerCase()))
-              .map((stage) => (
-                <StageRow
-                  key={stage.id}
-                  stage={stage}
-                  onUpdate={(updates) => updateStage.mutate({ id: stage.id, ...updates })}
-                  onDelete={() => deleteStage.mutate(stage.id)}
-                />
-              ))
+            <DndContext
+              sensors={sensors}
+              collisionDetection={closestCenter}
+              onDragEnd={handleDragEnd}
+            >
+              <SortableContext
+                items={visibleStages.map((stage) => stage.id)}
+                strategy={verticalListSortingStrategy}
+              >
+                {visibleStages.map((stage) => (
+                  <SortableStageRow
+                    key={stage.id}
+                    stage={stage}
+                    onUpdate={(updates) => updateStage.mutate({ id: stage.id, ...updates })}
+                    onDelete={() => deleteStage.mutate(stage.id)}
+                  />
+                ))}
+              </SortableContext>
+            </DndContext>
           )}
         </div>
 

@@ -7,6 +7,7 @@
  */
 
 import { aiEmbed, aiEmbedBatch } from './ai.ts'
+import { hasPulseIntent } from './pulse-request.mjs'
 
 export function shouldUseTokenOptimize(agent: { metadata?: Record<string, unknown> | null }, isCarmen: boolean): boolean {
   if (!isCarmen) return false
@@ -186,7 +187,7 @@ export function applyToolForceIncludes(userText: string, picked: Set<string>, he
     promote(['send_whatsapp_to_staff', 'lookup_staff_whatsapp', 'send_message_to_campaigner',
       'list_campaigners', 'list_sales_people', 'search_entities'])
   }
-  if (/\bדופק\b|\bpulse\s*check\b|בדיקת\s*דוח|מצב\s*קמפיינים|סיכום\s*קמפיינים/i.test(userText)) {
+  if (hasPulseIntent(userText)) {
     promote(['get_latest_campaign_pulse'])
   }
   if (/(openai|open ai|קרדיט|יתרת|billing|usage|חיוב|כמה.*(נשאר|עולה|הוצא)|api.*(cost|credit|balance))/i.test(userText)) {

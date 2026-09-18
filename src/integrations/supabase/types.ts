@@ -6299,6 +6299,7 @@ export type Database = {
           email: string
           full_name: string | null
           id: string
+          leads_default_view: string | null
           notification_group_link: string | null
           phone: string | null
           sales_person_id: string | null
@@ -6314,6 +6315,7 @@ export type Database = {
           email: string
           full_name?: string | null
           id: string
+          leads_default_view?: string | null
           notification_group_link?: string | null
           phone?: string | null
           sales_person_id?: string | null
@@ -6329,6 +6331,7 @@ export type Database = {
           email?: string
           full_name?: string | null
           id?: string
+          leads_default_view?: string | null
           notification_group_link?: string | null
           phone?: string | null
           sales_person_id?: string | null
@@ -8379,6 +8382,57 @@ export type Database = {
           },
         ]
       }
+      task_checklist_items: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          id: string
+          is_done: boolean
+          sort_order: number
+          task_id: string
+          tenant_id: string
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          is_done?: boolean
+          sort_order?: number
+          task_id: string
+          tenant_id: string
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          is_done?: boolean
+          sort_order?: number
+          task_id?: string
+          tenant_id?: string
+          title?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "task_checklist_items_task_id_fkey"
+            columns: ["task_id"]
+            isOneToOne: false
+            referencedRelation: "tasks"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "task_checklist_items_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       task_updates: {
         Row: {
           attachments: Json | null
@@ -8450,6 +8504,12 @@ export type Database = {
           notes: string | null
           overdue_notified_at: string | null
           priority: number
+          recurrence_frequency: string | null
+          recurrence_interval: number
+          recurrence_monthday: number | null
+          recurrence_previous_task_id: string | null
+          recurrence_series_id: string | null
+          recurrence_weekday: number | null
           sales_person_id: string | null
           sort_order: number | null
           status: Database["public"]["Enums"]["task_status"]
@@ -8481,6 +8541,12 @@ export type Database = {
           notes?: string | null
           overdue_notified_at?: string | null
           priority?: number
+          recurrence_frequency?: string | null
+          recurrence_interval?: number
+          recurrence_monthday?: number | null
+          recurrence_previous_task_id?: string | null
+          recurrence_series_id?: string | null
+          recurrence_weekday?: number | null
           sales_person_id?: string | null
           sort_order?: number | null
           status?: Database["public"]["Enums"]["task_status"]
@@ -8512,6 +8578,12 @@ export type Database = {
           notes?: string | null
           overdue_notified_at?: string | null
           priority?: number
+          recurrence_frequency?: string | null
+          recurrence_interval?: number
+          recurrence_monthday?: number | null
+          recurrence_previous_task_id?: string | null
+          recurrence_series_id?: string | null
+          recurrence_weekday?: number | null
           sales_person_id?: string | null
           sort_order?: number | null
           status?: Database["public"]["Enums"]["task_status"]
@@ -8555,6 +8627,13 @@ export type Database = {
             columns: ["lead_id"]
             isOneToOne: false
             referencedRelation: "leads"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tasks_recurrence_previous_task_id_fkey"
+            columns: ["recurrence_previous_task_id"]
+            isOneToOne: false
+            referencedRelation: "tasks"
             referencedColumns: ["id"]
           },
           {
@@ -11134,6 +11213,8 @@ export type Database = {
         | "send_signature"
       automation_trigger:
         | "task_assigned"
+        | "task_collaborator_added"
+        | "task_update_added"
         | "task_status_changed"
         | "lead_status_changed"
         | "lead_created"
@@ -11401,6 +11482,8 @@ export const Constants = {
       ],
       automation_trigger: [
         "task_assigned",
+        "task_collaborator_added",
+        "task_update_added",
         "task_status_changed",
         "lead_status_changed",
         "lead_created",

@@ -59,8 +59,9 @@ import {
   SeoMonthlyShareSnapshot,
   SeoShareRecentLink,
 } from "@/lib/seoMonthlyShareSnapshot";
-import { SeoMonthlySlideshowCaptureStack } from "@/components/seo/SeoMonthlySlideshow";
-import { downloadSeoMonthlySlideshowPdf } from "@/lib/seoMonthlyPdf";
+import { SeoMonthlyLandingPageCapture } from "@/components/seo/SeoMonthlyLandingPage";
+import { createSeoMonthlyReportPdf, downloadPdfBlob } from "@/lib/seoMonthlyPdf";
+import { archiveSeoMonthlyPdf } from "@/lib/seoMonthlyPdfArchive";
 
 type Props = {
   clientId: string;
@@ -506,12 +507,29 @@ export function SeoMonthlyWorkTab({ clientId, tenantId: tenantIdProp }: Props) {
     return (data as any).share_token as string;
   };
 
-  /** Persist dirty edits, refresh the share token/snapshot, then open the live deck. */
+  const buildAndArchivePdf = async (): Promise<Blob> => {
+    await new Promise((r) => setTimeout(r, 100));
+    if (!captureStackRef.current) throw new Error("אין דוח ליצוא");
+    if (!currentTenantId) throw new Error("חסר טננט לשמירת הקובץ");
+    const pdf = await createSeoMonthlyReportPdf(captureStackRef.current);
+    await archiveSeoMonthlyPdf({
+      blob: pdf,
+      tenantId: currentTenantId,
+      clientId,
+      month: selectedMonth,
+      monthLabel,
+    });
+    queryClient.invalidateQueries({ queryKey: ["clients", currentTenantId] });
+    return pdf;
+  };
+
+  /** Persist edits, refresh the public page, archive its PDF, then open it. */
   const handleOpenPresentation = async () => {
     setOpeningDeck(true);
     try {
       if (dirty) await saveMutation.mutateAsync();
       const token = await upsertShare();
+      await buildAndArchivePdf();
       queryClient.invalidateQueries({ queryKey: ["seo-monthly-share", clientId, selectedMonth] });
       navigate(`/shared/seo-monthly/${token}`, {
         state: {
@@ -556,13 +574,13 @@ export function SeoMonthlyWorkTab({ clientId, tenantId: tenantIdProp }: Props) {
     setExportingPdf(true);
     try {
       if (dirty) await saveMutation.mutateAsync();
-      await new Promise((r) => setTimeout(r, 100));
-      if (!captureStackRef.current) throw new Error("אין שקפים ליצוא");
       const safeName = `${snapshot.clientName}-${snapshot.monthLabel}`
         .replace(/[^\w\u0590-\u05FF-]+/g, "-")
         .slice(0, 60);
-      await downloadSeoMonthlySlideshowPdf(captureStackRef.current, `seo-${safeName}.pdf`);
-      toast.success("ה־PDF הורד (כולל קישורים לחיצים)");
+      const filename = `seo-${safeName}.pdf`;
+      const pdf = await buildAndArchivePdf();
+      downloadPdfBlob(pdf, filename);
+      toast.success("ה־PDF הורד ונשמר אוטומטית בקבצי הלקוח");
     } catch (err: any) {
       console.error(err);
       toast.error(err?.message || "שגיאה ביצוא PDF");
@@ -582,7 +600,7 @@ export function SeoMonthlyWorkTab({ clientId, tenantId: tenantIdProp }: Props) {
             </CardTitle>
             <div className="flex flex-wrap items-center gap-2">
               <Select value={selectedMonth} onValueChange={(v) => setSelectedMonth(v)}>
-                <SelectTrigger className="w-[180px] h-8 text-sm">
+                <SelectTrigger className="w-full min-w-0 sm:w-[180px] h-8 text-sm">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -594,7 +612,7 @@ export function SeoMonthlyWorkTab({ clientId, tenantId: tenantIdProp }: Props) {
                 </SelectContent>
               </Select>
               <Select value={status} onValueChange={(v) => { setStatus(v as any); setDirty(true); }}>
-                <SelectTrigger className="w-[130px] h-8 text-sm">
+                <SelectTrigger className="w-full min-w-0 sm:w-[130px] h-8 text-sm">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -616,7 +634,7 @@ export function SeoMonthlyWorkTab({ clientId, tenantId: tenantIdProp }: Props) {
           </div>
           <p className="text-xs text-muted-foreground mt-1">
             סיכום העבודה ל־{monthLabel}: באתר (מטא/כותרות), מאמרים שכתבנו, וקישורים.
-            המצגת נפתחת תמיד עם העדכונים האחרונים שנשמרו.
+            עמוד הדוח נפתח תמיד עם העדכונים האחרונים שנשמרו, וה־PDF נשמר בקבצי הלקוח.
             {dirty && <Badge variant="outline" className="mr-2 text-[10px]">יש שינויים שלא נשמרו</Badge>}
           </p>
           <div className="flex flex-wrap items-center gap-2 pt-2">
@@ -628,7 +646,7 @@ export function SeoMonthlyWorkTab({ clientId, tenantId: tenantIdProp }: Props) {
               onClick={handleOpenPresentation}
             >
               {openingDeck ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Presentation className="h-3.5 w-3.5" />}
-              פתח מצגת
+              פתח דוח
             </Button>
             <Button
               type="button"
@@ -696,7 +714,7 @@ export function SeoMonthlyWorkTab({ clientId, tenantId: tenantIdProp }: Props) {
       )}
 
       {/* Offscreen capture stack for PDF */}
-      <SeoMonthlySlideshowCaptureStack snapshot={snapshot} stackRef={captureStackRef} />
+      <SeoMonthlyLandingPageCapture snapshot={snapshot} reportRef={captureStackRef} />
     </div>
   );
 }
