@@ -61,14 +61,14 @@ const outcomeLabel = (kind: string | null) => {
   return kind ? labels[kind] || "תוצאות" : "תוצאה חסרה";
 };
 
-const formatDate = (value: string | null) =>
+const formatPulseDate = (value: string | null, emptyLabel = "—") =>
   value
     ? new Date(value.length === 10 ? `${value}T12:00:00Z` : value).toLocaleString("he-IL", {
         timeZone: "Asia/Jerusalem",
         dateStyle: "short",
         ...(value.length === 10 ? {} : { timeStyle: "short" as const }),
       })
-    : "לא זמין";
+    : emptyLabel;
 
 export function PulseCampaignGoalCard({
   row,
@@ -129,9 +129,9 @@ export function PulseCampaignGoalCard({
 
         <div className="grid gap-2 text-xs sm:grid-cols-2 lg:grid-cols-4">
           <div><span className="text-muted-foreground">קמפיינר: </span>{campaignerName}</div>
-          <div><span className="text-muted-foreground">נתונים עד: </span>{formatDate(row.data_fresh_through)}</div>
-          <div><span className="text-muted-foreground">סנכרון אחרון: </span>{formatDate(row.last_sync_at)}</div>
-          <div><span className="text-muted-foreground">שינוי אחרון: </span>{formatDate(row.last_change_at)}</div>
+          <div><span className="text-muted-foreground">נתונים עד: </span>{formatPulseDate(row.data_fresh_through, "ממתין לסנכרון")}</div>
+          <div><span className="text-muted-foreground">סנכרון אחרון: </span>{formatPulseDate(row.last_sync_at, "ממתין לסנכרון")}</div>
+          <div><span className="text-muted-foreground">שינוי אחרון: </span>{formatPulseDate(row.last_change_at, "—")}</div>
           <div><span className="text-muted-foreground">סיווג: </span>{row.classification_source === "unclassified" ? "לא מזוהה" : "מטרת קמפיין"}</div>
         </div>
       </CardHeader>

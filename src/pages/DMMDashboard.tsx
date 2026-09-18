@@ -59,6 +59,7 @@ import {
   clientHasCampaignService,
   expandPulseToPlatformGoalRows,
   applyClientCallToPulseSnapshot,
+  filterActiveCampaignTables,
   filterPulseCallFlags,
   fetchPulseCampaignRecords,
   formatGoalChange,
@@ -377,9 +378,14 @@ export function CampaignPulseDashboard({
     staleTime: 60_000,
   });
 
-  const pulseTableIds = useMemo(
-    () => pulseCampaignTables.map((table) => table.id),
+  const activePulseCampaignTables = useMemo(
+    () => filterActiveCampaignTables(pulseCampaignTables),
     [pulseCampaignTables],
+  );
+
+  const pulseTableIds = useMemo(
+    () => activePulseCampaignTables.map((table) => table.id),
+    [activePulseCampaignTables],
   );
 
   const {
@@ -404,23 +410,23 @@ export function CampaignPulseDashboard({
   });
 
   const campaignData = useMemo(() => {
-    const tableToType = new Map(pulseCampaignTables.map((t) => [t.id, t.integration_type as string | null]));
-    const tableToClient = new Map(pulseCampaignTables.map((t) => [t.id, t.client_id as string]));
+    const tableToType = new Map(activePulseCampaignTables.map((t) => [t.id, t.integration_type as string | null]));
+    const tableToClient = new Map(activePulseCampaignTables.map((t) => [t.id, t.client_id as string]));
     return {
-      tables: pulseCampaignTables,
+      tables: activePulseCampaignTables,
       records: pulseCampaignRecords,
       tableToType,
       tableToClient,
     };
-  }, [pulseCampaignTables, pulseCampaignRecords]);
+  }, [activePulseCampaignTables, pulseCampaignRecords]);
 
   const campaignGoalRows = useMemo(
     () => buildPulseCampaignRows({
       records: pulseCampaignRecords,
-      tables: pulseCampaignTables,
+      tables: activePulseCampaignTables,
       nowYmd: jerusalemYmd(),
     }),
-    [pulseCampaignRecords, pulseCampaignTables],
+    [pulseCampaignRecords, activePulseCampaignTables],
   );
 
   const refetchCampaignData = () => {
