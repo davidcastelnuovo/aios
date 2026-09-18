@@ -140,6 +140,61 @@ test('classifies from synced result_kind and Hebrew campaign names', () => {
   )
 })
 
+test('Avieli Tayg production-shaped Meta rows classify from objective not table type', () => {
+  const table = {
+    id: 'ccb8fbda-fd8f-4883-93e3-a59dc87563ab',
+    client_id: '0117effa-063f-4579-989c-cdf8ec923fb9',
+    integration_type: 'facebook_insights',
+    category: 'Facebook Insights',
+    integration_settings: {},
+  }
+  const specs = [
+    {
+      campaign_id: 'sale',
+      campaign_name: '‏‏‏‏קמפיין מכירות | מבצעים ספטמבר',
+      campaign_objective: 'OUTCOME_SALES',
+      campaign_type: 'ecommerce',
+      spend: 462.54,
+      purchases: 2,
+      purchase_value: 1200,
+    },
+    {
+      campaign_id: 'eng',
+      campaign_name: '‏קמפיין מעורבות | סרטונים‏ חדש',
+      campaign_objective: 'OUTCOME_ENGAGEMENT',
+      campaign_type: 'other',
+      spend: 62.21,
+      video_views: 20,
+    },
+    {
+      campaign_id: 'wa',
+      campaign_name: '‏קמפיין ווטסאפ | ברזל',
+      campaign_objective: 'OUTCOME_ENGAGEMENT',
+      campaign_type: 'other',
+      spend: 348.77,
+      conversations: 4,
+    },
+    {
+      campaign_id: 'lead',
+      campaign_name: 'קמפיין לידים | דרושים',
+      campaign_objective: 'OUTCOME_LEADS',
+      campaign_type: 'lead',
+      spend: 42.74,
+      leads: 0,
+    },
+  ]
+  const dates = ['2026-09-11', '2026-09-12', '2026-09-13', '2026-09-14', '2026-09-15', '2026-09-16', '2026-09-17']
+  const records = []
+  for (const date of dates) {
+    for (const spec of specs) {
+      records.push({ table_id: table.id, data: { date, entity_level: 'campaign', ...spec } })
+    }
+  }
+  const rows = buildPulseCampaignRows({ records, tables: [table], nowYmd: '2026-09-18' })
+    .filter((row) => row.spend_7d > 0)
+  assert.deepEqual(rows.map((row) => row.goal).sort(), ['ecommerce', 'engagement', 'engagement', 'leads'])
+})
+
 test('Avieli Tayg-style mixed Meta account splits into leads, engagement, and ecommerce', () => {
   const tables = [{
     id: 't-meta',

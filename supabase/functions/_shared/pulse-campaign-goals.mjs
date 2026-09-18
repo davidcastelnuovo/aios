@@ -93,6 +93,21 @@ function goalFromResultKind(resultKind) {
   return null
 }
 
+/** Legacy synced rows may lack objective/result_kind but still carry report metrics. */
+function goalFromSyncedRowMetrics(data = {}) {
+  const purchases = Number(data.purchases ?? data.purchase ?? 0) || 0
+  const purchaseValue = Number(data.purchase_value ?? data.conversions_value ?? data.revenue ?? 0) || 0
+  if (purchases > 0 || purchaseValue > 0) return 'ecommerce'
+
+  const leads = Number(data.leads ?? data.form_leads ?? data.conversions ?? 0) || 0
+  const conversations = Number(data.conversations ?? data.messages ?? 0) || 0
+  const videoViews = Number(data.video_views ?? data.thruplays ?? 0) || 0
+  if (conversations > 0 || videoViews > 0) return 'engagement'
+  if (leads > 0) return 'leads'
+
+  return null
+}
+
 function goalFromCampaignName(name) {
   const raw = String(name || '').trim()
   if (!raw) return null
@@ -189,6 +204,9 @@ export function classifyPulseCampaignGoal(data = {}, context = {}) {
 
   const resultKindGoal = goalFromResultKind(data.result_kind)
   if (resultKindGoal) return { goal: resultKindGoal, source: 'platform_goal' }
+
+  const syncedMetricsGoal = goalFromSyncedRowMetrics(data)
+  if (syncedMetricsGoal) return { goal: syncedMetricsGoal, source: 'platform_goal' }
 
   const platform = normalizedTerms(
     data.conversion_action_category,
@@ -590,7 +608,8 @@ export function buildPulseCampaignRows({
   const rows = []
 
   for (const items of campaigns.values()) {
-    const sample = items.sort((a, b) => b.record.data.date.localeCompare(a.record.data.date))[0]
+    const sample = items.reduce((best, item) =>
+      !best || recordScore(item.record, item.table) > recordScore(best.record, best.table) ? item : best)
     const classification = classifyPulseCampaignGoal(sample.record.data, {
       integration_type: sample.table.integration_type,
       integration_settings: sample.table.integration_settings || {},

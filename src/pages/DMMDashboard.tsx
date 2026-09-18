@@ -61,10 +61,6 @@ import {
   collectCampaignBreakdownFromSnapshots,
   expandPulseToPlatformGoalRows,
   fetchPulseCampaignDeliveryHints,
-  pulseClientsNeedingRecordBuild,
-  pulseClientsWithMisclassifiedEcommerceReports,
-  pulseClientsWithStaleCampaignGoals,
-  pulseFallbackTableIds,
   pulseMetaTablesNeedingDeliveryHints,
   rehydrateCampaignBreakdownRows,
   applyClientCallToPulseSnapshot,
@@ -424,21 +420,9 @@ export function CampaignPulseDashboard({
     staleTime: 60_000,
   });
 
-  const clientsNeedingRecordBuild = useMemo(() => {
-    const breakdown = collectCampaignBreakdownFromSnapshots(pulseRows);
-    return Array.from(new Set([
-      ...pulseClientsNeedingRecordBuild({
-        snapshots: pulseRows,
-        tables: pulseCampaignTables,
-      }),
-      ...pulseClientsWithStaleCampaignGoals(breakdown, pulseCampaignTables),
-      ...pulseClientsWithMisclassifiedEcommerceReports(breakdown, pulseCampaignTables),
-    ]));
-  }, [pulseRows, pulseCampaignTables]);
-
-  const fallbackTableIds = useMemo(
-    () => pulseFallbackTableIds(pulseCampaignTables, clientsNeedingRecordBuild),
-    [pulseCampaignTables, clientsNeedingRecordBuild],
+  const pulseTableIds = useMemo(
+    () => pulseCampaignTables.map((table) => table.id),
+    [pulseCampaignTables],
   );
 
   const snapshotCampaignRows = useMemo(
@@ -486,17 +470,17 @@ export function CampaignPulseDashboard({
     refetch: refetchPulseRecords,
   } = useQuery({
     queryKey: [
-      "pulse-dash-records-fallback",
-      fallbackTableIds.join(","),
+      "pulse-dash-records",
+      pulseTableIds.join(","),
       campaignTrendBounds.queryStart,
       campaignTrendBounds.queryEnd,
     ],
-    queryFn: () => fetchPulseCampaignRecords(fallbackTableIds, {
+    queryFn: () => fetchPulseCampaignRecords(pulseTableIds, {
       ...periodBounds,
       prevStartDate: campaignTrendBounds.queryStart,
       endDate: campaignTrendBounds.queryEnd,
     }),
-    enabled: fallbackTableIds.length > 0,
+    enabled: pulseTableIds.length > 0,
     staleTime: 30_000,
     placeholderData: (previous) => previous,
   });
@@ -513,30 +497,23 @@ export function CampaignPulseDashboard({
   }, [pulseCampaignTables, pulseCampaignRecords]);
 
   const campaignGoalRows = useMemo(() => {
-    const rehydrated = rehydrateCampaignBreakdownRows(
+    if (pulseCampaignRecords.length > 0) {
+      return buildPulseCampaignRows({
+        records: pulseCampaignRecords,
+        tables: pulseCampaignTables,
+        nowYmd: jerusalemYmd(),
+      });
+    }
+    return rehydrateCampaignBreakdownRows(
       snapshotCampaignRows,
       pulseCampaignTables,
       deliveryHints,
     );
-    if (!fallbackTableIds.length || !pulseCampaignRecords.length) {
-      return rehydrated;
-    }
-    const rebuiltRows = buildPulseCampaignRows({
-      records: pulseCampaignRecords.filter((record) => fallbackTableIds.includes(record.table_id)),
-      tables: pulseCampaignTables.filter((table) => fallbackTableIds.includes(table.id)),
-      nowYmd: jerusalemYmd(),
-    });
-    const rebuiltClientIds = new Set(rebuiltRows.map((row) => row.client_id));
-    return [
-      ...rehydrated.filter((row) => !rebuiltClientIds.has(row.client_id)),
-      ...rebuiltRows,
-    ];
   }, [
     snapshotCampaignRows,
     pulseCampaignTables,
     deliveryHints,
     pulseCampaignRecords,
-    fallbackTableIds,
   ]);
 
   const pulseInitialLoading =
@@ -546,7 +523,7 @@ export function CampaignPulseDashboard({
 
   const pulseRefining =
     deliveryHintsFetching
-    || (pulseRecordsFetching && fallbackTableIds.length > 0);
+    || (pulseRecordsFetching && pulseTableIds.length > 0);
 
   const refetchCampaignData = () => {
     refetchPulseTables();
