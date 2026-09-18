@@ -22,9 +22,9 @@ serve(async (req) => {
 
   try {
     const auth = await requireAuth(req);
-    if (!auth.ok) {
-      return new Response(JSON.stringify({ error: auth.error }), {
-        status: auth.status,
+    if (!auth) {
+      return new Response(JSON.stringify({ error: "Unauthorized" }), {
+        status: 401,
         headers: { ...cors, "Content-Type": "application/json" },
       });
     }
