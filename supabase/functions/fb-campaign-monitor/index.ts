@@ -18,7 +18,10 @@ type AlertInput = {
   details: Record<string, any>;
 };
 
-const NOTIFY_TYPES = new Set(['campaign_stopped', 'ad_disapproved', 'cpl_spike']);
+// KPI exceptions are owned by campaign-pulse-snapshot so they share its
+// target-aware filter, AI verification and campaign-level dedupe. This monitor
+// sends only platform-operational failures.
+const NOTIFY_TYPES = new Set(['campaign_stopped', 'ad_disapproved']);
 
 async function resolveRecipients(supabase: any, tenant_id: string, client_id?: string | null) {
   const phones = new Map<string, string>(); // phone -> label
@@ -69,12 +72,11 @@ async function notifyWhatsapp(supabase: any, alert: AlertInput, alert_id: string
   const typeLabel: Record<string, string> = {
     campaign_stopped: 'הקמפיין הושהה / נדחה ע״י Meta',
     ad_disapproved: 'מודעה לא מאושרת',
-    cpl_spike: `CPL חורג (פי ${alert.details?.spike_pct ? (1 + alert.details.spike_pct / 100).toFixed(1) : '?'} מהממוצע השבועי)`,
   };
   const message = `${emoji} התראת קמפיין\n` +
     `קמפיין: ${alert.campaign_name || alert.campaign_id}\n` +
     `הבעיה: ${typeLabel[alert.alert_type] || alert.alert_type}\n` +
-    `\nענה "כרמן נתחי ${alert.campaign_name || alert.campaign_id}" לקבלת ניתוח ופעולה.`;
+    '\nבדיקה מומלצת: לפתוח את דשבורד הדופק ולאמת את מצב הקמפיין.';
 
   const fnUrl = `${Deno.env.get('SUPABASE_URL')}/functions/v1/send-manus-wa-message`;
   for (const r of recipients) {
@@ -137,23 +139,13 @@ async function scanCampaign(supabase: any, tenant_id: string, token: string, acc
   if (c.effective_status !== 'ACTIVE') return;
 
   try {
-    const [insJ, ins7J] = await Promise.all([
-      fetch(`https://graph.facebook.com/v21.0/${c.id}/insights?fields=spend,frequency,ctr,cost_per_action_type&date_preset=today&access_token=${token}`).then(r => r.json()),
-      fetch(`https://graph.facebook.com/v21.0/${c.id}/insights?fields=cost_per_action_type,frequency,ctr&date_preset=last_7d&access_token=${token}`).then(r => r.json()),
-    ]);
-    const today = insJ?.data?.[0];
+    const ins7J = await fetch(
+      `https://graph.facebook.com/v21.0/${c.id}/insights?fields=frequency,ctr&date_preset=last_7d&access_token=${token}`,
+    ).then(r => r.json());
     const last7 = ins7J?.data?.[0];
 
-    const cplToday = (today?.cost_per_action_type || []).find((a: any) => a.action_type?.includes('lead'))?.value;
-    const cpl7 = (last7?.cost_per_action_type || []).find((a: any) => a.action_type?.includes('lead'))?.value;
-    if (cplToday && cpl7 && Number(cplToday) > Number(cpl7) * 1.5) {
-      const r = await upsertAlert(supabase, {
-        tenant_id, campaign_id: c.id, campaign_name: c.name, ad_account_id: acc.id,
-        alert_type: 'cpl_spike', severity: 'warning',
-        details: { cpl_today: Number(cplToday), cpl_7d_avg: Number(cpl7), spike_pct: Math.round(((Number(cplToday) / Number(cpl7)) - 1) * 100) },
-      });
-      if (r) stats.alerts_created++;
-    }
+    // CPL/ROAS/cost-per-result anomalies are deliberately not evaluated here.
+    // The pulse pipeline compares complete 3d+7d windows with approved targets.
     const freq = Number(last7?.frequency || 0);
     if (freq > 3.5) {
       const r = await upsertAlert(supabase, {
