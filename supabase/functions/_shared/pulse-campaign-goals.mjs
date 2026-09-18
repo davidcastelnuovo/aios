@@ -2,6 +2,50 @@ const DAY_MS = 86_400_000
 
 export const PULSE_CAMPAIGN_GOALS = ['leads', 'engagement', 'ecommerce']
 
+const PAUSED_DELIVERY_STATUSES = new Set([
+  'PAUSED', 'CAMPAIGN_PAUSED', 'ADSET_PAUSED', 'AD_PAUSED',
+])
+const ACTIVE_DELIVERY_STATUSES = new Set([
+  'ACTIVE', 'ENABLED', 'ELIGIBLE', 'LIMITED', 'LEARNING',
+])
+const REMOVED_DELIVERY_STATUSES = new Set([
+  'REMOVED', 'DELETED', 'ARCHIVED', 'DISAPPROVED',
+])
+
+export function resolveCampaignDeliveryStatus(data = {}, integrationSettings = {}) {
+  const raw = String(
+    data.effective_status
+    || data.configured_status
+    || data.campaign_status
+    || data.status
+    || '',
+  ).trim().toUpperCase()
+  if (raw) {
+    if (PAUSED_DELIVERY_STATUSES.has(raw) || raw.includes('PAUSED')) return 'paused'
+    if (ACTIVE_DELIVERY_STATUSES.has(raw)) return 'active'
+    if (REMOVED_DELIVERY_STATUSES.has(raw)) return 'removed'
+    return 'other'
+  }
+  const campaignId = String(data.campaign_id || data.campaignId || '')
+  const states = integrationSettings.operational_campaign_states
+  if (campaignId && states && typeof states === 'object') {
+    const state = states[campaignId]
+    const status = String(state?.status || '').toUpperCase()
+    if (status === 'PAUSED') return 'paused'
+    if (status === 'ENABLED') return 'active'
+    if (status === 'REMOVED') return 'removed'
+  }
+  return 'unknown'
+}
+
+export function campaignDeliveryStatusLabel(status) {
+  if (status === 'active') return 'פעיל'
+  if (status === 'paused') return 'מושהה'
+  if (status === 'removed') return 'הוסר'
+  if (status === 'other') return 'לא פעיל'
+  return 'לא ידוע'
+}
+
 const LEAD_TERMS = ['LEAD', 'CONTACT', 'SUBMIT_APPLICATION', 'QUALIFIED_LEAD']
 const ENGAGEMENT_TERMS = [
   'ENGAGEMENT', 'TRAFFIC', 'VIDEO_VIEW', 'THRUPLAY', 'MESSAGE', 'CONVERSATION',
@@ -20,30 +64,154 @@ function includesTerm(values, terms) {
   return values.some((value) => terms.some((term) => value.includes(term)))
 }
 
-export function classifyPulseCampaignGoal(data = {}, integrationSettings = {}) {
-  const explicit = normalizedTerms(
-    data.pulse_goal,
-    data.campaign_type,
-    data.campaign_goal,
-    integrationSettings.pulse_goal,
-    integrationSettings.campaign_type,
-  )
+const META_OBJECTIVE_GOAL = [
+  ['ecommerce', ['OUTCOME_SALES', 'PRODUCT_CATALOG_SALES', 'CATALOG_SALES']],
+  ['leads', ['OUTCOME_LEADS', 'LEAD_GENERATION']],
+  ['engagement', [
+    'OUTCOME_TRAFFIC', 'OUTCOME_ENGAGEMENT', 'OUTCOME_AWARENESS',
+    'LINK_CLICKS', 'MESSAGES', 'REACH', 'VIDEO_VIEWS',
+  ]],
+]
+
+function goalFromListedObjective(objective) {
+  const normalized = String(objective || '').trim().toUpperCase()
+  if (!normalized) return null
+  for (const [goal, tokens] of META_OBJECTIVE_GOAL) {
+    if (tokens.some((token) => normalized === token || normalized.includes(token))) return goal
+  }
+  return null
+}
+
+function goalFromResultKind(resultKind) {
+  const kind = String(resultKind || '').trim().toLowerCase()
+  if (!kind) return null
+  if (kind === 'purchases') return 'ecommerce'
+  if (kind === 'leads') return 'leads'
+  if (['video_views', 'conversations', 'engagements', 'link_clicks', 'landing_page_views', 'results'].includes(kind)) {
+    return 'engagement'
+  }
+  return null
+}
+
+/** Legacy synced rows may lack objective/result_kind but still carry report metrics. */
+function goalFromSyncedRowMetrics(data = {}) {
+  const purchases = Number(data.purchases ?? data.purchase ?? 0) || 0
+  const purchaseValue = Number(data.purchase_value ?? data.conversions_value ?? data.revenue ?? 0) || 0
+  if (purchases > 0 || purchaseValue > 0) return 'ecommerce'
+
+  const leads = Number(data.leads ?? data.form_leads ?? data.conversions ?? 0) || 0
+  const conversations = Number(data.conversations ?? data.messages ?? 0) || 0
+  const videoViews = Number(data.video_views ?? data.thruplays ?? 0) || 0
+  if (conversations > 0 || videoViews > 0) return 'engagement'
+  if (leads > 0) return 'leads'
+
+  return null
+}
+
+function goalFromCampaignName(name) {
+  const raw = String(name || '').trim()
+  if (!raw) return null
+  if (/מכירות|sales|purchase|רכיש/i.test(raw)) return 'ecommerce'
+  if (/מעורבות|סרטון|video|thruplay|ווטסאפ|whatsapp|message|שיח/i.test(raw)) return 'engagement'
+  if (/ליד|lead/i.test(raw)) return 'leads'
+  return null
+}
+
+function goalFromOptimizationGoal(optimizationGoal) {
+  const normalized = String(optimizationGoal || '').trim().toUpperCase()
+  if (!normalized) return null
+  if (includesTerm([normalized], ECOMMERCE_TERMS) || normalized.includes('PURCHASE') || normalized.includes('VALUE')) {
+    return 'ecommerce'
+  }
+  if (includesTerm([normalized], LEAD_TERMS)) return 'leads'
+  if (includesTerm([normalized], ENGAGEMENT_TERMS)) return 'engagement'
+  return null
+}
+
+function goalFromDerivedCampaignType(campaignType) {
+  const normalized = String(campaignType || '').trim().toLowerCase()
+  if (normalized === 'ecommerce') return 'ecommerce'
+  if (normalized === 'traffic') return 'engagement'
+  if (normalized === 'lead') return 'leads'
+  return null
+}
+
+/** Report/table configuration — not a per-campaign guess. */
+export function tableReportGoal(table = {}) {
+  const integrationType = table.integration_type
+  const settings = table.integration_settings || {}
+  const category = String(table.category || '').trim()
+  if (integrationType === 'facebook_ecommerce') return 'ecommerce'
+  if (category === 'איקומרס') return 'ecommerce'
+  const tableCampaignType = String(settings.campaign_type || '').trim().toLowerCase()
+  if (tableCampaignType === 'ecommerce') return 'ecommerce'
+  if (integrationType === 'facebook_insights' || integrationType === 'google_ads') return 'leads'
+  return null
+}
+
+/** Single source of truth for “is this CRM table an ecommerce report?” */
+export function isEcommerceReportTable(table = {}) {
+  if (table.integration_type === 'facebook_ecommerce') return true
+  if (String(table.category || '').trim() === 'איקומרס') return true
+  return String(table.integration_settings?.campaign_type || '').trim().toLowerCase() === 'ecommerce'
+}
+
+/** Table-level default goal for pulse rollups (not per-campaign). */
+export function integrationTypeToGoal(integrationType, table) {
+  if (table && isEcommerceReportTable(table)) return 'ecommerce'
+  if (integrationType === 'facebook_ecommerce') return 'ecommerce'
+  if (integrationType === 'facebook_insights' || integrationType === 'google_ads') return 'leads'
+  return null
+}
+
+/** Map stored pulse breakdown / snapshot row back to classifier input. */
+export function classificationDataFromStoredRow(row = {}) {
+  if (row.data && typeof row.data === 'object') return row.data
+  return {
+    campaign_objective: row.campaign_objective ?? row.objective ?? null,
+    objective: row.campaign_objective ?? row.objective ?? null,
+    optimization_goal: row.optimization_goal ?? null,
+    campaign_type: row.campaign_type_hint ?? row.campaign_type ?? null,
+    result_kind: row.result_kind ?? row.outcome_kind ?? null,
+    campaign_name: row.campaign_name ?? null,
+    pulse_goal: row.pulse_goal ?? null,
+    campaign_goal: row.campaign_goal ?? null,
+  }
+}
+
+function tableReportDefaultGoal(context = {}) {
+  const goal = tableReportGoal(context)
+  return goal === 'leads' ? null : goal
+}
+
+function classificationContext(context = {}) {
+  return {
+    integration_type: context.integration_type || null,
+    integration_settings: context.integration_settings || {},
+    category: context.category || null,
+  }
+}
+
+/** Classify by campaign objective first; fall back to report type only when unknown. */
+export function classifyPulseCampaignGoal(data = {}, context = {}) {
+  const ctx = classificationContext(context)
+
+  const objectiveGoal = goalFromListedObjective(data.campaign_objective || data.objective)
+  if (objectiveGoal) return { goal: objectiveGoal, source: 'platform_goal' }
+
+  const optimizationGoal = goalFromOptimizationGoal(data.optimization_goal)
+  if (optimizationGoal) return { goal: optimizationGoal, source: 'platform_goal' }
+
+  const resultKindGoal = goalFromResultKind(data.result_kind)
+  if (resultKindGoal) return { goal: resultKindGoal, source: 'platform_goal' }
+
+  const syncedMetricsGoal = goalFromSyncedRowMetrics(data)
+  if (syncedMetricsGoal) return { goal: syncedMetricsGoal, source: 'platform_goal' }
+
   const platform = normalizedTerms(
-    data.campaign_objective,
-    data.objective,
-    data.optimization_goal,
     data.conversion_action_category,
     data.bidding_strategy_type,
   )
-  if (includesTerm(explicit, ECOMMERCE_TERMS)) {
-    return { goal: 'ecommerce', source: 'explicit_mapping' }
-  }
-  if (includesTerm(explicit, LEAD_TERMS)) {
-    return { goal: 'leads', source: 'explicit_mapping' }
-  }
-  if (includesTerm(explicit, ENGAGEMENT_TERMS)) {
-    return { goal: 'engagement', source: 'explicit_mapping' }
-  }
   if (includesTerm(platform, ECOMMERCE_TERMS)) {
     return { goal: 'ecommerce', source: 'platform_goal' }
   }
@@ -53,6 +221,38 @@ export function classifyPulseCampaignGoal(data = {}, integrationSettings = {}) {
   if (includesTerm(platform, ENGAGEMENT_TERMS)) {
     return { goal: 'engagement', source: 'platform_goal' }
   }
+
+  const manual = normalizedTerms(data.pulse_goal, data.campaign_goal)
+  if (includesTerm(manual, ECOMMERCE_TERMS)) {
+    return { goal: 'ecommerce', source: 'explicit_mapping' }
+  }
+  if (includesTerm(manual, LEAD_TERMS)) {
+    return { goal: 'leads', source: 'explicit_mapping' }
+  }
+  if (includesTerm(manual, ENGAGEMENT_TERMS)) {
+    return { goal: 'engagement', source: 'explicit_mapping' }
+  }
+
+  const reportDefault = tableReportDefaultGoal(ctx)
+  const nameGoal = goalFromCampaignName(data.campaign_name)
+  if (nameGoal) return { goal: nameGoal, source: 'explicit_mapping' }
+
+  const derived = goalFromDerivedCampaignType(data.campaign_type)
+  if (derived) {
+    // Ecommerce report tables: ignore fbInsights "lead" heuristic unless objective confirms leads.
+    if (
+      derived === 'leads'
+      && reportDefault === 'ecommerce'
+      && !objectiveGoal
+      && !optimizationGoal
+    ) {
+      return { goal: reportDefault, source: 'table_report_type' }
+    }
+    return { goal: derived, source: 'explicit_mapping' }
+  }
+
+  if (reportDefault) return { goal: reportDefault, source: 'table_report_type' }
+
   return { goal: 'unknown', source: 'unclassified' }
 }
 
@@ -134,7 +334,11 @@ function numberValue(data, fields) {
 
 function recordScore(record, table) {
   const data = record.data || {}
-  const classification = classifyPulseCampaignGoal(data, table?.integration_settings || {})
+  const classification = classifyPulseCampaignGoal(data, {
+    integration_type: table?.integration_type,
+    integration_settings: table?.integration_settings || {},
+    category: table?.category,
+  })
   let score = classification.goal === 'unknown' ? 0 : 10
   if (data.campaign_id) score += 2
   if (pulseCampaignOutcome(data, classification.goal).field) score += 3
@@ -253,7 +457,25 @@ function round(value, digits = 2) {
   return Math.round(value * factor) / factor
 }
 
-function classifyStatus({ goal, current3, current7, baseline3, baseline7, target }) {
+function classifyStatus({ goal, current3, current7, baseline3, baseline7, target, deliveryStatus = 'unknown' }) {
+  if (deliveryStatus === 'paused') {
+    return {
+      status: 'healthy',
+      tier: 'normal',
+      reason: current7.spend > 0
+        ? 'קמפיין מושהה — ההוצאה בחלון היא מלפני ההשהיה'
+        : 'קמפיין מושהה — אין הוצאה פעילה',
+      alertEligible: false,
+    }
+  }
+  if (deliveryStatus === 'removed') {
+    return {
+      status: 'healthy',
+      tier: 'normal',
+      reason: 'קמפיין הוסר/לא פעיל',
+      alertEligible: false,
+    }
+  }
   if (goal === 'unknown') {
     return {
       status: 'warning',
@@ -386,11 +608,13 @@ export function buildPulseCampaignRows({
   const rows = []
 
   for (const items of campaigns.values()) {
-    const sample = items.sort((a, b) => b.record.data.date.localeCompare(a.record.data.date))[0]
-    const classification = classifyPulseCampaignGoal(
-      sample.record.data,
-      sample.table.integration_settings || {},
-    )
+    const sample = items.reduce((best, item) =>
+      !best || recordScore(item.record, item.table) > recordScore(best.record, best.table) ? item : best)
+    const classification = classifyPulseCampaignGoal(sample.record.data, {
+      integration_type: sample.table.integration_type,
+      integration_settings: sample.table.integration_settings || {},
+      category: sample.table.category,
+    })
     const outcome = pulseCampaignOutcome(sample.record.data, classification.goal)
     const campaignRecords = items.map((item) => item.record)
     const inWindow = (start, end) => campaignRecords.filter((row) => row.data.date >= start && row.data.date <= end)
@@ -400,7 +624,9 @@ export function buildPulseCampaignRows({
     const baselineRows = inWindow(windows.baseline.start, windows.baseline.end)
     const baseline3 = normalizedBaseline(baselineRows, classification.goal, outcome.kind, current3Dates)
     const baseline7 = normalizedBaseline(baselineRows, classification.goal, outcome.kind, current7Dates)
-    const target = approvedTarget(sample.table.integration_settings || {}, sample.record.data, classification.goal)
+    const tableSettings = sample.table.integration_settings || {}
+    const deliveryStatus = resolveCampaignDeliveryStatus(sample.record.data, tableSettings)
+    const target = approvedTarget(tableSettings, sample.record.data, classification.goal)
     const status = classifyStatus({
       goal: classification.goal,
       current3,
@@ -408,6 +634,7 @@ export function buildPulseCampaignRows({
       baseline3,
       baseline7,
       target,
+      deliveryStatus,
     })
     const useRoas = classification.goal === 'ecommerce' && target?.kind !== 'cpa'
     const lowerIsBetter = !useRoas
@@ -416,7 +643,7 @@ export function buildPulseCampaignRows({
     const efficiencyToday = useRoas ? today.roas : today.efficiency
     const baselineEfficiency3 = useRoas ? baseline3.roas : baseline3.efficiency
     const baselineEfficiency7 = useRoas ? baseline7.roas : baseline7.efficiency
-    const settings = sample.table.integration_settings || {}
+    const settings = tableSettings
     const lastChangeCandidates = [
       ...items.map((item) => item.record.data.updated_time),
       settings.last_campaign_updated_at,
@@ -431,6 +658,11 @@ export function buildPulseCampaignRows({
       table_id: sample.table.id,
       platform: sample.platform,
       goal: classification.goal,
+      campaign_objective: sample.record.data.campaign_objective || sample.record.data.objective || null,
+      optimization_goal: sample.record.data.optimization_goal || null,
+      campaign_type_hint: sample.record.data.campaign_type || null,
+      result_kind: sample.record.data.result_kind || null,
+      delivery_status: deliveryStatus,
       classification_source: classification.source,
       outcome_kind: outcome.kind,
       status: status.status,
