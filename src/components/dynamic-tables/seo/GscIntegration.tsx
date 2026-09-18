@@ -149,9 +149,17 @@ export function GscIntegration({
   // shared-agency tenant scope when provided.
   const lookupTenants =
     Array.isArray(tenantIds) && tenantIds.length > 0 ? tenantIds : tenantId;
-  const { data: gscIntegrations = [], isLoading: isLoadingIntegration } = useUserIntegrations(
+  const { data: gscIntegrationRows = [], isLoading: isLoadingIntegration } = useUserIntegrations(
     lookupTenants, 'google_search_console'
   );
+
+  // `useUserIntegrations` selects columns dynamically, so the row type is loose.
+  const gscIntegrations = gscIntegrationRows as unknown as Array<{
+    id: string;
+    settings?: Record<string, unknown> | null;
+    _isOwn?: boolean;
+    _sharedByName?: string | null;
+  }>;
 
   // The property this report needs — a stand-in connection is only allowed
   // when it verifiably has access to it.
