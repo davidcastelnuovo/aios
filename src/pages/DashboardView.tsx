@@ -1,4 +1,5 @@
 import { reportRecordsQuery } from "@/lib/reportRecords";
+import { WeeklyCampaignComparison } from "@/components/reports/WeeklyCampaignComparison";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -53,7 +54,7 @@ import {
 } from "@/lib/adsMetrics";
 import { reportQueryOptions, getReportLastSyncAt, refetchOnMountIfEmpty } from "@/lib/reportQueryOptions";
 import { ReportDataFreshness } from "@/components/reports/ReportDataFreshness";
-import { formatCurrency as formatCurrencyAmount, formatUnitCost as formatUnitCostAmount, resolveDashboardCurrency } from "@/lib/currency";
+import { formatCurrency as formatCurrencyAmount, formatUnitCost as formatUnitCostAmount, getCurrencySymbol, resolveDashboardCurrency } from "@/lib/currency";
 import { resolveAnalyticsReportMode } from "@/lib/analyticsReportMode";
 import { COMBINED_DASHBOARD_DATE_FILTERS, getDashboardDateRange } from "@/lib/dashboardDateFilters";
 import { formatReportDate, getReportCoverageGap } from "@/lib/reportCoverage";
@@ -75,7 +76,7 @@ const PLATFORM_CONFIG: Record<string, { name: string; color: string; bgColor: st
 };
 
 type CampaignType = 'leads' | 'ecommerce';
-type PlatformFilter = 'all' | 'facebook' | 'google_ads' | 'google_analytics' | 'seo' | 'woocommerce';
+type PlatformFilter = 'all' | 'weekly' | 'facebook' | 'google_ads' | 'google_analytics' | 'seo' | 'woocommerce';
 
 const getCampaignType = (integrationType?: string | null, integrationSettings?: any): CampaignType => {
   if (integrationType === 'facebook_ecommerce') return 'ecommerce';
@@ -314,6 +315,27 @@ export default function DashboardView() {
   const displayAllRecords = allRecords ?? [];
   const recordsInitialLoad = recordsPending && tables.length > 0;
 
+  // Weekly comparison is independent of the dashboard's active date preset: it needs
+  // every available campaign day (up to one year) to render the stacked week tables.
+  const { data: weeklyRecords = [], isPending: weeklyRecordsPending } = useQuery<any[]>({
+    queryKey: ['crm-records-dashboard-weekly', tables.map((t: any) => t.id).join(',')],
+    queryFn: async () => {
+      const adsTables = tables.filter((table: any) => isAdsPlatform(table.integration_type));
+      const results = await Promise.all(adsTables.map(async (table: any) => {
+        const records = await queryClient.fetchQuery({
+          ...reportRecordsQuery(supabase, table.id, 'last_365_days'),
+        });
+        return records.map((record: any) => ({
+          ...record,
+          _source: table.integration_type,
+        }));
+      }));
+      return results.flat();
+    },
+    enabled: platformFilter === 'weekly' && tables.some((t: any) => isAdsPlatform(t.integration_type)),
+    ...reportQueryOptions<any[]>(),
+  });
+
   // Check if client has SEO (Ahrefs) reports — do NOT filter by UI tenant.
   // Shared-agency clients (DMM-MC) store ahrefs_reports on the home tenant;
   // RLS + client_id is enough, and a UI-tenant filter hid the SEO tab from MC.
@@ -405,6 +427,13 @@ export default function DashboardView() {
 
   const platformTabItems = useMemo((): ResponsiveTabItem[] => {
     const items: ResponsiveTabItem[] = [{ value: "all", label: "📊 הכל" }];
+    if (availablePlatforms.includes("facebook") || availablePlatforms.includes("google_ads")) {
+      items.push({
+        value: "weekly",
+        label: "השוואה שבועית",
+        iconNode: <CalendarIcon className="h-4 w-4 text-violet-600" />,
+      });
+    }
     if (availablePlatforms.includes("facebook")) {
       items.push({
         value: "facebook",
@@ -1371,7 +1400,7 @@ export default function DashboardView() {
         </div>
       </div>
 
-      {adsCoverageGap && (
+      {adsCoverageGap && platformFilter !== 'weekly' && (
         <p className="text-xs text-muted-foreground">
           נתוני הפרסום הזמינים מתחילים ב-{formatReportDate(adsCoverageGap.earliestAvailable)}, כך שהסכומים מוצגים מהתאריך הזה ואילך ולא מתחילת הטווח שנבחר.
         </p>
@@ -1415,7 +1444,18 @@ export default function DashboardView() {
             </Tabs>
           )}
 
-          {platformFilter === 'woocommerce' ? (
+          {platformFilter === 'weekly' ? (
+            <WeeklyCampaignComparison
+              records={weeklyRecords}
+              currency={getCurrencySymbol(dashboardCurrency)}
+              isLoading={weeklyRecordsPending}
+              sourceModes={{
+                facebook_insights: campaignTypeByPlatform.facebook_insights,
+                facebook_ecommerce: campaignTypeByPlatform.facebook_ecommerce,
+                google_ads: campaignTypeByPlatform.google_ads,
+              }}
+            />
+          ) : platformFilter === 'woocommerce' ? (
             /* WooCommerce tab — client_id only (site may live on agency home tenant) */
             dashboard?.client_id ? (
               <WooCommerceDashboard clientId={dashboard.client_id} tenantId={currentTenantId || ''} dateFilter={dateFilter} customFrom={customFromStr} customTo={customToStr} />
