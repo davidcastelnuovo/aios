@@ -1,4 +1,5 @@
 -- Production apply for recurring human tasks + checklist subtasks.
+-- Re-run safe: idempotent guards on columns, trigger, and checklist table.
 -- Mirrors supabase/migrations/20260918093000_add_recurring_tasks.sql and
 -- supabase/migrations/20260918100000_recurring_day_time_and_checklist.sql.
 -- Idempotent: safe to re-run.
