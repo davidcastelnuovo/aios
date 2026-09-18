@@ -14,6 +14,7 @@ import { Link2, RefreshCw, Search, MousePointerClick, Eye, Target, ChevronsUpDow
 import { cn } from "@/lib/utils";
 import { normalizeSeoDomain, seoDomainsMatch } from "@/lib/seoDomain";
 import { formatGscCtrPercent, gscCtrAsPercent } from "@/lib/gscFormat";
+import { pickGscIntegration } from "@/lib/gscIntegrationSelection";
 
 export type GscDateRange = '28d' | '3m' | '12m';
 
@@ -152,60 +153,73 @@ export function GscIntegration({
     lookupTenants, 'google_search_console'
   );
 
-  // Selection priority for the GSC integration to use:
-  //   1. The connection explicitly selected for this report.
-  //   2. A personal/shared integration that has a USABLE mapping for THIS client.
-  //   3. The org-wide fallback resolved server-side (if available).
-  //   4. The first personal integration as a last resort (lets the user pick a site manually).
+  // The property this report needs — a stand-in connection is only allowed
+  // when it verifiably has access to it.
+  const requestedSiteUrl = initialSiteUrl || domain || "";
+
+  const {
+    integration: pickedIntegration,
+    source: selectionSource,
+    pinnedIntegration,
+  } = useMemo(
+    () =>
+      pickGscIntegration({
+        integrations: gscIntegrations,
+        clientId,
+        selectedIntegrationId,
+        brokenIntegrationIds,
+        fallbackIntegrationId: resolvedFallback?.integrationId ?? null,
+        fallbackSiteUrl: resolvedFallback?.siteUrl ?? null,
+        requestedSiteUrl,
+        siteMatcher: seoDomainsMatch,
+      }),
+    [
+      gscIntegrations,
+      clientId,
+      selectedIntegrationId,
+      brokenIntegrationIds,
+      resolvedFallback?.integrationId,
+      resolvedFallback?.siteUrl,
+      requestedSiteUrl,
+    ],
+  );
+
+  // The pinned account's connection is stale and no other account has the
+  // requested property — keep it selected so the user can reconnect it.
+  const pinnedNeedsReconnect = selectionSource === "explicit-needs-reconnect";
+  // Another account took over because it does have the requested property.
+  const isSubstituteSelection = selectionSource === "substitute";
+
   const gscIntegration = useMemo(() => {
-    const buildFallback = () => {
-      if (!resolvedFallback?.integrationId) return null;
-      return {
-        id: resolvedFallback.integrationId,
-        settings: {
-          google_email: resolvedFallback.ownerEmail || null,
-          // Surface the resolver's chosen siteUrl as a per-client mapping so
-          // the existing site-resolution code paths "just work".
-          client_sites: resolvedFallback.siteUrl
-            ? { [clientId]: resolvedFallback.siteUrl }
-            : {},
-          available_sites: [],
-        },
-        _isFallback: true,
-      } as any;
-    };
-
-    const usableIntegrations = gscIntegrations.filter(
-      (i: any) => !brokenIntegrationIds.has(i.id)
-    );
-
-    if (!usableIntegrations.length) {
-      return buildFallback();
-    }
-
-    const explicitlySelected = selectedIntegrationId
-      ? usableIntegrations.find((i) => i.id === selectedIntegrationId)
-      : null;
-    if (explicitlySelected) return explicitlySelected;
-
-    const withGoodMapping = usableIntegrations.find((i: any) => {
-      const mapped = (i.settings as any)?.client_sites?.[clientId];
-      if (!mapped) return false;
-      const sites = (i.settings as any)?.available_sites || [];
-      const site = sites.find((s: any) => s.siteUrl === mapped);
-      // Accept if we don't have permission metadata, or if it's not 'siteUnverifiedUser'
-      return !site || site.permissionLevel !== 'siteUnverifiedUser';
-    });
-    if (withGoodMapping) return withGoodMapping;
-
-    // Personal integration exists but isn't usable for this client → prefer the
-    // org-wide fallback so GSC data still loads automatically (same behavior
-    // as the public shared link). Fall back to the first personal integration
-    // only if no org fallback is available.
-    return buildFallback() || usableIntegrations[0];
-  }, [gscIntegrations, clientId, resolvedFallback, brokenIntegrationIds, selectedIntegrationId]);
+    if (pickedIntegration) return pickedIntegration;
+    if (!resolvedFallback?.integrationId) return null;
+    if (selectionSource !== "fallback" && selectionSource !== "substitute") return null;
+    return {
+      id: resolvedFallback.integrationId,
+      settings: {
+        google_email: resolvedFallback.ownerEmail || null,
+        // Surface the resolver's chosen siteUrl as a per-client mapping so
+        // the existing site-resolution code paths "just work".
+        client_sites: resolvedFallback.siteUrl
+          ? { [clientId]: resolvedFallback.siteUrl }
+          : {},
+        available_sites: [],
+      },
+      _isFallback: true,
+    } as any;
+  }, [pickedIntegration, selectionSource, resolvedFallback, clientId]);
 
   const isFallbackIntegration = !!(gscIntegration as any)?._isFallback;
+
+  // Properties belong to one Google account — drop a manual pick when the
+  // active connection changes so it can't leak into the new account.
+  const activeIntegrationIdRef = useRef<string | null>(null);
+  useEffect(() => {
+    const id = gscIntegration?.id ?? null;
+    if (activeIntegrationIdRef.current === id) return;
+    if (activeIntegrationIdRef.current !== null) setSelectedSite("");
+    activeIntegrationIdRef.current = id;
+  }, [gscIntegration?.id]);
 
   const settings = (gscIntegration?.settings as any) || {};
 
@@ -248,15 +262,13 @@ export function GscIntegration({
     staleTime: 5 * 60 * 1000,
   });
 
-  // When the chosen personal/shared integration reports needs_reconnect AND
-  // there's an org-wide fallback available, mark this integration as broken
-  // so the selection memo above re-runs and switches to the fallback —
-  // suppressing the per-client reconnect banner unnecessarily.
+  // Remember which connections failed, so the selection above can look for an
+  // account that has the requested property. A pinned account is never dropped
+  // by this — it stays selected with a reconnect prompt.
   useEffect(() => {
     const id = gscIntegration?.id;
     if (!id || isFallbackIntegration) return;
     if (!sitesResult?.needsReconnect) return;
-    if (!resolvedFallback?.integrationId) return; // no fallback → keep banner
     if (brokenIntegrationIds.has(id)) return;
     setBrokenIntegrationIds((prev) => {
       const next = new Set(prev);
@@ -277,8 +289,13 @@ export function GscIntegration({
   );
 
   const liveSites = sitesResult?.sites || [];
-  const needsReconnect = !!sitesResult?.needsReconnect;
-  const reconnectOwnerEmail = sitesResult?.ownerEmail || (settings?.google_email as string) || null;
+  const needsReconnect = !!sitesResult?.needsReconnect || pinnedNeedsReconnect;
+  const pinnedEmail =
+    ((pinnedIntegration?.settings as Record<string, unknown> | null)?.google_email as string) || null;
+  const activeEmail = (settings?.google_email as string) || null;
+  const reconnectOwnerEmail = pinnedNeedsReconnect
+    ? pinnedEmail
+    : sitesResult?.ownerEmail || activeEmail;
 
   // Fall back to cached sites when the live call returned nothing (auth issue
   // or transient failure) so the user can still pick a property.
@@ -629,7 +646,7 @@ export function GscIntegration({
           <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto">
             {showIntegrationSelector && gscIntegrations.length > 0 && (
               <Select
-                value={gscIntegration?.id || ""}
+                value={selectedIntegrationId || gscIntegration?.id || ""}
                 onValueChange={(integrationId) => {
                   setSelectedSite("");
                   onIntegrationSelected?.(integrationId);
@@ -755,11 +772,30 @@ export function GscIntegration({
         </div>
       </CardHeader>
 
+      {isSubstituteSelection && !hideTable && (
+        <CardContent className="px-4 pb-3 pt-0">
+          <div className="rounded-md border border-amber-300 bg-amber-50 dark:bg-amber-950/30 p-2 flex items-center justify-between gap-2">
+            <p className="text-xs text-amber-800 dark:text-amber-200">
+              {`החיבור${pinnedEmail ? ` של ${pinnedEmail}` : ""} אינו מחובר — הנתונים נטענים דרך ${activeEmail || "חשבון אחר"} שיש לו גישה לנכס`}
+            </p>
+            <Button
+              size="sm"
+              variant="outline"
+              className="h-7 text-xs"
+              onClick={() => connectMutation.mutate()}
+              disabled={connectMutation.isPending}
+            >
+              חבר מחדש
+            </Button>
+          </div>
+        </CardContent>
+      )}
+
       {needsReconnect && !hideTable && (
         <CardContent className="px-4 pb-3 pt-0">
           <div className="rounded-md border border-amber-300 bg-amber-50 dark:bg-amber-950/30 p-2 flex items-center justify-between gap-2">
             <p className="text-xs text-amber-800 dark:text-amber-200">
-              {`החיבור ל-Google${reconnectOwnerEmail ? ` של ${reconnectOwnerEmail}` : ""} פג תוקף — יש להתחבר מחדש`}
+              {`החיבור ל-Google${reconnectOwnerEmail ? ` של ${reconnectOwnerEmail}` : ""} אינו מחובר — יש להתחבר מחדש`}
               {cachedSites.length > 0 ? " (בינתיים מוצגים נכסים אחרונים מהמטמון)" : ""}
             </p>
             <Button
