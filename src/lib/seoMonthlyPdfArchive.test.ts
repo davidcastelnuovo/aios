@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildSeoMonthlyPdfArchivePath } from "./seoMonthlyPdfArchive";
+import { buildSeoMonthlyPdfArchivePath } from "./seoMonthlyPdfPath";
 
 describe("buildSeoMonthlyPdfArchivePath", () => {
   it("uses a stable client/month path so regenerating replaces the same report", () => {
