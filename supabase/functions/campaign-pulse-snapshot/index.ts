@@ -30,6 +30,10 @@ import {
   type PulseDeliveryPlan,
 } from '../_shared/pulse-delivery.ts'
 import { deliverInstantPulseAlerts } from '../_shared/pulse-instant-alerts.ts'
+import {
+  buildPulseCampaignRows,
+  classifyPulseCampaignGoal,
+} from '../_shared/pulse-campaign-goals.mjs'
 import { loadPulseSettings } from '../_shared/pulse-settings.mjs'
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!
@@ -38,6 +42,13 @@ const json = (body: unknown, status = 200) =>
   new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } })
 const round = (value: number | null, digits = 2) =>
   value === null ? null : Math.round(value * 10 ** digits) / 10 ** digits
+const jerusalemYmd = (value = new Date()) =>
+  new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Asia/Jerusalem',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).format(value)
 
 const META_GRAPH_VERSION = 'v21.0'
 const META_ACTIVITY_OBJECTS = new Set(['CAMPAIGN', 'AD_SET', 'AD'])
@@ -395,10 +406,12 @@ Deno.serve(async (req) => {
     const now = new Date()
     const d7 = new Date(now); d7.setDate(d7.getDate() - 7)
     const d14 = new Date(now); d14.setDate(d14.getDate() - 14)
-    const d30 = new Date(now); d30.setDate(d30.getDate() - 30)
+    const d35 = new Date(now); d35.setDate(d35.getDate() - 35)
     const d7Str = d7.toISOString().slice(0, 10)
     const d14Str = d14.toISOString().slice(0, 10)
+    const d30 = new Date(now); d30.setDate(d30.getDate() - 30)
     const d30Str = d30.toISOString().slice(0, 10)
+    const d35Str = d35.toISOString().slice(0, 10)
     const snapshots: any[] = []
     for (const client of reportableClients) {
       try {
@@ -424,7 +437,7 @@ Deno.serve(async (req) => {
         if (tableIds.length) {
           const filtered = await supabase.from('crm_records').select('table_id, data')
             .in('table_id', tableIds)
-            .filter('data->>date', 'gte', d30Str)
+            .filter('data->>date', 'gte', d35Str)
             .limit(5000)
           if (!filtered.error && (filtered.data?.length || 0) > 0) {
             records = filtered.data || []
@@ -441,11 +454,22 @@ Deno.serve(async (req) => {
             }
           }
         }
-        const tableTypeById = new Map(activeTables.map((table: any) => [table.id, table.integration_type]))
+        const tableById = new Map(activeTables.map((table: any) => [table.id, table]))
         const recordsForGoal = (goal: 'leads' | 'ecommerce') =>
-          records.filter((row: any) => integrationTypeToGoal(tableTypeById.get(row.table_id)) === goal)
+          records.filter((row: any) => {
+            const table = tableById.get(row.table_id)
+            return classifyPulseCampaignGoal(
+              row.data || {},
+              table?.integration_settings || {},
+            ).goal === goal
+          })
         const leadRecords = recordsForGoal('leads')
         const ecommerceRecords = recordsForGoal('ecommerce')
+        const campaignBreakdown = buildPulseCampaignRows({
+          records,
+          tables: activeTables,
+          nowYmd: jerusalemYmd(now),
+        })
         const recent = records.filter((row: any) => row.data?.date && row.data.date >= d30Str)
         const goalMode = detectCampaignGoalMode(activeTables)
         const leadMetrics = computeGoalMetricsFromRecords(leadRecords, 'leads', d7Str, d14Str)
@@ -497,14 +521,24 @@ Deno.serve(async (req) => {
         })
         const leadStatus = goalMode === 'ecommerce' ? null : leadClassification.status
         const ecommerceStatus = goalMode === 'leads' ? null : ecommerceClassification.status
-        const status = goalMode === 'hybrid'
+        const legacyStatus = goalMode === 'hybrid'
           ? worstPulseStatus(leadClassification.status, ecommerceClassification.status)
           : goalMode === 'ecommerce'
             ? ecommerceClassification.status
             : leadClassification.status
+        const campaignStatus = campaignBreakdown.reduce(
+          (current: any, campaign: any) => worstPulseStatus(current, campaign.status),
+          'healthy',
+        )
+        const status = campaignBreakdown.length
+          ? worstPulseStatus(legacyStatus === 'critical' && leadRecords.length === 0 ? 'healthy' : legacyStatus, campaignStatus)
+          : legacyStatus
         const flags = Array.from(new Set([
           ...(goalMode !== 'ecommerce' ? leadClassification.flags : []),
           ...(goalMode !== 'leads' ? ecommerceClassification.flags : []),
+          ...campaignBreakdown
+            .filter((campaign: any) => campaign.status !== 'healthy')
+            .map((campaign: any) => `${campaign.campaign_name}: ${campaign.status_reason}`),
         ]))
         const stalePlatforms = Array.from(new Set([
           ...leadClassification.stalePlatforms,
@@ -542,6 +576,7 @@ Deno.serve(async (req) => {
           roas_change_pct: round(roasChange, 1),
           lead_goal_status: leadStatus,
           ecommerce_goal_status: ecommerceStatus,
+          campaign_breakdown: campaignBreakdown,
           flags, source: 'synced_crm',
           last_meta_change_at: lastMetaChange.at,
           last_meta_change_type: lastMetaChange.type,
@@ -563,6 +598,7 @@ Deno.serve(async (req) => {
           cpl_7d: null, cpl_change_pct: null, purchases_7d: 0,
           revenue_7d: 0, roas_7d: null, roas_change_pct: null,
           lead_goal_status: 'no_data', ecommerce_goal_status: null,
+          campaign_breakdown: [],
           flags: ['שגיאה בחישוב דופק — נסה שוב'],
           source: 'synced_crm',
           last_meta_change_at: null, last_meta_change_type: null,
@@ -589,10 +625,15 @@ Deno.serve(async (req) => {
       const rows = snapshots.map(({ client_name: _c, agency_name: _a, ...row }) => row)
       let { error } = await supabase.from('campaign_pulse_snapshots')
         .upsert(rows, { onConflict: 'tenant_id,client_id' })
-      if (error && /last_client_call/.test(error.message)) {
-        // Columns not deployed yet — persist the pulse without the call fields.
-        console.warn('[campaign-pulse] client call columns missing, writing without them')
-        const legacyRows = rows.map(({ last_client_call_at: _at, last_client_call_by: _by, ...row }) => row)
+      if (error && /last_client_call|campaign_breakdown/.test(error.message)) {
+        // Additive columns may lag an Edge deployment — keep the legacy snapshot available.
+        console.warn('[campaign-pulse] additive snapshot columns missing, writing legacy rows')
+        const legacyRows = rows.map(({
+          last_client_call_at: _at,
+          last_client_call_by: _by,
+          campaign_breakdown: _campaigns,
+          ...row
+        }) => row)
         const retry = await supabase.from('campaign_pulse_snapshots')
           .upsert(legacyRows, { onConflict: 'tenant_id,client_id' })
         error = retry.error

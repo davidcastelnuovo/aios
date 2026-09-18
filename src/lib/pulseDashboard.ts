@@ -1,5 +1,6 @@
 import { supabase } from "@/integrations/supabase/client";
 import { shouldIncludeInAdsDashboardAggregate } from "@/lib/adsEntityLevel";
+import type { PulseCampaignGoalRow } from "@/lib/pulseCampaignGoals";
 
 /**
  * Helpers for the Pulse Check dashboard (דשבורד בדיקת דופק).
@@ -35,6 +36,7 @@ export type PulseSnapshotRow = {
   roas_change_pct?: number | null;
   lead_goal_status?: PulseStatus | null;
   ecommerce_goal_status?: PulseStatus | null;
+  campaign_breakdown?: PulseCampaignGoalRow[] | null;
   flags: string[] | null;
   data_fresh_through: string | null;
   calculated_at: string | null;

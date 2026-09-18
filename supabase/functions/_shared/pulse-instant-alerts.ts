@@ -6,7 +6,7 @@
 import { isPulseDeliveryExcludedPhone } from './campaign-pulse.ts'
 import { normalizeNotifyPhone } from './carmen-notify-target.ts'
 
-export type PulseAlertRuleType = 'no_contact' | 'cpl_spike' | 'connection_lost'
+export type PulseAlertRuleType = 'no_contact' | 'cpl_spike' | 'connection_lost' | 'campaign_exception'
 
 export type PulseAlertRules = {
   instant_wa_enabled?: boolean
@@ -31,6 +31,10 @@ export type PulseInstantAlertCandidate = {
   client_name: string
   rule_type: PulseAlertRuleType
   message: string
+  campaign_key?: string | null
+  fingerprint?: string | null
+  severity_score?: number | null
+  evidence?: Record<string, unknown>
 }
 
 export type PulseSnapshotAlertInput = {
@@ -43,6 +47,22 @@ export type PulseSnapshotAlertInput = {
   campaign_goal_mode?: string | null
   lead_goal_status?: string | null
   ecommerce_goal_status?: string | null
+  agency_id?: string | null
+  campaign_breakdown?: Array<{
+    campaign_key?: string | null
+    campaign_name?: string | null
+    goal?: string | null
+    status_reason?: string | null
+    alert_eligible?: boolean | null
+    target_kind?: string | null
+    target_value?: number | null
+    efficiency_3d?: number | null
+    efficiency_7d?: number | null
+    trend_3d_pct?: number | null
+    trend_7d_pct?: number | null
+    data_fresh_through?: string | null
+    last_change_at?: string | null
+  }> | null
 }
 
 type CriticalIssueLike = {
@@ -61,6 +81,7 @@ const RULE_THROTTLE_HOURS: Record<PulseAlertRuleType, number> = {
   no_contact: 7 * 24,
   cpl_spike: 7 * 24,
   connection_lost: 24,
+  campaign_exception: 7 * 24,
 }
 
 export function parsePulseAlertRules(raw: unknown): PulseAlertRules {
@@ -100,6 +121,61 @@ export function evaluatePulseInstantAlerts(
   for (const snapshot of snapshots) {
     const clientName = snapshot.client_name?.trim() || 'לקוח'
     const flags = flagList(snapshot.flags)
+    const campaignBreakdown = Array.isArray(snapshot.campaign_breakdown)
+      ? snapshot.campaign_breakdown
+      : []
+
+    for (const campaign of campaignBreakdown) {
+      if (campaign.alert_eligible !== true || !campaign.campaign_key) continue
+      const target = campaign.target_value === null || campaign.target_value === undefined
+        ? 'אין יעד מאושר'
+        : `${String(campaign.target_kind || 'יעד').toUpperCase()} ${campaign.target_value}`
+      const severity = Math.max(
+        1,
+        Math.abs(Number(campaign.trend_3d_pct) || 0),
+        Math.abs(Number(campaign.trend_7d_pct) || 0),
+      )
+      const fingerprint = [
+        campaign.campaign_key,
+        campaign.status_reason || 'campaign_exception',
+        campaign.target_kind || 'no_target',
+        campaign.target_value ?? 'none',
+      ].join(':')
+      const evidence = {
+        goal: campaign.goal || null,
+        target_kind: campaign.target_kind || null,
+        target_value: campaign.target_value ?? null,
+        efficiency_3d: campaign.efficiency_3d ?? null,
+        efficiency_7d: campaign.efficiency_7d ?? null,
+        trend_3d_pct: campaign.trend_3d_pct ?? null,
+        trend_7d_pct: campaign.trend_7d_pct ?? null,
+        data_fresh_through: campaign.data_fresh_through ?? null,
+        last_change_at: campaign.last_change_at ?? null,
+      }
+      candidates.push({
+        client_id: snapshot.client_id,
+        client_name: clientName,
+        rule_type: 'campaign_exception',
+        campaign_key: campaign.campaign_key,
+        fingerprint,
+        severity_score: severity,
+        evidence,
+        message: [
+          '🔴 *התראת דופק — חריגת קמפיין מאומתת*',
+          `לקוח: ${clientName}`,
+          `קמפיין: ${campaign.campaign_name || campaign.campaign_key}`,
+          `קטגוריה: ${campaign.goal || 'לא מסווג'}`,
+          `סיבה: ${campaign.status_reason || 'חריגה מתמשכת'}`,
+          `יעד: ${target}`,
+          `3 ימים: ${campaign.efficiency_3d ?? 'חסר'} · 7 ימים: ${campaign.efficiency_7d ?? 'חסר'}`,
+          `שינוי אחרון: ${campaign.last_change_at || 'לא זמין'}`,
+          `נתונים עד: ${campaign.data_fresh_through || 'לא זמין'}`,
+          '',
+          'בדיקה מומלצת: לאמת יעד, אירוע אופטימיזציה ושינויים אחרונים לפני פעולה.',
+          'AIOS → דשבורד דופק',
+        ].join('\n'),
+      })
+    }
 
     if (rules.no_contact_enabled) {
       const days = rules.no_contact_days ?? 14
@@ -127,7 +203,9 @@ export function evaluatePulseInstantAlerts(
       }
     }
 
-    if (rules.cpl_spike_enabled) {
+    // Legacy snapshots do not have campaign evidence. Once campaign_breakdown
+    // exists, target-aware campaign exceptions replace raw CPL-spike alerts.
+    if (rules.cpl_spike_enabled && campaignBreakdown.length === 0) {
       const threshold = rules.cpl_spike_pct ?? 50
       const change = snapshot.cpl_change_pct
       if (change !== null && change !== undefined && Number(change) >= threshold) {
@@ -190,33 +268,38 @@ export function evaluatePulseInstantAlerts(
   return candidates
 }
 
-async function wasAlertSentRecently(
+async function latestAlertDelivery(
   supabase: any,
   tenantId: string,
   clientId: string,
   ruleType: PulseAlertRuleType,
   throttleHours: number,
-): Promise<boolean> {
+  campaignKey?: string | null,
+): Promise<{ fingerprint?: string | null; severity_score?: number | null } | null> {
   const since = new Date(Date.now() - throttleHours * 60 * 60 * 1000).toISOString()
-  const { data, error } = await supabase
+  let query = supabase
     .from('pulse_instant_alert_log')
-    .select('id')
+    .select('fingerprint, severity_score')
     .eq('tenant_id', tenantId)
     .eq('client_id', clientId)
     .eq('rule_type', ruleType)
     .gte('sent_at', since)
+    .order('sent_at', { ascending: false })
     .limit(1)
+  if (campaignKey) query = query.eq('campaign_key', campaignKey)
+  const { data, error } = await query
   if (error) {
     console.warn('[pulse-instant-alerts] dedupe lookup failed', error.message)
-    return false
+    return null
   }
-  return (data?.length || 0) > 0
+  return data?.[0] || null
 }
 
 async function resolveInstantAlertRecipients(
   supabase: any,
   tenantId: string,
   clientId: string,
+  agencyId: string | null | undefined,
   pulsePhone: string | null | undefined,
   tenantSlug?: string | null,
 ): Promise<Array<{ phone: string; label: string }>> {
@@ -227,39 +310,38 @@ async function resolveInstantAlertRecipients(
     recipients.set(pulse, 'owner')
   }
 
-  const { data: managers } = await supabase
-    .from('tenant_users')
+  const { data: roles } = await supabase
+    .from('user_roles')
     .select('user_id, role')
     .eq('tenant_id', tenantId)
-    .in('role', ['owner', 'admin', 'agency_owner', 'agency_manager'])
-  const managerIds = (managers || []).map((row: any) => row.user_id).filter(Boolean)
-  if (managerIds.length) {
+    .in('role', ['owner', 'agency_owner', 'team_manager'])
+  const ownerIds = (roles || [])
+    .filter((row: any) => row.role === 'owner' || row.role === 'agency_owner')
+    .map((row: any) => row.user_id)
+    .filter(Boolean)
+  let managerIds = (roles || [])
+    .filter((row: any) => row.role === 'team_manager')
+    .map((row: any) => row.user_id)
+    .filter(Boolean)
+  if (agencyId && managerIds.length) {
+    const { data: managed } = await supabase
+      .from('user_managed_agencies')
+      .select('user_id')
+      .eq('agency_id', agencyId)
+      .in('user_id', managerIds)
+    const allowed = new Set((managed || []).map((row: any) => row.user_id))
+    managerIds = managerIds.filter((id: string) => allowed.has(id))
+  }
+  const recipientUserIds = Array.from(new Set([...ownerIds, ...managerIds]))
+  if (recipientUserIds.length) {
     const { data: profiles } = await supabase
       .from('profiles')
-      .select('id, phone, full_name')
-      .in('id', managerIds)
+      .select('id, full_name, campaigners ( phone )')
+      .in('id', recipientUserIds)
     for (const profile of profiles || []) {
-      const phone = normalizeNotifyPhone(profile.phone)
+      const phone = normalizeNotifyPhone(profile.campaigners?.phone)
       if (!phone || isPulseDeliveryExcludedPhone(phone, tenantSlug)) continue
       recipients.set(phone, profile.full_name || 'manager')
-    }
-  }
-
-  const { data: links } = await supabase
-    .from('client_team')
-    .select('campaigner_id')
-    .eq('client_id', clientId)
-  const campaignerIds = Array.from(new Set((links || []).map((row: any) => row.campaigner_id).filter(Boolean)))
-  if (campaignerIds.length) {
-    const { data: campaigners } = await supabase
-      .from('campaigners')
-      .select('id, full_name, phone, active')
-      .in('id', campaignerIds)
-      .eq('active', true)
-    for (const campaigner of campaigners || []) {
-      const phone = normalizeNotifyPhone(campaigner.phone)
-      if (!phone || isPulseDeliveryExcludedPhone(phone, tenantSlug)) continue
-      recipients.set(phone, campaigner.full_name || 'campaigner')
     }
   }
 
@@ -288,14 +370,19 @@ export async function deliverInstantPulseAlerts(input: {
 
   for (const candidate of candidates) {
     const throttleHours = RULE_THROTTLE_HOURS[candidate.rule_type]
-    const recentlySent = await wasAlertSentRecently(
+    const previousDelivery = await latestAlertDelivery(
       input.supabase,
       input.tenantId,
       candidate.client_id,
       candidate.rule_type,
       throttleHours,
+      candidate.campaign_key,
     )
-    if (recentlySent) {
+    const sameFinding = previousDelivery
+      && previousDelivery.fingerprint === candidate.fingerprint
+    const materiallyWorse = previousDelivery
+      && Number(candidate.severity_score || 0) > Number(previousDelivery.severity_score || 0) * 1.1
+    if (previousDelivery && sameFinding && !materiallyWorse) {
       skipped += 1
       continue
     }
@@ -304,6 +391,7 @@ export async function deliverInstantPulseAlerts(input: {
       input.supabase,
       input.tenantId,
       candidate.client_id,
+      input.snapshots.find((snapshot) => snapshot.client_id === candidate.client_id)?.agency_id,
       input.pulsePhone,
       input.tenantSlug,
     )
@@ -325,6 +413,10 @@ export async function deliverInstantPulseAlerts(input: {
         rule_type: candidate.rule_type,
         message: candidate.message,
         recipient_phone: recipients.map((row) => row.phone).join(','),
+        campaign_key: candidate.campaign_key || null,
+        fingerprint: candidate.fingerprint || null,
+        severity_score: candidate.severity_score || null,
+        evidence: candidate.evidence || {},
       })
     } else {
       skipped += 1

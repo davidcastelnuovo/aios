@@ -23,6 +23,7 @@ import {
   type PulseSnapshotRow,
 } from "@/lib/pulseDashboard";
 import { ExternalLink, Pencil } from "lucide-react";
+import type { PulseCampaignGoalRow } from "@/lib/pulseCampaignGoals";
 
 const PLATFORM_CONFIG: Record<string, { name: string; color: string }> = {
   facebook_insights: { name: "Facebook", color: "text-blue-600" },
@@ -34,6 +35,128 @@ const formatCurrency = (num: number) =>
   new Intl.NumberFormat("he-IL", { style: "currency", currency: "ILS", maximumFractionDigits: 0 }).format(num);
 
 const formatNumber = (num: number) => new Intl.NumberFormat("he-IL").format(Math.round(num));
+
+const campaignGoalLabel = (goal: PulseCampaignGoalRow["goal"]) => {
+  if (goal === "ecommerce") return "איקומרס";
+  if (goal === "engagement") return "אינגייג׳מנט";
+  if (goal === "leads") return "לידים";
+  return "טעון סיווג";
+};
+
+const outcomeLabel = (kind: string | null) => {
+  const labels: Record<string, string> = {
+    leads: "לידים",
+    purchases: "רכישות",
+    conversations: "שיחות",
+    messages: "הודעות",
+    video_views: "צפיות",
+    engagements: "אינטראקציות",
+    landing_page_views: "צפיות בדף",
+    link_clicks: "קליקים",
+    clicks: "קליקים",
+    results: "תוצאות",
+  };
+  return kind ? labels[kind] || "תוצאות" : "תוצאה חסרה";
+};
+
+const formatDate = (value: string | null) =>
+  value
+    ? new Date(value.length === 10 ? `${value}T12:00:00Z` : value).toLocaleString("he-IL", {
+        timeZone: "Asia/Jerusalem",
+        dateStyle: "short",
+        ...(value.length === 10 ? {} : { timeStyle: "short" as const }),
+      })
+    : "לא זמין";
+
+export function PulseCampaignGoalCard({
+  row,
+  clientName,
+  campaignerName,
+  onOpenClient,
+}: {
+  row: PulseCampaignGoalRow;
+  clientName: string;
+  campaignerName: string;
+  onOpenClient: () => void;
+}) {
+  const statusColor =
+    row.status === "critical"
+      ? "border-red-200 bg-surface-status-red"
+      : row.status === "warning" || row.goal === "unknown"
+        ? "border-yellow-200 bg-surface-status-yellow"
+        : "";
+  const efficiencyLabel =
+    row.target_kind === "roas" || (row.goal === "ecommerce" && row.target_kind !== "cpa")
+      ? "ROAS"
+      : row.goal === "leads"
+        ? "CPL"
+        : row.goal === "ecommerce"
+          ? "CPA"
+          : "עלות לתוצאה";
+
+  return (
+    <Card className={statusColor}>
+      <CardHeader className="pb-3 space-y-3">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <CardTitle className="flex min-w-0 items-center gap-2 text-lg">
+            <StatusDot status={row.status === "critical" ? "red" : row.status === "healthy" ? "green" : "yellow"} />
+            <span className="truncate">{clientName}</span>
+            <Badge variant="outline">{campaignGoalLabel(row.goal)}</Badge>
+          </CardTitle>
+          <div className="text-left">
+            <div className="font-semibold">{row.campaign_name}</div>
+            <div className="text-xs text-muted-foreground">{row.platform === "meta" ? "Meta" : "Google Ads"}</div>
+          </div>
+        </div>
+
+        <div className="rounded-md border bg-background/70 p-3 text-sm">
+          <div className="font-medium">{row.status_reason}</div>
+          <div className="mt-1 text-xs text-muted-foreground">
+            {row.target_value === null
+              ? "אין יעד מאושר — המגמה מוצגת עם מגבלת מסקנה"
+              : `יעד מאושר: ${String(row.target_kind || "יעד").toUpperCase()} ${row.target_value}`}
+          </div>
+        </div>
+
+        <div className="grid gap-2 text-xs sm:grid-cols-2 lg:grid-cols-4">
+          <div><span className="text-muted-foreground">קמפיינר: </span>{campaignerName}</div>
+          <div><span className="text-muted-foreground">נתונים עד: </span>{formatDate(row.data_fresh_through)}</div>
+          <div><span className="text-muted-foreground">שינוי אחרון: </span>{formatDate(row.last_change_at)}</div>
+          <div><span className="text-muted-foreground">סיווג: </span>{row.classification_source === "unclassified" ? "לא מזוהה" : "מטרת קמפיין"}</div>
+        </div>
+      </CardHeader>
+
+      <CardContent className="space-y-3">
+        <div className="grid grid-cols-2 gap-2 rounded-md bg-muted/30 p-3 text-sm sm:grid-cols-4 lg:grid-cols-6">
+          <div><span className="text-muted-foreground">הוצאה 7 ימים: </span><strong>{formatCurrency(row.spend_7d)}</strong></div>
+          <div><span className="text-muted-foreground">{outcomeLabel(row.outcome_kind)}: </span><strong>{row.outcomes_7d ?? "חסר"}</strong></div>
+          <div><span className="text-muted-foreground">{efficiencyLabel}: </span><strong>{row.efficiency_7d ?? "—"}</strong></div>
+          {row.goal === "ecommerce" ? (
+            <div><span className="text-muted-foreground">הכנסה (לא רווח): </span><strong>{formatCurrency(row.revenue_7d)}</strong></div>
+          ) : (
+            <div><span className="text-muted-foreground">חשיפות: </span><strong>{formatNumber(row.impressions_7d)}</strong></div>
+          )}
+          {row.goal === "engagement" ? (
+            <>
+              <div><span className="text-muted-foreground">תפוצה: </span><strong>{formatNumber(row.reach_7d)}</strong></div>
+              <div><span className="text-muted-foreground">תדירות: </span><strong>{row.frequency_7d ?? "—"}</strong></div>
+            </>
+          ) : null}
+        </div>
+        <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
+          <span className="text-muted-foreground">
+            מגמה מול בסיס 28 יום מותאם לימי השבוע: 3 ימים {row.trend_3d_pct ?? "—"}% · 7 ימים {row.trend_7d_pct ?? "—"}%
+            {" · "}היום החלקי לא נכלל
+          </span>
+          <Button variant="outline" size="sm" onClick={onOpenClient}>
+            <ExternalLink className="ml-1 h-3.5 w-3.5" />
+            פתח כרטיס
+          </Button>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
 
 function getIntegrationIcon(type: string) {
   switch (type) {
