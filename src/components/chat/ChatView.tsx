@@ -215,7 +215,7 @@ export default function ChatView({ contactId, contactType, senderPhone, contactN
     ? metaIntegrations.find(i => i.id === selectedMetaIntegrationId) || metaIntegrations[0] || null
     : (chatIntegrations || []).find(i => i.integration_type === activeProvider) || null;
   const connectionUserId = chatIntegration?.user_id;
-  const threadPhone = senderPhone || contact?.phone || contactId;
+  const threadPhone = senderPhone || contact?.phone || (contactType === "unknown" ? contactId : null);
   const effectiveTenantId = contactType === "unknown" ? tenantId : (contact?.tenant_id || tenantId);
   const threadFilter = buildChatThreadFilter({
     contactId,

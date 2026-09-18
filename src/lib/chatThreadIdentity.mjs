@@ -4,9 +4,15 @@
  * same thread is rendered from Chat, Leads, and Clients.
  */
 export function normalizeChatThreadPhone(phone) {
-  const digits = String(phone || "").replace(/\D/g, "").replace(/^00/, "");
+  const raw = String(phone ?? "").trim();
+  // A UUID (lead/client id) must never be treated as a phone number, otherwise
+  // its digits would match an unrelated conversation.
+  if (/[a-zA-Z]/.test(raw)) return "";
+
+  const digits = raw.replace(/\D/g, "").replace(/^00/, "");
   const withoutCountryCode = digits.startsWith("972") ? digits.slice(3) : digits;
-  return withoutCountryCode.replace(/^0/, "").slice(-9);
+  const local = withoutCountryCode.replace(/^0/, "");
+  return local.length >= 9 ? local.slice(-9) : "";
 }
 
 export function buildChatThreadFilter({ contactId, contactType, phone }) {
