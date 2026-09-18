@@ -25,6 +25,27 @@ export function resolveTaskNotificationLinkTenantId(input: {
   return input.campaignerTenantId || input.salesPersonTenantId || fallback
 }
 
+/**
+ * Carmen lines that may deliver the notification, best first. The recipient's own
+ * tenant line comes first: a Marketing Captain teammate must hear from the
+ * Marketing Captain Carmen even when the task's client belongs to another agency
+ * tenant, otherwise the message arrives from a WhatsApp number he never talks to.
+ * The client/task tenant stays as the fallback line.
+ */
+export function resolveTaskNotificationSenderTenantIds(input: {
+  notifyCreator: boolean
+  creatorHomeTenantId?: string | null
+  campaignerTenantId?: string | null
+  salesPersonTenantId?: string | null
+  fallbackTenantId?: string | null
+}): string[] {
+  const preferred = input.notifyCreator
+    ? [input.creatorHomeTenantId]
+    : [input.campaignerTenantId, input.salesPersonTenantId]
+  const ordered = [...preferred, input.fallbackTenantId]
+  return [...new Set(ordered.map((id) => String(id || '').trim()).filter(Boolean))]
+}
+
 export type TaskNotificationExtras = {
   updateContent?: string | null
   updaterName?: string | null
