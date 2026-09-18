@@ -7,7 +7,7 @@ alwaysApply: true
 
 There **is** a development environment. Never tell David or Carmen that it does not exist.
 
-- **Development environment** = Vercel Preview URL of the current branch (Staging data). **Persistent Staging** = `https://staging.aios.co.il` (`develop`).
+- **Development environment** = Vercel Preview URL of the current branch (Staging data). **Persistent Staging** = `https://after-lead-git-develop-aios-crm.vercel.app` (`develop`); verify the custom domain `https://staging.aios.co.il` before presenting it as available.
 - **Staging** = git branch `develop` → persistent Staging Supabase + Vercel `develop` deploy.
 - **Production** = `main` only. Never use Production as a development environment.
 - Normal flow: merge to `develop` → verify on Staging → `מאשר לפרודקשן` → merge `develop` → `main`.
@@ -18,6 +18,6 @@ There **is** a development environment. Never tell David or Carmen that it does 
 
 If asked whether a staging / development environment exists: **yes**. Send the Preview URL.
 
-Staging has cloned operational data (users, Carmen, clients, tasks, live integrations). WhatsApp integrations look connected but are mocked — send is blocked. Do not copy Production WhatsApp tokens.
+Before describing Staging data as current or outbound delivery as blocked, verify deployment/containment results and mirror freshness as specified in `docs/ENVIRONMENTS.md`. Connected-looking WhatsApp integrations do not authorize delivery; keep Production WhatsApp tokens out of Staging.
 
 **Never mix WhatsApp connections:** Manus (`manus_wa`, Carmen) ≠ Green API (`green_api`, operator). Carmen group lists must come from Manus only — never the full `whatsapp_groups` table. See `.cursor/rules/whatsapp-connections.mdc`.
