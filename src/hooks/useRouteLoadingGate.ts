@@ -1,9 +1,13 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useLocation } from "react-router-dom";
 import { useIsFetching } from "@tanstack/react-query";
 
-/** Give the freshly mounted page a moment to start its queries before deciding. */
-const ARM_MS = 70;
+/**
+ * React Query starts a query in an effect, i.e. after the first paint of the
+ * new route — so the gate waits a couple of frames before deciding whether
+ * anything is loading at all.
+ */
+const ARM_MS = 50;
 
 /** Release once first loads have been quiet for this long. */
 const SETTLE_MS = 120;
@@ -27,13 +31,19 @@ export function useRouteLoadingGate(): boolean {
   });
   const [holding, setHolding] = useState(true);
   const [armed, setArmed] = useState(true);
+  const sawFirstLoad = useRef(false);
 
   useEffect(() => {
     setHolding(true);
     setArmed(true);
+    sawFirstLoad.current = false;
     const timer = window.setTimeout(() => setArmed(false), ARM_MS);
     return () => window.clearTimeout(timer);
   }, [pathname]);
+
+  useEffect(() => {
+    if (firstLoads > 0) sawFirstLoad.current = true;
+  }, [firstLoads]);
 
   useEffect(() => {
     if (!holding) return;
@@ -43,6 +53,12 @@ export function useRouteLoadingGate(): boolean {
 
   useEffect(() => {
     if (!holding || armed || firstLoads > 0) return;
+    // A page served from cache never fetched anything — reveal it right away
+    // instead of charging every navigation for the settle window.
+    if (!sawFirstLoad.current) {
+      setHolding(false);
+      return;
+    }
     const timer = window.setTimeout(() => setHolding(false), SETTLE_MS);
     return () => window.clearTimeout(timer);
   }, [holding, armed, firstLoads]);
