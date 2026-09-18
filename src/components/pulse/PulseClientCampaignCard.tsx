@@ -1,3 +1,4 @@
+import { useEffect, useState } from "react";
 import { Facebook, FileSpreadsheet } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -24,6 +25,7 @@ import {
 } from "@/lib/pulseDashboard";
 import { ExternalLink, Pencil } from "lucide-react";
 import type { PulseCampaignGoalRow } from "@/lib/pulseCampaignGoals";
+import { Input } from "@/components/ui/input";
 
 const PLATFORM_CONFIG: Record<string, { name: string; color: string }> = {
   facebook_insights: { name: "Facebook", color: "text-blue-600" },
@@ -73,12 +75,19 @@ export function PulseCampaignGoalCard({
   clientName,
   campaignerName,
   onOpenClient,
+  onSaveTarget,
 }: {
   row: PulseCampaignGoalRow;
   clientName: string;
   campaignerName: string;
   onOpenClient: () => void;
+  onSaveTarget?: (value: number, kind: "cpl" | "cost_per_result" | "roas") => Promise<void>;
 }) {
+  const defaultTargetKind =
+    row.goal === "ecommerce" ? "roas" : row.goal === "engagement" ? "cost_per_result" : "cpl";
+  const [targetDraft, setTargetDraft] = useState(row.target_value?.toString() || "");
+  const [savingTarget, setSavingTarget] = useState(false);
+  useEffect(() => setTargetDraft(row.target_value?.toString() || ""), [row.target_value]);
   const statusColor =
     row.status === "critical"
       ? "border-red-200 bg-surface-status-red"
@@ -148,10 +157,47 @@ export function PulseCampaignGoalCard({
             מגמה מול בסיס 28 יום מותאם לימי השבוע: 3 ימים {row.trend_3d_pct ?? "—"}% · 7 ימים {row.trend_7d_pct ?? "—"}%
             {" · "}היום החלקי לא נכלל
           </span>
-          <Button variant="outline" size="sm" onClick={onOpenClient}>
-            <ExternalLink className="ml-1 h-3.5 w-3.5" />
-            פתח כרטיס
-          </Button>
+          <div className="flex items-center gap-1">
+            {onSaveTarget && row.goal !== "unknown" ? (
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button variant="outline" size="sm">הגדר יעד</Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-64 space-y-2" dir="rtl">
+                  <div className="text-sm font-medium">
+                    יעד {defaultTargetKind === "roas" ? "ROAS מינימלי" : defaultTargetKind === "cpl" ? "CPL מקסימלי" : "עלות מקסימלית לתוצאה"}
+                  </div>
+                  <Input
+                    type="number"
+                    min="0.01"
+                    step="0.01"
+                    dir="ltr"
+                    value={targetDraft}
+                    onChange={(event) => setTargetDraft(event.target.value)}
+                  />
+                  <Button
+                    size="sm"
+                    className="w-full"
+                    disabled={savingTarget || !(Number(targetDraft) > 0)}
+                    onClick={async () => {
+                      setSavingTarget(true);
+                      try {
+                        await onSaveTarget(Number(targetDraft), defaultTargetKind);
+                      } finally {
+                        setSavingTarget(false);
+                      }
+                    }}
+                  >
+                    {savingTarget ? "שומר..." : "שמור יעד מאושר"}
+                  </Button>
+                </PopoverContent>
+              </Popover>
+            ) : null}
+            <Button variant="outline" size="sm" onClick={onOpenClient}>
+              <ExternalLink className="ml-1 h-3.5 w-3.5" />
+              פתח כרטיס
+            </Button>
+          </div>
         </div>
       </CardContent>
     </Card>

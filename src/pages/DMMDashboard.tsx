@@ -61,7 +61,6 @@ import {
   applyClientCallToPulseSnapshot,
   filterPulseCallFlags,
   fetchPulseCampaignRecords,
-  filterDuplicateFacebookPulseTables,
   formatGoalChange,
   formatGoalEfficiency,
   formatGoalOutcomes,
@@ -84,6 +83,7 @@ import {
   buildPulseCampaignRows,
   pulseTrendWindows,
   type PulseCampaignGoal,
+  type PulseCampaignGoalRow,
 } from "@/lib/pulseCampaignGoals";
 
 type ClientBase = {
@@ -192,6 +192,39 @@ export function CampaignPulseDashboard({
     } catch {
       toast.error("לא ניתן להעתיק קישור");
     }
+  }
+
+  async function saveCampaignTarget(
+    row: PulseCampaignGoalRow,
+    value: number,
+    kind: "cpl" | "cost_per_result" | "roas",
+  ) {
+    const table = pulseCampaignTables.find((candidate) => candidate.id === row.table_id);
+    if (!table) {
+      toast.error("לא נמצאה טבלת המקור של הקמפיין");
+      return;
+    }
+    const settings = { ...(table.integration_settings || {}) } as Record<string, unknown>;
+    const targets = {
+      ...((settings.pulse_targets as Record<string, unknown> | undefined) || {}),
+    };
+    const targetKey = row.campaign_id || row.campaign_name;
+    targets[targetKey] = {
+      kind,
+      [kind]: value,
+      source: "pulse_dashboard",
+      approved_at: new Date().toISOString(),
+    };
+    const { error } = await (supabase as any)
+      .from("crm_tables")
+      .update({ integration_settings: { ...settings, pulse_targets: targets } })
+      .eq("id", row.table_id);
+    if (error) {
+      toast.error(`שמירת היעד נכשלה: ${error.message}`);
+      throw error;
+    }
+    toast.success("היעד המאושר נשמר");
+    await refetchPulseTables();
   }
 
   const { data: crossTenantAgencyIds = [] } = useQuery({
@@ -336,7 +369,9 @@ export function CampaignPulseDashboard({
         .in("client_id", clientIds)
         .in("integration_type", ["facebook_insights", "facebook_ecommerce", "google_ads"]);
       if (error) throw error;
-      return filterDuplicateFacebookPulseTables(tables ?? []) as PulseCampaignTable[];
+      // Keep both Meta sources here. The campaign classifier deduplicates the
+      // same campaign/day after choosing the richer objective/outcome record.
+      return (tables ?? []) as PulseCampaignTable[];
     },
     enabled: !!tenantId && clientIds.length > 0,
     staleTime: 60_000,
@@ -1079,6 +1114,13 @@ export function CampaignPulseDashboard({
         <div className="rounded-md border border-amber-300 bg-amber-50 p-3 text-sm text-amber-950">
           <strong>{unclassifiedCampaignRows.length} קמפיינים טעונים סיווג.</strong>
           {" "}הם אינם משויכים אוטומטית ללידים ולא נכללים בסיכומי הקטגוריות.
+          <div className="mt-1 text-xs">
+            {unclassifiedCampaignRows
+              .slice(0, 5)
+              .map((row) => `${clientMetaById.get(row.client_id)?.name || "לקוח"} — ${row.campaign_name}`)
+              .join(" · ")}
+            {unclassifiedCampaignRows.length > 5 ? " · …" : ""}
+          </div>
         </div>
       ) : null}
 
@@ -1127,6 +1169,11 @@ export function CampaignPulseDashboard({
                 clientName={meta.name}
                 campaignerName={meta.campaignerName}
                 onOpenClient={() => openClientCard(row.client_id)}
+                onSaveTarget={
+                  isOwner || isTeamManager || isSuperAdmin
+                    ? (value, kind) => saveCampaignTarget(row, value, kind)
+                    : undefined
+                }
               />
             );
           })}
