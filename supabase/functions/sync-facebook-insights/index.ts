@@ -11,6 +11,12 @@ import {
   fetchLastMetaCampaignActivity,
   latestCampaignUpdatedTime,
 } from '../_shared/fbInsights.ts';
+import {
+  replacedRecordsFilter,
+  resolveAdsSyncWindow,
+  resolvePruneStart,
+  toDateString,
+} from '../_shared/report-sync-window.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -219,8 +225,16 @@ Deno.serve(async (req) => {
         since = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 30);
         until = today;
         break;
+      case 'last_60_days':
+        since = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 60);
+        until = today;
+        break;
       case 'last_90_days':
         since = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 90);
+        until = today;
+        break;
+      case 'last_120_days':
+        since = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 120);
         until = today;
         break;
       case 'last_180_days':
@@ -236,8 +250,14 @@ Deno.serve(async (req) => {
         until = today;
     }
 
-    const sinceStr = since.toISOString().split('T')[0];
-    const untilStr = until.toISOString().split('T')[0];
+    // `date_range` is the table's display default; reports can look back further than
+    // that, so always pull (and keep) at least the deepest report window.
+    const syncWindow = resolveAdsSyncWindow(
+      { startDate: toDateString(since), endDate: toDateString(until) },
+      toDateString(now),
+    );
+    const sinceStr = syncWindow.startDate;
+    const untilStr = syncWindow.endDate;
 
 
     // First, fetch campaign statuses to detect real blocks
@@ -337,13 +357,19 @@ Deno.serve(async (req) => {
       .eq('table_id', table_id)
       .in('key', ['date_start', 'date_stop', 'landing_page_views']);
 
-    // Delete existing records and insert new ones.
+    // Replace only the days this run re-fetched; rows older than the sync window are
+    // history a longer report window still needs. A run that came back empty is far
+    // more likely to be a Meta hiccup than an account with no delivery at all, so it
+    // leaves the stored rows alone instead of blanking the report.
     // Scope by table_id only — shared-agency tables can leave orphan rows under a
     // previous tenant_id; filtering by tenant_id would leave them forever and inflate KPIs.
-    await supabaseAdmin
-      .from('crm_records')
-      .delete()
-      .eq('table_id', table_id);
+    if (insights.length > 0) {
+      await supabaseAdmin
+        .from('crm_records')
+        .delete()
+        .eq('table_id', table_id)
+        .or(replacedRecordsFilter(resolvePruneStart(syncWindow, insights.map((i) => i.date))));
+    }
 
     // Bulk insert new records (one round-trip per chunk instead of one per row)
     if (insights.length > 0) {

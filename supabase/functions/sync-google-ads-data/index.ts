@@ -5,6 +5,12 @@ import {
   type OperationalCampaignState,
 } from '../_shared/campaign-operational-health.ts';
 import { fireIntegrationAlert } from '../_shared/fireIntegrationAlert.ts';
+import {
+  replacedRecordsFilter,
+  resolveAdsSyncWindow,
+  resolvePruneStart,
+  toDateString,
+} from '../_shared/report-sync-window.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -371,15 +377,27 @@ Deno.serve(async (req) => {
       case 'last_30_days':
         startDate = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 30);
         break;
+      case 'last_60_days':
+        startDate = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 60);
+        break;
       case 'last_90_days':
         startDate = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 90);
+        break;
+      case 'last_120_days':
+        startDate = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 120);
         break;
       default:
         startDate = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 30);
     }
 
-    const startIso = startDate.toISOString().split('T')[0];
-    const endIso = endDate.toISOString().split('T')[0];
+    // `date_range` is the table's display default; reports can look back further than
+    // that, so always pull (and keep) at least the deepest report window.
+    const syncWindow = resolveAdsSyncWindow(
+      { startDate: toDateString(startDate), endDate: toDateString(endDate) },
+      toDateString(now),
+    );
+    const startIso = syncWindow.startDate;
+    const endIso = syncWindow.endDate;
 
     const detectGAError = (data: any): any | null => {
       if (!data) return null;
@@ -599,7 +617,7 @@ Deno.serve(async (req) => {
     const _rawText = await searchResponse.text();
     let searchData: any = null;
     try { searchData = JSON.parse(_rawText); } catch { searchData = null; }
-    console.log(`[sync-google-ads] table=${table_id} customer=${customerId} login=${loginCustomerId} status=${searchResponse.status} dateRange=${startDate.toISOString().split('T')[0]}..${endDate.toISOString().split('T')[0]}`);
+    console.log(`[sync-google-ads] table=${table_id} customer=${customerId} login=${loginCustomerId} status=${searchResponse.status} dateRange=${startIso}..${endIso}`);
     console.log(`[sync-google-ads] response preview:`, _rawText.slice(0, 800));
     // DIAG: persist exactly what Google returned on the first call so failures are debuggable from the DB.
     // Records HTTP status, whether the developer-token secret is present (boolean only, never the value),
@@ -838,7 +856,7 @@ Deno.serve(async (req) => {
         if (site) {
           verifiedSiteUrl = site.site_url;
           // Compute days from date range to limit submission scan
-          const daysDiff = Math.max(1, Math.ceil((endDate.getTime() - startDate.getTime()) / 86400000) + 1);
+          const daysDiff = Math.max(1, Math.round((Date.parse(endIso) - Date.parse(startIso)) / 86400000) + 1);
 
           const { data: subData, error: subErr } = await supabaseAdmin.functions.invoke(
             'fetch-elementor-submissions',
@@ -1038,13 +1056,19 @@ Deno.serve(async (req) => {
       }
     }
 
-    // Delete existing records and insert new ones (admin client to bypass RLS).
+    // Replace only the days this run re-fetched (admin client to bypass RLS); rows older
+    // than the sync window are history a longer report window still needs. A run that came
+    // back empty is far more likely to be a Google Ads hiccup than an account with no
+    // delivery at all, so it leaves the stored rows alone instead of blanking the report.
     // table_id only — orphan rows from a previous tenant_id must not survive sync.
-    const { error: delErr } = await supabaseAdmin
-      .from('crm_records')
-      .delete()
-      .eq('table_id', table_id);
-    if (delErr) console.error('[sync-google-ads] delete error:', delErr.message);
+    if (records.length > 0) {
+      const { error: delErr } = await supabaseAdmin
+        .from('crm_records')
+        .delete()
+        .eq('table_id', table_id)
+        .or(replacedRecordsFilter(resolvePruneStart(syncWindow, records.map((r) => r.date))));
+      if (delErr) console.error('[sync-google-ads] delete error:', delErr.message);
+    }
 
     // Insert new records (batched)
     let inserted = 0;

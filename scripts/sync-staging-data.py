@@ -1,8 +1,9 @@
 """Production -> Staging business-data mirror. Source API is read-only.
 
 Fingerprints find inserts AND updates without trusting updated_at. Only changed
-rows cross the network. Deletions require an explicit --apply-deletes run and
-are restricted to rows previously mirrored;
+rows cross the network. Deletions are restricted to rows previously mirrored:
+the manifest's replace_on_sync tables mirror them on every run because report
+syncs replace their rows, and every other table needs --apply-deletes;
 Staging-only test rows, schema, RLS, queues and credentials are never promoted.
 """
 import argparse
@@ -564,6 +565,21 @@ def main():
             failures.append({'table': table['name'], 'error': str(error)})
     record_table_states(api, results)
     rejected = [{'table': r['table'], 'rejected_rows': r['rejected_rows']} for r in results if r.get('rejected_rows')]
+    # Report syncs replace their Production rows instead of updating them, so a
+    # row that only ever upserts keeps one stale generation per sync and every
+    # report total multiplies. Mirror removals for those tables from the same
+    # inventory the upserts used; rows Production still holds stay untouched.
+    if not options.apply_deletes:
+        blocked = {entry['table'] for entry in failures} | {entry['table'] for entry in rejected}
+        replace_on_sync = set(manifest.get('replace_on_sync', []))
+        for table in reversed(plan):
+            if table['name'] not in replace_on_sync or table['name'] in blocked: continue
+            try:
+                result = mirror_table(api, table, delete_only=True, inventory=incoming[table['name']],
+                                      previous_rows=previous.get(table['name'], []))
+                if result['removed_rows']: print(json.dumps(result), flush=True)
+            except Exception as error:
+                failures.append({'table': table['name'], 'error': str(error)})
     if failures or rejected:
         print(json.dumps({'failures': failures, 'rejected': rejected})); raise SystemExit(1)
     # Child deletions precede parents; FKs remain enabled throughout. If a
@@ -573,7 +589,7 @@ def main():
             result = mirror_table(api, table, delete_only=True)
             if result['removed_rows']: print(json.dumps(result), flush=True)
     else:
-        print('Upserts complete; deletion mirroring requires explicit approval and --apply-deletes')
+        print('Upserts complete; deletion mirroring outside replace_on_sync requires --apply-deletes')
 
 
 if __name__ == '__main__':

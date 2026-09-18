@@ -55,7 +55,8 @@ import { reportQueryOptions, getReportLastSyncAt, refetchOnMountIfEmpty } from "
 import { ReportDataFreshness } from "@/components/reports/ReportDataFreshness";
 import { formatCurrency as formatCurrencyAmount, formatUnitCost as formatUnitCostAmount, resolveDashboardCurrency } from "@/lib/currency";
 import { resolveAnalyticsReportMode } from "@/lib/analyticsReportMode";
-import { COMBINED_DASHBOARD_DATE_FILTERS } from "@/lib/dashboardDateFilters";
+import { COMBINED_DASHBOARD_DATE_FILTERS, getDashboardDateRange } from "@/lib/dashboardDateFilters";
+import { formatReportDate, getReportCoverageGap } from "@/lib/reportCoverage";
 import { fetchWooDashboardSummary, getWooDashboardDateRangeIso, invalidateWooDashboardQueries } from "@/lib/wooDashboardQueries";
 import { shouldUseGoogleWooAttributionOverlay, summarizeGoogleAttributedWooOrders } from "@/lib/wooAttribution";
 import { shouldIncludeInAdsDashboardAggregate } from "@/lib/adsEntityLevel";
@@ -462,6 +463,17 @@ export default function DashboardView() {
       return true;
     });
   }, [displayAllRecords, platformFilter]);
+
+  // Ads history is only as deep as the last sync wrote, so a long preset can quietly
+  // return the same totals as a short one. Name the first day that actually has data.
+  const adsCoverageGap = useMemo(() => {
+    const adsDates = displayAllRecords
+      .filter((r: any) => isAdsPlatform(r._source || ''))
+      .map((r: any) => r.data?.date);
+    if (adsDates.length === 0) return null;
+    const { startDate } = getDashboardDateRange(dateFilter, new Date(), customFromStr, customToStr);
+    return getReportCoverageGap(startDate, adsDates);
+  }, [displayAllRecords, dateFilter, customFromStr, customToStr]);
 
   // All analytics records (unfiltered by report_type) for GoogleAnalyticsDashboard component
   const allAnalyticsRecords = useMemo(() => {
@@ -1120,17 +1132,19 @@ export default function DashboardView() {
     };
     try {
       // Compute date range for analytics-style syncs (GA / GSC).
-      // ALWAYS sync at least the last 90 days (regardless of display filter)
+      // ALWAYS sync at least the last 120 days (regardless of display filter)
       // so switching the dashboard to a short window doesn't wipe history.
       const computeRange = () => {
         const now = new Date();
         const end = new Date(now);
-        const MIN_SYNC_DAYS = 90;
+        const MIN_SYNC_DAYS = 120;
         const start = new Date(now);
         let days = MIN_SYNC_DAYS;
         switch (dateFilter) {
+          case 'last_60_days': days = Math.max(60, MIN_SYNC_DAYS); break;
           case 'last_70_days': days = Math.max(70, MIN_SYNC_DAYS); break;
           case 'last_90_days': days = Math.max(90, MIN_SYNC_DAYS); break;
+          case 'last_120_days': days = MIN_SYNC_DAYS; break;
           case 'last_180_days': days = 180; break;
           case 'last_365_days': days = 365; break;
           // All shorter ranges still pull MIN_SYNC_DAYS to preserve history.
@@ -1358,6 +1372,12 @@ export default function DashboardView() {
           )}
         </div>
       </div>
+
+      {adsCoverageGap && (
+        <p className="text-xs text-muted-foreground">
+          נתוני הפרסום הזמינים מתחילים ב-{formatReportDate(adsCoverageGap.earliestAvailable)}, כך שהסכומים מוצגים מהתאריך הזה ואילך ולא מתחילת הטווח שנבחר.
+        </p>
+      )}
 
       {/* Agency / Organization Dashboard Content */}
       {isAgencyDashboard ? (
