@@ -1,5 +1,5 @@
--- Campaign pulse WhatsApp delivery: once per week — Sunday 09:00 Asia/Jerusalem.
--- Snapshot refresh from sync crons stays deliver:false; only the Sunday cron sends WA.
+-- Ops: Sunday 09:00 pulse cadence + scoped delivery to campaigners and PMM (team managers) on DMM.
+-- David request 2026-09-18 — apply via apply-sql-migration workflow.
 
 CREATE OR REPLACE FUNCTION public.claim_campaign_pulse_delivery(p_tenant_id uuid)
 RETURNS boolean
@@ -12,12 +12,10 @@ DECLARE
   current_slot timestamp;
   affected_rows integer := 0;
 BEGIN
-  -- ISO day-of-week: 7 = Sunday.
   IF EXTRACT(ISODOW FROM local_now) <> 7 THEN
     RETURN false;
   END IF;
 
-  -- Delivery window: Sunday 09:00 ±10 minutes (cron jitter).
   IF local_now::time < time '08:50' OR local_now::time >= time '09:40' THEN
     RETURN false;
   END IF;
@@ -40,7 +38,6 @@ $$;
 REVOKE ALL ON FUNCTION public.claim_campaign_pulse_delivery(uuid) FROM PUBLIC, anon, authenticated;
 GRANT EXECUTE ON FUNCTION public.claim_campaign_pulse_delivery(uuid) TO service_role;
 
--- Sunday 09:00 Israel (06:00 UTC during IDT; claim window tolerates ±10 min).
 DO $pulse_crons$
 DECLARE
   worker_secret text;
@@ -98,3 +95,27 @@ BEGIN
   );
 END;
 $pulse_crons$;
+
+UPDATE public.tenant_heartbeat_settings ths
+SET
+  campaign_pulse_enabled = true,
+  campaign_pulse_deliver_to_campaigners = true,
+  campaign_pulse_deliver_to_team_managers = true,
+  updated_at = now()
+FROM public.tenants t
+WHERE ths.tenant_id = t.id
+  AND t.slug = 'dmm';
+
+SELECT
+  t.slug,
+  ths.campaign_pulse_enabled,
+  ths.campaign_pulse_deliver_to_campaigners,
+  ths.campaign_pulse_deliver_to_team_managers,
+  ths.campaign_pulse_phone
+FROM public.tenant_heartbeat_settings ths
+JOIN public.tenants t ON t.id = ths.tenant_id
+WHERE t.slug = 'dmm';
+
+SELECT jobname, schedule, active
+FROM cron.job
+WHERE jobname = 'campaign-pulse-sunday-0900';
