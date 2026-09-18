@@ -172,6 +172,42 @@ export function goalLabel(goal: CampaignGoal): string {
   return "לידים";
 }
 
+/** Precomputed per-campaign rows persisted on campaign_pulse_snapshots. */
+export function collectCampaignBreakdownFromSnapshots(
+  snapshots: PulseSnapshotRow[],
+): PulseCampaignGoalRow[] {
+  const rows: PulseCampaignGoalRow[] = [];
+  for (const snapshot of snapshots) {
+    if (!Array.isArray(snapshot.campaign_breakdown)) continue;
+    rows.push(...snapshot.campaign_breakdown);
+  }
+  return rows;
+}
+
+/** Clients whose tables still need a live crm_records rebuild (no stored breakdown). */
+export function pulseClientsNeedingRecordBuild(input: {
+  snapshots: PulseSnapshotRow[];
+  tables: PulseCampaignTable[];
+}): string[] {
+  const clientsWithTables = new Set(input.tables.map((table) => table.client_id));
+  const snapshotByClient = new Map(input.snapshots.map((row) => [row.client_id, row]));
+  const needsBuild: string[] = [];
+  for (const clientId of clientsWithTables) {
+    const snapshot = snapshotByClient.get(clientId);
+    if (snapshot && Array.isArray(snapshot.campaign_breakdown)) continue;
+    needsBuild.push(clientId);
+  }
+  return needsBuild;
+}
+
+export function pulseFallbackTableIds(
+  tables: PulseCampaignTable[],
+  clientIds: string[],
+): string[] {
+  const pending = new Set(clientIds);
+  return tables.filter((table) => pending.has(table.client_id)).map((table) => table.id);
+}
+
 export type PulseClientGoalRollup = {
   rowKey: string;
   client_id: string;

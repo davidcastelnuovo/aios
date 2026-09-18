@@ -9,6 +9,9 @@ import {
   clientHasCampaignService,
   expandPulseToPlatformGoalRows,
   filterPulseCallFlags,
+  collectCampaignBreakdownFromSnapshots,
+  pulseClientsNeedingRecordBuild,
+  pulseFallbackTableIds,
   rollupCampaignRowsByClientGoal,
   formatPulseChange,
   getPulsePeriodBounds,
@@ -244,6 +247,23 @@ test("expands pulse rows per platform when Meta and Google tables exist", () => 
   assert.equal(rows.length, 2);
   assert.deepEqual(rows.map((row) => row.platformLabel).sort(), ["Google", "Meta"]);
   assert.equal(platformGoalLabel(rows[0]), rows[0].platformLabel + " · " + (rows[0].goal === "ecommerce" ? "איקומרס" : "לידים"));
+});
+
+test("prefers stored snapshot breakdown and only rebuilds clients without it", () => {
+  const snapshots = [
+    {
+      client_id: "c1",
+      campaign_breakdown: [{ campaign_key: "meta:id:1", client_id: "c1", goal: "leads" }],
+    },
+    { client_id: "c2" },
+  ];
+  const tables = [
+    { id: "t1", client_id: "c1", integration_type: "facebook_insights" },
+    { id: "t2", client_id: "c2", integration_type: "google_ads" },
+  ];
+  assert.deepEqual(collectCampaignBreakdownFromSnapshots(snapshots), snapshots[0].campaign_breakdown);
+  assert.deepEqual(pulseClientsNeedingRecordBuild({ snapshots, tables }), ["c2"]);
+  assert.deepEqual(pulseFallbackTableIds(tables, ["c2"]), ["t2"]);
 });
 
 test("rolls per-campaign rows into one client card per platform and goal", () => {

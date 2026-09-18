@@ -57,7 +57,10 @@ import {
   buildPulseDashboardUrl,
   clientHasCampaignCoverage,
   clientHasCampaignService,
+  collectCampaignBreakdownFromSnapshots,
   expandPulseToPlatformGoalRows,
+  pulseClientsNeedingRecordBuild,
+  pulseFallbackTableIds,
   applyClientCallToPulseSnapshot,
   filterPulseCallFlags,
   fetchPulseCampaignRecords,
@@ -378,9 +381,17 @@ export function CampaignPulseDashboard({
     staleTime: 60_000,
   });
 
-  const pulseTableIds = useMemo(
-    () => pulseCampaignTables.map((table) => table.id),
-    [pulseCampaignTables],
+  const clientsNeedingRecordBuild = useMemo(
+    () => pulseClientsNeedingRecordBuild({
+      snapshots: pulseRows,
+      tables: pulseCampaignTables,
+    }),
+    [pulseRows, pulseCampaignTables],
+  );
+
+  const fallbackTableIds = useMemo(
+    () => pulseFallbackTableIds(pulseCampaignTables, clientsNeedingRecordBuild),
+    [pulseCampaignTables, clientsNeedingRecordBuild],
   );
 
   const {
@@ -389,17 +400,17 @@ export function CampaignPulseDashboard({
     refetch: refetchPulseRecords,
   } = useQuery({
     queryKey: [
-      "pulse-dash-records",
-      pulseTableIds.join(","),
+      "pulse-dash-records-fallback",
+      fallbackTableIds.join(","),
       campaignTrendBounds.queryStart,
       campaignTrendBounds.queryEnd,
     ],
-    queryFn: () => fetchPulseCampaignRecords(pulseTableIds, {
+    queryFn: () => fetchPulseCampaignRecords(fallbackTableIds, {
       ...periodBounds,
       prevStartDate: campaignTrendBounds.queryStart,
       endDate: campaignTrendBounds.queryEnd,
     }),
-    enabled: pulseTableIds.length > 0,
+    enabled: fallbackTableIds.length > 0,
     staleTime: 30_000,
     placeholderData: (previous) => previous,
   });
@@ -415,14 +426,23 @@ export function CampaignPulseDashboard({
     };
   }, [pulseCampaignTables, pulseCampaignRecords]);
 
-  const campaignGoalRows = useMemo(
-    () => buildPulseCampaignRows({
-      records: pulseCampaignRecords,
-      tables: pulseCampaignTables,
+  const campaignGoalRows = useMemo(() => {
+    const fromSnapshots = collectCampaignBreakdownFromSnapshots(pulseRows);
+    const coveredClients = new Set(
+      pulseRows
+        .filter((row) => Array.isArray(row.campaign_breakdown))
+        .map((row) => row.client_id),
+    );
+    if (!fallbackTableIds.length || !pulseCampaignRecords.length) {
+      return fromSnapshots;
+    }
+    const fallbackRows = buildPulseCampaignRows({
+      records: pulseCampaignRecords.filter((record) => fallbackTableIds.includes(record.table_id)),
+      tables: pulseCampaignTables.filter((table) => fallbackTableIds.includes(table.id)),
       nowYmd: jerusalemYmd(),
-    }),
-    [pulseCampaignRecords, pulseCampaignTables],
-  );
+    }).filter((row) => !coveredClients.has(row.client_id));
+    return [...fromSnapshots, ...fallbackRows];
+  }, [pulseRows, pulseCampaignRecords, pulseCampaignTables, fallbackTableIds]);
 
   const refetchCampaignData = () => {
     refetchPulseTables();
@@ -869,7 +889,9 @@ export function CampaignPulseDashboard({
               ? ` (${periodBounds.startDate}–${periodBounds.endDate})`
               : ""}
             {freshness ? ` · עודכן ${freshness}` : ""}
-            {pulseRecordsFetching ? " · טוען פירוט קמפיינים..." : ""}
+            {pulseRecordsFetching && fallbackTableIds.length > 0
+              ? ` · משלים ${fallbackTableIds.length} לקוחות ללא snapshot...`
+              : ""}
             {summary.missingPulse > 0
               ? ` · ${summary.missingPulse} ${clientGoalRollups.length ? "קמפיינים טעונים סיווג" : "ממתינים לחישוב"}`
               : ""}
