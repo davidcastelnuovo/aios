@@ -20,7 +20,7 @@ import { Slider } from "@/components/ui/slider";
 import { toast } from "sonner";
 import { format } from "date-fns";
 import { he } from "date-fns/locale";
-import { CalendarIcon, Save, Trash2, UserPlus, UserRound, X, Send, Search, ListTodo, ExternalLink, Check, Bot, GitCommit, ArrowRightLeft, MessageCircle, Link2, Users, Building2, Megaphone, Bell } from "lucide-react";
+import { CalendarIcon, Save, Trash2, UserPlus, UserRound, X, Send, Search, ListTodo, ExternalLink, Check, Bot, GitCommit, ArrowRightLeft, MessageCircle, Link2, Users, Building2, Megaphone, Bell, Repeat } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useCurrentTenant } from "@/hooks/useCurrentTenant";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
@@ -28,6 +28,8 @@ import { useUserRole } from "@/hooks/useUserRole";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { useCrossTenantAgencyIds } from "@/hooks/useCrossTenantAgencyIds";
 import { TimeSlotPicker } from "./TimeSlotPicker";
+import { TaskRecurrenceFields, type TaskRecurrenceValue } from "./TaskRecurrenceFields";
+import { TaskChecklistSection } from "./TaskChecklistSection";
 import { EditLeadDialog } from "@/components/forms/EditLeadDialog";
 import { NotesWithAttachments, type TaskAttachment } from "./NotesWithAttachments";
 import { fetchActiveCampaigners } from "@/lib/taskCampaigners";
@@ -35,6 +37,7 @@ import { syncTaskCalendarEvent } from "@/lib/calendarApi";
 import { coerceHumanTaskStatus } from "@/lib/taskStatus";
 import { PRIORITY_BAR_LABELS, priorityBarColor } from "@/lib/taskPriority";
 import { notifyTaskCollaboratorAdded, notifyTaskUpdateAdded } from "@/lib/notifyTaskPeers";
+import type { RecurrenceFrequency } from "@/lib/taskRecurrence";
 
 const DURATION_OPTIONS = [30, 60, 90, 120, 150, 180] as const;
 const FRAME = "rounded-xl border border-border/60 bg-card shadow-sm text-right";
@@ -78,6 +81,9 @@ interface Task {
   self_reminder_at?: string | null;
   google_calendar_event_id?: string | null;
   duration_minutes?: number | null;
+  recurrence_frequency?: RecurrenceFrequency | null;
+  recurrence_weekday?: number | null;
+  recurrence_monthday?: number | null;
 }
 
 interface TaskDetailDialogProps {
@@ -112,6 +118,12 @@ export function TaskDetailDialog({
   const [status, setStatus] = useState<"open" | "in_progress" | "done">("open");
   const [dueDate, setDueDate] = useState<Date | undefined>(undefined);
   const [targetDate, setTargetDate] = useState<Date | undefined>(undefined);
+  const [recurrence, setRecurrence] = useState<TaskRecurrenceValue>({
+    frequency: null,
+    weekday: null,
+    monthday: null,
+    time: null,
+  });
   const [clientId, setClientId] = useState("");
   const [leadId, setLeadId] = useState("");
   const [dueTime, setDueTime] = useState<string | null>(null);
@@ -166,9 +178,15 @@ export function TaskDetailDialog({
         setStatus(coerceHumanTaskStatus(t.status));
         setDueDate(parseOptionalDate(t.due_date));
         setTargetDate(parseOptionalDate(t.target_date));
+        setDueTime(t.due_time ? (t.due_time as string).substring(0, 5) : null);
+        setRecurrence({
+          frequency: (t.recurrence_frequency as RecurrenceFrequency | null) || null,
+          weekday: t.recurrence_weekday ?? null,
+          monthday: t.recurrence_monthday ?? null,
+          time: t.due_time ? String(t.due_time).substring(0, 5) : null,
+        });
         setClientId(t.client_id || "");
         setLeadId(t.lead_id || "");
-        setDueTime(t.due_time ? (t.due_time as string).substring(0, 5) : null);
         const rawDuration = Number((t as { duration_minutes?: number }).duration_minutes) || 30;
         setDurationMinutes((DURATION_OPTIONS as readonly number[]).includes(rawDuration) ? rawDuration : 30);
         setAssignedCampaignerId(t.campaigner_id || "");
@@ -317,27 +335,39 @@ export function TaskDetailDialog({
       }
       const nextDueDate = isUsableDate(dueDate) ? format(dueDate, "yyyy-MM-dd") : null;
       const nextTargetDate = isUsableDate(targetDate) ? format(targetDate, "yyyy-MM-dd") : null;
-      const nextDueTime = dueTime ? dueTime + ":00" : null;
+      const effectiveDueTime = recurrence.frequency
+        ? (recurrence.time || dueTime)
+        : dueTime;
+      const nextDueTime = effectiveDueTime ? effectiveDueTime + ":00" : null;
+      const updatePayload: Record<string, unknown> = {
+        title,
+        notes,
+        priority,
+        status,
+        due_date: nextDueDate,
+        due_time: nextDueTime,
+        target_date: nextTargetDate,
+        duration_minutes: durationMinutes,
+        client_id: clientId || null,
+        lead_id: leadId || null,
+        campaigner_id: assignedCampaignerId || null,
+        self_reminder_at:
+          assignedCampaignerId === userCampaignerId && selfReminderEnabled && selfReminderAt
+            ? new Date(selfReminderAt).toISOString()
+            : null,
+        attachments: attachments as any,
+      };
+      if (recurrence.frequency || task?.recurrence_frequency) {
+        updatePayload.recurrence_frequency = recurrence.frequency;
+        updatePayload.recurrence_interval = 1;
+        updatePayload.recurrence_weekday =
+          recurrence.frequency === "weekly" ? recurrence.weekday : null;
+        updatePayload.recurrence_monthday =
+          recurrence.frequency === "monthly" ? recurrence.monthday : null;
+      }
       const { error } = await supabase
         .from("tasks")
-        .update({
-          title,
-          notes,
-          priority,
-          status,
-          due_date: nextDueDate,
-          due_time: nextDueTime,
-          target_date: nextTargetDate,
-          duration_minutes: durationMinutes,
-          client_id: clientId || null,
-          lead_id: leadId || null,
-          campaigner_id: assignedCampaignerId || null,
-          self_reminder_at:
-            assignedCampaignerId === userCampaignerId && selfReminderEnabled && selfReminderAt
-              ? new Date(selfReminderAt).toISOString()
-              : null,
-          attachments: attachments as any,
-        })
+        .update(updatePayload as any)
         .eq("id", task!.id);
       if (error) throw error;
 
@@ -758,6 +788,20 @@ export function TaskDetailDialog({
                   </Popover>
                 </div>
               </div>
+              <div className="py-1.5 border-t space-y-2">
+                <div className="flex items-center gap-1 text-[11px] text-muted-foreground">
+                  <Repeat className="h-3 w-3" />
+                  חזרה קבועה
+                </div>
+                <TaskRecurrenceFields
+                  compact
+                  value={recurrence}
+                  onChange={(next) => {
+                    setRecurrence(next);
+                    if (next.time) setDueTime(next.time);
+                  }}
+                />
+              </div>
               {Boolean(userCampaignerId && assignedCampaignerId === userCampaignerId) && (
                 <div className="flex items-center gap-2 py-1.5 border-t">
                   <label className="flex cursor-pointer items-center gap-1.5 text-[11px] font-medium shrink-0">
@@ -782,6 +826,10 @@ export function TaskDetailDialog({
                 </div>
               )}
             </section>
+
+            {task?.id && tenantId && (
+              <TaskChecklistSection taskId={task.id} tenantId={tenantId} />
+            )}
 
             <NotesWithAttachments
               value={notes}
