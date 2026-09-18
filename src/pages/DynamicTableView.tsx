@@ -6,6 +6,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
+import { CarmenLoadingScreen } from "@/components/shared/CarmenLoadingScreen";
 import { ArrowRight, Plus, Trash2, Send, Pencil, Check, X, MoreVertical, Calendar as CalendarIcon, RefreshCw, Facebook, Settings, Link, BarChart3, Search, TrendingUp, Bell, SearchIcon, Sparkles, Info, Copy, Loader2, AlertCircle, Play, ShoppingCart } from "lucide-react";
 import { AIAnalysisDialog } from "@/components/dynamic-tables/AIAnalysisDialog";
 import { format, subDays } from "date-fns";
@@ -1552,8 +1553,7 @@ export default function DynamicTableView({ embedTableSlug, embedMode, summaryOnl
   if (resolvingTables) {
     return (
       <div className="container mx-auto py-8 px-4">
-        <Skeleton className="h-8 w-48 mb-4" />
-        <Skeleton className="h-64 w-full" />
+        <CarmenLoadingScreen messages={["כרמן פותחת את הטבלה…", "טוענת את השדות והנתונים…"]} />
       </div>
     );
   }
@@ -3162,7 +3162,7 @@ export default function DynamicTableView({ embedTableSlug, embedMode, summaryOnl
       </div>
 
       {!summaryOnly && (hasAhrefs && isSeoReportSource(table?.integration_settings?.data_source) ? null : isLoading ? (
-        <Skeleton className="h-96 w-full" />
+        <CarmenLoadingScreen variant="card" messages={["כרמן מושכת את נתוני הטבלה…", "מחשבת את התקופה הנבחרת…"]} />
       ) : (
         <div className="border rounded-lg overflow-hidden bg-background shadow-sm">
           <div className="overflow-auto">
@@ -3360,11 +3360,16 @@ export default function DynamicTableView({ embedTableSlug, embedMode, summaryOnl
                 </div>
               ))}
 
-              {/* Empty state */}
+              {/* Empty state — never before the refetch for this period settles */}
               {(!filteredRecords || filteredRecords.length === 0) && (
                 <div className="flex items-center justify-center p-12 text-center">
                   <div>
-                    {campaignSearch ? (
+                    {recordsFetching ? (
+                      <CarmenLoadingScreen
+                        variant="inline"
+                        messages={["כרמן מרעננת את הנתונים…"]}
+                      />
+                    ) : campaignSearch ? (
                       <p className="text-muted-foreground mb-3">לא נמצאו קמפיינים תואמים</p>
                     ) : table?.integration_type ? (
                       <>
