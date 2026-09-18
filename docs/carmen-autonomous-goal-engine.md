@@ -10,9 +10,9 @@ Carmen does **not** finish because she "did tasks". She finishes only when succe
 
 | Layer | Role |
 | --- | --- |
-| **Carmen / Orchestrator** | Goal Contract, plan, replan, evidence, blockers |
-| **Cursor** | All technical work (code, tests, migrations, tools) |
-| **Model API Router** | Fast chat, classification, short reasoning |
+| **Cursor Direct (orchestrator brain)** | Planning, project management, delegation, efficiency review — sticky Carmen↔Cursor chat |
+| **Cursor (per-goal agents)** | All technical work (code, tests, migrations, tools) |
+| **Model API Router** | Fast user-facing chat only (not goal orchestration) |
 | **Verifier + Completion Gate** | Truth for whether the goal is actually done |
 
 ## Goal Contract fields

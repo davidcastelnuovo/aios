@@ -4,7 +4,7 @@ export type ExecutionGoalStatus =
   | "active" | "in_progress" | "blocked" | "completed" | "cancelled" | "paused";
 
 export type EngineStatus =
-  | "PLANNING" | "EXECUTING" | "VERIFYING" | "REPLANNING" | "BLOCKED" | "COMPLETED";
+  | "PLANNING" | "EXECUTING" | "VERIFYING" | "REPLANNING" | "BLOCKED" | "COMPLETED" | "AWAITING_BRAIN";
 
 export type CriterionStatus = "PASS" | "FAIL" | "UNKNOWN" | "NOT_TESTED";
 
@@ -124,6 +124,7 @@ export const ENGINE_STATUS_LABELS: Record<EngineStatus, string> = {
   REPLANNING: "תכנון מחדש",
   BLOCKED: "חסום",
   COMPLETED: "הושלם",
+  AWAITING_BRAIN: "ממתין ל-Cursor Direct",
 };
 
 export const CRITERION_STATUS_LABELS: Record<CriterionStatus, string> = {

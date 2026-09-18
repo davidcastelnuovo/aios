@@ -7,7 +7,7 @@ import { createUnifiedGoal, logGoalEvent } from "./goal-execution.ts";
 import { modelRouterJSON, type ModelProfile } from "./model-router.ts";
 
 export const ENGINE_STATUSES = [
-  "PLANNING", "EXECUTING", "VERIFYING", "REPLANNING", "BLOCKED", "COMPLETED",
+  "PLANNING", "EXECUTING", "VERIFYING", "REPLANNING", "BLOCKED", "COMPLETED", "AWAITING_BRAIN",
 ] as const;
 export type EngineStatus = typeof ENGINE_STATUSES[number];
 
@@ -317,35 +317,38 @@ async function planGoalIfNeeded(
   supabase: SupabaseLike,
   state: Awaited<ReturnType<typeof loadGoalState>>,
   iterationId: string,
-): Promise<void> {
-  if (!state) return;
+): Promise<{ awaiting_brain?: boolean; dispatched?: boolean; fallback?: boolean }> {
+  if (!state) return {};
   const pendingSteps = state.planSteps.filter((s) => s.status === "pending" || s.status === "in_progress");
-  if (pendingSteps.length > 0) return;
+  if (pendingSteps.length > 0) return {};
+
+  const {
+    getInFlightBrainRequest,
+    queueBrainRequest,
+    goalBrainApiFallbackEnabled,
+  } = await import("./goal-cursor-brain.ts");
+  const { buildPlanBrainPrompt } = await import("./goal-brain-apply.ts");
+
+  const inflight = await getInFlightBrainRequest(supabase, state.goal.id, "plan");
+  if (inflight) return { awaiting_brain: true };
 
   const ctx = buildContextPackage(state);
-  const prompt = `You are Carmen's autonomous goal planner. Given this Goal Contract context, output JSON:
-{
-  "plan_steps": [
-    {
-      "title": "...",
-      "description": "...",
-      "action_type": "model|cursor|verify|observe",
-      "priority": 1-10,
-      "parallel_track": false,
-      "sub_project_key": "optional slug e.g. creative|copy|seo|campaigners",
-      "sub_project_label": "optional Hebrew label e.g. מחלקת קריאייטיב"
-    }
-  ],
-  "notes": "brief planning notes"
-}
-Rules:
-- Technical/code changes MUST use action_type "cursor".
-- When the goal spans multiple departments/modules that can work independently, create MULTIPLE cursor steps with parallel_track=true and distinct sub_project_key (each gets its own Cursor agent).
-- Example: marketing department goal → parallel cursor steps for creative, copy, seo, campaigners.
-- Non-parallel steps (verify, observe, model) run sequentially after parallel tracks dispatch.
-- Keep 2-8 steps max.
-Context:
-${JSON.stringify(ctx, null, 2)}`;
+  const prompt = buildPlanBrainPrompt(ctx);
+  const queued = await queueBrainRequest(supabase, {
+    tenantId: state.goal.tenant_id,
+    goalId: state.goal.id,
+    requestType: "plan",
+    prompt,
+    iterationId,
+  });
+
+  if (queued.dispatched || queued.awaiting) {
+    return { awaiting_brain: true, dispatched: queued.dispatched };
+  }
+
+  if (!goalBrainApiFallbackEnabled()) {
+    throw new Error(queued.reason || "cursor_direct_brain_unavailable");
+  }
 
   const result = await modelRouterJSON<{ plan_steps?: Array<{
     title: string;
@@ -355,10 +358,7 @@ ${JSON.stringify(ctx, null, 2)}`;
     parallel_track?: boolean;
     sub_project_key?: string;
     sub_project_label?: string;
-  }> }>(
-    "DEEP_REASON",
-    prompt,
-  );
+  }> }>("DEEP_REASON", prompt);
   await recordModelEvent(supabase, {
     tenantId: state.goal.tenant_id,
     goalId: state.goal.id,
@@ -366,7 +366,6 @@ ${JSON.stringify(ctx, null, 2)}`;
     profile: "DEEP_REASON",
     result,
   });
-
   if (!result.ok || !result.data?.plan_steps?.length) {
     throw new Error(result.failoverReason || "planning_failed");
   }
@@ -392,12 +391,12 @@ ${JSON.stringify(ctx, null, 2)}`;
       metadata: parallelTrack ? { parallel_track: true } : {},
     });
   }
-
   await supabase.from("goals").update({
     plan: steps,
     engine_status: "EXECUTING",
     updated_at: new Date().toISOString(),
   }).eq("id", state.goal.id);
+  return { fallback: true };
 }
 
 async function monitorInProgressCursorSteps(
@@ -559,20 +558,44 @@ async function executePlanStep(
       return { done: true };
     }
 
-    // model / observe — fast reasoning
+    // model / observe — orchestration brain via Cursor Direct (not Model API)
     const ctx = buildContextPackage(state);
-    const prompt = `Execute this plan step for an autonomous goal. Reply JSON:
-{ "summary": "...", "evidence": [{ "criterion_key": "optional", "type": "observation", "content": {} }], "criterion_updates": [{ "key": "...", "status": "PASS|FAIL|UNKNOWN|NOT_TESTED", "reason": "..." }] }
-Step: ${step.title}
-${step.description || ""}
-Context: ${JSON.stringify(ctx)}`;
+    const {
+      getInFlightBrainRequest,
+      queueBrainRequest,
+      goalBrainApiFallbackEnabled,
+    } = await import("./goal-cursor-brain.ts");
+    const { buildStepExecuteBrainPrompt } = await import("./goal-brain-apply.ts");
+
+    const inflight = await getInFlightBrainRequest(supabase, state.goal.id, "step_execute");
+    if (inflight && inflight.step_id === step.id) {
+      return { done: false, monitoring: true };
+    }
+
+    const prompt = buildStepExecuteBrainPrompt(step.title, step.description || "", ctx);
+    const queued = await queueBrainRequest(supabase, {
+      tenantId: state.goal.tenant_id,
+      goalId: state.goal.id,
+      requestType: "step_execute",
+      prompt,
+      iterationId,
+      stepId: step.id,
+      actionId: action.id,
+    });
+
+    if (queued.dispatched || queued.awaiting) {
+      return { done: false, monitoring: true };
+    }
+
+    if (!goalBrainApiFallbackEnabled()) {
+      throw new Error(queued.reason || "cursor_direct_brain_unavailable");
+    }
 
     const result = await modelRouterJSON<{
       summary?: string;
       evidence?: Array<{ criterion_key?: string; type: string; content: Record<string, unknown> }>;
       criterion_updates?: Array<{ key: string; status: CriterionStatus; reason?: string }>;
     }>("FAST_REASON", prompt);
-
     await recordModelEvent(supabase, {
       tenantId: state.goal.tenant_id,
       goalId: state.goal.id,
@@ -580,7 +603,6 @@ Context: ${JSON.stringify(ctx)}`;
       profile: "FAST_REASON",
       result,
     });
-
     if (!result.ok) throw new Error(result.failoverReason || "model_step_failed");
 
     for (const ev of result.data?.evidence || []) {
@@ -594,7 +616,6 @@ Context: ${JSON.stringify(ctx)}`;
         source_action_id: action.id,
       });
     }
-
     for (const upd of result.data?.criterion_updates || []) {
       const criterion = state.criteria.find((c) => c.criterion_key === upd.key);
       if (!criterion) continue;
@@ -605,18 +626,15 @@ Context: ${JSON.stringify(ctx)}`;
         updated_at: new Date().toISOString(),
       }).eq("id", criterion.id);
     }
-
     await supabase.from("goal_actions").update({
       status: "completed",
       result: result.data,
       completed_at: new Date().toISOString(),
     }).eq("id", action.id);
-
     await supabase.from("goal_plan_steps").update({
       status: "done",
       completed_at: new Date().toISOString(),
     }).eq("id", step.id);
-
     return { done: true };
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
@@ -673,6 +691,12 @@ export async function runGoalIteration(
     const { goal } = state;
     if (goal.engine_status === "COMPLETED") {
       return { status: "COMPLETED", summary: "already_completed" };
+    }
+
+    const { getInFlightBrainRequest } = await import("./goal-cursor-brain.ts");
+    const brainInflight = await getInFlightBrainRequest(supabase, goalId);
+    if (brainInflight || goal.engine_status === "AWAITING_BRAIN") {
+      return { status: "AWAITING_BRAIN", summary: `awaiting_brain:${brainInflight?.request_type || "unknown"}` };
     }
 
     const iterationNumber = (goal.iteration_count || 0) + 1;
@@ -743,9 +767,21 @@ export async function runGoalIteration(
       });
     }
 
-    // Planning phase
+    // Planning phase — Cursor Direct brain (async callback applies plan)
     if (goal.engine_status === "PLANNING" || goal.engine_status === "REPLANNING") {
-      await planGoalIfNeeded(supabase, await loadGoalState(supabase, tenantId, goalId), iterationId);
+      const planOutcome = await planGoalIfNeeded(
+        supabase,
+        await loadGoalState(supabase, tenantId, goalId),
+        iterationId,
+      );
+      if (planOutcome.awaiting_brain) {
+        await supabase.from("goal_loop_iterations").update({
+          status: "completed",
+          summary: planOutcome.dispatched ? "brain_plan_dispatched" : "brain_plan_awaiting",
+          completed_at: new Date().toISOString(),
+        }).eq("id", iterationId);
+        return { status: "AWAITING_BRAIN", summary: "brain_plan_dispatched" };
+      }
     }
 
     const freshState = await loadGoalState(supabase, tenantId, goalId);
@@ -796,19 +832,7 @@ export async function runGoalIteration(
 
     const afterState = await loadGoalState(supabase, tenantId, goalId);
     const finalGate = checkCompletionGate(afterState?.criteria || []);
-    const nextStatus: EngineStatus = finalGate.complete
-      ? "COMPLETED"
-      : (afterState?.goal.engine_status === "VERIFYING" ? "VERIFYING" : "EXECUTING");
-
-    await supabase.from("goals").update({
-      engine_status: finalGate.complete ? "COMPLETED" : nextStatus,
-      status: finalGate.complete ? "completed" : "in_progress",
-      progress_percent: finalGate.complete ? 100 : Math.min(95, iterationNumber * 5),
-      iteration_count: iterationNumber,
-      last_iteration_at: new Date().toISOString(),
-      next_run_at: finalGate.complete ? null : new Date(Date.now() + 60_000).toISOString(),
-      stuck_score: stuck.score,
-    }).eq("id", goalId);
+    let awaitingBrain = false;
 
     if (!finalGate.complete) {
       const { runPostIterationEfficiencyReview } = await import("./goal-efficiency-review.ts");
@@ -822,11 +846,33 @@ export async function runGoalIteration(
         stuckScore: stuck.score,
         constraints: afterState?.goal.constraints || goal.constraints,
       });
-      if (!eff.review.efficient) {
+      if (eff.awaiting_brain) {
+        awaitingBrain = true;
+        summary += ";efficiency_brain_pending";
+      } else if (eff.review && !eff.review.efficient) {
         summary += `;efficiency_score:${eff.review.score}`;
         if (eff.cursor_dispatched) summary += ";cursor_optimize_sent";
       }
     }
+
+    const brainInflightFinal = await getInFlightBrainRequest(supabase, goalId);
+    if (brainInflightFinal) awaitingBrain = true;
+
+    const nextStatus: EngineStatus = finalGate.complete
+      ? "COMPLETED"
+      : awaitingBrain
+        ? "AWAITING_BRAIN"
+        : (afterState?.goal.engine_status === "VERIFYING" ? "VERIFYING" : "EXECUTING");
+
+    await supabase.from("goals").update({
+      engine_status: nextStatus,
+      status: finalGate.complete ? "completed" : "in_progress",
+      progress_percent: finalGate.complete ? 100 : Math.min(95, iterationNumber * 5),
+      iteration_count: iterationNumber,
+      last_iteration_at: new Date().toISOString(),
+      next_run_at: finalGate.complete ? null : new Date(Date.now() + 60_000).toISOString(),
+      stuck_score: stuck.score,
+    }).eq("id", goalId);
 
     await supabase.from("goal_loop_iterations").update({
       status: "completed",
@@ -850,7 +896,7 @@ export async function runGoalIteration(
       });
     }
 
-    return { status: finalGate.complete ? "COMPLETED" : nextStatus, summary };
+    return { status: finalGate.complete ? "COMPLETED" : (awaitingBrain ? "AWAITING_BRAIN" : nextStatus), summary };
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
     if (iterationId) {
@@ -895,6 +941,16 @@ export async function getAutonomousGoalStatus(
       cursor_session_url: s.cursor_session_url,
     }));
 
+  const { data: brainSession } = await supabase.from("goal_orchestrator_brain")
+    .select("cursor_session_id, cursor_session_url, session_source, updated_at")
+    .eq("tenant_id", tenantId)
+    .maybeSingle();
+  const { data: brainRequests } = await supabase.from("goal_brain_requests")
+    .select("id, request_type, status, created_at, completed_at")
+    .eq("goal_id", goalId)
+    .order("created_at", { ascending: false })
+    .limit(5);
+
   return {
     goal: state.goal,
     criteria: state.criteria,
@@ -904,6 +960,8 @@ export async function getAutonomousGoalStatus(
     completion_gate: gate,
     recent_iterations: iterations || [],
     recent_evidence: evidence || [],
+    orchestrator_brain: brainSession || null,
+    brain_requests: brainRequests || [],
   };
 }
 

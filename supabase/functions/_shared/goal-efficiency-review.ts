@@ -4,6 +4,12 @@
 
 import { dispatchToGoalCursor } from "./goal-cursor-dispatch.ts";
 import { modelRouterJSON } from "./model-router.ts";
+import { buildEfficiencyReviewBrainPrompt } from "./goal-brain-apply.ts";
+import {
+  getInFlightBrainRequest,
+  goalBrainApiFallbackEnabled,
+  queueBrainRequest,
+} from "./goal-cursor-brain.ts";
 
 export type GoalResourceMetrics = {
   goal_id: string;
@@ -121,7 +127,12 @@ export async function runPostIterationEfficiencyReview(
     stuckScore: number;
     constraints?: Record<string, unknown>;
   },
-): Promise<{ metrics: GoalResourceMetrics; review: EfficiencyReviewResult; cursor_dispatched: boolean }> {
+): Promise<{
+  metrics: GoalResourceMetrics;
+  review?: EfficiencyReviewResult;
+  cursor_dispatched: boolean;
+  awaiting_brain?: boolean;
+}> {
   const metrics = await collectGoalResourceMetrics(
     supabase,
     args.tenantId,
@@ -131,8 +142,32 @@ export async function runPostIterationEfficiencyReview(
     args.stuckScore,
   );
 
-  const review = await reviewIterationEfficiency(metrics, args.goalTitle);
+  const inflight = await getInFlightBrainRequest(supabase, args.goalId, "efficiency_review");
+  if (inflight) {
+    return { metrics, cursor_dispatched: false, awaiting_brain: true };
+  }
 
+  const prompt = buildEfficiencyReviewBrainPrompt(metrics as unknown as Record<string, unknown>, args.goalTitle);
+  const queued = await queueBrainRequest(supabase, {
+    tenantId: args.tenantId,
+    goalId: args.goalId,
+    requestType: "efficiency_review",
+    prompt,
+    iterationId: args.iterationId,
+  });
+
+  if (queued.dispatched || queued.awaiting) {
+    await supabase.from("goal_loop_iterations").update({
+      context_snapshot: { resource_metrics: metrics, efficiency_review_pending: true },
+    }).eq("id", args.iterationId);
+    return { metrics, cursor_dispatched: false, awaiting_brain: true };
+  }
+
+  if (!goalBrainApiFallbackEnabled()) {
+    return { metrics, cursor_dispatched: false };
+  }
+
+  const review = await reviewIterationEfficiency(metrics, args.goalTitle);
   await supabase.from("goal_loop_iterations").update({
     context_snapshot: { resource_metrics: metrics, efficiency_review: review },
   }).eq("id", args.iterationId);
@@ -162,7 +197,7 @@ export async function runPostIterationEfficiencyReview(
       goal_id: args.goalId,
       event_type: "efficiency_review",
       actor: "autonomous_goal_engine",
-      detail: { metrics, review, cursor_dispatched: cursorDispatched },
+      detail: { metrics, review, cursor_dispatched: cursorDispatched, via: "api_fallback" },
     });
   }
 
