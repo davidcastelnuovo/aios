@@ -20,8 +20,14 @@
 - עד 20 שלבים; טריגר ו-spec מאומתים; כשל מסומן `failed` עם סיבה.
 - נבנה על דפוס Campaign Pulse (שרשרת לינארית) — fan-in אמיתי = שדרוג מנוע נפרד.
 
+## הוספת צעד WhatsApp לאוטומציה קיימת
+1. `get_automation_details` — מחזיר `configuration` מלא (מסונן) + `propose_format` לכל צעד.
+2. `propose_automation_add_step` — מוסיף צעד בודד (למשל `send_greenapi_message`) בסוף או אחרי `after_step_id`; לא מוחק צעדים קיימים.
+3. אישור → `carmen-approval-execute` (`add_automation_step`).
+4. סקין: `carmen_automation_add_whatsapp_step`.
+
 ## פערים לשלב הבא
-- עריכת אוטומציה קיימת ע"י כרמן (`propose_automation_edit`) — באישור.
+- עריכת אוטומציה קיימת (החלפת כל ה-flow) — `propose_automation_edit` (מסוכן; העדפה ל-`add_step`).
 - הפעלה/כיבוי באישור (כרגע ידני בעורך).
 - תצוגה מקדימה ויזואלית של ההצעה בתוך ה-approval לפני אישור.
 
