@@ -52,6 +52,10 @@ import {
   syncLocalTasksForAgencyFilter,
   filterTasksByBoardTenantScope,
 } from "@/lib/taskBoardAgency";
+import {
+  collectTaskAssigneeIds,
+  shouldFanOutRecurringTasks,
+} from "@/lib/recurringTaskAssignees";
 import { fetchActiveCampaigners } from "@/lib/taskCampaigners";
 import { buildMineQueueOrFilter, fetchMineTaskIdentity } from "@/lib/mineTaskIdentity";
 import {
@@ -96,6 +100,12 @@ interface Task {
   target_date?: string | null;
   duration_minutes?: number;
   google_calendar_event_id?: string | null;
+  recurrence_frequency?: "daily" | "weekly" | "monthly" | null;
+  recurrence_interval?: number;
+  recurrence_weekday?: number | null;
+  recurrence_monthday?: number | null;
+  recurrence_series_id?: string | null;
+  recurrence_previous_task_id?: string | null;
   clients?: { name: string; agency_id?: string | null } | null;
   leads?: { company_name?: string | null; contact_name?: string | null } | null;
   task_updates?: { id: string }[];
@@ -721,6 +731,10 @@ export function WeeklyTaskBoard() {
       campaignerId,
       selfReminderAt,
       targetDate,
+      recurrenceFrequency,
+      recurrenceWeekday,
+      recurrenceMonthday,
+      collaboratorIds,
     }: {
       title: string;
       date: Date | null;
@@ -729,6 +743,10 @@ export function WeeklyTaskBoard() {
       campaignerId?: string | null;
       selfReminderAt?: string | null;
       targetDate?: string | null;
+      recurrenceFrequency?: "daily" | "weekly" | "monthly" | null;
+      recurrenceWeekday?: number | null;
+      recurrenceMonthday?: number | null;
+      collaboratorIds?: string[];
     }) => {
       if (!tenantId) throw new Error("TENANT_NOT_READY");
       // A task attached to a client must carry that client's agency, otherwise
@@ -763,6 +781,16 @@ export function WeeklyTaskBoard() {
         sales_person_id: assignedCampaignerId ? null : assignedSalesPersonId,
         client_id: clientId ?? null,
       };
+      // Only send recurrence columns when configured — avoids insert failures
+      // before the recurring-tasks migration has been applied.
+      if (recurrenceFrequency) {
+        insertData.recurrence_frequency = recurrenceFrequency;
+        insertData.recurrence_interval = 1;
+        insertData.recurrence_weekday =
+          recurrenceFrequency === "weekly" ? recurrenceWeekday ?? null : null;
+        insertData.recurrence_monthday =
+          recurrenceFrequency === "monthly" ? recurrenceMonthday ?? null : null;
+      }
       if (selfReminderAt) {
         insertData.self_reminder_at = selfReminderAt;
       }
@@ -777,11 +805,49 @@ export function WeeklyTaskBoard() {
         }
       }
       // Note: time without date is not saved to prevent orphaned times
-      const { data: newTask, error } = await supabase.from("tasks").insert(insertData).select().single();
-      if (error) throw error;
+      const assigneeIds = collectTaskAssigneeIds(assignedCampaignerId, collaboratorIds);
+      const fanOut = shouldFanOutRecurringTasks(recurrenceFrequency, assigneeIds);
+
+      let newTask: { id: string } | null = null;
+      if (fanOut) {
+        const payloads = assigneeIds.map((campaignerId) => ({
+          ...insertData,
+          campaigner_id: campaignerId,
+          sales_person_id: null,
+        }));
+        const { data: createdTasks, error } = await supabase
+          .from("tasks")
+          .insert(payloads)
+          .select("id");
+        if (error) throw error;
+        newTask = createdTasks?.[0] ?? null;
+      } else {
+        const { data: created, error } = await supabase
+          .from("tasks")
+          .insert(insertData)
+          .select()
+          .single();
+        if (error) throw error;
+        newTask = created;
+
+        const uniqueCollaborators = Array.from(
+          new Set((collaboratorIds || []).filter((id) => id && id !== assignedCampaignerId)),
+        );
+        if (uniqueCollaborators.length > 0) {
+          const { error: collabError } = await supabase.from("task_collaborators").insert(
+            uniqueCollaborators.map((campaignerCollaboratorId) => ({
+              task_id: newTask!.id,
+              campaigner_id: campaignerCollaboratorId,
+              tenant_id: tenantId,
+              added_by: boardUserId,
+            })),
+          );
+          if (collabError) throw collabError;
+        }
+      }
 
       // אם יש תאריך ושעה - יצור גם אירוע ביומן גוגל ושמור את ה-eventId
-      if (validDate && time) {
+      if (!fanOut && validDate && time && newTask) {
         try {
           const startDateTime = new Date(`${format(validDate, "yyyy-MM-dd")}T${time}:00`);
           const endDateTime = new Date(startDateTime.getTime() + 30 * 60000); // 30 דקות
@@ -809,22 +875,35 @@ export function WeeklyTaskBoard() {
         }
       }
       
-      return newTask;
+      return fanOut ? { fanOutCount: assigneeIds.length, newTask } : newTask;
     },
-    onSuccess: (newTask) => {
+    onSuccess: (result) => {
+      const fanOutCount =
+        result && typeof result === "object" && "fanOutCount" in result
+          ? (result as { fanOutCount: number }).fanOutCount
+          : null;
+      const newTask =
+        result && typeof result === "object" && "newTask" in result
+          ? (result as { newTask: typeof result }).newTask
+          : result;
+
       // Optimistic add so the user sees it immediately even if filters are restrictive
-      setLocalTasks(prev => {
-        if (!newTask) return prev;
-        return prev.some(t => t.id === (newTask as any).id) ? prev : [newTask as any, ...prev];
-      });
+      if (newTask && typeof newTask === "object" && "id" in newTask) {
+        setLocalTasks((prev) => {
+          if (!newTask) return prev;
+          return prev.some((t) => t.id === (newTask as any).id) ? prev : [newTask as any, ...prev];
+        });
+      }
 
       queryClient.invalidateQueries({ queryKey: ["tasks", tenantId] });
       queryClient.invalidateQueries({ queryKey: ["calendar-events-weekly", tenantId] });
-      toast.success("משימה נוספה");
+      toast.success(
+        fanOutCount ? `נוצרו ${fanOutCount} משימות חוזרות — אחת לכל איש צוות` : "משימה נוספה",
+      );
     },
     onError: (error) => {
       console.error("[addTask] failed", error);
-      const msg = (error as any)?.message;
+      const msg = (error as any)?.message as string | undefined;
       if (msg === "TENANT_NOT_READY") {
         toast.error("המערכת עדיין נטענת, נסי שוב בעוד רגע");
         return;
@@ -833,7 +912,11 @@ export function WeeklyTaskBoard() {
         toast.error("לא נמצאה סוכנות בארגון – אי אפשר להוסיף משימה");
         return;
       }
-      toast.error("שגיאה בהוספת משימה");
+      if (msg && /recurrence_/i.test(msg)) {
+        toast.error("עמודות משימה חוזרת עדיין לא זמינות בדאטהבייס — אפשר להוסיף משימה רגילה בינתיים");
+        return;
+      }
+      toast.error(msg ? `שגיאה בהוספת משימה: ${msg}` : "שגיאה בהוספת משימה");
     },
   });
 
@@ -876,6 +959,10 @@ export function WeeklyTaskBoard() {
       campaignerId: payload.campaignerId,
       selfReminderAt: payload.selfReminderAt,
       targetDate: payload.targetDate,
+      recurrenceFrequency: payload.recurrenceFrequency,
+      recurrenceWeekday: payload.recurrenceWeekday,
+      recurrenceMonthday: payload.recurrenceMonthday,
+      collaboratorIds: payload.collaboratorIds,
     });
   };
 
