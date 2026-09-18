@@ -57,6 +57,7 @@ on:
       - 'supabase/ops/apply_carmen_autonomous_goal_engine_production.sql'
       - 'supabase/ops/apply_goal_execution_and_autonomous_engine_production.sql'
       - 'supabase/ops/apply_pulse_campaign_breakdown_production.sql'
+      - 'supabase/ops/apply_recurring_human_tasks_production.sql'
 
 jobs:
   apply:
