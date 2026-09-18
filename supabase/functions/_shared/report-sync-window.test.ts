@@ -9,7 +9,7 @@ import {
   toDateString,
 } from "./report-sync-window.ts";
 
-test("a 30-day table still syncs deep enough for the 70-day dashboard preset", () => {
+test("a 30-day table still syncs every rolling dashboard preset through 120 days", () => {
   const today = "2026-09-18";
   const window = resolveAdsSyncWindow(
     { startDate: shiftDateString(today, -30), endDate: today },
@@ -18,7 +18,8 @@ test("a 30-day table still syncs deep enough for the 70-day dashboard preset", (
 
   assert.equal(window.startDate, shiftDateString(today, -REPORT_MIN_SYNC_DAYS));
   assert.equal(window.endDate, today);
-  assert.ok(window.startDate <= shiftDateString(today, -70));
+  assert.equal(REPORT_MIN_SYNC_DAYS, 120);
+  assert.ok(window.startDate <= shiftDateString(today, -120));
 });
 
 test("a configured range deeper than the minimum is kept", () => {

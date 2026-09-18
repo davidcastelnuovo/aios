@@ -225,8 +225,16 @@ Deno.serve(async (req) => {
         since = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 30);
         until = today;
         break;
+      case 'last_60_days':
+        since = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 60);
+        until = today;
+        break;
       case 'last_90_days':
         since = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 90);
+        until = today;
+        break;
+      case 'last_120_days':
+        since = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 120);
         until = today;
         break;
       case 'last_180_days':

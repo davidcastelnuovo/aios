@@ -80,6 +80,9 @@ type DateRangePreset =
   | 'last_7_days'
   | 'last_14_days'
   | 'last_30_days'
+  | 'last_60_days'
+  | 'last_70_days'
+  | 'last_120_days'
   | 'this_month'
   | 'last_month'
   | 'last_90_days'
@@ -112,6 +115,9 @@ export function GoogleAnalyticsDashboard({
       'last_7_days': 'last_7_days',
       'last_14_days': 'last_14_days',
       'last_30_days': 'last_30_days',
+      'last_60_days': 'last_60_days',
+      'last_70_days': 'last_70_days',
+      'last_120_days': 'last_120_days',
       'this_month': 'this_month',
       'last_month': 'last_month',
       'last_90_days': 'last_90_days',
@@ -229,8 +235,12 @@ export function GoogleAnalyticsDashboard({
         return { start: subDays(today, 14), end: yesterday };
       case 'last_30_days':
         return { start: subDays(today, 30), end: yesterday };
+      case 'last_60_days':
+        return { start: subDays(today, 60), end: yesterday };
       case 'last_70_days':
         return { start: subDays(today, 70), end: yesterday };
+      case 'last_120_days':
+        return { start: subDays(today, 120), end: yesterday };
       case 'this_month':
         return { start: startOfMonth(today), end: today };
       case 'last_month': {
@@ -688,11 +698,14 @@ export function GoogleAnalyticsDashboard({
     { value: 'last_7_days', label: '7 ימים אחרונים' },
     { value: 'last_14_days', label: '14 יום אחרונים' },
     { value: 'last_30_days', label: '30 יום אחרונים' },
-    { value: 'this_month', label: 'החודש' },
-    { value: 'last_month', label: 'חודש שעבר' },
+    { value: 'last_60_days', label: '60 יום אחרונים' },
+    { value: 'last_70_days', label: '70 יום אחרונים' },
     { value: 'last_90_days', label: '90 יום אחרונים' },
+    { value: 'last_120_days', label: '120 יום אחרונים' },
     { value: 'last_180_days', label: '6 חודשים אחרונים' },
     { value: 'last_365_days', label: 'שנה אחרונה' },
+    { value: 'this_month', label: 'החודש' },
+    { value: 'last_month', label: 'חודש שעבר' },
     { value: 'custom', label: 'בחירה ידנית' },
   ];
 

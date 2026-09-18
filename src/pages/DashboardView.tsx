@@ -1132,17 +1132,19 @@ export default function DashboardView() {
     };
     try {
       // Compute date range for analytics-style syncs (GA / GSC).
-      // ALWAYS sync at least the last 90 days (regardless of display filter)
+      // ALWAYS sync at least the last 120 days (regardless of display filter)
       // so switching the dashboard to a short window doesn't wipe history.
       const computeRange = () => {
         const now = new Date();
         const end = new Date(now);
-        const MIN_SYNC_DAYS = 90;
+        const MIN_SYNC_DAYS = 120;
         const start = new Date(now);
         let days = MIN_SYNC_DAYS;
         switch (dateFilter) {
+          case 'last_60_days': days = Math.max(60, MIN_SYNC_DAYS); break;
           case 'last_70_days': days = Math.max(70, MIN_SYNC_DAYS); break;
           case 'last_90_days': days = Math.max(90, MIN_SYNC_DAYS); break;
+          case 'last_120_days': days = MIN_SYNC_DAYS; break;
           case 'last_180_days': days = 180; break;
           case 'last_365_days': days = 365; break;
           // All shorter ranges still pull MIN_SYNC_DAYS to preserve history.

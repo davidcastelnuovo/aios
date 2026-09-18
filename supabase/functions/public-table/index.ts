@@ -78,10 +78,14 @@ function getDateRange(
       return { startDate: fmt(subDays(today, 14)), endDate: fmt(subDays(today, 1)) };
     case "last_30_days":
       return { startDate: fmt(subDays(today, 30)), endDate: fmt(subDays(today, 1)) };
+    case "last_60_days":
+      return { startDate: fmt(subDays(today, 60)), endDate: fmt(subDays(today, 1)) };
     case "last_70_days":
       return { startDate: fmt(subDays(today, 70)), endDate: fmt(subDays(today, 1)) };
     case "last_90_days":
       return { startDate: fmt(subDays(today, 90)), endDate: fmt(subDays(today, 1)) };
+    case "last_120_days":
+      return { startDate: fmt(subDays(today, 120)), endDate: fmt(subDays(today, 1)) };
     case "last_180_days":
       return { startDate: fmt(subDays(today, 180)), endDate: fmt(subDays(today, 1)) };
     case "last_365_days":

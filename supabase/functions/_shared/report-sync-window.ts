@@ -3,8 +3,8 @@
  *
  * Reports read whatever the sync last wrote into `crm_records`, so the sync window —
  * not the date picker — decides how far back a report can actually look. With a
- * 30-day sync window the dashboard's "70 יום אחרונים" preset silently returns the
- * same 30 days as "30 יום אחרונים".
+ * 30-day sync window every longer dashboard preset silently returns the same 30
+ * days as "30 יום אחרונים".
  *
  * Two rules keep the stored history wide enough:
  *  1. every ads sync pulls at least REPORT_MIN_SYNC_DAYS and always ends today,
@@ -16,8 +16,8 @@
  * already protects the Google Analytics / Search Console syncs the same way.
  */
 
-/** Deepest report preset is 90 days (single-table view); dashboards go to 70. */
-export const REPORT_MIN_SYNC_DAYS = 90;
+/** Scheduled syncs retain every rolling report preset through 120 days. */
+export const REPORT_MIN_SYNC_DAYS = 120;
 
 /**
  * Blank or malformed `date` values sort below every real report date, so the prune
