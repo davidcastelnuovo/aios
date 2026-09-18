@@ -326,10 +326,10 @@ export function ClientUpdatesTab({ clientId, clientName, currentMoodStatus }: Cl
       dateFilter === "all" || new Date(createdAt ?? 0) >= cutoff;
 
     const updateEvents = (updates || [])
-      .filter((update: any) => moodFilter === "all"
+      .filter((update) => moodFilter === "all"
         && (updateTypeFilter === "all"
           || (update.update_type ?? "other") === updateTypeFilter))
-      .map((update: any) => ({
+      .map((update) => ({
         kind: "update" as const,
         id: update.id,
         createdAt: update.created_at,
