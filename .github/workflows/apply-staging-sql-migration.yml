@@ -20,6 +20,7 @@ on:
       - '.github/workflows/apply-staging-sql-migration.yml'
       - 'supabase/ops/apply_connect_client_meta_ad_account_skin.sql'
       - 'supabase/ops/apply_carmen_autonomous_goal_engine_staging.sql'
+      - 'supabase/ops/apply_goal_execution_and_autonomous_engine_staging.sql'
 
 jobs:
   apply:
@@ -39,19 +40,22 @@ jobs:
             FILE="${{ github.event.inputs.sql_file }}"
             NAME="${{ github.event.inputs.migration_name }}"
           else
-            if git diff --name-only "${{ github.event.before }}" "${{ github.sha }}" 2>/dev/null | grep -q 'apply_carmen_autonomous_goal_engine_staging.sql'; then
-              FILE="supabase/ops/apply_carmen_autonomous_goal_engine_staging.sql"
-              NAME="apply_carmen_autonomous_goal_engine_staging"
-            else
-              FILE="supabase/ops/apply_connect_client_meta_ad_account_skin.sql"
-              NAME="apply_connect_client_meta_ad_account_skin"
+            CHANGED="$(git diff --name-only "${{ github.event.before }}" "${{ github.sha }}" 2>/dev/null | grep '^supabase/ops/.*staging.*\.sql$' || true)"
+            if [ -z "$CHANGED" ]; then
+              echo "No staging ops SQL changed in this push; skipping."
+              echo "skip=true" >> "$GITHUB_OUTPUT"
+              exit 0
             fi
+            FILE="$(echo "$CHANGED" | head -1)"
+            NAME="$(basename "$FILE" .sql)"
           fi
           test -f "$FILE"
           echo "file=$FILE" >> "$GITHUB_OUTPUT"
           echo "name=$NAME" >> "$GITHUB_OUTPUT"
+          echo "skip=false" >> "$GITHUB_OUTPUT"
 
       - name: Apply via /database/migrations (Staging)
+        if: steps.sql.outputs.skip != 'true'
         run: |
           set -euo pipefail
           python3 - <<'PY'

@@ -102,7 +102,7 @@ export function parseCreateGoalResponse(raw: unknown): CreateExecutionGoalResult
     throw new Error(
       serverError
         ? String(serverError)
-        : "השרת לא החזיר יעד — ייתכן שמיגרציה חסרה על Staging. נסה שוב אחרי merge ל-develop.",
+        : "השרת לא החזיר יעד — נסה לרענן. אם נמשך, עדכן Staging (מיגרציה או edge function).",
     );
   }
   return {
