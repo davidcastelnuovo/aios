@@ -26,8 +26,8 @@ serve(async (req) => {
 
   try {
     const auth = await requireAuth(req);
-    if (!auth.ok) {
-      return json({ error: auth.error }, auth.status);
+    if (!auth) {
+      return json({ error: "Unauthorized" }, 401);
     }
 
     const body = await req.json().catch(() => ({}));
