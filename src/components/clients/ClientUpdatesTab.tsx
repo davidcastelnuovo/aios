@@ -40,6 +40,7 @@ import { withTaskCreatorNames } from "@/lib/taskCreators";
 import { useCurrentTenant } from "@/hooks/useCurrentTenant";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
 import { resolveClientUpdateType } from "@/lib/clientUpdateType";
+import { SeoUpdateModal } from "@/components/clients/SeoUpdateModal";
 
 interface ClientUpdatesTabProps {
   clientId: string;
@@ -73,6 +74,7 @@ export function ClientUpdatesTab({ clientId, clientName, currentMoodStatus }: Cl
   const [editingTask, setEditingTask] = useState<any>(null);
   const [newUpdate, setNewUpdate] = useState("");
   const [newUpdateType, setNewUpdateType] = useState<string>("weekly_update");
+  const [seoUpdateOpen, setSeoUpdateOpen] = useState(false);
   const queryClient = useQueryClient();
   const { tenantId } = useCurrentTenant();
   const { user } = useCurrentUser();
@@ -344,7 +346,13 @@ export function ClientUpdatesTab({ clientId, clientName, currentMoodStatus }: Cl
             </div>
             <div>
               <Label className="text-xs text-muted-foreground mb-1 block">סוג עדכון</Label>
-              <Select value={newUpdateType} onValueChange={setNewUpdateType}>
+              <Select
+                value={newUpdateType}
+                onValueChange={(value) => {
+                  setNewUpdateType(value);
+                  if (value === "seo_update") setSeoUpdateOpen(true);
+                }}
+              >
                 <SelectTrigger className="h-8 text-sm">
                   <SelectValue />
                 </SelectTrigger>
@@ -374,6 +382,10 @@ export function ClientUpdatesTab({ clientId, clientName, currentMoodStatus }: Cl
             />
             <Button
               onClick={() => {
+                if (newUpdateType === "seo_update") {
+                  setSeoUpdateOpen(true);
+                  return;
+                }
                 if (!newUpdate.trim()) return;
                 saveCommMutation.mutate(commStatus);
                 addUpdateMutation.mutate({ content: newUpdate.trim(), updateType: newUpdateType });
@@ -614,6 +626,15 @@ export function ClientUpdatesTab({ clientId, clientName, currentMoodStatus }: Cl
           onOpenChange={(open) => !open && setEditingTask(null)}
         />
       )}
+      <SeoUpdateModal
+        clientId={clientId}
+        clientName={clientName}
+        open={seoUpdateOpen}
+        onOpenChange={(open) => {
+          setSeoUpdateOpen(open);
+          if (!open) setNewUpdateType("weekly_update");
+        }}
+      />
     </div>
   );
 }

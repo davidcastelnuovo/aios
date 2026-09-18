@@ -24,6 +24,7 @@ export function GoalsPanel({ tenantId }: { tenantId: string | null }) {
   const qc = useQueryClient();
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [newTitle, setNewTitle] = useState("");
+  const [newBrief, setNewBrief] = useState("");
   const [autonomous, setAutonomous] = useState(true);
   const [busy, setBusy] = useState(false);
 
@@ -62,6 +63,8 @@ export function GoalsPanel({ tenantId }: { tenantId: string | null }) {
       try {
         result = await createExecutionGoal(session.access_token, tenantId, {
           title: newTitle.trim(),
+          description: newBrief.trim() || undefined,
+          objective: newBrief.trim() || undefined,
           autonomous,
         });
       } catch (firstErr: unknown) {
@@ -69,6 +72,8 @@ export function GoalsPanel({ tenantId }: { tenantId: string | null }) {
         if (!autonomous || !schemaHint(msg)) throw firstErr;
         result = await createExecutionGoal(session.access_token, tenantId, {
           title: newTitle.trim(),
+          description: newBrief.trim() || undefined,
+          objective: newBrief.trim() || undefined,
           autonomous: false,
         });
         result.autonomous_deferred = true;
@@ -82,10 +87,22 @@ export function GoalsPanel({ tenantId }: { tenantId: string | null }) {
         });
       } else if (result.possible_duplicates?.length) {
         toast({ title: "נוצר — ייתכן שיש יעד דומה", description: "בדקי כפילויות לפני פתיחת משימות נוספות." });
+      } else if (result.kick?.error) {
+        toast({
+          title: autonomous ? "יעד אוטונומי נוצר" : "יעד נוצר",
+          description: `התחלת עבודה נכשלה: ${result.kick.error}`,
+          variant: "destructive",
+        });
+      } else if (result.kick?.status === "AWAITING_BRAIN") {
+        toast({
+          title: "יעד אוטונומי נוצר — כרמן מתכננת",
+          description: "הנחיה נשלחה ל-Cursor Direct. סטטוס יתעדכן תוך דקה.",
+        });
       } else {
-        toast({ title: autonomous ? "יעד אוטונומי נוצר" : "יעד נוצר" });
+        toast({ title: autonomous ? "יעד אוטונומי נוצר — עבודה התחילה" : "יעד נוצר" });
       }
       setNewTitle("");
+      setNewBrief("");
       setSelectedId(result.goal.id);
       await qc.invalidateQueries({ queryKey: ["execution-goals", tenantId] });
     } catch (e: unknown) {
@@ -93,7 +110,7 @@ export function GoalsPanel({ tenantId }: { tenantId: string | null }) {
     } finally {
       setBusy(false);
     }
-  }, [autonomous, newTitle, qc, tenantId, toast]);
+  }, [autonomous, newBrief, newTitle, qc, tenantId, toast]);
 
   const triggerIteration = useCallback(async (goalId: string) => {
     if (!tenantId) return;
@@ -130,6 +147,7 @@ export function GoalsPanel({ tenantId }: { tenantId: string | null }) {
       )}
 
       <div className="mb-3 space-y-2">
+        <p className="text-[10px] font-semibold text-[var(--cc-accent)]">יעד חדש</p>
         <div className="flex gap-2">
           <input
             type="text"
@@ -137,15 +155,9 @@ export function GoalsPanel({ tenantId }: { tenantId: string | null }) {
             autoComplete="off"
             value={newTitle}
             onChange={(e) => setNewTitle(e.target.value)}
-            placeholder="יעד חדש…"
+            placeholder="שם קצר ליעד…"
             className="cc-form-input flex-1 text-sm"
             disabled={busy || !tenantId}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") {
-                e.preventDefault();
-                void createGoal();
-              }
-            }}
           />
           <button type="button" onClick={() => void createGoal()} disabled={busy || !newTitle.trim()}
             className="flex items-center gap-1 rounded border border-[var(--cc-accent)] px-2 py-1 text-xs text-[var(--cc-accent)] disabled:opacity-40">
@@ -153,6 +165,14 @@ export function GoalsPanel({ tenantId }: { tenantId: string | null }) {
             צור
           </button>
         </div>
+        <textarea
+          dir="rtl"
+          value={newBrief}
+          onChange={(e) => setNewBrief(e.target.value)}
+          placeholder="מה לבצע? הנחיה לכרמן (זה נכנס ליעד ומתחיל עבודה)…"
+          className="cc-form-textarea cc-form-input min-h-[72px] text-sm"
+          disabled={busy || !tenantId}
+        />
         <label className="flex cursor-pointer items-center gap-2 text-xs text-[var(--cc-text-dim)]">
           <input type="checkbox" checked={autonomous} onChange={(e) => setAutonomous(e.target.checked)} className="rounded" />
           <Bot className="h-3.5 w-3.5 text-[var(--cc-accent)]" />
@@ -185,6 +205,7 @@ export function GoalsPanel({ tenantId }: { tenantId: string | null }) {
           {selectedId && detailLoading && <Loader2 className="h-4 w-4 animate-spin" />}
           {detail?.goal && (
             <GoalDetailView
+              key={selectedId}
               goal={detail.goal as ExecutionGoal}
               detail={detail}
               tenantId={tenantId}
@@ -195,9 +216,17 @@ export function GoalsPanel({ tenantId }: { tenantId: string | null }) {
                 try {
                   const { data: { session } } = await supabase.auth.getSession();
                   if (!session) throw new Error("לא מחובר");
-                  await sendGoalManualGuidance(session.access_token, tenantId, selectedId, guidance);
+                  const result = await sendGoalManualGuidance(session.access_token, tenantId, selectedId, guidance);
                   await qc.invalidateQueries({ queryKey: ["execution-goal-detail", tenantId, selectedId] });
-                  toast({ title: "הנחיה נשלחה ל-Cursor Direct" });
+                  await qc.invalidateQueries({ queryKey: ["execution-goals", tenantId] });
+                  if (result.dispatched) {
+                    toast({ title: "הנחיה נשלחה ל-Cursor Direct", description: "כרמן ממשיכה על היעד הזה." });
+                  } else if (result.awaiting) {
+                    toast({ title: "ממתין ל-Cursor Direct", description: "יש כבר בקשה פתוחה ליעד הזה." });
+                  } else {
+                    const msg = (result as { message?: string }).message || result.reason || "לא נשלח";
+                    toast({ title: "ההנחיה לא נשלחה", description: msg, variant: "destructive" });
+                  }
                 } catch (e: unknown) {
                   toast({ title: "שגיאה", description: e instanceof Error ? e.message : String(e), variant: "destructive" });
                 } finally {
@@ -243,6 +272,21 @@ function GoalDetailView({
     status: string;
     cursor_session_url?: string | null;
   }>;
+  const recentEvents = (
+    (detail.events as Array<{ event_type: string; created_at: string; detail?: Record<string, unknown> }>) ||
+    (detail.changes_since as Array<{ event_type: string; created_at: string; detail?: Record<string, unknown> }>) ||
+    []
+  ).slice(0, 6);
+
+  const eventLabel = (type: string) => {
+    const labels: Record<string, string> = {
+      autonomous_goal_created: "יעד אוטונומי נוצר",
+      manual_guidance: "הנחיה ידנית",
+      manual_guidance_applied: "הנחיה יושמה",
+      created: "יעד נוצר",
+    };
+    return labels[type] || type;
+  };
 
   return (
     <div className="space-y-3">
@@ -281,15 +325,15 @@ function GoalDetailView({
               הרץ איטרציה עכשיו
             </button>
             <div className="rounded border border-[var(--cc-line)] p-2">
-              <p className="mb-1 text-[10px] font-semibold text-[var(--cc-accent)]">הכנסת יד / הנחיה ידנית</p>
+              <p className="mb-1 text-[10px] font-semibold text-[var(--cc-accent)]">עדכון ליעד הזה בלבד</p>
               <p className="mb-2 text-[10px] text-[var(--cc-text-dim)]">
-                נשלח ל-Cursor Direct (מוח המנהל) — לא דרך API.
+                הנחיה נוספת לכרמן על <strong>{goal.title}</strong> — לא משותף ליעדים אחרים.
               </p>
               <textarea
                 dir="rtl"
                 value={guidance}
                 onChange={(e) => setGuidance(e.target.value)}
-                placeholder="מה לשנות / לקדם / לעצור…"
+                placeholder="שינוי כיוון / עדכון / מה לעצור…"
                 className="cc-form-textarea cc-form-input text-[11px]"
                 disabled={busy}
               />
@@ -346,6 +390,20 @@ function GoalDetailView({
           )}
         </section>
       ) : null}
+
+      {recentEvents.length > 0 && (
+        <section>
+          <p className="font-semibold">פעילות אחרונה (יעד זה)</p>
+          <ul className="mt-1 space-y-1">
+            {recentEvents.map((ev, i) => (
+              <li key={`${ev.event_type}-${ev.created_at}-${i}`} className="text-[var(--cc-text-dim)]">
+                • {eventLabel(ev.event_type)}
+                <span className="opacity-70"> · {new Date(ev.created_at).toLocaleString("he-IL")}</span>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
 
       {engine?.recent_iterations?.length ? (
         <section>

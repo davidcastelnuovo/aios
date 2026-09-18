@@ -83,7 +83,7 @@ serve(async (req) => {
         ownerUserId: userId,
         actorUserId: userId,
         autonomous,
-        objective: body.objective,
+        objective: body.objective || body.description,
         constraints: body.constraints,
         scope: body.scope,
         riskLevel: body.risk_level,
@@ -101,12 +101,25 @@ serve(async (req) => {
           }
         }
       }
+
+      let kick: { status?: string; summary?: string; error?: string } | undefined;
+      if (autonomous && goal.autonomous_mode && !autonomous_deferred) {
+        try {
+          const holder = userId ? `user:${userId}` : "create";
+          const outcome = await runGoalIteration(supabase, tenantId, goal.id, holder);
+          kick = { status: outcome.status, summary: outcome.summary };
+        } catch (kickErr: unknown) {
+          kick = { error: kickErr instanceof Error ? kickErr.message : String(kickErr) };
+        }
+      }
+
       return json({
         goal,
         criteria,
         possible_duplicates: duplicates.slice(0, 5),
         autonomous_deferred,
         notice,
+        kick,
       });
     }
 
@@ -209,12 +222,19 @@ serve(async (req) => {
         prompt: buildManualGuidanceBrainPrompt({ guidance, ctx }),
       });
 
+      const reasonMessages: Record<string, string> = {
+        no_cursor_direct_session: "לא נמצא Cursor Direct לטננט — חבר בפרופיל / MCP לפני הנחיה.",
+        inflight: "כבר יש הנחיה בתהליך ליעד הזה — המתן לתשובה.",
+        cursor_busy: "Cursor Direct עסוק — נסה שוב בעוד דקה.",
+      };
+
       return json({
         ok: true,
         dispatched: queued.dispatched,
         awaiting: queued.awaiting,
         request_id: queued.requestId,
         reason: queued.reason,
+        message: queued.reason ? reasonMessages[queued.reason] || queued.reason : undefined,
       });
     }
 
