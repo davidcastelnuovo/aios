@@ -287,7 +287,7 @@ export default function EditTaskDialog({ task, open, onOpenChange }: EditTaskDia
 
       const { data, error } = await supabase
         .from("tasks")
-        .update(updateData)
+        .update(updateData as any)
         .eq("id", task.id)
         .select();
         

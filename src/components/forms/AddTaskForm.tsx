@@ -483,7 +483,7 @@ export default function AddTaskForm({ clientId, leadId, agencyId, defaultCampaig
 
       const { data: created, error } = await supabase
         .from("tasks")
-        .insert([taskPayload])
+        .insert([taskPayload as any])
         .select("id")
         .single();
       if (error) throw error;

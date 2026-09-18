@@ -367,7 +367,7 @@ export function TaskDetailDialog({
       }
       const { error } = await supabase
         .from("tasks")
-        .update(updatePayload)
+        .update(updatePayload as any)
         .eq("id", task!.id);
       if (error) throw error;
 
