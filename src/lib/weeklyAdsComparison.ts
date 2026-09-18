@@ -81,6 +81,18 @@ function parseDate(value: unknown): Date | null {
   return Number.isNaN(date.getTime()) ? null : date;
 }
 
+function dateInTimeZone(date: Date, timeZone: string): Date {
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(date);
+  const value = (type: Intl.DateTimeFormatPartTypes) =>
+    Number(parts.find((part) => part.type === type)?.value);
+  return new Date(Date.UTC(value("year"), value("month") - 1, value("day")));
+}
+
 export function getSundayStart(date: Date): Date {
   const day = new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()));
   day.setUTCDate(day.getUTCDate() - day.getUTCDay());
@@ -113,7 +125,9 @@ export function buildWeeklyCampaignSections(
 ): WeeklyCampaignSection[] {
   const now = options.now ?? new Date();
   const maxWeeks = options.maxWeeks ?? 53;
-  const currentSunday = getSundayStart(now);
+  // Match crm-records' APP_TIME_ZONE so Saturday night in Israel does not remain
+  // attached to the previous week merely because it is still Saturday in UTC.
+  const currentSunday = getSundayStart(dateInTimeZone(now, "Asia/Jerusalem"));
   const sourceModes = options.sourceModes ?? {};
   const weeks = new Map<number, Map<string, {
     source: WeeklyAdsSource;

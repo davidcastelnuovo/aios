@@ -101,3 +101,14 @@ test("week and heading formatting are timezone-independent", () => {
   assert.equal(getSundayStart(new Date("2026-09-18T23:59:00Z")).toISOString(), "2026-09-13T00:00:00.000Z");
   assert.equal(formatWeeklyRange("2026-09-13", "2026-09-19"), "13/09/2026–19/09/2026");
 });
+
+test("the current week rolls over at Sunday midnight in Jerusalem", () => {
+  const sections = buildWeeklyCampaignSections([
+    record("2026-09-20", "new-week", 100, 5),
+    record("2026-09-19", "previous-week", 100, 5),
+  ], { now: new Date("2026-09-19T21:30:00Z") });
+
+  assert.equal(sections[0].startDate, "2026-09-20");
+  assert.equal(sections[0].rows[0].campaign, "new-week");
+  assert.equal(sections[1].startDate, "2026-09-13");
+});
