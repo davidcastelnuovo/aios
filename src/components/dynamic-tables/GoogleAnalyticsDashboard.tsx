@@ -229,6 +229,8 @@ export function GoogleAnalyticsDashboard({
         return { start: subDays(today, 14), end: yesterday };
       case 'last_30_days':
         return { start: subDays(today, 30), end: yesterday };
+      case 'last_70_days':
+        return { start: subDays(today, 70), end: yesterday };
       case 'this_month':
         return { start: startOfMonth(today), end: today };
       case 'last_month': {

@@ -177,6 +177,7 @@ export default function DynamicTableView({ embedTableSlug, embedMode, summaryOnl
     { value: "last_7_days", label: "7 ימים אחרונים" },
     { value: "last_14_days", label: "14 יום" },
     { value: "last_30_days", label: "30 יום" },
+    { value: "last_70_days", label: "70 יום" },
     { value: "this_month", label: "החודש" },
     { value: "last_month", label: "חודש שעבר" },
     { value: "last_90_days", label: "3 חודשים" },
