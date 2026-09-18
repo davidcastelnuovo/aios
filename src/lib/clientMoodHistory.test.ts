@@ -10,6 +10,25 @@ test("normalizes legacy communication statuses to client mood statuses", () => {
   assert.equal(normalizeClientMoodStatus("unknown"), null);
 });
 
+test("keeps a transition whose log has no timestamp", () => {
+  const changes = getClientMoodChanges([
+    { id: "1", status: "happy", created_at: null },
+    { id: "2", status: "churn_risk", created_at: "2026-09-02T10:00:00Z" },
+  ]);
+
+  assert.deepEqual(
+    changes.map(({ id, moodStatus, previousMoodStatus }) => ({
+      id,
+      moodStatus,
+      previousMoodStatus,
+    })),
+    [
+      { id: "2", moodStatus: "churn_risk", previousMoodStatus: "happy" },
+      { id: "1", moodStatus: "happy", previousMoodStatus: null },
+    ],
+  );
+});
+
 test("returns only real mood transitions in newest-first order", () => {
   const changes = getClientMoodChanges([
     { id: "3", status: "wavering", created_at: "2026-09-03T10:00:00Z" },

@@ -532,7 +532,7 @@ export function ClientUpdatesTab({ clientId, clientName, currentMoodStatus }: Cl
             <h3 className="font-semibold">היסטוריית עדכונים</h3>
             <Badge variant="secondary" className="text-xs">{historyEvents.length}</Badge>
           </div>
-          <div className="space-y-2 max-h-[200px] overflow-y-auto">
+          <div className="space-y-2 max-h-[320px] overflow-y-auto">
             {historyEvents.length === 0 ? (
               <Card className="border-dashed">
                 <CardContent className="p-4 text-center text-sm text-muted-foreground">
@@ -547,6 +547,7 @@ export function ClientUpdatesTab({ clientId, clientName, currentMoodStatus }: Cl
                 const previousOption = MOOD_STATUS_OPTIONS.find(
                   (option) => option.value === event.change.previousMoodStatus,
                 );
+                const changedAt = event.createdAt ? new Date(event.createdAt) : null;
                 return (
                   <Card key={event.id} className={currentOption?.bg}>
                     <CardContent className="p-3">
@@ -562,10 +563,12 @@ export function ClientUpdatesTab({ clientId, clientName, currentMoodStatus }: Cl
                       {event.change.note && (
                         <p className="text-sm whitespace-pre-wrap mt-1">{event.change.note}</p>
                       )}
-                      <div className="flex items-center gap-2 text-xs text-muted-foreground mt-2">
-                        <Calendar className="h-3 w-3 shrink-0" />
-                        <span>{format(new Date(event.createdAt!), "d/M/yy HH:mm", { locale: he })}</span>
-                      </div>
+                      {changedAt && !Number.isNaN(changedAt.getTime()) && (
+                        <div className="flex items-center gap-2 text-xs text-muted-foreground mt-2">
+                          <Calendar className="h-3 w-3 shrink-0" />
+                          <span>{format(changedAt, "d/M/yy HH:mm", { locale: he })}</span>
+                        </div>
+                      )}
                     </CardContent>
                   </Card>
                 );
