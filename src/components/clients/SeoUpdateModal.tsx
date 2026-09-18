@@ -13,7 +13,7 @@
  *   />
  */
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useMutation, useQueryClient, useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
@@ -35,6 +35,7 @@ import { Loader2, TrendingUp, TrendingDown, Minus, History } from "lucide-react"
 import { format, startOfMonth, subMonths } from "date-fns";
 import { he } from "date-fns/locale";
 import { SEO_STATUS_COLORS, SEO_STATUS_LABELS } from "@/lib/healthScore";
+import { parseSeoMonthlyWork, sanitizeSeoMonthlyWork } from "@/lib/seoMonthlyWork";
 
 interface SeoUpdateModalProps {
   clientId: string;
@@ -76,7 +77,7 @@ export function SeoUpdateModal({
       if (!clientId) return [];
       const { data, error } = await (supabase as any)
         .from("seo_monthly_updates")
-        .select("id, month, status, notes, created_at, tenant_id")
+        .select("id, month, status, notes, work, created_at, tenant_id")
         .eq("client_id", clientId)
         .order("month", { ascending: false })
         .limit(6);
@@ -86,13 +87,30 @@ export function SeoUpdateModal({
     enabled: !!clientId && open,
   });
 
+  useEffect(() => {
+    if (!open) return;
+    const existing = (seoHistory as Array<{ month?: string; status?: string; notes?: string | null; work?: unknown }>).find(
+      (entry) => String(entry.month || "").slice(0, 10) === selectedMonth,
+    );
+    if (!existing) {
+      setStatus("stable");
+      setNotes("");
+      return;
+    }
+    setStatus(
+      existing.status === "up" || existing.status === "down" ? existing.status : "stable",
+    );
+    const savedWork = parseSeoMonthlyWork(existing.work);
+    setNotes(savedWork.summary || existing.notes || "");
+  }, [open, selectedMonth, seoHistory]);
+
   const mutation = useMutation({
     mutationFn: async () => {
       if (!user?.id) throw new Error("Missing user");
 
       // Keep the row on the client's home / existing tenant so shared-agency
       // viewers don't fork a second empty history under their session tenant.
-      const existing = (seoHistory as Array<{ month?: string; tenant_id?: string }>).find(
+      const existing = (seoHistory as Array<{ month?: string; tenant_id?: string; work?: unknown }>).find(
         (r) => String(r.month || "").slice(0, 10) === selectedMonth,
       );
       let saveTenantId = existing?.tenant_id || tenantId || "";
@@ -105,6 +123,11 @@ export function SeoUpdateModal({
         saveTenantId = clientRow?.tenant_id || saveTenantId;
       }
       if (!saveTenantId) throw new Error("Missing tenant");
+      const existingWork = parseSeoMonthlyWork(existing?.work);
+      const nextWork = sanitizeSeoMonthlyWork({
+        ...existingWork,
+        summary: notes,
+      });
 
       const { error } = await (supabase as any)
         .from("seo_monthly_updates")
@@ -114,7 +137,8 @@ export function SeoUpdateModal({
             tenant_id: saveTenantId,
             month: selectedMonth,
             status,
-            notes: notes.trim() || null,
+            notes: nextWork.summary || null,
+            work: nextWork,
             updated_by: user.id,
           },
           { onConflict: "client_id,month" }
@@ -124,9 +148,12 @@ export function SeoUpdateModal({
     onSuccess: () => {
       toast.success("עדכון SEO נשמר בהצלחה");
       queryClient.invalidateQueries({ queryKey: ["seo-monthly-history", clientId] });
+      queryClient.invalidateQueries({ queryKey: ["seo-history", clientId] });
       queryClient.invalidateQueries({ queryKey: ["seo-monthly-work", clientId] });
       queryClient.invalidateQueries({ queryKey: ["seo-monthly-latest"] });
       queryClient.invalidateQueries({ queryKey: ["seo-monthly-single", clientId] });
+      queryClient.invalidateQueries({ queryKey: ["seo-monthly-months", clientId] });
+      queryClient.invalidateQueries({ queryKey: ["client-updates", clientId] });
       queryClient.invalidateQueries({ queryKey: ["dmm-clients", tenantId] });
       setNotes("");
       onOpenChange(false);
@@ -204,11 +231,11 @@ export function SeoUpdateModal({
 
           {/* Notes */}
           <div className="space-y-2">
-            <Label className="text-sm font-medium">הערות (אופציונלי)</Label>
+            <Label className="text-sm font-medium">סיכום חודשי</Label>
             <Textarea
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
-              placeholder="פרט שינויים, מילות מפתח שעלו/ירדו, פעולות שבוצעו..."
+              placeholder="הסיכום שיופיע בדוח החודשי..."
               rows={3}
               className="resize-none"
             />

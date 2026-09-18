@@ -3,7 +3,7 @@ import { useLocation, useNavigate, useParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { Download, Loader2, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { SeoMonthlySlideshow, SeoMonthlySlideshowCaptureStack } from "@/components/seo/SeoMonthlySlideshow";
+import { SeoMonthlyLandingPage, SeoMonthlyLandingPageCapture } from "@/components/seo/SeoMonthlyLandingPage";
 import { isSeoMonthlyShareSnapshot, SeoMonthlyShareSnapshot } from "@/lib/seoMonthlyShareSnapshot";
 import { downloadSeoMonthlySlideshowPdf } from "@/lib/seoMonthlyPdf";
 import { toast } from "sonner";
@@ -93,10 +93,10 @@ export default function SharedSeoMonthly() {
   if (isLoading) {
     return (
       <div
-        className="flex min-h-screen items-center justify-center bg-[#071820] text-[#F4F0E6]"
+        className="flex min-h-screen items-center justify-center bg-[#f6f8f5] text-[#172a32]"
         dir="rtl"
       >
-        <Loader2 className="h-6 w-6 animate-spin text-[#2DA89E]" />
+        <Loader2 className="h-6 w-6 animate-spin text-[#0f766e]" />
       </div>
     );
   }
@@ -104,11 +104,11 @@ export default function SharedSeoMonthly() {
   if (error || !snapshot) {
     return (
       <div
-        className="flex min-h-screen flex-col items-center justify-center gap-3 bg-[#071820] px-6 text-center text-[#F4F0E6]"
+        className="flex min-h-screen flex-col items-center justify-center gap-3 bg-[#f6f8f5] px-6 text-center text-[#172a32]"
         dir="rtl"
       >
         <p className="text-xl font-semibold">הקישור לא נמצא או פג תוקף</p>
-        <p className="text-sm text-[#F4F0E6]/60">בקשו מהסוכנות קישור שיתוף מעודכן לדוח SEO.</p>
+        <p className="text-sm text-slate-500">בקשו מהסוכנות קישור שיתוף מעודכן לדוח SEO.</p>
         {canCloseToApp && (
           <Button variant="secondary" className="mt-2" onClick={handleClose}>
             חזרה לדשבורד
@@ -119,14 +119,14 @@ export default function SharedSeoMonthly() {
   }
 
   return (
-    <div className="relative flex h-[100dvh] flex-col bg-[#071820]" dir="rtl">
-      <div className="absolute inset-x-0 top-0 z-30 flex items-center justify-between gap-2 p-4">
+    <div className="relative min-h-[100dvh] bg-[#f6f8f5]" dir="rtl">
+      <div className="fixed inset-x-0 bottom-0 z-30 flex items-center justify-between gap-2 p-4">
         <div className="flex gap-2">
           {canCloseToApp && (
             <Button
               size="sm"
               variant="secondary"
-              className="gap-1.5 bg-white/10 text-[#F4F0E6] hover:bg-white/20"
+              className="gap-1.5 border border-slate-200 bg-white text-[#172a32] shadow-sm hover:bg-slate-50"
               onClick={handleClose}
             >
               <X className="h-3.5 w-3.5" />
@@ -136,7 +136,7 @@ export default function SharedSeoMonthly() {
         </div>
         <div className="flex gap-2">
           {isFetching && (
-            <span className="inline-flex items-center gap-1.5 self-center text-[11px] text-[#F4F0E6]/55">
+            <span className="inline-flex items-center gap-1.5 self-center text-[11px] text-slate-500">
               <Loader2 className="h-3 w-3 animate-spin" />
               מעדכן…
             </span>
@@ -144,7 +144,7 @@ export default function SharedSeoMonthly() {
           <Button
             size="sm"
             variant="secondary"
-            className="gap-1.5 bg-white/10 text-[#F4F0E6] hover:bg-white/20"
+            className="gap-1.5 border border-slate-200 bg-white text-[#172a32] shadow-sm hover:bg-slate-50"
             disabled={exporting}
             onClick={onExportPdf}
           >
@@ -153,11 +153,9 @@ export default function SharedSeoMonthly() {
           </Button>
         </div>
       </div>
-      <div className="min-h-0 flex-1">
-        <SeoMonthlySlideshow key={snapshot.generatedAt} snapshot={snapshot} className="h-full" />
-      </div>
+      <SeoMonthlyLandingPage key={snapshot.generatedAt} snapshot={snapshot} />
       {/* Always mounted for PDF capture */}
-      <SeoMonthlySlideshowCaptureStack snapshot={snapshot} stackRef={stackRef} />
+      <SeoMonthlyLandingPageCapture snapshot={snapshot} reportRef={stackRef} />
     </div>
   );
 }
