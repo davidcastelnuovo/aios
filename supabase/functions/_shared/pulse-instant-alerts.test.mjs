@@ -3,6 +3,7 @@ import test from "node:test";
 
 import {
   DEFAULT_PULSE_ALERT_RULES,
+  confirmPulseExceptionCandidate,
   evaluatePulseInstantAlerts,
   parsePulseAlertRules,
 } from "./pulse-instant-alerts.ts";
@@ -94,4 +95,22 @@ test("target-aware campaign rows suppress the legacy raw CPL-spike alert", () =>
   );
   assert.equal(rows.some((row) => row.rule_type === "cpl_spike"), false);
   assert.equal(rows.some((row) => row.rule_type === "campaign_exception"), false);
+});
+
+test("automatic AI verification may veto a filtered exception", () => {
+  const candidate = {
+    client_id: "c1",
+    client_name: "Acme",
+    rule_type: "campaign_exception",
+    message: "evidence",
+    evidence: { target_value: 30 },
+  };
+  assert.equal(confirmPulseExceptionCandidate(candidate, { confirmed: false }), null);
+  const confirmed = confirmPulseExceptionCandidate(candidate, {
+    confirmed: true,
+    summary: "החריגה מאומתת",
+    recommended_check: "בדיקת אירוע ההמרה",
+  });
+  assert.match(confirmed.message, /אימות AI/);
+  assert.equal(confirmed.evidence.ai_confirmation.confirmed, true);
 });

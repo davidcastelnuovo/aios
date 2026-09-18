@@ -34,6 +34,7 @@ import {
   buildPulseCampaignRows,
   classifyPulseCampaignGoal,
 } from '../_shared/pulse-campaign-goals.mjs'
+import { aiChatJSON } from '../_shared/ai.ts'
 import { loadPulseSettings } from '../_shared/pulse-settings.mjs'
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!
@@ -642,7 +643,7 @@ Deno.serve(async (req) => {
     }
     const { data: tenantRow } = await supabase.from('tenants').select('slug').eq('id', tenantId).maybeSingle()
     const tenantSlug = tenantRow?.slug || tenantId
-    let instantAlerts = { sent: 0, skipped: 0, candidates: 0 }
+    let instantAlerts = { sent: 0, skipped: 0, candidates: 0, analyzed: 0 }
     if (snapshots.length) {
       try {
         instantAlerts = await deliverInstantPulseAlerts({
@@ -655,6 +656,22 @@ Deno.serve(async (req) => {
           rules: setting.pulse_alert_rules,
           queueWhatsApp: (message, chatId) =>
             queuePulseWhatsApp(supabase, tenantId, tenantSlug, message, chatId),
+          analyzeException: async (candidate) => {
+            const evidence = JSON.stringify(candidate.evidence || {})
+            return await aiChatJSON<{
+              confirmed: boolean
+              summary?: string | null
+              recommended_check?: string | null
+            }>([
+              'את מאמתת מועמד חריגה שכבר סונן דטרמיניסטית. אל תבצעי ניתוח מתקדם ואל תמציאי נתונים.',
+              'אשרי רק אם הראיות מראות חריגה מתמשכת מיעד מאושר או הוצאה ללא תוצאות.',
+              'החזירי JSON בלבד: {"confirmed":boolean,"summary":"משפט קצר","recommended_check":"בדיקה אחת"}.',
+              `לקוח: ${candidate.client_name}`,
+              `קמפיין: ${candidate.campaign_key || 'לא ידוע'}`,
+              `סיבה: ${candidate.message}`,
+              `ראיות: ${evidence}`,
+            ].join('\n'))
+          },
         })
       } catch (instantAlertError) {
         console.warn('[campaign-pulse] instant alerts failed', tenantId, instantAlertError)
@@ -765,7 +782,7 @@ Deno.serve(async (req) => {
       actions_taken: [{
         type: 'deterministic_campaign_pulse',
         sent,
-        ai_used: false,
+        ai_used: instantAlerts.analyzed > 0,
         external_api_calls: metaActivityCalls,
         dashboard_url: dashboardUrl,
         clients_checked: snapshots.length,
@@ -785,7 +802,7 @@ Deno.serve(async (req) => {
       delivery_channel: 'carmen_direct',
       delivery_requested: deliveryRequested,
       skipped_duplicate_delivery: deliveryRequested && setting.campaign_pulse_enabled && !manualDeliveryBypass && !deliveryClaimed,
-      ai_used: false,
+      ai_used: instantAlerts.analyzed > 0,
       external_api_calls: metaActivityCalls,
     })
   }

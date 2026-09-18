@@ -78,6 +78,29 @@ type QueueWhatsApp = (
   chatId: string | null,
 ) => Promise<boolean>
 
+type AnalyzeException = (
+  candidate: PulseInstantAlertCandidate,
+) => Promise<{ confirmed: boolean; summary?: string | null; recommended_check?: string | null } | null>
+
+export function confirmPulseExceptionCandidate(
+  candidate: PulseInstantAlertCandidate,
+  analysis: { confirmed: boolean; summary?: string | null; recommended_check?: string | null } | null,
+): PulseInstantAlertCandidate | null {
+  if (!analysis?.confirmed) return null
+  return {
+    ...candidate,
+    message: [
+      candidate.message,
+      analysis.summary ? `\nאימות AI: ${analysis.summary}` : '',
+      analysis.recommended_check ? `בדיקה מומלצת: ${analysis.recommended_check}` : '',
+    ].filter(Boolean).join('\n'),
+    evidence: {
+      ...(candidate.evidence || {}),
+      ai_confirmation: analysis,
+    },
+  }
+}
+
 const RULE_THROTTLE_HOURS: Record<PulseAlertRuleType, number> = {
   no_contact: 7 * 24,
   cpl_spike: 7 * 24,
@@ -358,16 +381,18 @@ export async function deliverInstantPulseAlerts(input: {
   criticalIssues: CriticalIssueLike[]
   rules: unknown
   queueWhatsApp: QueueWhatsApp
-}): Promise<{ sent: number; skipped: number; candidates: number }> {
+  analyzeException?: AnalyzeException
+}): Promise<{ sent: number; skipped: number; candidates: number; analyzed: number }> {
   const candidates = evaluatePulseInstantAlerts(
     input.snapshots,
     input.criticalIssues,
     input.rules,
   )
-  if (!candidates.length) return { sent: 0, skipped: 0, candidates: 0 }
+  if (!candidates.length) return { sent: 0, skipped: 0, candidates: 0, analyzed: 0 }
 
   let sent = 0
   let skipped = 0
+  let analyzed = 0
 
   for (const candidate of candidates) {
     const throttleHours = RULE_THROTTLE_HOURS[candidate.rule_type]
@@ -386,6 +411,24 @@ export async function deliverInstantPulseAlerts(input: {
     if (previousDelivery && sameFinding && !materiallyWorse) {
       skipped += 1
       continue
+    }
+
+    if (candidate.rule_type === 'campaign_exception') {
+      // AI is never used during collection or trend calculation. It receives
+      // only a deterministic exception candidate and may veto the notification.
+      if (!input.analyzeException) {
+        skipped += 1
+        continue
+      }
+      const analysis = await input.analyzeException(candidate)
+      analyzed += 1
+      const confirmed = confirmPulseExceptionCandidate(candidate, analysis)
+      if (!confirmed) {
+        skipped += 1
+        continue
+      }
+      candidate.message = confirmed.message
+      candidate.evidence = confirmed.evidence
     }
 
     const recipients = await resolveInstantAlertRecipients(
@@ -424,5 +467,5 @@ export async function deliverInstantPulseAlerts(input: {
     }
   }
 
-  return { sent, skipped, candidates: candidates.length }
+  return { sent, skipped, candidates: candidates.length, analyzed }
 }
