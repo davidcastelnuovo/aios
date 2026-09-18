@@ -177,11 +177,14 @@ export default function DynamicTableView({ embedTableSlug, embedMode, summaryOnl
     { value: "last_7_days", label: "7 ימים אחרונים" },
     { value: "last_14_days", label: "14 יום" },
     { value: "last_30_days", label: "30 יום" },
-    { value: "this_month", label: "החודש" },
-    { value: "last_month", label: "חודש שעבר" },
-    { value: "last_90_days", label: "3 חודשים" },
+    { value: "last_60_days", label: "60 יום" },
+    { value: "last_70_days", label: "70 יום" },
+    { value: "last_90_days", label: "90 יום" },
+    { value: "last_120_days", label: "120 יום" },
     { value: "last_180_days", label: "6 חודשים" },
     { value: "last_365_days", label: "שנה" },
+    { value: "this_month", label: "החודש" },
+    { value: "last_month", label: "חודש שעבר" },
     { value: "custom", label: "תאריכים מותאמים..." },
   ];
 
@@ -199,14 +202,14 @@ export default function DynamicTableView({ embedTableSlug, embedMode, summaryOnl
   const isDateRangeReadyForSync = dateFilter !== 'custom' || (!!customDateRange.from && !!customDateRange.to);
 
   const getMainFilterSyncRange = () => {
-    // Sync ALWAYS ends today and ALWAYS pulls at least the last 90 days,
+    // Sync ALWAYS ends today and ALWAYS pulls at least the last 120 days,
     // regardless of the display filter. This prevents the sync from wiping
     // historical data when the user is viewing a short window like "7 days".
     // The view layer continues to filter the visible window separately.
     // For longer display windows we still extend the sync range accordingly.
     const today = new Date();
     const endDate = format(today, 'yyyy-MM-dd');
-    const MIN_SYNC_DAYS = 90;
+    const MIN_SYNC_DAYS = 120;
 
     const rangeFromDays = (days: number) => ({
       startDate: format(subDays(today, Math.max(days, MIN_SYNC_DAYS)), 'yyyy-MM-dd'),
@@ -223,9 +226,11 @@ export default function DynamicTableView({ embedTableSlug, embedMode, summaryOnl
       case 'last_7_days':
       case 'last_14_days':
       case 'last_30_days':
+      case 'last_60_days':
       case 'this_month':
       case 'last_month':
       case 'last_90_days':
+      case 'last_120_days':
         return rangeFromDays(MIN_SYNC_DAYS);
       case 'last_180_days':
         return rangeFromDays(180);

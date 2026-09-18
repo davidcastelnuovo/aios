@@ -25,7 +25,11 @@ export const COMBINED_DASHBOARD_DATE_FILTERS: DateFilterOption[] = [
   { value: "last_7_days", label: "7 ימים אחרונים" },
   { value: "last_14_days", label: "14 יום אחרונים" },
   { value: "last_30_days", label: "30 יום אחרונים" },
+  { value: "last_60_days", label: "60 יום אחרונים" },
   { value: "last_70_days", label: "70 יום אחרונים" },
+  { value: "last_90_days", label: "90 יום אחרונים" },
+  { value: "last_120_days", label: "120 יום אחרונים" },
+  { value: "last_365_days", label: "שנה אחרונה" },
   { value: "this_month", label: "החודש הנוכחי" },
   { value: "last_month", label: "חודש קודם" },
   { value: "custom", label: "טווח מותאם אישית" },
@@ -43,7 +47,11 @@ export const SHARED_COMBINED_DASHBOARD_DATE_FILTERS: DateFilterOption[] = [
   { value: "last_7_days", label: "7 ימים אחרונים" },
   { value: "last_14_days", label: "14 יום אחרונים" },
   { value: "last_30_days", label: "30 יום אחרונים" },
+  { value: "last_60_days", label: "60 יום אחרונים" },
   { value: "last_70_days", label: "70 יום אחרונים" },
+  { value: "last_90_days", label: "90 יום אחרונים" },
+  { value: "last_120_days", label: "120 יום אחרונים" },
+  { value: "last_365_days", label: "שנה אחרונה" },
   { value: "this_month", label: "החודש הנוכחי" },
   { value: "last_month", label: "חודש קודם" },
 ];
@@ -57,8 +65,10 @@ export const SHARED_TABLE_DATE_FILTERS: DateFilterOption[] = [
   { value: "last_7_days", label: "7 ימים אחרונים" },
   { value: "last_14_days", label: "14 יום אחרונים" },
   { value: "last_30_days", label: "30 יום אחרונים" },
+  { value: "last_60_days", label: "60 יום אחרונים" },
   { value: "last_70_days", label: "70 יום אחרונים" },
   { value: "last_90_days", label: "90 יום אחרונים" },
+  { value: "last_120_days", label: "120 יום אחרונים" },
   { value: "last_180_days", label: "180 יום אחרונים" },
   { value: "last_365_days", label: "שנה אחרונה" },
   { value: "this_month", label: "החודש הנוכחי" },
@@ -148,10 +158,14 @@ export function getDashboardDateRange(
       return { startDate: fmt(subDays(today, 14)), endDate: fmt(subDays(today, 1)) };
     case "last_30_days":
       return { startDate: fmt(subDays(today, 30)), endDate: fmt(subDays(today, 1)) };
+    case "last_60_days":
+      return { startDate: fmt(subDays(today, 60)), endDate: fmt(subDays(today, 1)) };
     case "last_70_days":
       return { startDate: fmt(subDays(today, 70)), endDate: fmt(subDays(today, 1)) };
     case "last_90_days":
       return { startDate: fmt(subDays(today, 90)), endDate: fmt(subDays(today, 1)) };
+    case "last_120_days":
+      return { startDate: fmt(subDays(today, 120)), endDate: fmt(subDays(today, 1)) };
     case "last_180_days":
       return { startDate: fmt(subDays(today, 180)), endDate: fmt(subDays(today, 1)) };
     case "last_365_days":

@@ -1,4 +1,10 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.75.0';
+import {
+  replacedRecordsFilter,
+  resolveAdsSyncWindow,
+  resolvePruneStart,
+  toDateString,
+} from '../_shared/report-sync-window.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -211,15 +217,27 @@ Deno.serve(async (req) => {
       case 'last_30_days':
         since = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 30);
         break;
+      case 'last_60_days':
+        since = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 60);
+        break;
       case 'last_90_days':
         since = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 90);
+        break;
+      case 'last_120_days':
+        since = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 120);
         break;
       default:
         since = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 30);
     }
 
-    const sinceStr = since.toISOString().split('T')[0];
-    const untilStr = until.toISOString().split('T')[0];
+    // `date_range` is the table's display default; reports can look back further than
+    // that, so always pull (and keep) at least the deepest report window.
+    const syncWindow = resolveAdsSyncWindow(
+      { startDate: toDateString(since), endDate: toDateString(until) },
+      toDateString(now),
+    );
+    const sinceStr = syncWindow.startDate;
+    const untilStr = syncWindow.endDate;
 
 
     // Fetch campaign statuses
@@ -387,13 +405,19 @@ Deno.serve(async (req) => {
       }
     }
 
-    // Delete existing records and insert new ones (admin client to bypass RLS).
+    // Replace only the days this run re-fetched (admin client to bypass RLS); rows older
+    // than the sync window are history a longer report window still needs. A run that came
+    // back empty is far more likely to be a Meta hiccup than an account with no delivery
+    // at all, so it leaves the stored rows alone instead of blanking the report.
     // table_id only — orphan rows from a previous tenant_id must not survive sync.
-    const { error: delErr } = await supabaseAdmin
-      .from('crm_records')
-      .delete()
-      .eq('table_id', table_id);
-    if (delErr) console.error('[sync-facebook-ecommerce] delete error:', delErr.message);
+    if (insights.length > 0) {
+      const { error: delErr } = await supabaseAdmin
+        .from('crm_records')
+        .delete()
+        .eq('table_id', table_id)
+        .or(replacedRecordsFilter(resolvePruneStart(syncWindow, insights.map((i) => i.date))));
+      if (delErr) console.error('[sync-facebook-ecommerce] delete error:', delErr.message);
+    }
 
     // Insert new records (batched)
     let inserted = 0;

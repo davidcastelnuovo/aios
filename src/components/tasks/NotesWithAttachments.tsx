@@ -29,6 +29,10 @@ interface Props {
   notesTitle?: string;
   notesFooter?: ReactNode;
   thumbSize?: "sm" | "lg";
+  /** Extra classes on the notes card wrapper (variant=notes). */
+  notesWrapperClassName?: string;
+  /** When true, notes card grows to fill flex parent instead of a fixed min-height. */
+  fillHeight?: boolean;
 }
 
 const MAX = 10 * 1024 * 1024;
@@ -61,6 +65,8 @@ export function NotesWithAttachments({
   notesTitle = "הערות",
   notesFooter,
   thumbSize = "sm",
+  notesWrapperClassName,
+  fillHeight = false,
 }: Props) {
   const { tenantId } = useCurrentTenant();
   const [uploading, setUploading] = useState(false);
@@ -238,7 +244,13 @@ export function NotesWithAttachments({
   );
 
   const notesCube = (
-    <div className="rounded-xl border border-border/60 bg-card p-3 flex flex-col min-h-[180px] h-full shadow-sm text-right">
+    <div
+      className={cn(
+        "rounded-xl border border-border/60 bg-card p-3 flex flex-col shadow-sm text-right",
+        fillHeight ? "flex-1 min-h-[200px]" : "min-h-[180px] h-full",
+        notesWrapperClassName,
+      )}
+    >
       <div className="flex items-center gap-1.5 text-sm font-medium mb-2">
         <MessageSquare className="h-4 w-4 text-muted-foreground" />
         {notesTitle}

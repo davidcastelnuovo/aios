@@ -108,6 +108,35 @@ class MirrorTests(unittest.TestCase):
         self.assertEqual(result['changed_rows'], 0)
         self.assertEqual(result['source_rows'], 1)
 
+    def test_replaced_report_rows_are_removed_without_touching_live_or_staging_rows(self):
+        # Report syncs delete and re-insert their rows with fresh IDs, so every
+        # Production sync leaves a whole stale generation behind in Staging.
+        live = {'id': 'current'}
+        deletes = []
+
+        class API:
+            def query(self, sql, source=False):
+                if 'AS duplicate' in sql: return [{'duplicate': False}]
+                if source: return [{'key': live}]  # 'stale' is gone from Production.
+                deletes.append(sql)
+                return []
+        result = mirror.mirror_table(API(), {'name': 'crm_records', 'keys': ['id'], 'columns': ['id', 'data']},
+            delete_only=True, inventory=[{'key': live, 'digest': None}],
+            previous_rows=[{'row_key': live, 'digest': 'x'}, {'row_key': {'id': 'stale'}, 'digest': 'x'}])
+        self.assertEqual(result['removed_rows'], 1)
+        self.assertEqual(len(deletes), 1)
+        self.assertIn('stale', deletes[0])
+        self.assertNotIn('current', deletes[0])  # Still in Production.
+        self.assertNotIn('staging_only', deletes[0])  # Never mirrored, so never managed.
+        self.assertIn('DELETE FROM environment_sync.managed_rows', deletes[0])
+
+    def test_report_tables_mirror_removals_without_the_global_delete_flag(self):
+        manifest = json.loads(Path(__file__).with_name('staging-data-manifest.json').read_text())
+        self.assertIn('crm_records', manifest['replace_on_sync'])
+        self.assertTrue(set(manifest['replace_on_sync']) <= set(manifest['tables']))
+        source = Path(__file__).with_name('sync-staging-data.py').read_text()
+        self.assertIn("manifest.get('replace_on_sync', [])", source)
+
     def test_source_cannot_be_target(self):
         with self.assertRaises(ValueError): mirror.Management('a'*20, 'a'*20, 'fake')
 

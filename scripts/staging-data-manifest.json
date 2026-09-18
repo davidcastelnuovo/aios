@@ -1,5 +1,10 @@
 {
   "description": "Business data mirrored Production to Staging. Operational queues, environment settings, credentials, live agent sessions, and rebuildable graph indexes remain environment-local.",
+  "replace_on_sync_description": "Production report syncs replace their rows wholesale (delete + insert with new IDs). Mirroring only upserts, so Staging keeps one stale generation per sync unless these tables also mirror removals.",
+  "replace_on_sync": [
+    "crm_records",
+    "crm_fields"
+  ],
   "excluded": [
     "_d_campag",
     "_d_prof",
