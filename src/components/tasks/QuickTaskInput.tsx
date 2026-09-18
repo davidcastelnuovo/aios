@@ -15,22 +15,35 @@ import {
   CalendarDays,
   Flag,
   Link2,
+  Repeat,
   ChevronDown,
   ChevronRight,
+  UserPlus,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { TimeSlotPicker } from "./TimeSlotPicker";
+import { TaskRecurrenceFields, type TaskRecurrenceValue } from "./TaskRecurrenceFields";
+import {
+  computeFirstOccurrenceDate,
+  describeRecurrence,
+  formatLocalDate,
+  type RecurrenceFrequency,
+} from "@/lib/taskRecurrence";
 
 export interface QuickTaskPayload {
   title: string;
   clientId?: string | null;
   campaignerId?: string | null;
+  collaboratorIds?: string[];
   selfReminderAt?: string | null;
   /** When to perform / show on calendar (תאריך ביצוע) */
   executionDate?: string | null;
   executionTime?: string | null;
   /** Deadline to complete by (תאריך יעד) */
   targetDate?: string | null;
+  recurrenceFrequency?: RecurrenceFrequency | null;
+  recurrenceWeekday?: number | null;
+  recurrenceMonthday?: number | null;
 }
 
 interface QuickTaskInputProps {
@@ -43,7 +56,7 @@ interface QuickTaskInputProps {
 
 const COMPACT_WIDTH = 420;
 
-type LinksPanel = "menu" | "client" | "campaigner" | "execution" | "target";
+type LinksPanel = "menu" | "client" | "campaigner" | "execution" | "target" | "recurrence" | "team";
 
 export function QuickTaskInput({
   onAddTask,
@@ -66,6 +79,14 @@ export function QuickTaskInput({
   const [executionDate, setExecutionDate] = useState<Date | undefined>(undefined);
   const [executionTime, setExecutionTime] = useState<string | null>(null);
   const [targetDate, setTargetDate] = useState<Date | undefined>(undefined);
+  const [recurrence, setRecurrence] = useState<TaskRecurrenceValue>({
+    frequency: null,
+    weekday: null,
+    monthday: null,
+    time: null,
+  });
+  const [collaboratorIds, setCollaboratorIds] = useState<string[]>([]);
+  const [teamSearch, setTeamSearch] = useState("");
   const [executionOpen, setExecutionOpen] = useState(false);
   const [targetOpen, setTargetOpen] = useState(false);
   const [linksOpen, setLinksOpen] = useState(false);
@@ -113,10 +134,19 @@ export function QuickTaskInput({
     ? format(targetDate, "dd/MM", { locale: he })
     : "תאריך יעד";
 
+  const recurrenceLabel = describeRecurrence({
+    frequency: recurrence.frequency,
+    weekday: recurrence.weekday,
+    monthday: recurrence.monthday,
+    time: recurrence.time,
+  });
+
   const assignmentCount = [
     clientId,
     executionDate,
     targetDate,
+    recurrence.frequency,
+    collaboratorIds.length > 0,
     reminderEnabled,
     campaignerId && campaignerId !== defaultCampaignerId,
   ].filter(Boolean).length;
@@ -129,9 +159,12 @@ export function QuickTaskInput({
     setReminderAt("");
     setClientSearch("");
     setCampaignerSearch("");
+    setTeamSearch("");
     setExecutionDate(undefined);
     setExecutionTime(null);
     setTargetDate(undefined);
+    setRecurrence({ frequency: null, weekday: null, monthday: null, time: null });
+    setCollaboratorIds([]);
     setLinksOpen(false);
     setLinksPanel("menu");
   };
@@ -143,17 +176,34 @@ export function QuickTaskInput({
 
     if (reminderEnabled && !reminderAt) return;
 
+    let nextExecutionDate = executionDate ? format(executionDate, "yyyy-MM-dd") : null;
+    let nextExecutionTime = executionTime ?? null;
+    if (recurrence.frequency) {
+      const first = computeFirstOccurrenceDate({
+        frequency: recurrence.frequency,
+        weekday: recurrence.weekday,
+        monthday: recurrence.monthday,
+        preferredDate: executionDate,
+      });
+      nextExecutionDate = formatLocalDate(first);
+      nextExecutionTime = recurrence.time ?? nextExecutionTime;
+    }
+
     onAddTask({
       title: trimmed,
       clientId,
       campaignerId: effectiveCampaignerId,
+      collaboratorIds,
       selfReminderAt:
         canSetReminder && reminderEnabled && reminderAt
           ? new Date(reminderAt).toISOString()
           : null,
-      executionDate: executionDate ? format(executionDate, "yyyy-MM-dd") : null,
-      executionTime: executionTime ?? null,
+      executionDate: nextExecutionDate,
+      executionTime: nextExecutionTime,
       targetDate: targetDate ? format(targetDate, "yyyy-MM-dd") : null,
+      recurrenceFrequency: recurrence.frequency,
+      recurrenceWeekday: recurrence.frequency === "weekly" ? recurrence.weekday : null,
+      recurrenceMonthday: recurrence.frequency === "monthly" ? recurrence.monthday : null,
     });
     resetForm();
   };
@@ -278,6 +328,78 @@ export function QuickTaskInput({
     </div>
   ) : null;
 
+  const recurrencePicker = (
+    <Popover modal={false}>
+      <PopoverTrigger asChild>
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          className={cn(chipClass(Boolean(recurrence.frequency)), "max-w-[180px]")}
+        >
+          <Repeat className="h-3.5 w-3.5 shrink-0" />
+          <span className="truncate">{recurrenceLabel || "משימה חוזרת"}</span>
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent className="w-[280px] p-3 z-50" align="start" onOpenAutoFocus={(e) => e.preventDefault()}>
+        <p className="text-xs font-medium mb-2">משימה חוזרת</p>
+        <TaskRecurrenceFields compact value={recurrence} onChange={setRecurrence} />
+      </PopoverContent>
+    </Popover>
+  );
+
+  const teamPicker = campaignersList ? (
+    <Popover>
+      <PopoverTrigger asChild>
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          className={cn(chipClass(collaboratorIds.length > 0), "max-w-[150px]")}
+        >
+          <UserPlus className="h-3.5 w-3.5 shrink-0" />
+          <span className="truncate">
+            {collaboratorIds.length > 0 ? `${collaboratorIds.length} בצוות` : "הוסף אנשים"}
+          </span>
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent className="w-[240px] p-2 z-50" align="start">
+        <p className="text-[11px] text-muted-foreground px-1 pb-1">אנשים נוספים על המשימה</p>
+        <Command>
+          <CommandInput
+            placeholder="חיפוש איש צוות..."
+            className="h-8 text-xs"
+            value={teamSearch}
+            onValueChange={setTeamSearch}
+          />
+          <CommandList>
+            <CommandEmpty>לא נמצא</CommandEmpty>
+            <CommandGroup>
+              {filteredCampaigners
+                .filter((c) => c.id !== effectiveCampaignerId)
+                .map((c) => {
+                  const selected = collaboratorIds.includes(c.id);
+                  return (
+                    <CommandItem
+                      key={c.id}
+                      onSelect={() => {
+                        setCollaboratorIds((prev) =>
+                          selected ? prev.filter((id) => id !== c.id) : [...prev, c.id],
+                        );
+                      }}
+                    >
+                      <Check className={cn("h-3 w-3 mr-1", selected ? "opacity-100" : "opacity-0")} />
+                      {c.full_name}
+                    </CommandItem>
+                  );
+                })}
+            </CommandGroup>
+          </CommandList>
+        </Command>
+      </PopoverContent>
+    </Popover>
+  ) : null;
+
   const showExtras = isTyping && (clientsList || campaignersList || canSetReminder);
 
   return (
@@ -367,6 +489,20 @@ export function QuickTaskInput({
                   value={targetDate ? targetLabel : "ללא"}
                   onClick={() => setLinksPanel("target")}
                 />
+                <MenuRow
+                  icon={Repeat}
+                  label="משימה חוזרת"
+                  value={recurrenceLabel || "הגדר תדירות"}
+                  onClick={() => setLinksPanel("recurrence")}
+                />
+                {campaignersList && (
+                  <MenuRow
+                    icon={UserPlus}
+                    label="צוות"
+                    value={collaboratorIds.length > 0 ? `${collaboratorIds.length} אנשים` : "ללא"}
+                    onClick={() => setLinksPanel("team")}
+                  />
+                )}
                 {reminderBlock && <div className="pt-1.5 px-1">{reminderBlock}</div>}
               </div>
             )}
@@ -418,6 +554,48 @@ export function QuickTaskInput({
                 <TargetCalendar date={targetDate} onDate={setTargetDate} />
               </div>
             )}
+            {linksPanel === "recurrence" && (
+              <div className="space-y-2">
+                <BackRow label="משימה חוזרת" onBack={() => setLinksPanel("menu")} />
+                <TaskRecurrenceFields compact value={recurrence} onChange={setRecurrence} />
+              </div>
+            )}
+            {linksPanel === "team" && campaignersList && (
+              <div className="space-y-2">
+                <BackRow label="אנשים נוספים" onBack={() => setLinksPanel("menu")} />
+                <Command>
+                  <CommandInput
+                    placeholder="חיפוש איש צוות..."
+                    className="h-8 text-xs"
+                    value={teamSearch}
+                    onValueChange={setTeamSearch}
+                  />
+                  <CommandList>
+                    <CommandEmpty>לא נמצא</CommandEmpty>
+                    <CommandGroup>
+                      {filteredCampaigners
+                        .filter((c) => c.id !== effectiveCampaignerId)
+                        .map((c) => {
+                          const selected = collaboratorIds.includes(c.id);
+                          return (
+                            <CommandItem
+                              key={c.id}
+                              onSelect={() => {
+                                setCollaboratorIds((prev) =>
+                                  selected ? prev.filter((id) => id !== c.id) : [...prev, c.id],
+                                );
+                              }}
+                            >
+                              <Check className={cn("h-3 w-3 mr-1", selected ? "opacity-100" : "opacity-0")} />
+                              {c.full_name}
+                            </CommandItem>
+                          );
+                        })}
+                    </CommandGroup>
+                  </CommandList>
+                </Command>
+              </div>
+            )}
           </PopoverContent>
         </Popover>
       )}
@@ -427,6 +605,8 @@ export function QuickTaskInput({
           <div className="flex flex-wrap items-center gap-1.5 min-w-0">
             {executionPicker}
             {targetPicker}
+            {recurrencePicker}
+            {teamPicker}
             {clientPicker}
             {campaignerPicker}
           </div>

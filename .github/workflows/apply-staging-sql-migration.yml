@@ -22,6 +22,7 @@ on:
       - 'supabase/ops/apply_carmen_autonomous_goal_engine_staging.sql'
       - 'supabase/ops/apply_goal_execution_and_autonomous_engine_staging.sql'
       - 'supabase/ops/apply_pulse_campaign_breakdown_staging.sql'
+      - 'supabase/ops/apply_recurring_human_tasks_staging.sql'
 
 jobs:
   apply:
