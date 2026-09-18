@@ -1,6 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -40,6 +40,7 @@ import { withTaskCreatorNames } from "@/lib/taskCreators";
 import { useCurrentTenant } from "@/hooks/useCurrentTenant";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
 import { resolveClientUpdateType } from "@/lib/clientUpdateType";
+import { getClientMoodChanges, type ClientMoodStatus } from "@/lib/clientMoodHistory";
 
 interface ClientUpdatesTabProps {
   clientId: string;
@@ -48,6 +49,8 @@ interface ClientUpdatesTabProps {
 }
 
 type DateFilter = "week" | "month" | "all";
+type UpdateTypeFilter = "all" | "mood_change" | string;
+type MoodFilter = "all" | ClientMoodStatus;
 
 // ── Unified mood/status config ───────────────────────────────────────────────
 const MOOD_STATUS_OPTIONS = [
@@ -70,6 +73,8 @@ const INTERACTION_TYPES = [
 
 export function ClientUpdatesTab({ clientId, clientName, currentMoodStatus }: ClientUpdatesTabProps) {
   const [dateFilter, setDateFilter] = useState<DateFilter>("month");
+  const [updateTypeFilter, setUpdateTypeFilter] = useState<UpdateTypeFilter>("all");
+  const [moodFilter, setMoodFilter] = useState<MoodFilter>("all");
   const [editingTask, setEditingTask] = useState<any>(null);
   const [newUpdate, setNewUpdate] = useState("");
   const [newUpdateType, setNewUpdateType] = useState<string>("weekly_update");
@@ -130,6 +135,7 @@ export function ClientUpdatesTab({ clientId, clientName, currentMoodStatus }: Cl
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["comm-log-latest", clientId] });
+      queryClient.invalidateQueries({ queryKey: ["client-mood-history", clientId] });
       queryClient.invalidateQueries({ queryKey: ["communication-logs-latest", tenantId] });
       queryClient.invalidateQueries({ queryKey: ["comm-logs-agency", tenantId] });
       queryClient.invalidateQueries({ queryKey: ["clients", tenantId] });
@@ -198,6 +204,22 @@ export function ClientUpdatesTab({ clientId, clientName, currentMoodStatus }: Cl
       const { data, error } = await query;
       if (error) throw error;
       return data;
+    },
+    enabled: !!clientId,
+  });
+
+  // Fetch the full log so status changes can be detected against the preceding
+  // value even when the selected date range starts in the middle of the history.
+  const { data: communicationLogs, isLoading: communicationLogsLoading } = useQuery({
+    queryKey: ["client-mood-history", clientId],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("communication_logs")
+        .select("id, status, interaction_type, note, created_at")
+        .eq("client_id", clientId)
+        .order("created_at", { ascending: true });
+      if (error) throw error;
+      return data || [];
     },
     enabled: !!clientId,
   });
@@ -295,7 +317,43 @@ export function ClientUpdatesTab({ clientId, clientName, currentMoodStatus }: Cl
   const inProgressTasks = tasks?.filter(t => t.status === "open" || t.status === "in_progress") || [];
   const completedTasks = tasks?.filter(t => t.status === "done") || [];
 
-  const isLoading = tasksLoading || updatesLoading;
+  const historyEvents = useMemo(() => {
+    const moodChanges = getClientMoodChanges(communicationLogs || []);
+    const cutoff = new Date();
+    if (dateFilter === "week") cutoff.setDate(cutoff.getDate() - 7);
+    if (dateFilter === "month") cutoff.setDate(cutoff.getDate() - 30);
+    const isInDateRange = (createdAt?: string | null) =>
+      dateFilter === "all" || new Date(createdAt ?? 0) >= cutoff;
+
+    const updateEvents = (updates || [])
+      .filter((update: any) => moodFilter === "all"
+        && (updateTypeFilter === "all"
+          || (update.update_type ?? "other") === updateTypeFilter))
+      .map((update: any) => ({
+        kind: "update" as const,
+        id: update.id,
+        createdAt: update.created_at,
+        update,
+      }));
+
+    const moodEvents = moodChanges
+      .filter((change) =>
+        isInDateRange(change.created_at)
+        && (updateTypeFilter === "all" || updateTypeFilter === "mood_change")
+        && (moodFilter === "all" || change.moodStatus === moodFilter))
+      .map((change) => ({
+        kind: "mood" as const,
+        id: `mood-${change.id}`,
+        createdAt: change.created_at,
+        change,
+      }));
+
+    return [...updateEvents, ...moodEvents].sort(
+      (a, b) => new Date(b.createdAt ?? 0).getTime() - new Date(a.createdAt ?? 0).getTime(),
+    );
+  }, [communicationLogs, dateFilter, moodFilter, updateTypeFilter, updates]);
+
+  const isLoading = tasksLoading || updatesLoading || communicationLogsLoading;
 
   if (isLoading) {
     return <div className="text-center py-8 text-muted-foreground">טוען...</div>;
@@ -423,15 +481,97 @@ export function ClientUpdatesTab({ clientId, clientName, currentMoodStatus }: Cl
         </RadioGroup>
       </div>
 
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+        <div>
+          <Label className="text-xs text-muted-foreground mb-1 block">סינון לפי סוג עדכון</Label>
+          <Select
+            value={updateTypeFilter}
+            onValueChange={(value) => {
+              setUpdateTypeFilter(value);
+              if (value !== "mood_change") setMoodFilter("all");
+            }}
+          >
+            <SelectTrigger className="h-9">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">כל סוגי העדכונים</SelectItem>
+              <SelectItem value="mood_change">שינוי מצב לקוח</SelectItem>
+              {INTERACTION_TYPES.map((option) => (
+                <SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+        <div>
+          <Label className="text-xs text-muted-foreground mb-1 block">סינון לפי מצב לקוח</Label>
+          <Select
+            value={moodFilter}
+            onValueChange={(value) => {
+              setMoodFilter(value as MoodFilter);
+              if (value !== "all") setUpdateTypeFilter("mood_change");
+            }}
+          >
+            <SelectTrigger className="h-9">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">כל המצבים</SelectItem>
+              {MOOD_STATUS_OPTIONS.map((option) => (
+                <SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+      </div>
+
       {/* Updates History */}
-      {updates && updates.length > 0 && (
-        <div className="space-y-2">
+      <div className="space-y-2">
           <div className="flex items-center gap-2">
             <MessageSquare className="h-4 w-4 text-primary" />
             <h3 className="font-semibold">היסטוריית עדכונים</h3>
+            <Badge variant="secondary" className="text-xs">{historyEvents.length}</Badge>
           </div>
           <div className="space-y-2 max-h-[200px] overflow-y-auto">
-            {updates.map((update: any) => {
+            {historyEvents.length === 0 ? (
+              <Card className="border-dashed">
+                <CardContent className="p-4 text-center text-sm text-muted-foreground">
+                  אין עדכונים התואמים לסינון
+                </CardContent>
+              </Card>
+            ) : historyEvents.map((event) => {
+              if (event.kind === "mood") {
+                const currentOption = MOOD_STATUS_OPTIONS.find(
+                  (option) => option.value === event.change.moodStatus,
+                );
+                const previousOption = MOOD_STATUS_OPTIONS.find(
+                  (option) => option.value === event.change.previousMoodStatus,
+                );
+                return (
+                  <Card key={event.id} className={currentOption?.bg}>
+                    <CardContent className="p-3">
+                      <Badge variant="outline" className="mb-2 gap-1 text-xs">
+                        <Activity className="h-3 w-3" />
+                        שינוי מצב לקוח
+                      </Badge>
+                      <p className={`text-sm font-medium ${currentOption?.color ?? ""}`}>
+                        {previousOption
+                          ? `מצב הלקוח השתנה מ־${previousOption.label} ל־${currentOption?.label ?? event.change.moodStatus}`
+                          : `מצב הלקוח נקבע ל־${currentOption?.label ?? event.change.moodStatus}`}
+                      </p>
+                      {event.change.note && (
+                        <p className="text-sm whitespace-pre-wrap mt-1">{event.change.note}</p>
+                      )}
+                      <div className="flex items-center gap-2 text-xs text-muted-foreground mt-2">
+                        <Calendar className="h-3 w-3 shrink-0" />
+                        <span>{format(new Date(event.createdAt!), "d/M/yy HH:mm", { locale: he })}</span>
+                      </div>
+                    </CardContent>
+                  </Card>
+                );
+              }
+
+              const update = event.update;
               const isEditing = editingUpdateId === update.id;
               const isOwner = user?.id === update.user_id;
               
@@ -527,8 +667,7 @@ export function ClientUpdatesTab({ clientId, clientName, currentMoodStatus }: Cl
               );
             })}
           </div>
-        </div>
-      )}
+      </div>
 
       {/* Tasks Columns */}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
