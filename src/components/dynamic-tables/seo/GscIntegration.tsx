@@ -40,6 +40,12 @@ interface GscIntegrationProps {
   onMultiPeriodLoaded?: (data: GscMultiPeriodData) => void;
   /** Called whenever a GSC site is selected/auto-linked, so callers can persist it on their own entity. */
   onSiteSelected?: (siteUrl: string) => void;
+  /** GSC OAuth connection explicitly selected for this report. */
+  selectedIntegrationId?: string;
+  /** Called when the report should use a different GSC OAuth connection. */
+  onIntegrationSelected?: (integrationId: string) => void;
+  /** Show the account selector inside this card (default true). */
+  showIntegrationSelector?: boolean;
   /** When true, hides the raw queries table — data is still fetched and passed via onDataLoaded */
   hideTable?: boolean;
   /** Date range to fetch from GSC (default 28d) */
@@ -113,6 +119,9 @@ export function GscIntegration({
   onDataLoaded,
   onMultiPeriodLoaded,
   onSiteSelected,
+  selectedIntegrationId,
+  onIntegrationSelected,
+  showIntegrationSelector = true,
   hideTable = false,
   dateRange,
   showDateRangeSelector = true,
@@ -144,9 +153,10 @@ export function GscIntegration({
   );
 
   // Selection priority for the GSC integration to use:
-  //   1. A personal/shared integration that has a USABLE mapping for THIS client.
-  //   2. The org-wide fallback resolved server-side (if available).
-  //   3. The first personal integration as a last resort (lets the user pick a site manually).
+  //   1. The connection explicitly selected for this report.
+  //   2. A personal/shared integration that has a USABLE mapping for THIS client.
+  //   3. The org-wide fallback resolved server-side (if available).
+  //   4. The first personal integration as a last resort (lets the user pick a site manually).
   const gscIntegration = useMemo(() => {
     const buildFallback = () => {
       if (!resolvedFallback?.integrationId) return null;
@@ -173,6 +183,11 @@ export function GscIntegration({
       return buildFallback();
     }
 
+    const explicitlySelected = selectedIntegrationId
+      ? usableIntegrations.find((i: any) => i.id === selectedIntegrationId)
+      : null;
+    if (explicitlySelected) return explicitlySelected;
+
     const withGoodMapping = usableIntegrations.find((i: any) => {
       const mapped = (i.settings as any)?.client_sites?.[clientId];
       if (!mapped) return false;
@@ -188,7 +203,7 @@ export function GscIntegration({
     // as the public shared link). Fall back to the first personal integration
     // only if no org fallback is available.
     return buildFallback() || usableIntegrations[0];
-  }, [gscIntegrations, clientId, resolvedFallback, brokenIntegrationIds]);
+  }, [gscIntegrations, clientId, resolvedFallback, brokenIntegrationIds, selectedIntegrationId]);
 
   const isFallbackIntegration = !!(gscIntegration as any)?._isFallback;
 
@@ -285,8 +300,12 @@ export function GscIntegration({
   const isUsableSite = (siteUrl?: string) => {
     if (!siteUrl) return false;
     const meta = availableSites.find((s) => s.siteUrl === siteUrl);
-    // If we don't have metadata yet, allow it (avoids flicker before sites load)
-    return !meta || meta.permissionLevel !== 'siteUnverifiedUser';
+    if (meta) return meta.permissionLevel !== 'siteUnverifiedUser';
+    // Once a selected account has returned its property list, a property absent
+    // from that list belongs to another account and must not be reused.
+    if (!isFallbackIntegration && availableSites.length > 0) return false;
+    // Before sites load (and for server-resolved fallback), avoid UI flicker.
+    return true;
   };
 
   // Drop a stored mapping that points at an unverified (no-access) property.
@@ -608,6 +627,32 @@ export function GscIntegration({
             )}
           </div>
           <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto">
+            {showIntegrationSelector && gscIntegrations.length > 0 && (
+              <Select
+                value={gscIntegration?.id || ""}
+                onValueChange={(integrationId) => {
+                  setSelectedSite("");
+                  onIntegrationSelected?.(integrationId);
+                }}
+              >
+                <SelectTrigger className="h-7 text-xs w-full min-w-0 sm:w-[220px]">
+                  <SelectValue placeholder="בחר חשבון Google" />
+                </SelectTrigger>
+                <SelectContent>
+                  {gscIntegrations.map((integration: any) => {
+                    const email = integration?.settings?.google_email || "חשבון Google";
+                    const owner = integration._isOwn
+                      ? "שלי"
+                      : integration._sharedByName || "משותף";
+                    return (
+                      <SelectItem key={integration.id} value={integration.id} className="text-xs">
+                        {email} · {owner}
+                      </SelectItem>
+                    );
+                  })}
+                </SelectContent>
+              </Select>
+            )}
             {showDateRangeSelector && (
               <Select
                 value={effectiveDateRange}

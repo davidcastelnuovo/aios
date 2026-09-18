@@ -38,6 +38,8 @@ interface SeoDashboardViewProps {
   gaRecords?: any[];
   /** GSC site URL persisted on the SEO crm_table — used as source of truth on first load. */
   initialGscSiteUrl?: string;
+  /** GSC OAuth connection persisted on the SEO crm_table. */
+  selectedGscIntegrationId?: string;
   /** Persist callback when GSC site is selected/auto-linked at the report level. */
   onGscSiteSelected?: (siteUrl: string) => void;
   /** Initial language filter for the keywords table, persisted on the SEO crm_table. */
@@ -55,7 +57,7 @@ interface SeoDashboardViewProps {
   ahrefsProtocol?: string | null;
 }
 
-export function SeoDashboardView({ tenantId, clientId, accessibleTenantIds, gaRecords = [], initialGscSiteUrl, onGscSiteSelected, initialLangFilter, onLangFilterChange, expectedDomain, ahrefsProjectId, ahrefsMode, ahrefsProtocol }: SeoDashboardViewProps) {
+export function SeoDashboardView({ tenantId, clientId, accessibleTenantIds, gaRecords = [], initialGscSiteUrl, selectedGscIntegrationId, onGscSiteSelected, initialLangFilter, onLangFilterChange, expectedDomain, ahrefsProjectId, ahrefsMode, ahrefsProtocol }: SeoDashboardViewProps) {
   const queryClient = useQueryClient();
   const [selectedReportId, setSelectedReportId] = useState<string | null>(null);
   const [isFetchingSnapshot, setIsFetchingSnapshot] = useState(false);
@@ -697,6 +699,7 @@ export function SeoDashboardView({ tenantId, clientId, accessibleTenantIds, gaRe
         onDataLoaded={handleGscDataLoaded}
         onMultiPeriodLoaded={handleGscMultiPeriodLoaded}
         initialSiteUrl={initialGscSiteUrl}
+        selectedIntegrationId={selectedGscIntegrationId}
         onSiteSelected={onGscSiteSelected}
         resolvedFallback={resolvedGsc}
         hideTable

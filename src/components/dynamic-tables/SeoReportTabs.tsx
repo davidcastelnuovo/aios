@@ -117,6 +117,7 @@ export function SeoReportTabs({ tenantId, clientId }: SeoReportTabsProps) {
   const targetDomain = (seoTable?.integration_settings as any)?.targetDomain || '';
   const savedGaTableId = (seoTable?.integration_settings as any)?.linkedGaTableId || '';
   const savedGscTableId = (seoTable?.integration_settings as any)?.linkedGscTableId || '';
+  const savedGscIntegrationId = (seoTable?.integration_settings as any)?.gsc_integration_id || '';
   const savedGscSiteUrl = resolveSeoLinkedGscSiteUrl({
     integrationSettings: (seoTable?.integration_settings || {}) as Record<string, unknown>,
     clientGscSiteUrl: scope?.clientGscSiteUrl,
@@ -323,6 +324,7 @@ export function SeoReportTabs({ tenantId, clientId }: SeoReportTabsProps) {
             ahrefsMode={ahrefsMode}
             ahrefsProtocol={ahrefsProtocol}
             initialGscSiteUrl={savedGscSiteUrl}
+            selectedGscIntegrationId={savedGscIntegrationId}
             onGscSiteSelected={(siteUrl) => {
               if (siteUrl && siteUrl !== savedGscSiteUrl) {
                 saveLinkMutation.mutate({ key: 'linkedGscSiteUrl', value: siteUrl });
@@ -335,6 +337,43 @@ export function SeoReportTabs({ tenantId, clientId }: SeoReportTabsProps) {
 
         {hasGsc && (
           <TabsContent value="gsc">
+            {Array.isArray(gscUserIntegrations) && gscUserIntegrations.length > 0 && (
+              <Card className="mb-3 border-primary/20">
+                <CardContent className="p-3">
+                  <div className="flex items-center gap-3 flex-wrap">
+                    <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                      <Settings2 className="h-4 w-4" />
+                      <span>חשבון Search Console לדוח:</span>
+                    </div>
+                    <Select
+                      value={savedGscIntegrationId}
+                      onValueChange={(integrationId) => {
+                        if (integrationId !== savedGscIntegrationId) {
+                          saveLinkMutation.mutate({ key: 'gsc_integration_id', value: integrationId });
+                        }
+                      }}
+                    >
+                      <SelectTrigger className="h-8 w-full max-w-full sm:w-[320px] text-sm">
+                        <SelectValue placeholder="בחר משתמש Google" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {gscUserIntegrations.map((integration: any) => {
+                          const email = integration?.settings?.google_email || "חשבון Google";
+                          const owner = integration._isOwn
+                            ? "שלי"
+                            : integration._sharedByName || "משותף";
+                          return (
+                            <SelectItem key={integration.id} value={integration.id}>
+                              {email} · {owner}
+                            </SelectItem>
+                          );
+                        })}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </CardContent>
+              </Card>
+            )}
             {/* If we have a GSC crm_table with data, show the full dashboard */}
             {selectedGscTableId ? (
               <div className="space-y-3">
@@ -374,6 +413,8 @@ export function SeoReportTabs({ tenantId, clientId }: SeoReportTabsProps) {
                   clientId={clientId}
                   domain={savedGscSiteUrl || expectedDomain || targetDomain || clientWebsite}
                   initialSiteUrl={savedGscSiteUrl}
+                  selectedIntegrationId={savedGscIntegrationId}
+                  showIntegrationSelector={false}
                   initialLangFilter={savedGscLangFilter}
                   resolvedFallback={resolvedGsc}
                   onLangFilterChange={(v) => saveLinkMutation.mutate({ key: 'linkedGscLangFilter', value: v })}
