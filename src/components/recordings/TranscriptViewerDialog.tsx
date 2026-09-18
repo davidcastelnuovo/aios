@@ -1,5 +1,5 @@
 import { useMemo } from "react";
-import { Copy, Download, Mic } from "lucide-react";
+import { Copy, Download, Loader2, Mic, Sparkles } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -9,8 +9,10 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
+import { useRegenerateRecordingSummary } from "@/hooks/useRegenerateRecordingSummary";
 
 interface TranscriptRecording {
+  id?: string;
   meeting_topic: string | null;
   start_time: string | null;
   transcription: string | null;
@@ -20,6 +22,10 @@ interface TranscriptViewerDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   recording: TranscriptRecording;
+  tenantId?: string;
+  /** All recording rows in the same meeting — keeps grouped Zoom files in sync. */
+  recordingIds?: string[];
+  onSummarized?: (summaryMd: string) => void;
 }
 
 function safeFileName(value: string): string {
@@ -30,9 +36,23 @@ export function TranscriptViewerDialog({
   open,
   onOpenChange,
   recording,
+  tenantId,
+  recordingIds,
+  onSummarized,
 }: TranscriptViewerDialogProps) {
   const { toast } = useToast();
   const transcript = recording.transcription?.trim() || "";
+  const ids = recordingIds?.length
+    ? recordingIds
+    : recording.id
+    ? [recording.id]
+    : [];
+  const regenerateMutation = useRegenerateRecordingSummary({
+    tenantId: tenantId ?? "",
+    recordingIds: ids,
+    onRegenerated: onSummarized,
+  });
+  const canSummarize = !!tenantId && ids.length > 0 && !!transcript;
   const stats = useMemo(() => {
     const words = transcript ? transcript.split(/\s+/).filter(Boolean).length : 0;
     const speakers = new Set(
@@ -87,6 +107,19 @@ export function TranscriptViewerDialog({
             <Download className="h-4 w-4 ml-1" />
             הורד TXT
           </Button>
+          {canSummarize && (
+            <Button
+              size="sm"
+              onClick={() => regenerateMutation.mutate()}
+              disabled={regenerateMutation.isPending}
+              title="יוצר סיכום מפורט מהתמלול, לפי מתודת הסיכום הנוכחית"
+            >
+              {regenerateMutation.isPending
+                ? <Loader2 className="h-4 w-4 ml-1 animate-spin" />
+                : <Sparkles className="h-4 w-4 ml-1" />}
+              {regenerateMutation.isPending ? "מסכם מחדש..." : "סכם מחדש מפורט"}
+            </Button>
+          )}
         </div>
 
         <div
