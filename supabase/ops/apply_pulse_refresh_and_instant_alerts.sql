@@ -1,4 +1,4 @@
--- Production pulse cadence: weekly WA (Sunday 09:00) + twice-daily dashboard refresh + instant alert rules.
+-- Production pulse cadence: weekly WA (Sunday 07:30) + twice-daily dashboard refresh + instant alert rules.
 
 CREATE OR REPLACE FUNCTION public.claim_campaign_pulse_delivery(p_tenant_id uuid)
 RETURNS boolean
@@ -14,10 +14,10 @@ BEGIN
   IF EXTRACT(ISODOW FROM local_now) <> 7 THEN
     RETURN false;
   END IF;
-  IF local_now::time < time '08:50' OR local_now::time >= time '09:40' THEN
+  IF local_now::time < time '07:20' OR local_now::time >= time '07:40' THEN
     RETURN false;
   END IF;
-  current_slot := date_trunc('day', local_now) + interval '9 hours';
+  current_slot := date_trunc('day', local_now) + interval '7 hours 30 minutes';
   UPDATE public.tenant_heartbeat_settings
   SET campaign_pulse_last_sent_at = now()
   WHERE tenant_id = p_tenant_id
@@ -60,14 +60,15 @@ BEGIN
       'campaign-pulse-morning-0700',
       'campaign-pulse-afternoon-1600',
       'campaign-pulse-sunday-0700',
-      'campaign-pulse-sunday-0900'
+      'campaign-pulse-sunday-0900',
+      'campaign-pulse-sunday-0730'
     )
   LOOP
     PERFORM cron.unschedule(existing_job);
   END LOOP;
   PERFORM cron.schedule(
-    'campaign-pulse-sunday-0900',
-    '0 6 * * 0',
+    'campaign-pulse-sunday-0730',
+    '30 4 * * 0',
     format(
       $cron$
       SELECT net.http_post(

@@ -925,9 +925,9 @@ export default function AgentTasksPage() {
                             <div className="rounded-lg border bg-background p-3 space-y-3">
                               <div className="flex items-center justify-between gap-3">
                                 <div>
-                                  <Label className="text-xs font-medium">בדיקת דופק שבועית + קישור לדשבורד (ראשון 09:00)</Label>
+                                  <Label className="text-xs font-medium">בדיקת דופק שבועית + קישור לדשבורד (ראשון 07:30)</Label>
                                   <p className="text-[11px] text-muted-foreground mt-0.5">
-                                    נתוני הדשבורד מתרעננים פעמיים ביום (07:00, 16:00). שליחת WA בראשון 09:00 — גם לקמפיינרים וגם למנהלי PMM.
+                                    נתוני הדשבורד מתרעננים פעמיים ביום (07:00, 16:00). שליחת WA בראשון 07:30 — לבעלים + לכל קמפיינר (scoped, מכרמן הארגון).
                                   </p>
                                 </div>
                                 <Switch
@@ -971,7 +971,7 @@ export default function AgentTasksPage() {
                                 <div className="flex items-center justify-between gap-3 rounded-md border bg-muted/20 px-3 py-2">
                                   <div>
                                     <Label className="text-xs font-medium">שליחה למנהלי PMM</Label>
-                                    <p className="text-[11px] text-muted-foreground mt-0.5">דופק scoped לפי סוכנות מנוהלת</p>
+                                    <p className="text-[11px] text-muted-foreground mt-0.5">דופק scoped לפי סוכנות — כבוי כברירת מחדל</p>
                                   </div>
                                   <Switch
                                     checked={heartbeatSettings?.campaign_pulse_deliver_to_team_managers === true}

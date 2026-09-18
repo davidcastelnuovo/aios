@@ -35,9 +35,9 @@ export const CRON_JOB_CATALOG: Record<string, CronJobMeta> = {
     category: "sync",
     icon: "📊",
   },
-  "campaign-pulse-sunday-0900": {
+  "campaign-pulse-sunday-0730": {
     label: "בדיקת דופק שבועית",
-    description: "מחשב בדיקת דופק דטרמיניסטית ביום ראשון 09:00 (שעון ישראל) ושולח לוואטסאפ — גם לקמפיינרים ולמנהלי PMM.",
+    description: "מחשב בדיקת דופק דטרמיניסטית ביום ראשון 07:30 (שעון ישראל) ושולח לוואטסאפ — לבעלים ולכל קמפיינר (scoped, מכרמן הארגון).",
     category: "carmen",
     icon: "💗",
   },

@@ -39,7 +39,7 @@ on:
       - 'supabase/ops/apply_pulse_refresh_and_instant_alerts.sql'
       - 'supabase/ops/notify_felix_calendar_fix_ready.sql'
       - 'supabase/ops/apply_pulse_campaigner_delivery.sql'
-      - 'supabase/ops/apply_pulse_sunday_0900_dmm_delivery.sql'
+      - 'supabase/ops/apply_pulse_sunday_0730_david_campaigners.sql'
       - 'supabase/ops/apply_pulse_sunday_0900_dmm_delivery.sql'
       - 'supabase/ops/apply_pulse_dmm_felix_mc_david.sql'
       - 'supabase/ops/apply_pulse_goal_metrics.sql'
@@ -148,6 +148,9 @@ jobs:
             elif echo "$CHANGED" | grep -qx 'supabase/ops/apply_pulse_campaigner_delivery.sql'; then
               FILE="supabase/ops/apply_pulse_campaigner_delivery.sql"
               NAME="apply_pulse_campaigner_delivery"
+            elif echo "$CHANGED" | grep -qx 'supabase/ops/apply_pulse_sunday_0730_david_campaigners.sql'; then
+              FILE="supabase/ops/apply_pulse_sunday_0730_david_campaigners.sql"
+              NAME="apply_pulse_sunday_0730_david_campaigners"
             elif echo "$CHANGED" | grep -qx 'supabase/ops/apply_pulse_sunday_0900_dmm_delivery.sql'; then
               FILE="supabase/ops/apply_pulse_sunday_0900_dmm_delivery.sql"
               NAME="apply_pulse_sunday_0900_dmm_delivery"

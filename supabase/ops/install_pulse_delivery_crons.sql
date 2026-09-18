@@ -1,4 +1,4 @@
--- Install weekly campaign pulse delivery cron: Sunday 09:00 Asia/Jerusalem.
+-- Install weekly campaign pulse delivery cron: Sunday 07:30 Asia/Jerusalem.
 -- Applied via install-pulse-delivery-crons workflow: __SUPABASE_SERVICE_ROLE_KEY__
 -- is substituted from the Management API service_role key (never committed).
 
@@ -23,15 +23,16 @@ BEGIN
       'campaign-pulse-morning-0700',
       'campaign-pulse-afternoon-1600',
       'campaign-pulse-sunday-0700',
-      'campaign-pulse-sunday-0900'
+      'campaign-pulse-sunday-0900',
+      'campaign-pulse-sunday-0730'
     )
   LOOP
     PERFORM cron.unschedule(existing_job);
   END LOOP;
 
   PERFORM cron.schedule(
-    'campaign-pulse-sunday-0900',
-    '0 6 * * 0',
+    'campaign-pulse-sunday-0730',
+    '30 4 * * 0',
     format(
       $cron$
       SELECT net.http_post(
@@ -56,4 +57,4 @@ $pulse_crons$;
 -- Verification (visible in migration apply logs)
 SELECT jobname, schedule, active
 FROM cron.job
-WHERE jobname = 'campaign-pulse-sunday-0900';
+WHERE jobname = 'campaign-pulse-sunday-0730';
