@@ -20,13 +20,13 @@ function includesTerm(values, terms) {
   return values.some((value) => terms.some((term) => value.includes(term)))
 }
 
-export function classifyPulseCampaignGoal(data = {}, integrationSettings = {}) {
+export function classifyPulseCampaignGoal(data = {}, _integrationSettings = {}) {
+  // Per-campaign only — table-level integration_settings.campaign_type must not
+  // blanket-classify every row (e.g. PMax table tagged "leads").
   const explicit = normalizedTerms(
     data.pulse_goal,
     data.campaign_type,
     data.campaign_goal,
-    integrationSettings.pulse_goal,
-    integrationSettings.campaign_type,
   )
   const platform = normalizedTerms(
     data.campaign_objective,

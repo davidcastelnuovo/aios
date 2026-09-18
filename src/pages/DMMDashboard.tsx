@@ -39,8 +39,8 @@ import {
   type AgencyPlatformFilter,
 } from "@/lib/agencyCampaignData";
 import {
-  PulseCampaignGoalCard,
   PulseClientCampaignCard,
+  PulseClientGoalRollupCard,
 } from "@/components/pulse/PulseClientCampaignCard";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
@@ -72,6 +72,7 @@ import {
   PULSE_PERIOD_OPTIONS,
   pulseSpendColumnLabel,
   pulseStatusToOverall,
+  rollupCampaignRowsByClientGoal,
   type PulseCampaignTable,
   type PulseCrmRecord,
   type PulsePlatformDisplayRow,
@@ -578,25 +579,46 @@ export function CampaignPulseDashboard({
     return map;
   }, [filteredByRole]);
 
-  const visibleCampaignGoalRows = useMemo(() => {
-    return campaignGoalRows
+  const clientGoalRollups = useMemo(
+    () => rollupCampaignRowsByClientGoal({
+      campaignRows: campaignGoalRows,
+      snapshotsByClient: pulseByClient,
+    }),
+    [campaignGoalRows, pulseByClient],
+  );
+
+  const visibleClientGoalRollups = useMemo(() => {
+    return clientGoalRollups
       .filter((row) => row.goal === categoryTab)
       .filter((row) => {
         const meta = clientMetaById.get(row.client_id);
         if (!meta) return false;
-        if (search && !`${meta.name} ${row.campaign_name}`.toLowerCase().includes(search.toLowerCase())) return false;
+        if (search && !meta.name.toLowerCase().includes(search.toLowerCase())) return false;
         if (platformFilter === "facebook" && row.platform !== "meta") return false;
         if (platformFilter === "google_ads" && row.platform !== "google") return false;
-        const overall = row.status === "critical" ? "red" : row.status === "healthy" ? "green" : "yellow";
+        const manualOverride = activeOverrideByClient.get(row.client_id)?.override_status;
+        const overall = manualOverride ?? pulseStatusToOverall(row.status);
         if (filterStatus !== "all" && overall !== filterStatus) return false;
         return true;
       })
       .sort((a, b) => {
-        const rank = (status: string) => status === "critical" ? 0 : status === "warning" ? 1 : 2;
-        return rank(a.status) - rank(b.status)
-          || a.campaign_name.localeCompare(b.campaign_name, "he");
+        const rank = (status: string) => (status === "critical" ? 0 : status === "warning" || status === "no_data" ? 1 : 2);
+        const overallA = activeOverrideByClient.get(a.client_id)?.override_status ?? pulseStatusToOverall(a.status);
+        const overallB = activeOverrideByClient.get(b.client_id)?.override_status ?? pulseStatusToOverall(b.status);
+        const statusRank = (value: OverallStatus) => (value === "red" ? 0 : value === "yellow" ? 1 : 2);
+        return statusRank(overallA) - statusRank(overallB)
+          || rank(a.status) - rank(b.status)
+          || (clientMetaById.get(a.client_id)?.name || "").localeCompare(clientMetaById.get(b.client_id)?.name || "", "he");
       });
-  }, [campaignGoalRows, categoryTab, clientMetaById, search, platformFilter, filterStatus]);
+  }, [
+    clientGoalRollups,
+    categoryTab,
+    clientMetaById,
+    search,
+    platformFilter,
+    filterStatus,
+    activeOverrideByClient,
+  ]);
 
   const unclassifiedCampaignRows = useMemo(
     () => campaignGoalRows.filter((row) => row.goal === "unknown" && clientMetaById.has(row.client_id)),
@@ -680,6 +702,7 @@ export function CampaignPulseDashboard({
 
     for (const card of clientCampaignCards) {
       const pulseRow = resolvePulseRowForCard(card);
+      if (pulseRow.goalRow && pulseRow.goalRow.goal !== categoryTab) continue;
       if (!cardPassesFilters(card, pulseRow)) continue;
       items.push({ kind: "campaign", card, pulseRow });
       seenCards.add(`${card.clientId}-${card.tableId}`);
@@ -687,6 +710,7 @@ export function CampaignPulseDashboard({
 
     for (const pulseRow of filtered) {
       if (!pulseRow.goalRow) continue;
+      if (pulseRow.goalRow.goal !== categoryTab) continue;
       const hasCard = clientCampaignCards.some(
         (card) =>
           seenCards.has(`${card.clientId}-${card.tableId}`) &&
@@ -715,6 +739,7 @@ export function CampaignPulseDashboard({
     tablesByClient,
     activeOverrideByClient,
     pulseByClient,
+    categoryTab,
   ]);
 
   const availablePlatforms = useMemo(() => {
@@ -726,14 +751,23 @@ export function CampaignPulseDashboard({
   }, [campaignData?.tables]);
 
   const summary = useMemo(() => {
-    const categoryRows = campaignGoalRows.filter(
+    const categoryRows = clientGoalRollups.filter(
       (row) => row.goal === categoryTab && clientMetaById.has(row.client_id),
     );
     if (categoryRows.length > 0) {
       return {
-        red: categoryRows.filter((row) => row.status === "critical").length,
-        yellow: categoryRows.filter((row) => row.status === "warning" || row.status === "no_data").length,
-        green: categoryRows.filter((row) => row.status === "healthy").length,
+        red: categoryRows.filter((row) => {
+          const overall = activeOverrideByClient.get(row.client_id)?.override_status ?? pulseStatusToOverall(row.status);
+          return overall === "red";
+        }).length,
+        yellow: categoryRows.filter((row) => {
+          const overall = activeOverrideByClient.get(row.client_id)?.override_status ?? pulseStatusToOverall(row.status);
+          return overall === "yellow";
+        }).length,
+        green: categoryRows.filter((row) => {
+          const overall = activeOverrideByClient.get(row.client_id)?.override_status ?? pulseStatusToOverall(row.status);
+          return overall === "green";
+        }).length,
         total: categoryRows.length,
         missingPulse: unclassifiedCampaignRows.length,
       };
@@ -753,11 +787,12 @@ export function CampaignPulseDashboard({
   }, [
     rows,
     filterService,
-    campaignGoalRows,
+    clientGoalRollups,
     categoryTab,
     clientMetaById,
     unclassifiedCampaignRows.length,
     tablesByClient,
+    activeOverrideByClient,
   ]);
 
   const freshness = useMemo(() => {
@@ -828,7 +863,7 @@ export function CampaignPulseDashboard({
             <h1 className="text-xl sm:text-2xl font-bold">דשבורד בדיקת דופק</h1>
           ) : null}
           <p className="text-muted-foreground text-xs sm:text-sm mt-0.5 break-words">
-            {summary.total} {campaignGoalRows.length ? "קמפיינים בקטגוריה" : "לקוחות קמפיין פעילים"}
+            {summary.total} {clientGoalRollups.length ? "לקוחות בקטגוריה" : "לקוחות קמפיין פעילים"}
             {` · ${periodBounds.label}`}
             {period !== "last_7_days"
               ? ` (${periodBounds.startDate}–${periodBounds.endDate})`
@@ -836,7 +871,7 @@ export function CampaignPulseDashboard({
             {freshness ? ` · עודכן ${freshness}` : ""}
             {pulseRecordsFetching ? " · טוען פירוט קמפיינים..." : ""}
             {summary.missingPulse > 0
-              ? ` · ${summary.missingPulse} ${campaignGoalRows.length ? "טעונים סיווג" : "ממתינים לחישוב"}`
+              ? ` · ${summary.missingPulse} ${clientGoalRollups.length ? "קמפיינים טעונים סיווג" : "ממתינים לחישוב"}`
               : ""}
           </p>
         </div>
@@ -1151,27 +1186,52 @@ export function CampaignPulseDashboard({
         </Tabs>
       )}
 
-      {campaignGoalRows.length > 0 ? (
+      {clientGoalRollups.length > 0 ? (
         <div className="space-y-4 min-w-0">
-          {visibleCampaignGoalRows.length === 0 ? (
+          {visibleClientGoalRollups.length === 0 ? (
             <Card>
               <CardContent className="py-10 text-center text-muted-foreground text-sm">
-                אין קמפיינים בקטגוריה ובסינון שנבחרו
+                אין לקוחות בקטגוריה ובסינון שנבחרו
               </CardContent>
             </Card>
-          ) : visibleCampaignGoalRows.map((row) => {
-            const meta = clientMetaById.get(row.client_id);
+          ) : visibleClientGoalRollups.map((rollup) => {
+            const meta = clientMetaById.get(rollup.client_id);
             if (!meta) return null;
+            const manualOverride = activeOverrideByClient.get(rollup.client_id) ?? null;
+            const algorithmOverall = pulseStatusToOverall(rollup.status);
+            const overall = manualOverride?.override_status ?? algorithmOverall;
+            const pulse = pulseByClient.get(rollup.client_id) ?? null;
             return (
-              <PulseCampaignGoalCard
-                key={row.campaign_key}
-                row={row}
+              <PulseClientGoalRollupCard
+                key={rollup.rowKey}
+                rollup={rollup}
                 clientName={meta.name}
                 campaignerName={meta.campaignerName}
-                onOpenClient={() => openClientCard(row.client_id)}
+                period={period}
+                overall={overall}
+                manualOverride={!!manualOverride}
+                onOverride={() =>
+                  setOverrideTarget({
+                    clientId: rollup.client_id,
+                    clientName: meta.name,
+                    algorithmOverall,
+                    pulse,
+                    flags: rollup.flags,
+                    activeOverride: manualOverride,
+                  })
+                }
+                onOpenClient={() => openClientCard(rollup.client_id)}
+                onCallLog={() => {
+                  if (!pulse) return;
+                  setCallLogTarget({
+                    clientId: rollup.client_id,
+                    clientName: meta.name,
+                    pulse,
+                  });
+                }}
                 onSaveTarget={
                   isOwner || isTeamManager || isSuperAdmin
-                    ? (value, kind) => saveCampaignTarget(row, value, kind)
+                    ? (row, value, kind) => saveCampaignTarget(row, value, kind)
                     : undefined
                 }
               />

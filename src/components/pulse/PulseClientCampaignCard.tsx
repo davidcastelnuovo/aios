@@ -9,16 +9,23 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/comp
 import type { CampaignRecord, ClientCampaignTableData } from "@/lib/agencyCampaignData";
 import type { OverallStatus } from "@/lib/healthScore";
 import {
+  formatCampaignTouchDetails,
+  formatCampaignTouchSummary,
   formatGoalChange,
   formatGoalEfficiency,
   formatGoalOutcomes,
   formatLastClientCall,
   formatMetaChangeDetails,
   formatPulseMoney,
+  formatRollupEfficiency,
+  formatRollupOutcomes,
+  goalLabel,
   metaChangeSummary,
   overallStatusLabel,
+  platformGoalLabel,
   pulseSpendColumnLabel,
   pulseStatusLabel,
+  type PulseClientGoalRollup,
   type PulsePeriod,
   type PulsePlatformDisplayRow,
   type PulseSnapshotRow,
@@ -69,6 +76,178 @@ const formatDate = (value: string | null) =>
         ...(value.length === 10 ? {} : { timeStyle: "short" as const }),
       })
     : "לא זמין";
+
+export function PulseClientGoalRollupCard({
+  rollup,
+  clientName,
+  campaignerName,
+  period,
+  overall,
+  manualOverride,
+  onOverride,
+  onOpenClient,
+  onCallLog,
+  onSaveTarget,
+}: {
+  rollup: PulseClientGoalRollup;
+  clientName: string;
+  campaignerName: string;
+  period: PulsePeriod;
+  overall: OverallStatus;
+  manualOverride: boolean;
+  onOverride: () => void;
+  onOpenClient: () => void;
+  onCallLog: () => void;
+  onSaveTarget?: (row: PulseCampaignGoalRow, value: number, kind: "cpl" | "cost_per_result" | "roas") => Promise<void>;
+}) {
+  const [expanded, setExpanded] = useState(false);
+  const statusText = manualOverride
+    ? `${pulseStatusLabel(rollup.status)} → ${overallStatusLabel(overall)}`
+    : pulseStatusLabel(rollup.status);
+  const callSnapshot: PulseSnapshotRow = {
+    client_id: rollup.client_id,
+    agency_id: null,
+    status: rollup.status,
+    is_ecommerce: rollup.goal === "ecommerce",
+    spend_7d: rollup.spend_7d,
+    leads_7d: rollup.goal === "leads" ? rollup.outcomes_7d : null,
+    cpl_7d: null,
+    cpl_change_pct: null,
+    purchases_7d: rollup.goal === "ecommerce" ? rollup.outcomes_7d : null,
+    revenue_7d: rollup.revenue_7d,
+    roas_7d: null,
+    flags: rollup.flags,
+    data_fresh_through: rollup.data_fresh_through,
+    calculated_at: rollup.calculated_at,
+    last_meta_change_at: rollup.last_meta_change_at,
+    last_meta_change_type: rollup.last_meta_change_type,
+    last_meta_change_actor: rollup.last_meta_change_actor,
+    last_meta_change_object: rollup.last_meta_change_object,
+    meta_change_availability: rollup.meta_change_availability,
+    last_client_call_at: rollup.last_client_call_at,
+    last_client_call_by: rollup.last_client_call_by,
+  };
+
+  return (
+    <Card
+      className={
+        overall === "red"
+          ? "border-red-200 bg-surface-status-red"
+          : overall === "yellow"
+            ? "border-yellow-200 bg-surface-status-yellow"
+            : ""
+      }
+    >
+      <CardHeader className="pb-3 space-y-3">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <CardTitle className="flex min-w-0 items-center gap-2 text-lg">
+            <StatusDot status={overall} />
+            <span className="truncate">{clientName}</span>
+            <Badge variant="outline">{platformGoalLabel({ platformLabel: rollup.platformLabel, goal: rollup.goal })}</Badge>
+            {manualOverride ? <Badge variant="secondary" className="text-[10px]">ידני</Badge> : null}
+          </CardTitle>
+          <div className="text-left text-xs text-muted-foreground">
+            {rollup.campaigns.length} {rollup.campaigns.length === 1 ? "קמפיין" : "קמפיינים"}
+          </div>
+        </div>
+
+        <div className="rounded-md border bg-background/70 p-3 text-sm">
+          <div className="font-medium">{rollup.status_reason}</div>
+        </div>
+
+        <div className="grid gap-2 text-xs sm:grid-cols-2 lg:grid-cols-4">
+          <div><span className="text-muted-foreground">סטטוס: </span>{statusText}</div>
+          <div><span className="text-muted-foreground">קמפיינר: </span>{campaignerName}</div>
+          <div>
+            <span className="text-muted-foreground">שיחת לקוח: </span>
+            <button
+              type="button"
+              className={`hover:text-primary ${
+                rollup.last_client_call_at
+                  ? "underline decoration-dotted underline-offset-2"
+                  : "text-amber-700 underline decoration-dotted underline-offset-2 font-medium"
+              }`}
+              onClick={onCallLog}
+            >
+              {formatLastClientCall(callSnapshot)}
+            </button>
+          </div>
+          <div>
+            <span className="text-muted-foreground">נגיעה בקמפיין: </span>
+            {rollup.last_campaign_change_at ? (
+              <Popover>
+                <PopoverTrigger asChild>
+                  <button type="button" className="underline decoration-dotted underline-offset-2 hover:text-primary">
+                    {formatCampaignTouchSummary(rollup)}
+                  </button>
+                </PopoverTrigger>
+                <PopoverContent className="w-72 text-sm whitespace-pre-wrap" align="start">
+                  {formatCampaignTouchDetails(rollup)}
+                </PopoverContent>
+              </Popover>
+            ) : (
+              formatCampaignTouchSummary(rollup)
+            )}
+          </div>
+        </div>
+
+        <div className="flex flex-wrap gap-1">
+          <Button variant="outline" size="sm" className="h-8 px-2 gap-1" onClick={onOverride}>
+            <Pencil className="h-3.5 w-3.5" />
+            <span className="text-xs">ערוך צבע</span>
+          </Button>
+          <Button variant="outline" size="sm" className="h-8 px-2 gap-1" onClick={onOpenClient}>
+            <ExternalLink className="h-3.5 w-3.5" />
+            <span className="text-xs">פתח כרטיס</span>
+          </Button>
+          {rollup.campaigns.length > 0 ? (
+            <Button variant="outline" size="sm" className="h-8 px-2" onClick={() => setExpanded((value) => !value)}>
+              {expanded ? "הסתר קמפיינים" : "פירוט קמפיינים"}
+            </Button>
+          ) : null}
+        </div>
+      </CardHeader>
+
+      <CardContent className="space-y-3">
+        <div className="grid grid-cols-2 gap-2 rounded-md bg-muted/30 p-3 text-sm sm:grid-cols-4">
+          <div>
+            <span className="text-muted-foreground">{pulseSpendColumnLabel(period).split(" ")[0]}: </span>
+            <strong>{formatCurrency(rollup.spend_7d)}</strong>
+          </div>
+          <div>
+            <span className="text-muted-foreground">{goalLabel(rollup.goal)}: </span>
+            <strong>{formatRollupOutcomes(rollup)}</strong>
+          </div>
+          <div>
+            <span className="text-muted-foreground">
+              {rollup.efficiency_kind === "roas" ? "ROAS" : rollup.goal === "engagement" ? "עלות לתוצאה" : "CPL"}:{" "}
+            </span>
+            <strong>{formatRollupEfficiency(rollup)}</strong>
+          </div>
+          <div>
+            <span className="text-muted-foreground">מגמה 7 ימים: </span>
+            <strong>{rollup.change_pct === null ? "—" : `${rollup.change_pct > 0 ? "+" : ""}${rollup.change_pct}%`}</strong>
+          </div>
+        </div>
+
+        {expanded ? (
+          <div className="space-y-3 border-t pt-3">
+            {rollup.campaigns.map((campaign) => (
+              <PulseCampaignGoalCard
+                key={campaign.campaign_key}
+                row={campaign}
+                clientName={clientName}
+                campaignerName={campaignerName}
+                onOpenClient={onOpenClient}
+                onSaveTarget={onSaveTarget ? (value, kind) => onSaveTarget(campaign, value, kind) : undefined}
+              />
+            ))}
+          </div>
+        ) : null}
+      </CardContent>
+    </Card>
+  );
+}
 
 export function PulseCampaignGoalCard({
   row,
@@ -398,7 +577,11 @@ export function PulseClientCampaignCard({
               {platformConfig?.name || data.integrationType}
             </span>
             <Badge variant="secondary" className="text-xs">
-              {data.campaignType === "leads" ? "לידים" : "איקומרס"}
+              {goalRow?.goal
+                ? goalLabel(goalRow.goal)
+                : data.campaignType === "leads"
+                  ? "לידים"
+                  : "איקומרס"}
             </Badge>
           </div>
         </div>

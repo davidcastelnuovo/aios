@@ -9,6 +9,7 @@ import {
   clientHasCampaignService,
   expandPulseToPlatformGoalRows,
   filterPulseCallFlags,
+  rollupCampaignRowsByClientGoal,
   formatPulseChange,
   getPulsePeriodBounds,
   platformGoalLabel,
@@ -243,4 +244,98 @@ test("expands pulse rows per platform when Meta and Google tables exist", () => 
   assert.equal(rows.length, 2);
   assert.deepEqual(rows.map((row) => row.platformLabel).sort(), ["Google", "Meta"]);
   assert.equal(platformGoalLabel(rows[0]), rows[0].platformLabel + " · " + (rows[0].goal === "ecommerce" ? "איקומרס" : "לידים"));
+});
+
+test("rolls per-campaign rows into one client card per platform and goal", () => {
+  const campaignRows = [
+    {
+      campaign_key: "meta:id:1",
+      campaign_id: "1",
+      campaign_name: "Leads A",
+      client_id: "c1",
+      table_id: "t1",
+      platform: "meta",
+      goal: "leads",
+      status: "healthy",
+      status_reason: "ok",
+      spend_7d: 100,
+      outcomes_7d: 5,
+      revenue_7d: 0,
+      trend_7d_pct: 10,
+      last_change_at: "2026-09-10T08:00:00.000Z",
+      data_fresh_through: "2026-09-17",
+    },
+    {
+      campaign_key: "meta:id:2",
+      campaign_id: "2",
+      campaign_name: "Leads B",
+      client_id: "c1",
+      table_id: "t1",
+      platform: "meta",
+      goal: "leads",
+      status: "critical",
+      status_reason: "bad",
+      spend_7d: 50,
+      outcomes_7d: 0,
+      revenue_7d: 0,
+      trend_7d_pct: null,
+      last_change_at: "2026-09-12T09:00:00.000Z",
+      data_fresh_through: "2026-09-17",
+    },
+    {
+      campaign_key: "google:id:3",
+      campaign_id: "3",
+      campaign_name: "Video",
+      client_id: "c1",
+      table_id: "t2",
+      platform: "google",
+      goal: "engagement",
+      status: "warning",
+      status_reason: "watch",
+      spend_7d: 30,
+      outcomes_7d: 12,
+      revenue_7d: 0,
+      trend_7d_pct: 5,
+      last_change_at: "2026-09-11T07:00:00.000Z",
+      data_fresh_through: "2026-09-16",
+    },
+  ];
+  const snapshots = new Map([
+    [
+      "c1",
+      {
+        client_id: "c1",
+        agency_id: null,
+        status: "warning",
+        is_ecommerce: false,
+        spend_7d: 180,
+        leads_7d: 5,
+        cpl_7d: null,
+        cpl_change_pct: null,
+        purchases_7d: null,
+        revenue_7d: null,
+        roas_7d: null,
+        flags: [],
+        data_fresh_through: "2026-09-17",
+        calculated_at: "2026-09-18T08:00:00.000Z",
+        last_meta_change_at: "2026-09-13T10:00:00.000Z",
+        last_meta_change_type: "updated ad",
+        last_meta_change_actor: "דנה",
+        last_meta_change_object: "Lead",
+        meta_change_availability: "available",
+        last_client_call_at: "2026-09-15T12:00:00.000Z",
+        last_client_call_by: "David",
+      },
+    ],
+  ]);
+  const rollups = rollupCampaignRowsByClientGoal({ campaignRows, snapshotsByClient: snapshots });
+  assert.equal(rollups.length, 2);
+  const metaLeads = rollups.find((row) => row.platform === "meta" && row.goal === "leads");
+  assert.equal(metaLeads.campaigns.length, 2);
+  assert.equal(metaLeads.status, "critical");
+  assert.equal(metaLeads.spend_7d, 150);
+  assert.equal(metaLeads.last_campaign_change_at, "2026-09-13T10:00:00.000Z");
+  assert.equal(metaLeads.last_client_call_at, "2026-09-15T12:00:00.000Z");
+  const googleEngagement = rollups.find((row) => row.platform === "google" && row.goal === "engagement");
+  assert.equal(googleEngagement.last_campaign_change_at, "2026-09-11T07:00:00.000Z");
 });

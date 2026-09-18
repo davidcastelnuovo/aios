@@ -19,7 +19,7 @@ test('classifies campaign objective and never defaults an unknown campaign to le
       { campaign_objective: 'OUTCOME_SALES' },
       { campaign_type: 'leads' },
     ).goal,
-    'leads',
+    'ecommerce',
   )
 })
 

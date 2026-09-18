@@ -49,7 +49,7 @@ export type PulseSnapshotRow = {
   last_client_call_by: string | null;
 };
 
-export type CampaignGoal = "leads" | "ecommerce";
+export type CampaignGoal = "leads" | "engagement" | "ecommerce";
 export type CampaignGoalMode = CampaignGoal | "hybrid";
 
 export type PulseGoalDisplayRow = {
@@ -167,7 +167,225 @@ export function formatPulseMoney(value: number | null | undefined): string {
 }
 
 export function goalLabel(goal: CampaignGoal): string {
-  return goal === "ecommerce" ? "איקומרס" : "לידים";
+  if (goal === "ecommerce") return "איקומרס";
+  if (goal === "engagement") return "אינגייג׳מנט";
+  return "לידים";
+}
+
+export type PulseClientGoalRollup = {
+  rowKey: string;
+  client_id: string;
+  platform: PulsePlatform;
+  platformLabel: string;
+  goal: CampaignGoal;
+  status: PulseStatus;
+  status_reason: string;
+  spend_7d: number;
+  outcomes_7d: number | null;
+  revenue_7d: number;
+  efficiency: number | null;
+  change_pct: number | null;
+  efficiency_kind: "cpl" | "roas" | "cost_per_result";
+  flags: string[];
+  data_fresh_through: string | null;
+  calculated_at: string | null;
+  last_meta_change_at: string | null;
+  last_meta_change_type: string | null;
+  last_meta_change_actor: string | null;
+  last_meta_change_object: string | null;
+  meta_change_availability: string | null;
+  last_client_call_at: string | null;
+  last_client_call_by: string | null;
+  last_campaign_change_at: string | null;
+  campaigns: PulseCampaignGoalRow[];
+};
+
+const PULSE_STATUS_RANK: Record<PulseStatus, number> = {
+  critical: 0,
+  warning: 1,
+  no_data: 2,
+  healthy: 3,
+};
+
+function worstPulseStatusFromList(statuses: PulseStatus[]): PulseStatus {
+  if (!statuses.length) return "no_data";
+  return statuses.reduce((worst, status) =>
+    PULSE_STATUS_RANK[status] < PULSE_STATUS_RANK[worst] ? status : worst,
+  );
+}
+
+function rollupEfficiency(
+  goal: CampaignGoal,
+  spend: number,
+  outcomes: number | null,
+  revenue: number,
+): number | null {
+  if (goal === "ecommerce") {
+    return spend > 0 ? roundMetric(revenue / spend) : null;
+  }
+  if (outcomes === null || outcomes <= 0) return null;
+  return roundMetric(spend / outcomes);
+}
+
+/** One dashboard row per client × platform × goal (not per individual campaign). */
+export function rollupCampaignRowsByClientGoal(input: {
+  campaignRows: PulseCampaignGoalRow[];
+  snapshotsByClient: Map<string, PulseSnapshotRow>;
+}): PulseClientGoalRollup[] {
+  const groups = new Map<string, PulseCampaignGoalRow[]>();
+  for (const row of input.campaignRows) {
+    if (row.goal === "unknown") continue;
+    const key = `${row.client_id}:${row.platform}:${row.goal}`;
+    const list = groups.get(key) || [];
+    list.push(row);
+    groups.set(key, list);
+  }
+
+  const rollups: PulseClientGoalRollup[] = [];
+  for (const [key, campaigns] of groups) {
+    const parts = key.split(":");
+    const client_id = parts[0];
+    const platform = parts[1] as PulsePlatform;
+    const goal = parts[2] as CampaignGoal;
+    const snapshot = input.snapshotsByClient.get(client_id) ?? null;
+    const spend_7d = campaigns.reduce((total, row) => total + (row.spend_7d || 0), 0);
+    const outcomeValues = campaigns.map((row) => row.outcomes_7d);
+    const hasAnyOutcome = outcomeValues.some((value) => value !== null);
+    const outcomes_7d = hasAnyOutcome
+      ? outcomeValues.reduce((total, value) => total + (value ?? 0), 0)
+      : null;
+    const revenue_7d = campaigns.reduce((total, row) => total + (row.revenue_7d || 0), 0);
+    const efficiency_kind =
+      goal === "ecommerce" ? "roas" : goal === "engagement" ? "cost_per_result" : "cpl";
+    const efficiency = rollupEfficiency(goal, spend_7d, outcomes_7d, revenue_7d);
+    const status = worstPulseStatusFromList(campaigns.map((row) => row.status));
+    const statusReason =
+      campaigns.find((row) => row.status === status)?.status_reason ||
+      campaigns[0]?.status_reason ||
+      "";
+    const flags = Array.from(new Set(campaigns.flatMap((row) =>
+      row.status !== "healthy" && row.status_reason ? [row.status_reason] : [],
+    )));
+    const campaignTouches = campaigns
+      .map((row) => row.last_change_at)
+      .filter((value): value is string => !!value);
+    let last_campaign_change_at = campaignTouches.sort().at(-1) ?? null;
+    if (platform === "meta" && snapshot?.last_meta_change_at) {
+      if (!last_campaign_change_at || snapshot.last_meta_change_at > last_campaign_change_at) {
+        last_campaign_change_at = snapshot.last_meta_change_at;
+      }
+    }
+    const trendWeighted = campaigns.reduce(
+      (acc, row) => {
+        if (row.trend_7d_pct === null || !row.spend_7d) return acc;
+        acc.weighted += row.trend_7d_pct * row.spend_7d;
+        acc.spend += row.spend_7d;
+        return acc;
+      },
+      { weighted: 0, spend: 0 },
+    );
+    const change_pct =
+      trendWeighted.spend > 0 ? roundMetric(trendWeighted.weighted / trendWeighted.spend, 1) : null;
+    const freshestDates = campaigns
+      .map((row) => row.data_fresh_through)
+      .filter((value): value is string => !!value)
+      .sort();
+    rollups.push({
+      rowKey: key,
+      client_id,
+      platform,
+      platformLabel: pulsePlatformLabel(platform),
+      goal,
+      status,
+      status_reason: statusReason,
+      spend_7d,
+      outcomes_7d,
+      revenue_7d,
+      efficiency,
+      change_pct,
+      efficiency_kind,
+      flags,
+      data_fresh_through: freshestDates.at(-1) ?? snapshot?.data_fresh_through ?? null,
+      calculated_at: snapshot?.calculated_at ?? null,
+      last_meta_change_at: platform === "meta" ? snapshot?.last_meta_change_at ?? null : null,
+      last_meta_change_type: platform === "meta" ? snapshot?.last_meta_change_type ?? null : null,
+      last_meta_change_actor: platform === "meta" ? snapshot?.last_meta_change_actor ?? null : null,
+      last_meta_change_object: platform === "meta" ? snapshot?.last_meta_change_object ?? null : null,
+      meta_change_availability:
+        platform === "meta"
+          ? snapshot?.meta_change_availability ?? null
+          : last_campaign_change_at
+            ? "available"
+            : "not_applicable",
+      last_client_call_at: snapshot?.last_client_call_at ?? null,
+      last_client_call_by: snapshot?.last_client_call_by ?? null,
+      last_campaign_change_at,
+      campaigns: campaigns.sort((a, b) => a.campaign_name.localeCompare(b.campaign_name, "he")),
+    });
+  }
+
+  return rollups.sort((a, b) =>
+    PULSE_STATUS_RANK[a.status] - PULSE_STATUS_RANK[b.status]
+    || a.client_id.localeCompare(b.client_id)
+    || a.platform.localeCompare(b.platform)
+    || a.goal.localeCompare(b.goal),
+  );
+}
+
+export function formatCampaignTouchSummary(rollup: Pick<
+  PulseClientGoalRollup,
+  | "last_campaign_change_at"
+  | "last_meta_change_at"
+  | "meta_change_availability"
+>): string {
+  const at = rollup.last_campaign_change_at || rollup.last_meta_change_at;
+  if (!at) {
+    if (rollup.meta_change_availability === "no_campaign_change_in_30d") return "לא נמצא";
+    return "לא זמין";
+  }
+  return new Date(at).toLocaleDateString("he-IL", {
+    timeZone: "Asia/Jerusalem",
+    day: "numeric",
+    month: "numeric",
+    year: "numeric",
+  });
+}
+
+export function formatCampaignTouchDetails(rollup: PulseClientGoalRollup): string {
+  const at = rollup.last_campaign_change_at || rollup.last_meta_change_at;
+  if (!at) {
+    if (rollup.meta_change_availability === "no_campaign_change_in_30d") {
+      return "לא נמצא שינוי בקמפיין ב-30 הימים האחרונים";
+    }
+    return "לא זמין";
+  }
+  const when = new Date(at).toLocaleString("he-IL", {
+    timeZone: "Asia/Jerusalem",
+    dateStyle: "short",
+    timeStyle: "short",
+  });
+  const lines = [`תאריך: ${when}`];
+  if (rollup.last_meta_change_type) lines.push(`סוג: ${rollup.last_meta_change_type}`);
+  if (rollup.last_meta_change_object) lines.push(`אובייקט: ${rollup.last_meta_change_object}`);
+  if (rollup.last_meta_change_actor) lines.push(`מי ביצע: ${rollup.last_meta_change_actor}`);
+  if (rollup.campaigns.length > 1) {
+    lines.push(`קמפיינים בקבוצה: ${rollup.campaigns.map((row) => row.campaign_name).join(", ")}`);
+  }
+  return lines.join("\n");
+}
+
+export function formatRollupEfficiency(row: Pick<
+  PulseClientGoalRollup,
+  "efficiency_kind" | "efficiency"
+>): string {
+  if (row.efficiency === null || row.efficiency === undefined) return "—";
+  if (row.efficiency_kind === "roas") return `ROAS ${row.efficiency}`;
+  return `₪${row.efficiency}`;
+}
+
+export function formatRollupOutcomes(row: Pick<PulseClientGoalRollup, "goal" | "outcomes_7d">): string {
+  if (row.outcomes_7d === null) return "—";
+  return String(row.outcomes_7d);
 }
 
 export type PulsePlatform = "meta" | "google";
