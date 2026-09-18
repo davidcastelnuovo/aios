@@ -32,6 +32,12 @@ logged.
 ## Log
 
 <!-- New entries go below this line, newest first. -->
+### 2026-09-18 — נתוני קמפיינים — snapshot + טבלה
+- **Skin slug:** `campaign_data_snapshot` (tenant: `2dcdaac6-41bf-42cc-86bf-9a0b4b2e6019`)
+- **What Carmen can now do:** When David asks for campaign data, fetch live metrics per campaign (spend, conversions, cost per conversion), save an updated JSON snapshot to `ai_memory` (`category=clients`, key `campaign_snapshot_{client_id}_{period}d`), and reply with a formatted markdown table for fast repeat retrieval.
+- **How:** `recall_memory` → `get_facebook_campaign_data` / `list_google_campaigns` / `analyze_campaign_performance` → aggregate by campaign → `save_memory` + `kb_learn` → display table per `output_template`. Meta leads use CPL; ecommerce uses purchases/CPP; Google uses `conversions` + cost÷conversions.
+- **Origin:** David — "בכל פעם שדוד מבקש נתונים על קמפיינים, לשמור בזיכרון… ולהציג בטבלה מסודרת".
+
 ### 2026-09-10 — מודול הרשאות שיחה (Agent → 📱 הרשאות WhatsApp)
 - **Skin slug:** `carmen_conversation_access_admin` (tenant: `2dcdaac6-41bf-42cc-86bf-9a0b4b2e6019`)
 - **What Carmen can now do:** מנהל מגדיר ב-Agent Hub טאב **הרשאות שיחה**: טלפונים לפרטי, קבוצות, לקוח↔קבוצה, dev tier (full/bugfix). Runtime קורא `carmen_access_policies` + `carmen_whatsapp_identities` + `carmen_client_group_access`.
