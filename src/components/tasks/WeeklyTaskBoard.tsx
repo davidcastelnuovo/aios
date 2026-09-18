@@ -52,6 +52,10 @@ import {
   syncLocalTasksForAgencyFilter,
   filterTasksByBoardTenantScope,
 } from "@/lib/taskBoardAgency";
+import {
+  collectTaskAssigneeIds,
+  shouldFanOutRecurringTasks,
+} from "@/lib/recurringTaskAssignees";
 import { fetchActiveCampaigners } from "@/lib/taskCampaigners";
 import { buildMineQueueOrFilter, fetchMineTaskIdentity } from "@/lib/mineTaskIdentity";
 import {
@@ -801,26 +805,49 @@ export function WeeklyTaskBoard() {
         }
       }
       // Note: time without date is not saved to prevent orphaned times
-      const { data: newTask, error } = await supabase.from("tasks").insert(insertData).select().single();
-      if (error) throw error;
+      const assigneeIds = collectTaskAssigneeIds(assignedCampaignerId, collaboratorIds);
+      const fanOut = shouldFanOutRecurringTasks(recurrenceFrequency, assigneeIds);
 
-      const uniqueCollaborators = Array.from(
-        new Set((collaboratorIds || []).filter((id) => id && id !== assignedCampaignerId)),
-      );
-      if (uniqueCollaborators.length > 0) {
-        const { error: collabError } = await supabase.from("task_collaborators").insert(
-          uniqueCollaborators.map((campaignerCollaboratorId) => ({
-            task_id: newTask.id,
-            campaigner_id: campaignerCollaboratorId,
-            tenant_id: tenantId,
-            added_by: boardUserId,
-          })),
+      let newTask: { id: string } | null = null;
+      if (fanOut) {
+        const payloads = assigneeIds.map((campaignerId) => ({
+          ...insertData,
+          campaigner_id: campaignerId,
+          sales_person_id: null,
+        }));
+        const { data: createdTasks, error } = await supabase
+          .from("tasks")
+          .insert(payloads)
+          .select("id");
+        if (error) throw error;
+        newTask = createdTasks?.[0] ?? null;
+      } else {
+        const { data: created, error } = await supabase
+          .from("tasks")
+          .insert(insertData)
+          .select()
+          .single();
+        if (error) throw error;
+        newTask = created;
+
+        const uniqueCollaborators = Array.from(
+          new Set((collaboratorIds || []).filter((id) => id && id !== assignedCampaignerId)),
         );
-        if (collabError) throw collabError;
+        if (uniqueCollaborators.length > 0) {
+          const { error: collabError } = await supabase.from("task_collaborators").insert(
+            uniqueCollaborators.map((campaignerCollaboratorId) => ({
+              task_id: newTask!.id,
+              campaigner_id: campaignerCollaboratorId,
+              tenant_id: tenantId,
+              added_by: boardUserId,
+            })),
+          );
+          if (collabError) throw collabError;
+        }
       }
 
       // אם יש תאריך ושעה - יצור גם אירוע ביומן גוגל ושמור את ה-eventId
-      if (validDate && time) {
+      if (!fanOut && validDate && time && newTask) {
         try {
           const startDateTime = new Date(`${format(validDate, "yyyy-MM-dd")}T${time}:00`);
           const endDateTime = new Date(startDateTime.getTime() + 30 * 60000); // 30 דקות
@@ -848,18 +875,31 @@ export function WeeklyTaskBoard() {
         }
       }
       
-      return newTask;
+      return fanOut ? { fanOutCount: assigneeIds.length, newTask } : newTask;
     },
-    onSuccess: (newTask) => {
+    onSuccess: (result) => {
+      const fanOutCount =
+        result && typeof result === "object" && "fanOutCount" in result
+          ? (result as { fanOutCount: number }).fanOutCount
+          : null;
+      const newTask =
+        result && typeof result === "object" && "newTask" in result
+          ? (result as { newTask: typeof result }).newTask
+          : result;
+
       // Optimistic add so the user sees it immediately even if filters are restrictive
-      setLocalTasks(prev => {
-        if (!newTask) return prev;
-        return prev.some(t => t.id === (newTask as any).id) ? prev : [newTask as any, ...prev];
-      });
+      if (newTask && typeof newTask === "object" && "id" in newTask) {
+        setLocalTasks((prev) => {
+          if (!newTask) return prev;
+          return prev.some((t) => t.id === (newTask as any).id) ? prev : [newTask as any, ...prev];
+        });
+      }
 
       queryClient.invalidateQueries({ queryKey: ["tasks", tenantId] });
       queryClient.invalidateQueries({ queryKey: ["calendar-events-weekly", tenantId] });
-      toast.success("משימה נוספה");
+      toast.success(
+        fanOutCount ? `נוצרו ${fanOutCount} משימות חוזרות — אחת לכל איש צוות` : "משימה נוספה",
+      );
     },
     onError: (error) => {
       console.error("[addTask] failed", error);

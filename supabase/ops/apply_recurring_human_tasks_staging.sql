@@ -248,21 +248,6 @@ BEGIN
     RETURNING id INTO next_task_id;
 
     IF next_task_id IS NOT NULL THEN
-      INSERT INTO public.task_collaborators (
-        task_id,
-        campaigner_id,
-        tenant_id,
-        added_by
-      )
-      SELECT
-        next_task_id,
-        campaigner_id,
-        tenant_id,
-        added_by
-      FROM public.task_collaborators
-      WHERE task_id = NEW.id
-      ON CONFLICT (task_id, campaigner_id) DO NOTHING;
-
       INSERT INTO public.task_checklist_items (
         task_id,
         tenant_id,

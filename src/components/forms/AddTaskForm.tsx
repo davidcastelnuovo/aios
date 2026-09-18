@@ -35,6 +35,10 @@ import {
 } from "@/components/ui/select";
 import { TaskRecurrenceFields, type TaskRecurrenceValue } from "@/components/tasks/TaskRecurrenceFields";
 import {
+  collectTaskAssigneeIds,
+  shouldFanOutRecurringTasks,
+} from "@/lib/recurringTaskAssignees";
+import {
   computeFirstOccurrenceDate,
   formatLocalDate,
   type RecurrenceFrequency,
@@ -481,42 +485,59 @@ export default function AddTaskForm({ clientId, leadId, agencyId, defaultCampaig
           values.recurrence_frequency === "monthly" ? values.recurrence_monthday : null;
       }
 
-      const { data: created, error } = await supabase
-        .from("tasks")
-        .insert([taskPayload as any])
-        .select("id")
-        .single();
-      if (error) throw error;
+      const assigneeIds = collectTaskAssigneeIds(finalCampaignerId, values.collaborator_ids);
+      const fanOut = shouldFanOutRecurringTasks(values.recurrence_frequency, assigneeIds);
 
-      const uniqueCollaborators = Array.from(
-        new Set((values.collaborator_ids || []).filter((id) => id && id !== finalCampaignerId)),
-      );
-      if (uniqueCollaborators.length > 0 && created?.id) {
-        const { error: collabError } = await supabase.from("task_collaborators").insert(
-          uniqueCollaborators.map((campaignerCollaboratorId) => ({
-            task_id: created.id,
-            campaigner_id: campaignerCollaboratorId,
-            tenant_id: tenantId,
-            added_by: effectiveCreatorId,
-          })),
+      if (fanOut) {
+        const payloads = assigneeIds.map((campaignerId) => ({
+          ...taskPayload,
+          campaigner_id: campaignerId,
+          sales_person_id: null,
+        }));
+        const { error } = await supabase.from("tasks").insert(payloads as any);
+        if (error) throw error;
+      } else {
+        const { data: created, error } = await supabase
+          .from("tasks")
+          .insert([taskPayload as any])
+          .select("id")
+          .single();
+        if (error) throw error;
+
+        const uniqueCollaborators = Array.from(
+          new Set((values.collaborator_ids || []).filter((id) => id && id !== finalCampaignerId)),
         );
-        if (collabError) throw collabError;
+        if (uniqueCollaborators.length > 0 && created?.id) {
+          const { error: collabError } = await supabase.from("task_collaborators").insert(
+            uniqueCollaborators.map((campaignerCollaboratorId) => ({
+              task_id: created.id,
+              campaigner_id: campaignerCollaboratorId,
+              tenant_id: tenantId,
+              added_by: effectiveCreatorId,
+            })),
+          );
+          if (collabError) throw collabError;
+        }
       }
 
       // task_assigned is fired by trg_notify_task_notification_worker.
       // (AFTER INSERT OR UPDATE OF campaigner_id ON public.tasks). Do not invoke it
       // from the client to avoid duplicate notifications.
+      return fanOut ? { fanOutCount: assigneeIds.length } : null;
     },
-    onSuccess: () => {
+    onSuccess: (result) => {
       queryClient.invalidateQueries({ queryKey: ["tasks", currentTenantId] });
       queryClient.invalidateQueries({ queryKey: ["lead-tasks"] });
       queryClient.invalidateQueries({ queryKey: ["client-tasks"] });
       queryClient.invalidateQueries({ queryKey: ["campaigner-tasks"] });
       queryClient.invalidateQueries({ queryKey: ["client-onboarding", currentTenantId] });
+      const fanOutCount = result?.fanOutCount;
       toast.success(
-        isViewingAs
-          ? `המשימה נוספה כ-${viewAsUserName || "המשתמש הנבחר"} ותופיע במודול משימות`
-          : "המשימה נוספה בהצלחה ותופיע במודול משימות"
+        fanOutCount
+          ? `נוצרו ${fanOutCount} משימות חוזרות — אחת לכל איש צוות`
+          : isViewingAs
+            ? `המשימה נוספה כ-${viewAsUserName || "המשתמש הנבחר"} ותופיע במודול משימות`
+            : "המשימה נוספה בהצלחה ותופיע במודול משימות",
       );
       form.reset();
       setOpen(false);
