@@ -242,6 +242,22 @@ async function writeSeoShareCache(
   await writeSeoShareCacheToDb(supabase, cacheKey, body, SEO_SHARE_CACHE_TTL_MS);
 }
 
+/**
+ * Display preferences (which tabs a client sees) live in `integration_settings`
+ * and must not wait out the share cache, so a cached payload gets the current
+ * settings before it goes out.
+ */
+function withLiveTableSettings(cachedBody: string, table: any): string {
+  try {
+    const payload = JSON.parse(cachedBody);
+    if (!payload?.table) return cachedBody;
+    payload.table.integration_settings = table?.integration_settings ?? payload.table.integration_settings;
+    return JSON.stringify(payload);
+  } catch {
+    return cachedBody;
+  }
+}
+
 function withTimeout<T>(promise: Promise<T>, ms: number, fallback: T): Promise<T> {
   return Promise.race<T>([
     promise,
@@ -460,7 +476,7 @@ Deno.serve(async (req) => {
         : shareToken;
       const cachedSeoBody = await readSeoShareCache(supabase, cacheKey);
       if (cachedSeoBody) {
-        return new Response(cachedSeoBody, {
+        return new Response(withLiveTableSettings(cachedSeoBody, table), {
           headers: {
             ...corsHeaders,
             "Content-Type": "application/json",
