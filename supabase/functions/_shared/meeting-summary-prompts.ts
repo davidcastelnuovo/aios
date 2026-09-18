@@ -107,3 +107,31 @@ export function splitTranscript(
   flush();
   return chunks;
 }
+
+export type SummaryCompletion = (
+  systemPrompt: string,
+  userPrompt: string,
+  maxCompletionTokens: number,
+) => Promise<string>;
+
+export async function prepareDetailedSummarySource(
+  transcript: string,
+  complete: SummaryCompletion,
+): Promise<string> {
+  if (transcript.length <= LONG_TRANSCRIPT_THRESHOLD) return transcript;
+
+  const chunks = splitTranscript(transcript);
+  const extractedChunks = await Promise.all(
+    chunks.map((chunk, index) =>
+      complete(
+        buildExtractionSystemPrompt(index + 1, chunks.length),
+        `חלק ${index + 1} מתוך ${chunks.length}:\n\n${chunk}`,
+        4_000,
+      )
+    ),
+  );
+
+  return extractedChunks
+    .map((notes, index) => `### ממצאים מחלק ${index + 1}\n${notes}`)
+    .join("\n\n");
+}

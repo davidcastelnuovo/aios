@@ -3,11 +3,9 @@
 // ingest-extension-recording (automatic, after extension upload).
 import { zipSync } from "https://esm.sh/fflate@0.8.2";
 import {
-  buildExtractionSystemPrompt,
   buildSummaryUserPrompt,
-  LONG_TRANSCRIPT_THRESHOLD,
   MEETING_SUMMARY_SYSTEM_PROMPT,
-  splitTranscript,
+  prepareDetailedSummarySource,
 } from "./meeting-summary-prompts.ts";
 
 export class AiHttpError extends Error {
@@ -70,27 +68,19 @@ export async function generateMeetingSummary(
   recordingInfo: string,
   focusPrompt: string,
 ): Promise<string> {
-  let source = transcript;
-
   // Long meetings need a coverage pass before synthesis. Asking one completion
   // to both scan a long transcript and write polished prose caused late agenda
   // items to disappear and encouraged the model to fill gaps.
-  if (transcript.length > LONG_TRANSCRIPT_THRESHOLD) {
-    const chunks = splitTranscript(transcript);
-    const extractedChunks = await Promise.all(
-      chunks.map((chunk, index) =>
-        requestMeetingCompletion(
-          openaiKey,
-          buildExtractionSystemPrompt(index + 1, chunks.length),
-          `חלק ${index + 1} מתוך ${chunks.length}:\n\n${chunk}`,
-          4_000,
-        )
+  const source = await prepareDetailedSummarySource(
+    transcript,
+    (systemPrompt, userPrompt, maxCompletionTokens) =>
+      requestMeetingCompletion(
+        openaiKey,
+        systemPrompt,
+        userPrompt,
+        maxCompletionTokens,
       ),
-    );
-    source = extractedChunks
-      .map((notes, index) => `### ממצאים מחלק ${index + 1}\n${notes}`)
-      .join("\n\n");
-  }
+  );
 
   return await requestMeetingCompletion(
     openaiKey,
