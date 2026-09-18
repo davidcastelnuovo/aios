@@ -23,6 +23,7 @@ import { Collapsible, CollapsibleContent } from "@/components/ui/collapsible";
 import { ChevronDown, ChevronUp } from "lucide-react";
 import { Link } from "react-router-dom";
 import { useTenantPath } from "@/hooks/useTenantPath";
+import { buildChatThreadFilter } from "@/lib/chatThreadIdentity.mjs";
 
 interface Message {
   id: string;
@@ -214,6 +215,13 @@ export default function ChatView({ contactId, contactType, senderPhone, contactN
     ? metaIntegrations.find(i => i.id === selectedMetaIntegrationId) || metaIntegrations[0] || null
     : (chatIntegrations || []).find(i => i.integration_type === activeProvider) || null;
   const connectionUserId = chatIntegration?.user_id;
+  const threadPhone = senderPhone || contact?.phone || contactId;
+  const effectiveTenantId = contactType === "unknown" ? tenantId : (contact?.tenant_id || tenantId);
+  const threadFilter = buildChatThreadFilter({
+    contactId,
+    contactType,
+    phone: threadPhone,
+  });
 
   const switchProvider = (p: "manychat" | "green_api" | "manus_wa" | "meta_whatsapp") => {
     setSelectedProvider(p);
@@ -229,29 +237,15 @@ export default function ChatView({ contactId, contactType, senderPhone, contactN
       if (!userData.user) return;
       
       // Mark messages as read
-      if (contactType === "unknown") {
-        // For unknown contacts, mark by sender_phone
-        const { error } = await supabase
-          .from("chat_messages")
-          .update({ read_at: new Date().toISOString() })
-          .eq("sender_phone", senderPhone || contactId)
-          .eq("direction", "inbound")
-          .is("read_at", null);
-        if (error) throw error;
-      } else {
-        const filter = contactType === "client" 
-          ? { client_id: contactId } 
-          : contactType === "lead" 
-          ? { lead_id: contactId }
-          : { group_id: contactId };
-        const { error } = await supabase
-          .from("chat_messages")
-          .update({ read_at: new Date().toISOString() })
-          .match(filter)
-          .eq("direction", "inbound")
-          .is("read_at", null);
-        if (error) throw error;
-      }
+      if (!effectiveTenantId || !threadFilter) return;
+      const { error } = await supabase
+        .from("chat_messages")
+        .update({ read_at: new Date().toISOString() })
+        .eq("tenant_id", effectiveTenantId)
+        .or(threadFilter)
+        .eq("direction", "inbound")
+        .is("read_at", null);
+      if (error) throw error;
       
       // Remove "unread" tag (by name matching)
       if (tenantId) {
@@ -432,7 +426,7 @@ export default function ChatView({ contactId, contactType, senderPhone, contactN
 
   // Fetch chat messages
   const { data: messagesData, isLoading: isLoadingMessages } = useQuery({
-    queryKey: ["chat-messages", contactId, contactType, senderPhone, connectionUserId, chatIntegration?.id, activeProvider, messagePeriod, telegramChatId],
+    queryKey: ["chat-messages", contactId, contactType, threadPhone, effectiveTenantId, connectionUserId, chatIntegration?.id, activeProvider, messagePeriod, telegramChatId],
     queryFn: async () => {
       const dateFilter = getDateFilter();
       
@@ -461,47 +455,12 @@ export default function ChatView({ contactId, contactType, senderPhone, contactN
         }));
       }
 
-      if (contactType === "unknown") {
-        let query = supabase
-          .from("chat_messages")
-          .select("*")
-          .eq("sender_phone", senderPhone || contactId)
-          .eq("is_blocked", false);
-
-        if (connectionUserId) {
-          query = query.eq("connection_user_id", connectionUserId);
-        }
-        if (activeProvider) {
-          query = query.eq("provider", activeProvider);
-        }
-        if (activeProvider === "meta_whatsapp" && chatIntegration?.id) {
-          query = query.eq("integration_id", chatIntegration.id);
-        }
-        if (dateFilter) {
-          query = query.gte("created_at", dateFilter);
-        }
-
-        const { data, error } = await query.order("created_at", { ascending: false }).limit(2000);
-
-        if (error) {
-          console.error("❌ Error fetching unknown messages:", error);
-          throw error;
-        }
-
-        markAsReadMutation.mutate();
-        return data?.reverse() || [];
-      }
-
-      const filter = contactType === "client" 
-        ? { client_id: contactId } 
-        : contactType === "lead" 
-        ? { lead_id: contactId }
-        : { group_id: contactId };
-
+      if (!effectiveTenantId || !threadFilter) return [];
       let query = supabase
         .from("chat_messages")
         .select("*")
-        .match(filter)
+        .eq("tenant_id", effectiveTenantId)
+        .or(threadFilter)
         .eq("is_blocked", false);
 
       if (connectionUserId) {
@@ -519,16 +478,13 @@ export default function ChatView({ contactId, contactType, senderPhone, contactN
 
       const { data, error } = await query.order("created_at", { ascending: false }).limit(2000);
 
-      if (error) {
-        console.error("❌ Error fetching messages:", error);
-        throw error;
-      }
+      if (error) throw error;
 
       markAsReadMutation.mutate();
 
       return data?.reverse() || [];
     },
-    enabled: !!contactId,
+    enabled: !!contactId && !!effectiveTenantId && (contactType === "unknown" || !!contact),
     refetchInterval: 5000,
   });
 
