@@ -1,6 +1,9 @@
 import { supabase } from "@/integrations/supabase/client";
 import { shouldIncludeInAdsDashboardAggregate } from "@/lib/adsEntityLevel";
-import type { PulseCampaignGoalRow } from "@/lib/pulseCampaignGoals";
+import {
+  resolveCampaignDeliveryStatus,
+  type PulseCampaignGoalRow,
+} from "@/lib/pulseCampaignGoals";
 
 /**
  * Helpers for the Pulse Check dashboard (דשבורד בדיקת דופק).
@@ -184,7 +187,7 @@ export function collectCampaignBreakdownFromSnapshots(
   return rows;
 }
 
-/** Clients whose tables still need a live crm_records rebuild (no stored breakdown). */
+/** Clients with campaign tables but no stored campaign_breakdown on snapshot. */
 export function pulseClientsNeedingRecordBuild(input: {
   snapshots: PulseSnapshotRow[];
   tables: PulseCampaignTable[];
@@ -196,13 +199,129 @@ export function pulseClientsNeedingRecordBuild(input: {
     const snapshot = snapshotByClient.get(clientId);
     if (!snapshot || !Array.isArray(snapshot.campaign_breakdown)) {
       needsBuild.push(clientId);
-      continue;
-    }
-    if (snapshot.campaign_breakdown.some((row) => !row.delivery_status)) {
-      needsBuild.push(clientId);
     }
   }
   return needsBuild;
+}
+
+export type PulseCampaignDeliveryHint = {
+  table_id: string;
+  campaign_id: string;
+  effective_status: string | null;
+  date: string;
+};
+
+const PAUSED_ROW_PATCH = {
+  status: "healthy" as const,
+  status_tier: "normal" as const,
+  status_reason: "קמפיין מושהה — אין הוצאה פעילה שדורשת טיפול",
+  alert_eligible: false,
+};
+
+/** Apply delivery status + paused/removed criteria without a full crm_records rebuild. */
+export function rehydrateCampaignBreakdownRows(
+  rows: PulseCampaignGoalRow[],
+  tables: PulseCampaignTable[],
+  hints: PulseCampaignDeliveryHint[] = [],
+): PulseCampaignGoalRow[] {
+  const settingsByTable = new Map(
+    tables.map((table) => [table.id, table.integration_settings || {}]),
+  );
+  const hintByKey = new Map<string, PulseCampaignDeliveryHint>();
+  for (const hint of hints) {
+    const key = `${hint.table_id}:${hint.campaign_id}`;
+    const prev = hintByKey.get(key);
+    if (!prev || hint.date > prev.date) hintByKey.set(key, hint);
+  }
+
+  return rows.map((row) => {
+    const settings = settingsByTable.get(row.table_id) || {};
+    const hint = row.campaign_id ? hintByKey.get(`${row.table_id}:${row.campaign_id}`) : undefined;
+    const delivery_status = row.delivery_status && row.delivery_status !== "unknown"
+      ? row.delivery_status
+      : resolveCampaignDeliveryStatus(
+        {
+          campaign_id: row.campaign_id,
+          effective_status: hint?.effective_status,
+          configured_status: hint?.effective_status,
+        },
+        settings,
+      );
+    if (delivery_status === "paused") {
+      return { ...row, delivery_status, ...PAUSED_ROW_PATCH };
+    }
+    if (delivery_status === "removed") {
+      return {
+        ...row,
+        delivery_status,
+        status: "healthy",
+        status_tier: "normal",
+        status_reason: "קמפיין הוסר/לא פעיל",
+        alert_eligible: false,
+      };
+    }
+    return { ...row, delivery_status };
+  });
+}
+
+export function pulseMetaTablesNeedingDeliveryHints(
+  rows: PulseCampaignGoalRow[],
+  tables: PulseCampaignTable[],
+): string[] {
+  const metaTableIds = new Set(
+    tables
+      .filter((table) => table.integration_type === "facebook_insights" || table.integration_type === "facebook_ecommerce")
+      .map((table) => table.id),
+  );
+  const needsHint = new Set<string>();
+  for (const row of rows) {
+    if (!metaTableIds.has(row.table_id)) continue;
+    if (row.delivery_status && row.delivery_status !== "unknown") continue;
+    needsHint.add(row.table_id);
+  }
+  return Array.from(needsHint);
+}
+
+const DELIVERY_HINT_PAGE = 1000;
+const DELIVERY_HINT_MAX = 8000;
+const DELIVERY_HINT_TABLE_CHUNK = 15;
+
+/** Latest effective_status per campaign — 7-day window only (not full pulse trend). */
+export async function fetchPulseCampaignDeliveryHints(
+  tableIds: string[],
+  lookbackStart: string,
+): Promise<PulseCampaignDeliveryHint[]> {
+  if (!tableIds.length) return [];
+  const hints: PulseCampaignDeliveryHint[] = [];
+  for (let offset = 0; offset < tableIds.length; offset += DELIVERY_HINT_TABLE_CHUNK) {
+    const chunk = tableIds.slice(offset, offset + DELIVERY_HINT_TABLE_CHUNK);
+    for (let from = 0; from < DELIVERY_HINT_MAX; from += DELIVERY_HINT_PAGE) {
+      const to = from + DELIVERY_HINT_PAGE - 1;
+      const { data, error } = await supabase
+        .from("crm_records")
+        .select("table_id, data")
+        .in("table_id", chunk)
+        .filter("data->>date", "gte", lookbackStart)
+        .range(from, to);
+      if (error) throw error;
+      if (!data?.length) break;
+      for (const record of data) {
+        const dataRow = record.data || {};
+        const campaignId = dataRow.campaign_id || dataRow.campaignId;
+        const date = typeof dataRow.date === "string" ? dataRow.date : null;
+        if (!campaignId || !date) continue;
+        if (String(dataRow.entity_level || "campaign").toLowerCase() !== "campaign") continue;
+        hints.push({
+          table_id: record.table_id,
+          campaign_id: String(campaignId),
+          effective_status: dataRow.effective_status ? String(dataRow.effective_status) : null,
+          date,
+        });
+      }
+      if (data.length < DELIVERY_HINT_PAGE) break;
+    }
+  }
+  return hints;
 }
 
 export function pulseFallbackTableIds(

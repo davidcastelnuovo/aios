@@ -6,9 +6,14 @@ import {
   campaignDeliveryStatusLabel as deliveryStatusLabel,
   pulseCampaignOutcome as campaignOutcome,
   pulseTrendWindows as trendWindows,
+  resolveCampaignDeliveryStatus as resolveDeliveryStatus,
 } from "../../supabase/functions/_shared/pulse-campaign-goals.mjs";
 
 export const campaignDeliveryStatusLabel = deliveryStatusLabel as (status: string) => string;
+export const resolveCampaignDeliveryStatus = resolveDeliveryStatus as (
+  data?: Record<string, unknown>,
+  integrationSettings?: Record<string, unknown>,
+) => "active" | "paused" | "removed" | "other" | "unknown";
 
 export type PulseCampaignGoal = "leads" | "engagement" | "ecommerce" | "unknown";
 

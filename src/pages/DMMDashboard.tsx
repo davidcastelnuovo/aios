@@ -42,6 +42,7 @@ import {
   PulseClientCampaignCard,
   PulseClientGoalRollupCard,
 } from "@/components/pulse/PulseClientCampaignCard";
+import { CarmenLoadingScreen } from "@/components/shared/CarmenLoadingScreen";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
 import { type OverallStatus } from "@/lib/healthScore";
@@ -59,8 +60,11 @@ import {
   clientHasCampaignService,
   collectCampaignBreakdownFromSnapshots,
   expandPulseToPlatformGoalRows,
+  fetchPulseCampaignDeliveryHints,
   pulseClientsNeedingRecordBuild,
   pulseFallbackTableIds,
+  pulseMetaTablesNeedingDeliveryHints,
+  rehydrateCampaignBreakdownRows,
   applyClientCallToPulseSnapshot,
   filterPulseCallFlags,
   fetchPulseCampaignRecords,
@@ -316,7 +320,13 @@ export function CampaignPulseDashboard({
 
   const clientIds = filteredByRole.map((c: any) => c.id);
 
-  const { data: pulseRows = [], refetch: refetchPulse, dataUpdatedAt } = useQuery({
+  const {
+    data: pulseRows = [],
+    isLoading: pulseSnapshotsLoading,
+    isFetching: pulseSnapshotsFetching,
+    refetch: refetchPulse,
+    dataUpdatedAt,
+  } = useQuery({
     queryKey: ["pulse-dash-snapshots", tenantId, clientIds.join(","), selectedAgency],
     queryFn: async () => {
       if (!tenantId || !clientIds.length) return [] as PulseSnapshotRow[];
@@ -424,6 +434,31 @@ export function CampaignPulseDashboard({
     [pulseCampaignTables, clientsNeedingRecordBuild],
   );
 
+  const snapshotCampaignRows = useMemo(
+    () => collectCampaignBreakdownFromSnapshots(pulseRows),
+    [pulseRows],
+  );
+
+  const deliveryHintStart = useMemo(
+    () => jerusalemYmd(new Date(Date.now() - 7 * 86_400_000)),
+    [],
+  );
+
+  const metaHintTableIds = useMemo(() => {
+    const primed = rehydrateCampaignBreakdownRows(snapshotCampaignRows, pulseCampaignTables, []);
+    return pulseMetaTablesNeedingDeliveryHints(primed, pulseCampaignTables);
+  }, [snapshotCampaignRows, pulseCampaignTables]);
+
+  const {
+    data: deliveryHints = [],
+    isFetching: deliveryHintsFetching,
+  } = useQuery({
+    queryKey: ["pulse-dash-delivery-hints", metaHintTableIds.join(","), deliveryHintStart],
+    queryFn: () => fetchPulseCampaignDeliveryHints(metaHintTableIds, deliveryHintStart),
+    enabled: metaHintTableIds.length > 0,
+    staleTime: 120_000,
+  });
+
   const {
     data: pulseCampaignRecords = [],
     isFetching: pulseRecordsFetching,
@@ -457,12 +492,13 @@ export function CampaignPulseDashboard({
   }, [pulseCampaignTables, pulseCampaignRecords]);
 
   const campaignGoalRows = useMemo(() => {
-    const fromSnapshots = collectCampaignBreakdownFromSnapshots(pulseRows);
-    const rebuildClientIds = new Set(clientsNeedingRecordBuild);
-    if (!rebuildClientIds.size) return fromSnapshots;
+    const rehydrated = rehydrateCampaignBreakdownRows(
+      snapshotCampaignRows,
+      pulseCampaignTables,
+      deliveryHints,
+    );
     if (!fallbackTableIds.length || !pulseCampaignRecords.length) {
-      // Hide stale snapshot rows until live rebuild finishes (old criteria → wrong red).
-      return fromSnapshots.filter((row) => !rebuildClientIds.has(row.client_id));
+      return rehydrated;
     }
     const rebuiltRows = buildPulseCampaignRows({
       records: pulseCampaignRecords.filter((record) => fallbackTableIds.includes(record.table_id)),
@@ -471,16 +507,25 @@ export function CampaignPulseDashboard({
     });
     const rebuiltClientIds = new Set(rebuiltRows.map((row) => row.client_id));
     return [
-      ...fromSnapshots.filter((row) => !rebuiltClientIds.has(row.client_id)),
+      ...rehydrated.filter((row) => !rebuiltClientIds.has(row.client_id)),
       ...rebuiltRows,
     ];
   }, [
-    pulseRows,
-    pulseCampaignRecords,
+    snapshotCampaignRows,
     pulseCampaignTables,
+    deliveryHints,
+    pulseCampaignRecords,
     fallbackTableIds,
-    clientsNeedingRecordBuild,
   ]);
+
+  const pulseInitialLoading =
+    clientsLoading
+    || (pulseSnapshotsLoading && clientIds.length > 0)
+    || (pulseSnapshotsFetching && pulseRows.length === 0 && clientIds.length > 0);
+
+  const pulseRefining =
+    deliveryHintsFetching
+    || (pulseRecordsFetching && fallbackTableIds.length > 0);
 
   const refetchCampaignData = () => {
     refetchPulseTables();
@@ -909,12 +954,33 @@ export function CampaignPulseDashboard({
     campaigners,
   ]);
 
-  if (clientsLoading) {
-    return <div className="flex justify-center p-12 text-muted-foreground">טוען בדיקת דופק...</div>;
+  if (pulseInitialLoading) {
+    return (
+      <CarmenLoadingScreen
+        variant="page"
+        title="כרמן מכינה את בדיקת הדופק"
+        messages={[
+          "כרמן אוספת את נתוני הקמפיינים…",
+          "מסדרת לפי לקוח, פלטפורמה ומטרה…",
+          "בודקת מי פעיל ומי מושהה…",
+          "עוד רגע הכול על המסך…",
+        ]}
+      />
+    );
   }
 
   return (
     <div className="p-3 sm:p-4 space-y-3 sm:space-y-4 overflow-x-hidden max-w-full min-w-0" dir="rtl">
+      {pulseRefining ? (
+        <CarmenLoadingScreen
+          variant="inline"
+          messages={[
+            "כרמן מדייקת סטטוסי קמפיין (פעיל/מושהה)…",
+            "מעדכנת את הקריטריונים החדשים…",
+            "עוד רגע הנתונים יתיישרו…",
+          ]}
+        />
+      ) : null}
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div className="min-w-0">
           {showTitle ? (
@@ -927,9 +993,7 @@ export function CampaignPulseDashboard({
               ? ` (${periodBounds.startDate}–${periodBounds.endDate})`
               : ""}
             {freshness ? ` · עודכן ${freshness}` : ""}
-            {pulseRecordsFetching && fallbackTableIds.length > 0
-              ? ` · משלים ${fallbackTableIds.length} לקוחות ללא snapshot...`
-              : ""}
+            {pulseRefining ? " · כרמן מכינה את הנתונים…" : ""}
             {summary.missingPulse > 0
               ? ` · ${summary.missingPulse} ${clientGoalRollups.length ? "קמפיינים טעונים סיווג" : "ממתינים לחישוב"}`
               : ""}

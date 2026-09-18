@@ -12,6 +12,7 @@ import {
   collectCampaignBreakdownFromSnapshots,
   pulseClientsNeedingRecordBuild,
   pulseFallbackTableIds,
+  rehydrateCampaignBreakdownRows,
   rollupCampaignRowsByClientGoal,
   formatPulseChange,
   getPulsePeriodBounds,
@@ -263,6 +264,26 @@ test("prefers stored snapshot breakdown and only rebuilds clients without it", (
   ];
   assert.deepEqual(collectCampaignBreakdownFromSnapshots(snapshots), snapshots[0].campaign_breakdown);
   assert.deepEqual(pulseClientsNeedingRecordBuild({ snapshots, tables }), ["c2"]);
+  const paused = rehydrateCampaignBreakdownRows(
+    [{
+      campaign_key: "meta:id:1",
+      client_id: "c1",
+      table_id: "t1",
+      campaign_id: "1",
+      platform: "meta",
+      goal: "leads",
+      status: "critical",
+      status_tier: "exception",
+      status_reason: "old",
+      alert_eligible: true,
+      spend_7d: 100,
+      outcomes_7d: 0,
+    }],
+    tables,
+    [{ table_id: "t1", campaign_id: "1", effective_status: "PAUSED", date: "2026-09-17" }],
+  );
+  assert.equal(paused[0].delivery_status, "paused");
+  assert.equal(paused[0].status, "healthy");
   assert.deepEqual(pulseFallbackTableIds(tables, ["c2"]), ["t2"]);
 });
 
