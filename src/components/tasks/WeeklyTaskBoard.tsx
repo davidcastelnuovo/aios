@@ -776,11 +776,17 @@ export function WeeklyTaskBoard() {
         campaigner_id: assignedCampaignerId,
         sales_person_id: assignedCampaignerId ? null : assignedSalesPersonId,
         client_id: clientId ?? null,
-        recurrence_frequency: recurrenceFrequency ?? null,
-        recurrence_interval: 1,
-        recurrence_weekday: recurrenceFrequency === "weekly" ? recurrenceWeekday ?? null : null,
-        recurrence_monthday: recurrenceFrequency === "monthly" ? recurrenceMonthday ?? null : null,
       };
+      // Only send recurrence columns when configured — avoids insert failures
+      // before the recurring-tasks migration has been applied.
+      if (recurrenceFrequency) {
+        insertData.recurrence_frequency = recurrenceFrequency;
+        insertData.recurrence_interval = 1;
+        insertData.recurrence_weekday =
+          recurrenceFrequency === "weekly" ? recurrenceWeekday ?? null : null;
+        insertData.recurrence_monthday =
+          recurrenceFrequency === "monthly" ? recurrenceMonthday ?? null : null;
+      }
       if (selfReminderAt) {
         insertData.self_reminder_at = selfReminderAt;
       }
@@ -857,7 +863,7 @@ export function WeeklyTaskBoard() {
     },
     onError: (error) => {
       console.error("[addTask] failed", error);
-      const msg = (error as any)?.message;
+      const msg = (error as any)?.message as string | undefined;
       if (msg === "TENANT_NOT_READY") {
         toast.error("המערכת עדיין נטענת, נסי שוב בעוד רגע");
         return;
@@ -866,7 +872,11 @@ export function WeeklyTaskBoard() {
         toast.error("לא נמצאה סוכנות בארגון – אי אפשר להוסיף משימה");
         return;
       }
-      toast.error("שגיאה בהוספת משימה");
+      if (msg && /recurrence_/i.test(msg)) {
+        toast.error("עמודות משימה חוזרת עדיין לא זמינות בדאטהבייס — אפשר להוסיף משימה רגילה בינתיים");
+        return;
+      }
+      toast.error(msg ? `שגיאה בהוספת משימה: ${msg}` : "שגיאה בהוספת משימה");
     },
   });
 

@@ -329,7 +329,7 @@ export function QuickTaskInput({
   ) : null;
 
   const recurrencePicker = (
-    <Popover>
+    <Popover modal={false}>
       <PopoverTrigger asChild>
         <Button
           type="button"
@@ -338,10 +338,11 @@ export function QuickTaskInput({
           className={cn(chipClass(Boolean(recurrence.frequency)), "max-w-[180px]")}
         >
           <Repeat className="h-3.5 w-3.5 shrink-0" />
-          <span className="truncate">{recurrenceLabel || "לא חוזרת"}</span>
+          <span className="truncate">{recurrenceLabel || "משימה חוזרת"}</span>
         </Button>
       </PopoverTrigger>
-      <PopoverContent className="w-[280px] p-3 z-50" align="start">
+      <PopoverContent className="w-[280px] p-3 z-50" align="start" onOpenAutoFocus={(e) => e.preventDefault()}>
+        <p className="text-xs font-medium mb-2">משימה חוזרת</p>
         <TaskRecurrenceFields compact value={recurrence} onChange={setRecurrence} />
       </PopoverContent>
     </Popover>
@@ -490,8 +491,8 @@ export function QuickTaskInput({
                 />
                 <MenuRow
                   icon={Repeat}
-                  label="חזרה"
-                  value={recurrenceLabel || "לא חוזרת"}
+                  label="משימה חוזרת"
+                  value={recurrenceLabel || "הגדר תדירות"}
                   onClick={() => setLinksPanel("recurrence")}
                 />
                 {campaignersList && (
@@ -555,7 +556,7 @@ export function QuickTaskInput({
             )}
             {linksPanel === "recurrence" && (
               <div className="space-y-2">
-                <BackRow label="חזרת משימה" onBack={() => setLinksPanel("menu")} />
+                <BackRow label="משימה חוזרת" onBack={() => setLinksPanel("menu")} />
                 <TaskRecurrenceFields compact value={recurrence} onChange={setRecurrence} />
               </div>
             )}

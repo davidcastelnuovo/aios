@@ -445,7 +445,7 @@ export default function AddTaskForm({ clientId, leadId, agencyId, defaultCampaig
         dueTimeValue = values.due_time || null;
       }
 
-      const taskPayload = {
+      const taskPayload: Record<string, unknown> = {
         title: values.title,
         notes: values.notes || null,
         campaigner_id: finalCampaignerId || null,
@@ -455,10 +455,6 @@ export default function AddTaskForm({ clientId, leadId, agencyId, defaultCampaig
         agency_id: finalAgencyId,
         due_date: dueDate,
         due_time: dueTimeValue ? (dueTimeValue.length === 5 ? `${dueTimeValue}:00` : dueTimeValue) : null,
-        recurrence_frequency: values.recurrence_frequency,
-        recurrence_interval: 1,
-        recurrence_weekday: values.recurrence_frequency === "weekly" ? values.recurrence_weekday : null,
-        recurrence_monthday: values.recurrence_frequency === "monthly" ? values.recurrence_monthday : null,
         self_reminder_at:
           isSelfAssigned && values.self_reminder_enabled && values.self_reminder_at
             ? new Date(values.self_reminder_at).toISOString()
@@ -474,6 +470,16 @@ export default function AddTaskForm({ clientId, leadId, agencyId, defaultCampaig
         created_by: effectiveCreatorId,
         impersonated_by: isViewingAs ? currentUserId : null,
       };
+      // Only send recurrence columns when configured — avoids insert failures
+      // before the recurring-tasks migration has been applied.
+      if (values.recurrence_frequency) {
+        taskPayload.recurrence_frequency = values.recurrence_frequency;
+        taskPayload.recurrence_interval = 1;
+        taskPayload.recurrence_weekday =
+          values.recurrence_frequency === "weekly" ? values.recurrence_weekday : null;
+        taskPayload.recurrence_monthday =
+          values.recurrence_frequency === "monthly" ? values.recurrence_monthday : null;
+      }
 
       const { data: created, error } = await supabase
         .from("tasks")

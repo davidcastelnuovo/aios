@@ -339,30 +339,35 @@ export function TaskDetailDialog({
         ? (recurrence.time || dueTime)
         : dueTime;
       const nextDueTime = effectiveDueTime ? effectiveDueTime + ":00" : null;
+      const updatePayload: Record<string, unknown> = {
+        title,
+        notes,
+        priority,
+        status,
+        due_date: nextDueDate,
+        due_time: nextDueTime,
+        target_date: nextTargetDate,
+        duration_minutes: durationMinutes,
+        client_id: clientId || null,
+        lead_id: leadId || null,
+        campaigner_id: assignedCampaignerId || null,
+        self_reminder_at:
+          assignedCampaignerId === userCampaignerId && selfReminderEnabled && selfReminderAt
+            ? new Date(selfReminderAt).toISOString()
+            : null,
+        attachments: attachments as any,
+      };
+      if (recurrence.frequency || task?.recurrence_frequency) {
+        updatePayload.recurrence_frequency = recurrence.frequency;
+        updatePayload.recurrence_interval = 1;
+        updatePayload.recurrence_weekday =
+          recurrence.frequency === "weekly" ? recurrence.weekday : null;
+        updatePayload.recurrence_monthday =
+          recurrence.frequency === "monthly" ? recurrence.monthday : null;
+      }
       const { error } = await supabase
         .from("tasks")
-        .update({
-          title,
-          notes,
-          priority,
-          status,
-          due_date: nextDueDate,
-          due_time: nextDueTime,
-          target_date: nextTargetDate,
-          recurrence_frequency: recurrence.frequency,
-          recurrence_interval: 1,
-          recurrence_weekday: recurrence.frequency === "weekly" ? recurrence.weekday : null,
-          recurrence_monthday: recurrence.frequency === "monthly" ? recurrence.monthday : null,
-          duration_minutes: durationMinutes,
-          client_id: clientId || null,
-          lead_id: leadId || null,
-          campaigner_id: assignedCampaignerId || null,
-          self_reminder_at:
-            assignedCampaignerId === userCampaignerId && selfReminderEnabled && selfReminderAt
-              ? new Date(selfReminderAt).toISOString()
-              : null,
-          attachments: attachments as any,
-        })
+        .update(updatePayload)
         .eq("id", task!.id);
       if (error) throw error;
 

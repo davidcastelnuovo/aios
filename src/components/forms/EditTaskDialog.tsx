@@ -260,7 +260,7 @@ export default function EditTaskDialog({ task, open, onOpenChange }: EditTaskDia
         agencyId = selectedClient.agency_id;
       }
 
-      const updateData = {
+      const updateData: Record<string, unknown> = {
         title: values.title,
         notes: values.notes || null,
         campaigner_id: values.campaigner_id || null,
@@ -271,14 +271,18 @@ export default function EditTaskDialog({ task, open, onOpenChange }: EditTaskDia
         due_time: values.due_time
           ? (values.due_time.length === 5 ? `${values.due_time}:00` : values.due_time)
           : null,
-        recurrence_frequency: values.recurrence_frequency,
-        recurrence_interval: 1,
-        recurrence_weekday: values.recurrence_frequency === "weekly" ? values.recurrence_weekday : null,
-        recurrence_monthday: values.recurrence_frequency === "monthly" ? values.recurrence_monthday : null,
         status: values.status,
         priority: values.priority,
         task_type: "other" as const,
       };
+      if (values.recurrence_frequency || task.recurrence_frequency) {
+        updateData.recurrence_frequency = values.recurrence_frequency;
+        updateData.recurrence_interval = 1;
+        updateData.recurrence_weekday =
+          values.recurrence_frequency === "weekly" ? values.recurrence_weekday : null;
+        updateData.recurrence_monthday =
+          values.recurrence_frequency === "monthly" ? values.recurrence_monthday : null;
+      }
       
 
       const { data, error } = await supabase
