@@ -70,6 +70,7 @@ import { shouldUseGoogleWooAttributionOverlay } from "@/lib/wooAttribution";
 import { reportQueryOptions, getReportLastSyncAt } from "@/lib/reportQueryOptions";
 import { ReportDataFreshness } from "@/components/reports/ReportDataFreshness";
 import { AdsEntityLevelTabs } from "@/components/reports/AdsEntityLevelTabs";
+import { WeeklyCampaignComparison } from "@/components/reports/WeeklyCampaignComparison";
 import {
   ADS_ENTITY_LEVEL_LABELS,
   ADS_ENTITY_SEARCH_PLACEHOLDERS,
@@ -159,6 +160,7 @@ export default function DynamicTableView({ embedTableSlug, embedMode, summaryOnl
   const [showLinkClientDialog, setShowLinkClientDialog] = useState(false);
   const [campaignSearch, setCampaignSearch] = useState("");
   const [adsEntityLevel, setAdsEntityLevel] = useState<AdsEntityLevel>("campaign");
+  const [adsReportView, setAdsReportView] = useState<"summary" | "weekly">("summary");
   const [isCloning, setIsCloning] = useState(false);
   const cellInputRef = useRef<HTMLInputElement>(null);
 
@@ -385,6 +387,12 @@ export default function DynamicTableView({ embedTableSlug, embedMode, summaryOnl
     table?.integration_type === 'facebook_insights'
     || table?.integration_type === 'facebook_ecommerce'
     || table?.integration_type === 'google_ads';
+
+  const { data: weeklyRecords = [], isPending: weeklyRecordsPending } = useQuery({
+    ...reportRecordsQuery(supabase, table?.id || '', 'last_365_days'),
+    enabled: !!table?.id && isAdsReportTable && adsReportView === 'weekly',
+    ...reportQueryOptions<CrmRecord[]>(),
+  });
 
   const entityLevelRecords = useMemo(() => {
     if (!isAdsReportTable) return displayRecords;
@@ -2487,6 +2495,30 @@ export default function DynamicTableView({ embedTableSlug, embedMode, summaryOnl
         />
       )}
 
+      {isAdsReportTable && (
+        <Tabs value={adsReportView} onValueChange={(value) => setAdsReportView(value as "summary" | "weekly")} className="mb-4">
+          <TabsList dir="rtl">
+            <TabsTrigger value="summary">הדוח</TabsTrigger>
+            <TabsTrigger value="weekly">השוואה שבועית</TabsTrigger>
+          </TabsList>
+        </Tabs>
+      )}
+
+      {isAdsReportTable && adsReportView === "weekly" && (
+        <WeeklyCampaignComparison
+          records={weeklyRecords}
+          defaultSource={table?.integration_type as "facebook_insights" | "facebook_ecommerce" | "google_ads"}
+          currency={getCurrencySymbol(table?.integration_settings?.currency)}
+          isLoading={weeklyRecordsPending}
+          sourceModes={{
+            facebook_insights: table?.integration_settings?.campaign_type === "leads" ? "leads" : undefined,
+            facebook_ecommerce: "ecommerce",
+            google_ads: table?.integration_settings?.campaign_type === "ecommerce" ? "ecommerce" : "leads",
+          }}
+        />
+      )}
+
+      {(!isAdsReportTable || adsReportView === "summary") && (
       <div ref={summaryTablesRef}>
       {(hasAnyFacebook || hasGoogleAds) && displayRecords.length > 0 && (
         <div className="mb-3">
@@ -3165,8 +3197,9 @@ export default function DynamicTableView({ embedTableSlug, embedMode, summaryOnl
         />
       )}
       </div>
+      )}
 
-      {!summaryOnly && (hasAhrefs && isSeoReportSource(table?.integration_settings?.data_source) ? null : isLoading ? (
+      {(!isAdsReportTable || adsReportView === "summary") && !summaryOnly && (hasAhrefs && isSeoReportSource(table?.integration_settings?.data_source) ? null : isLoading ? (
         <CarmenLoadingScreen variant="card" messages={["כרמן מושכת את נתוני הטבלה…", "מחשבת את התקופה הנבחרת…"]} />
       ) : (
         <div className="border rounded-lg overflow-hidden bg-background shadow-sm">

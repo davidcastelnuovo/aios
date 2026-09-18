@@ -22,6 +22,7 @@ import { PublicMaskyooCallsCard } from "@/components/dynamic-tables/PublicMaskyo
 import { PublicSeoMonthlyWorkView } from "@/components/dynamic-tables/PublicSeoMonthlyWorkView";
 import { GoogleAnalyticsDashboard } from "@/components/dynamic-tables/GoogleAnalyticsDashboard";
 import { PublicWooCommerceView } from "@/components/dynamic-tables/PublicWooCommerceView";
+import { WeeklyCampaignComparison } from "@/components/reports/WeeklyCampaignComparison";
 import {
   getAddToCartFromData,
   getAdsPurchasesFromData,
@@ -40,7 +41,7 @@ import {
   isFacebookLeadsOnlyTable,
   summarizeFacebookCampaignGroup,
 } from "@/lib/adsMetrics";
-import { formatCurrency as formatCurrencyAmount, formatUnitCost as formatUnitCostAmount, resolveDashboardCurrency } from "@/lib/currency";
+import { formatCurrency as formatCurrencyAmount, formatUnitCost as formatUnitCostAmount, getCurrencySymbol, resolveDashboardCurrency } from "@/lib/currency";
 import { resolveAnalyticsReportMode } from "@/lib/analyticsReportMode";
 import {
   LineChart, Line, BarChart, Bar, ComposedChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer
@@ -60,7 +61,7 @@ const PLATFORM_CONFIG: Record<string, { name: string; color: string }> = {
   google_analytics: { name: 'Analytics', color: 'text-orange-500' },
 };
 
-type PlatformFilter = 'all' | 'facebook' | 'google_ads' | 'google_analytics' | 'woocommerce' | 'seo';
+type PlatformFilter = 'all' | 'weekly' | 'facebook' | 'google_ads' | 'google_analytics' | 'woocommerce' | 'seo';
 type CampaignType = 'leads' | 'ecommerce';
 
 const hasMeaningfulAnalyticsMetrics = (data: any) =>
@@ -173,6 +174,23 @@ export default function SharedDashboard({
 
   const tables = data?.tables || [];
   const rawRecords = data?.records || [];
+
+  const { data: weeklyData, isPending: weeklyPending } = useQuery({
+    queryKey: ['shared-dashboard', shareToken, 'last_365_days', 'weekly'],
+    queryFn: async () => {
+      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+      const apiKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
+      const query = new URLSearchParams({ token: shareToken!, date_filter: 'last_365_days' });
+      const res = await fetch(`${supabaseUrl}/functions/v1/public-dashboard?${query}`, {
+        headers: { apikey: apiKey, Authorization: `Bearer ${apiKey}` },
+      });
+      if (!res.ok) throw new Error(await res.text());
+      return res.json();
+    },
+    enabled: !!shareToken && platformFilter === 'weekly',
+    staleTime: 5 * 60_000,
+    retry: false,
+  });
   const dashboardCurrency = useMemo(() => resolveDashboardCurrency(tables), [tables]);
   const formatCurrency = (num: number) => formatCurrencyAmount(num, dashboardCurrency);
   const formatUnitCost = (num: number) => formatUnitCostAmount(num, dashboardCurrency);
@@ -187,6 +205,15 @@ export default function SharedDashboard({
     }
     return rawRecords;
   }, [rawRecords, tables]);
+
+  const weeklyRecords = useMemo(() => {
+    const source = weeklyData?.records || [];
+    const hasFbEcommerce = tables.some((t: any) => t.integration_type === 'facebook_ecommerce');
+    const hasFbInsights = tables.some((t: any) => t.integration_type === 'facebook_insights');
+    return hasFbEcommerce && hasFbInsights
+      ? source.filter((record: any) => record._source !== 'facebook_insights')
+      : source;
+  }, [weeklyData?.records, tables]);
 
   const wooSites = data?.woocommerce?.sites || [];
   const wooOrders = data?.woocommerce?.orders || [];
@@ -307,6 +334,13 @@ export default function SharedDashboard({
 
   const platformTabItems = useMemo((): ResponsiveTabItem[] => {
     const items: ResponsiveTabItem[] = [{ value: "all", label: "📊 הכל" }];
+    if (availablePlatforms.includes("facebook") || availablePlatforms.includes("google_ads")) {
+      items.push({
+        value: "weekly",
+        label: "השוואה שבועית",
+        iconNode: <BarChart3 className="h-4 w-4 text-violet-600" />,
+      });
+    }
     if (availablePlatforms.includes("facebook")) {
       items.push({
         value: "facebook",
@@ -1009,7 +1043,18 @@ export default function SharedDashboard({
       )}
 
       {/* Analytics Tab → Full GoogleAnalyticsDashboard */}
-      {platformFilter === 'google_analytics' ? (
+      {platformFilter === 'weekly' ? (
+        <WeeklyCampaignComparison
+          records={weeklyRecords}
+          currency={getCurrencySymbol(dashboardCurrency)}
+          isLoading={weeklyPending}
+          sourceModes={{
+            facebook_insights: campaignTypeByPlatform.facebook_insights,
+            facebook_ecommerce: campaignTypeByPlatform.facebook_ecommerce,
+            google_ads: campaignTypeByPlatform.google_ads,
+          }}
+        />
+      ) : platformFilter === 'google_analytics' ? (
         <GoogleAnalyticsDashboard
           records={allAnalyticsRecords}
           externalDateFilter={dateFilter}
