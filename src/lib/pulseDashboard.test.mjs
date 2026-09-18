@@ -7,9 +7,12 @@ import {
   applyPeriodMetricsToSnapshot,
   buildPulseDashboardUrl,
   clientHasCampaignService,
+  describeMetaChangeAvailability,
   expandPulseToPlatformGoalRows,
+  filterActiveCampaignTables,
   filterPulseCallFlags,
   formatPulseChange,
+  metaChangeSummary,
   getPulsePeriodBounds,
   platformGoalLabel,
   pulseSpendColumnLabel,
@@ -243,4 +246,66 @@ test("expands pulse rows per platform when Meta and Google tables exist", () => 
   assert.equal(rows.length, 2);
   assert.deepEqual(rows.map((row) => row.platformLabel).sort(), ["Google", "Meta"]);
   assert.equal(platformGoalLabel(rows[0]), rows[0].platformLabel + " · " + (rows[0].goal === "ecommerce" ? "איקומרס" : "לידים"));
+});
+
+test("inactive campaign tables do not create a second pulse row", () => {
+  const bounds = getPulsePeriodBounds("last_7_days", new Date("2026-08-05T12:00:00+03:00"));
+  const snapshot = {
+    client_id: "c1",
+    agency_id: null,
+    status: "healthy",
+    campaign_goal_mode: "leads",
+    is_ecommerce: false,
+    spend_7d: 100,
+    lead_spend_7d: 100,
+    ecommerce_spend_7d: 0,
+    leads_7d: 4,
+    cpl_7d: 25,
+    cpl_change_pct: 0,
+    purchases_7d: 0,
+    revenue_7d: 0,
+    roas_7d: null,
+    lead_goal_status: "healthy",
+    ecommerce_goal_status: null,
+    flags: [],
+    data_fresh_through: "2026-08-05",
+    calculated_at: "2026-08-05T10:00:00Z",
+    last_meta_change_at: null,
+    last_meta_change_type: null,
+    last_meta_change_actor: null,
+    last_meta_change_object: null,
+    meta_change_availability: "meta_api_unavailable",
+    last_client_call_at: null,
+    last_client_call_by: null,
+  };
+  const tables = [
+    { id: "t-meta-off", client_id: "c1", integration_type: "facebook_insights", campaign_active: false },
+    { id: "t-google", client_id: "c1", integration_type: "google_ads", campaign_active: true },
+  ];
+  const records = [
+    { table_id: "t-meta-off", data: { date: "2026-08-04", spend: 500, leads: 0 } },
+    { table_id: "t-google", data: { date: "2026-08-04", spend: 100, leads: 4 } },
+  ];
+  const rows = expandPulseToPlatformGoalRows({
+    snapshot,
+    services: ["ppc_meta", "ppc_google"],
+    tables,
+    records,
+    bounds,
+  });
+  assert.equal(rows.length, 1);
+  assert.equal(rows[0].platform, "google");
+  assert.equal(rows[0].status, "healthy");
+});
+
+test("meta change availability labels are explicit", () => {
+  assert.equal(describeMetaChangeAvailability("meta_api_unavailable", "summary"), "Meta API לא זמין");
+  assert.equal(
+    metaChangeSummary({ meta_change_availability: "meta_api_unavailable", last_meta_change_at: null }),
+    "Meta API לא זמין",
+  );
+  assert.equal(filterActiveCampaignTables([
+    { id: "a", client_id: "c1", integration_type: "google_ads", campaign_active: false },
+    { id: "b", client_id: "c1", integration_type: "google_ads", campaign_active: true },
+  ]).map((table) => table.id), ["b"]);
 });

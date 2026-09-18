@@ -414,19 +414,49 @@ function goalsForPlatform(tables: PulseCampaignTable[], platform: PulsePlatform)
 
 function platformsForClient(
   services: string[],
-  configuredTables: PulseCampaignTable[],
   activeTables: PulseCampaignTable[],
 ): PulsePlatform[] {
   const platforms = new Set<PulsePlatform>();
-  for (const table of [...activeTables, ...configuredTables]) {
+  for (const table of activeTables) {
     const key = pulsePlatformKey(table.integration_type);
     if (key) platforms.add(key);
   }
-  if (!platforms.size) {
+  // Only fall back to client.services when there are no connected tables at all.
+  if (!platforms.size && !activeTables.length) {
     if (services.includes("ppc_meta")) platforms.add("meta");
     if (services.includes("ppc_google")) platforms.add("google");
   }
   return Array.from(platforms);
+}
+
+export function isCampaignTableActive(table: Pick<PulseCampaignTable, "campaign_active">): boolean {
+  return table.campaign_active !== false;
+}
+
+export function filterActiveCampaignTables(tables: PulseCampaignTable[] | null | undefined): PulseCampaignTable[] {
+  if (!Array.isArray(tables)) return [];
+  return tables.filter(isCampaignTableActive);
+}
+
+export function describeMetaChangeAvailability(
+  availability: string | null | undefined,
+  mode: "summary" | "details" = "summary",
+): string {
+  if (availability === "no_campaign_change_in_30d") {
+    return mode === "details"
+      ? "לא נמצא שינוי במטה ב-30 הימים האחרונים"
+      : "לא נמצא";
+  }
+  if (availability === "not_applicable") return mode === "details" ? "לא רלוונטי" : "—";
+  if (availability === "meta_api_unavailable") {
+    return mode === "details"
+      ? "לא ניתן לשלוף שינויים מ-Meta כרגע (API לא זמין)"
+      : "Meta API לא זמין";
+  }
+  if (availability === "campaign_inactive") {
+    return mode === "details" ? "הקמפיין כבוי — לא נכלל בבדיקת דופק" : "קמפיין כבוי";
+  }
+  return mode === "details" ? "אין נתוני שינוי" : "—";
 }
 
 /**
@@ -447,8 +477,8 @@ export function expandPulseToPlatformGoalRows(input: {
   if (!configuredTables.length) {
     configuredTables = tables.filter((table) => pulsePlatformKey(table.integration_type) !== null);
   }
-  const activeTables = configuredTables.filter((table) => table.campaign_active !== false);
-  const platforms = platformsForClient(services, configuredTables, activeTables);
+  const activeTables = filterActiveCampaignTables(configuredTables);
+  const platforms = platformsForClient(services, activeTables);
 
   if (!platforms.length) {
     return [];
@@ -508,6 +538,10 @@ export function expandPulseToPlatformGoalRows(input: {
         (table) => integrationTypeToGoal(table.integration_type) === goal,
       );
       const goalActive = platformActive.filter((table) => integrationTypeToGoal(table.integration_type) === goal);
+
+      // Inactive campaign tables stay linked to the client but must not create
+      // a second red/yellow pulse row alongside the active campaign.
+      if (!goalActive.length) continue;
 
       const { status, flags } = classifyPlatformGoalStatus({
         platform,
@@ -642,16 +676,12 @@ export function formatMetaChangeDetails(row: PulseSnapshotRow | PulseGoalDisplay
     if (row.last_meta_change_actor) lines.push(`מי ביצע: ${row.last_meta_change_actor}`);
     return lines.join("\n");
   }
-  if (row.meta_change_availability === "no_campaign_change_in_30d") return "לא נמצא שינוי במטה ב-30 הימים האחרונים";
-  if (row.meta_change_availability === "not_applicable") return "לא רלוונטי";
-  return "לא זמין";
+  return describeMetaChangeAvailability(row.meta_change_availability, "details");
 }
 
 export function metaChangeSummary(row: PulseSnapshotRow | PulseGoalDisplayRow): string {
   if (row.last_meta_change_at) return formatMetaChangeDate(row) || "—";
-  if (row.meta_change_availability === "no_campaign_change_in_30d") return "לא נמצא";
-  if (row.meta_change_availability === "not_applicable") return "—";
-  return "לא זמין";
+  return describeMetaChangeAvailability(row.meta_change_availability, "summary");
 }
 
 export function formatPulseOutcomes(row: Pick<PulseSnapshotRow, "is_ecommerce" | "leads_7d" | "purchases_7d">): string {
@@ -685,9 +715,7 @@ export function formatMetaChange(row: PulseSnapshotRow): string {
     const object = row.last_meta_change_object ? ` (${row.last_meta_change_object})` : "";
     return `${when} — ${type}${object}`;
   }
-  if (row.meta_change_availability === "no_campaign_change_in_30d") return "לא נמצא ב-30 יום";
-  if (row.meta_change_availability === "not_applicable") return "—";
-  return "לא זמין";
+  return describeMetaChangeAvailability(row.meta_change_availability, "summary");
 }
 
 export function formatLastClientCall(row: PulseSnapshotRow): string {
