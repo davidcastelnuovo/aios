@@ -1,7 +1,8 @@
 /**
  * Instant WhatsApp alerts from campaign pulse snapshots.
- * Owner + assigned campaigners receive per-client alerts (deduped).
+ * Scoped owner + responsible team managers receive per-campaign alerts (deduped).
  */
+/* eslint-disable @typescript-eslint/no-explicit-any */
 
 import { isPulseDeliveryExcludedPhone } from './campaign-pulse.ts'
 import { normalizeNotifyPhone } from './carmen-notify-target.ts'

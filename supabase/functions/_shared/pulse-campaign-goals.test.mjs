@@ -14,6 +14,13 @@ test('classifies campaign objective and never defaults an unknown campaign to le
   assert.equal(classifyPulseCampaignGoal({ optimization_goal: 'THRUPLAY' }).goal, 'engagement')
   assert.equal(classifyPulseCampaignGoal({ campaign_objective: 'OUTCOME_SALES' }).goal, 'ecommerce')
   assert.equal(classifyPulseCampaignGoal({ campaign_name: 'קמפיין קיץ' }).goal, 'unknown')
+  assert.equal(
+    classifyPulseCampaignGoal(
+      { campaign_objective: 'OUTCOME_SALES' },
+      { campaign_type: 'leads' },
+    ).goal,
+    'leads',
+  )
 })
 
 test('keeps a missing outcome missing instead of converting it to zero', () => {

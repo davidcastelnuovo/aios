@@ -2,6 +2,7 @@
  * דשבורד בדיקת דופק — unified with agency dashboard: platform-centric campaign
  * breakdown plus pulse status, client-call, and campaign-touch columns.
  */
+/* eslint-disable @typescript-eslint/no-explicit-any */
 
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";

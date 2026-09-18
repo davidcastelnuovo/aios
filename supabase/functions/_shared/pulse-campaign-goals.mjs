@@ -35,16 +35,23 @@ export function classifyPulseCampaignGoal(data = {}, integrationSettings = {}) {
     data.conversion_action_category,
     data.bidding_strategy_type,
   )
-  const values = [...explicit, ...platform]
-
-  if (includesTerm(values, ECOMMERCE_TERMS)) {
-    return { goal: 'ecommerce', source: explicit.length ? 'explicit_mapping' : 'platform_goal' }
+  if (includesTerm(explicit, ECOMMERCE_TERMS)) {
+    return { goal: 'ecommerce', source: 'explicit_mapping' }
   }
-  if (includesTerm(values, LEAD_TERMS)) {
-    return { goal: 'leads', source: explicit.length ? 'explicit_mapping' : 'platform_goal' }
+  if (includesTerm(explicit, LEAD_TERMS)) {
+    return { goal: 'leads', source: 'explicit_mapping' }
   }
-  if (includesTerm(values, ENGAGEMENT_TERMS)) {
-    return { goal: 'engagement', source: explicit.length ? 'explicit_mapping' : 'platform_goal' }
+  if (includesTerm(explicit, ENGAGEMENT_TERMS)) {
+    return { goal: 'engagement', source: 'explicit_mapping' }
+  }
+  if (includesTerm(platform, ECOMMERCE_TERMS)) {
+    return { goal: 'ecommerce', source: 'platform_goal' }
+  }
+  if (includesTerm(platform, LEAD_TERMS)) {
+    return { goal: 'leads', source: 'platform_goal' }
+  }
+  if (includesTerm(platform, ENGAGEMENT_TERMS)) {
+    return { goal: 'engagement', source: 'platform_goal' }
   }
   return { goal: 'unknown', source: 'unclassified' }
 }
