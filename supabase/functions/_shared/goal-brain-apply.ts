@@ -15,12 +15,13 @@ export async function applyBrainResponse(
   content: string,
 ): Promise<{ ok: boolean; error?: string }> {
   const json = extractJsonFromBrainResponse(content);
-  if (!json) {
+  if (!json && request.request_type !== "manual_guidance") {
     return { ok: false, error: "no_json_in_response" };
   }
+  const payload = json || { summary: content.slice(0, 2000) };
 
   await supabase.from("goal_brain_requests").update({
-    response_json: json,
+    response_json: payload,
     status: "completed",
     completed_at: new Date().toISOString(),
     updated_at: new Date().toISOString(),
@@ -33,6 +34,8 @@ export async function applyBrainResponse(
       return await applyStepExecuteResponse(supabase, request, json);
     case "efficiency_review":
       return await applyEfficiencyReviewResponse(supabase, request, json);
+    case "manual_guidance":
+      return await applyManualGuidanceResponse(supabase, request, payload, content);
     default:
       return { ok: false, error: `unknown_request_type:${request.request_type}` };
   }
@@ -218,6 +221,66 @@ async function applyEfficiencyReviewResponse(
   }).eq("id", request.goal_id);
 
   return { ok: true };
+}
+
+async function applyManualGuidanceResponse(
+  supabase: SupabaseLike,
+  request: BrainRequestRow,
+  json: Record<string, unknown>,
+  rawContent: string,
+): Promise<{ ok: boolean; error?: string }> {
+  const summary = String(json.summary || json.notes || rawContent).slice(0, 2000);
+  await supabase.from("goal_events").insert({
+    tenant_id: request.tenant_id,
+    goal_id: request.goal_id,
+    event_type: "manual_guidance_applied",
+    actor: "cursor_direct_brain",
+    detail: {
+      request_id: request.id,
+      summary,
+      replan: !!json.replan,
+      actions: json.actions || [],
+    },
+  });
+
+  if (json.replan) {
+    await supabase.from("goals").update({
+      engine_status: "REPLANNING",
+      plan: [],
+      updated_at: new Date().toISOString(),
+    }).eq("id", request.goal_id);
+    await supabase.from("goal_plan_steps").update({ status: "skipped" })
+      .eq("goal_id", request.goal_id).in("status", ["pending", "in_progress"]);
+  } else {
+    await supabase.from("goals").update({
+      engine_status: "EXECUTING",
+      updated_at: new Date().toISOString(),
+    }).eq("id", request.goal_id);
+  }
+
+  await supabase.from("goals").update({
+    next_run_at: new Date().toISOString(),
+  }).eq("id", request.goal_id);
+
+  return { ok: true };
+}
+
+export function buildManualGuidanceBrainPrompt(args: {
+  guidance: string;
+  ctx: Record<string, unknown>;
+}): string {
+  return `David/Carmen sent MANUAL guidance into this autonomous goal. Incorporate it into orchestration.
+Reply JSON only:
+{
+  "summary": "how you incorporated the guidance",
+  "replan": boolean,
+  "notes": "optional next orchestration notes"
+}
+Manual guidance:
+${args.guidance}
+
+Goal context:
+${JSON.stringify(args.ctx, null, 2)}`;
 }
 
 export function buildPlanBrainPrompt(ctx: Record<string, unknown>): string {

@@ -108,6 +108,20 @@ export async function runGoalIteration(token: string, tenantId: string, goalId: 
   });
 }
 
+export async function sendGoalManualGuidance(
+  token: string,
+  tenantId: string,
+  goalId: string,
+  guidance: string,
+) {
+  return goalExecutionAction(token, {
+    action: "manual_guidance",
+    tenant_id: tenantId,
+    goal_id: goalId,
+    guidance,
+  });
+}
+
 export const GOAL_STATUS_LABELS: Record<ExecutionGoalStatus, string> = {
   active: "פעיל",
   in_progress: "בעבודה",

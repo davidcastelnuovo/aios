@@ -172,6 +172,45 @@ serve(async (req) => {
       return json(report);
     }
 
+    if (action === "manual_guidance") {
+      const goalId = String(body.goal_id || body.id || "");
+      const guidance = String(body.guidance || body.message || "").trim();
+      if (!goalId || !guidance) return json({ error: "goal_id and guidance required" }, 400);
+
+      const { data: goal } = await supabase.from("goals").select("*")
+        .eq("id", goalId).eq("tenant_id", tenantId).eq("autonomous_mode", true).maybeSingle();
+      if (!goal) return json({ error: "autonomous goal not found" }, 404);
+
+      await logGoalEvent(supabase, {
+        goalId,
+        tenantId,
+        eventType: "manual_guidance",
+        actorUserId: userId,
+        detail: { guidance: guidance.slice(0, 2000) },
+      });
+
+      const { loadGoalState, buildContextPackage } = await import("../_shared/autonomous-goal-engine.ts");
+      const { queueBrainRequest } = await import("../_shared/goal-cursor-brain.ts");
+      const { buildManualGuidanceBrainPrompt } = await import("../_shared/goal-brain-apply.ts");
+
+      const state = await loadGoalState(supabase, tenantId, goalId);
+      const ctx = state ? buildContextPackage(state) : { goal_id: goalId };
+      const queued = await queueBrainRequest(supabase, {
+        tenantId,
+        goalId,
+        requestType: "manual_guidance",
+        prompt: buildManualGuidanceBrainPrompt({ guidance, ctx }),
+      });
+
+      return json({
+        ok: true,
+        dispatched: queued.dispatched,
+        awaiting: queued.awaiting,
+        request_id: queued.requestId,
+        reason: queued.reason,
+      });
+    }
+
     if (action === "autonomous_run_iteration" || action === "run_iteration") {
       const id = String(body.id || body.goal_id || "");
       if (!id) return json({ error: "id required" }, 400);

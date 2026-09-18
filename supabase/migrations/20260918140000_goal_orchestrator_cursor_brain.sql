@@ -32,7 +32,7 @@ CREATE TABLE IF NOT EXISTS public.goal_brain_requests (
   step_id uuid REFERENCES public.goal_plan_steps(id) ON DELETE SET NULL,
   action_id uuid REFERENCES public.goal_actions(id) ON DELETE SET NULL,
   request_type text NOT NULL
-    CHECK (request_type IN ('plan', 'step_execute', 'efficiency_review')),
+    CHECK (request_type IN ('plan', 'step_execute', 'efficiency_review', 'manual_guidance')),
   status text NOT NULL DEFAULT 'pending'
     CHECK (status IN ('pending', 'sent', 'completed', 'failed', 'busy')),
   cursor_session_id text,

@@ -15,6 +15,7 @@ import {
   goalExecutionAction,
   listExecutionGoals,
   runGoalIteration,
+  sendGoalManualGuidance,
 } from "@/lib/goalExecution";
 
 export function GoalsPanel({ tenantId }: { tenantId: string | null }) {
@@ -25,7 +26,7 @@ export function GoalsPanel({ tenantId }: { tenantId: string | null }) {
   const [autonomous, setAutonomous] = useState(true);
   const [busy, setBusy] = useState(false);
 
-  const { data: goals = [], isLoading, refetch, isFetching } = useQuery({
+  const { data: goals = [], isLoading, isError: listError, refetch, isFetching } = useQuery({
     queryKey: ["execution-goals", tenantId],
     queryFn: async () => {
       const { data: { session } } = await supabase.auth.getSession();
@@ -100,14 +101,30 @@ export function GoalsPanel({ tenantId }: { tenantId: string | null }) {
         </button>
       </div>
 
+      {!tenantId && (
+        <p className="mb-2 text-xs text-[var(--cc-warn)]">טוען tenant… אם זה נשאר — רענן את הדף.</p>
+      )}
+      {listError && (
+        <p className="mb-2 text-xs text-[var(--cc-crit)]">לא הצלחתי לטעון יעדים — בדוק חיבור / הרשאות.</p>
+      )}
+
       <div className="mb-3 space-y-2">
         <div className="flex gap-2">
           <input
+            type="text"
+            dir="rtl"
+            autoComplete="off"
             value={newTitle}
             onChange={(e) => setNewTitle(e.target.value)}
             placeholder="יעד חדש…"
-            className="min-w-0 flex-1 rounded border border-[var(--cc-line)] bg-transparent px-2 py-1.5 text-sm"
-            onKeyDown={(e) => e.key === "Enter" && void createGoal()}
+            className="cc-form-input flex-1 text-sm"
+            disabled={busy || !tenantId}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                e.preventDefault();
+                void createGoal();
+              }
+            }}
           />
           <button type="button" onClick={() => void createGoal()} disabled={busy || !newTitle.trim()}
             className="flex items-center gap-1 rounded border border-[var(--cc-accent)] px-2 py-1 text-xs text-[var(--cc-accent)] disabled:opacity-40">
@@ -151,6 +168,21 @@ export function GoalsPanel({ tenantId }: { tenantId: string | null }) {
               detail={detail}
               tenantId={tenantId}
               onRunIteration={() => void triggerIteration(selectedId)}
+              onManualGuidance={async (guidance) => {
+                if (!tenantId || !selectedId) return;
+                setBusy(true);
+                try {
+                  const { data: { session } } = await supabase.auth.getSession();
+                  if (!session) throw new Error("לא מחובר");
+                  await sendGoalManualGuidance(session.access_token, tenantId, selectedId, guidance);
+                  await qc.invalidateQueries({ queryKey: ["execution-goal-detail", tenantId, selectedId] });
+                  toast({ title: "הנחיה נשלחה ל-Cursor Direct" });
+                } catch (e: unknown) {
+                  toast({ title: "שגיאה", description: e instanceof Error ? e.message : String(e), variant: "destructive" });
+                } finally {
+                  setBusy(false);
+                }
+              }}
               busy={busy}
             />
           )}
@@ -165,14 +197,17 @@ function GoalDetailView({
   detail,
   tenantId,
   onRunIteration,
+  onManualGuidance,
   busy,
 }: {
   goal: ExecutionGoal;
   detail: Record<string, unknown>;
   tenantId: string | null;
   onRunIteration: () => void;
+  onManualGuidance: (guidance: string) => Promise<void>;
   busy: boolean;
 }) {
+  const [guidance, setGuidance] = useState("");
   const milestones = (detail.milestones as Array<{ title: string; status: string }>) || [];
   const blockers = (detail.open_blockers as Array<{ title: string }>) || [];
   const next = (detail.next_three_actions as string[]) || [];
@@ -218,11 +253,39 @@ function GoalDetailView({
           </a>
         )}
         {goal.autonomous_mode && goal.engine_status !== "COMPLETED" && (
-          <button type="button" onClick={onRunIteration} disabled={busy}
-            className="mt-2 flex items-center gap-1 rounded border border-[var(--cc-line)] px-2 py-1 text-[10px] hover:border-[var(--cc-accent)]">
-            {busy ? <Loader2 className="h-3 w-3 animate-spin" /> : <Play className="h-3 w-3" />}
-            הרץ איטרציה עכשיו
-          </button>
+          <div className="mt-2 space-y-2">
+            <button type="button" onClick={onRunIteration} disabled={busy}
+              className="flex items-center gap-1 rounded border border-[var(--cc-line)] px-2 py-1 text-[10px] hover:border-[var(--cc-accent)]">
+              {busy ? <Loader2 className="h-3 w-3 animate-spin" /> : <Play className="h-3 w-3" />}
+              הרץ איטרציה עכשיו
+            </button>
+            <div className="rounded border border-[var(--cc-line)] p-2">
+              <p className="mb-1 text-[10px] font-semibold text-[var(--cc-accent)]">הכנסת יד / הנחיה ידנית</p>
+              <p className="mb-2 text-[10px] text-[var(--cc-text-dim)]">
+                נשלח ל-Cursor Direct (מוח המנהל) — לא דרך API.
+              </p>
+              <textarea
+                dir="rtl"
+                value={guidance}
+                onChange={(e) => setGuidance(e.target.value)}
+                placeholder="מה לשנות / לקדם / לעצור…"
+                className="cc-form-textarea cc-form-input text-[11px]"
+                disabled={busy}
+              />
+              <button
+                type="button"
+                disabled={busy || !guidance.trim()}
+                onClick={() => {
+                  const text = guidance.trim();
+                  if (!text) return;
+                  void onManualGuidance(text).then(() => setGuidance(""));
+                }}
+                className="mt-2 rounded border border-[var(--cc-accent)] px-2 py-1 text-[10px] text-[var(--cc-accent)] disabled:opacity-40"
+              >
+                שלח הנחיה
+              </button>
+            </div>
+          </div>
         )}
       </div>
 

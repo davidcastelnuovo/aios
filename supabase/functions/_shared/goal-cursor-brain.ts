@@ -11,7 +11,7 @@ import {
 import { followUpCloudAgent, cursorApiKey } from "./agent-channel/cursor-api.ts";
 import { hmacSha256Hex, timingSafeEqual } from "./security.ts";
 
-export const BRAIN_REQUEST_TYPES = ["plan", "step_execute", "efficiency_review"] as const;
+export const BRAIN_REQUEST_TYPES = ["plan", "step_execute", "efficiency_review", "manual_guidance"] as const;
 export type BrainRequestType = typeof BRAIN_REQUEST_TYPES[number];
 
 export type BrainRequestRow = {
