@@ -7,6 +7,7 @@
 // known-good monolithic version from main; CI redeploys it via the Supabase CLI. (re-deploy: a stray placeholder bundle had overwritten v40).
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.75.0'
 import { resolveModelId } from '../_shared/models.ts'
+import { isCachedPulseRequest } from '../_shared/pulse-request.mjs'
 import { assertCallerCanAccessClient, assertCallerCanAccessEntityClient } from '../_shared/auth-helpers.ts'
 import { summarizeAndStoreAgentMemory, recallAgentMemory, recallAgentMemoryFTS, saveAgentMemory } from '../_shared/agent-memory.ts'
 import { buildCarmenV2SystemPrompt, shouldUseV2Prompt } from '../_shared/carmen-prompt-v2.ts'
@@ -7402,16 +7403,9 @@ ${relevantLongTermMemory.map((item: any) => `• [${item.label}] ${item.text}`).
     // - On 'task' surface (a subagent itself running via run-agent-task): hide delegation tools entirely
     //   so a subagent can't recursively spawn more subagents.
     const cmd = (command_text || '').toString()
-    // "דופק" is intentionally sufficient: speech transcription frequently
-    // mangles the word before it ("ביגת דופק", "מדיקת דופק"). A pulse request
-    // must never depend on the model deciding whether to call the data tool.
-    const isStoredPulseRequest = !pinSkillsOnly
-      && (
-        /\bדופק\b|\bpulse\s*check\b/i.test(cmd)
-        || /בדיקת\s*(דוח|דופק)/i.test(cmd)
-        || /מצב\s*קמפיינים|סיכום\s*קמפיינים/i.test(cmd)
-      ) && !/(רעננ|חדש|עכשיו|בזמן\s*אמת|תריצ|תבצע)/i.test(cmd)
-      && !/תקינות\s*מערכות/i.test(cmd)
+    // Only unqualified summaries use empty tool args; scoped requests must
+    // retain their client/agency filters through normal tool routing.
+    const isStoredPulseRequest = !pinSkillsOnly && isCachedPulseRequest(cmd)
     const userAskedBackground = /\b(ברקע|תמשיכ[יה]\s+לבד|background|אל\s+תחכ[יה]|תעדכנ[יה]\s+אחר[\s-]?כך|תרוצ[יה]\s+ברקע)\b/i.test(cmd)
     const userAskedManus = /\b(manus|מנוס|מאנוס|מנואס)\b/i.test(cmd)
     const userAskedGithubAgent = /\b(github|גיטהאב|גיט\s*האב|שגיאת\s*קוד|תמיכה\s*טכנית|אגנט\s*קוד)\b/i.test(cmd)

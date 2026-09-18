@@ -30,6 +30,7 @@ import {
   type PulseDeliveryPlan,
 } from '../_shared/pulse-delivery.ts'
 import { deliverInstantPulseAlerts } from '../_shared/pulse-instant-alerts.ts'
+import { loadPulseSettings } from '../_shared/pulse-settings.mjs'
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!
 const SERVICE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
@@ -257,11 +258,9 @@ Deno.serve(async (req) => {
     manualDeliveryBypass && typeof body.campaigner_name === 'string'
       ? body.campaigner_name.trim()
       : null
-  let settingsQuery = supabase.from('tenant_heartbeat_settings')
-    .select('tenant_id, campaign_pulse_enabled, campaign_pulse_last_sent_at, campaign_pulse_phone, campaign_pulse_deliver_to_campaigners, campaign_pulse_deliver_to_team_managers, campaign_pulse_preview_phone, pulse_alert_rules')
-  if (body.tenant_id) settingsQuery = settingsQuery.eq('tenant_id', body.tenant_id)
-  const { data: settings, error: settingsError } = await settingsQuery
+  const { data: settings, error: settingsError, legacySchema } = await loadPulseSettings(supabase, body.tenant_id)
   if (settingsError) return json({ error: settingsError.message }, 500)
+  if (legacySchema) console.warn('[campaign-pulse] pulse_alert_rules missing; instant alerts disabled until schema deployment')
 
   const results: any[] = []
   for (const setting of settings || []) {
@@ -749,5 +748,6 @@ Deno.serve(async (req) => {
       external_api_calls: metaActivityCalls,
     })
   }
-  return json({ success: true, results })
+  const success = results.every(result => !result.error)
+  return json({ success, results, schema_degraded: legacySchema }, success ? 200 : 500)
 })
