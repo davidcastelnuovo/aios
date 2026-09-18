@@ -19,6 +19,7 @@ on:
     paths:
       - '.github/workflows/apply-staging-sql-migration.yml'
       - 'supabase/ops/apply_connect_client_meta_ad_account_skin.sql'
+      - 'supabase/ops/apply_carmen_autonomous_goal_engine_staging.sql'
 
 jobs:
   apply:
@@ -38,8 +39,13 @@ jobs:
             FILE="${{ github.event.inputs.sql_file }}"
             NAME="${{ github.event.inputs.migration_name }}"
           else
-            FILE="supabase/ops/apply_connect_client_meta_ad_account_skin.sql"
-            NAME="apply_connect_client_meta_ad_account_skin"
+            if git diff --name-only "${{ github.event.before }}" "${{ github.sha }}" 2>/dev/null | grep -q 'apply_carmen_autonomous_goal_engine_staging.sql'; then
+              FILE="supabase/ops/apply_carmen_autonomous_goal_engine_staging.sql"
+              NAME="apply_carmen_autonomous_goal_engine_staging"
+            else
+              FILE="supabase/ops/apply_connect_client_meta_ad_account_skin.sql"
+              NAME="apply_connect_client_meta_ad_account_skin"
+            fi
           fi
           test -f "$FILE"
           echo "file=$FILE" >> "$GITHUB_OUTPUT"

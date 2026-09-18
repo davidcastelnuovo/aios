@@ -671,6 +671,64 @@ export function goalLabel(goal: CampaignGoal): string {
   return goal === 'ecommerce' ? 'איקומרס' : 'לידים'
 }
 
+export type PulseCampaignBreakdownRow = {
+  goal?: string | null
+  status?: string | null
+  alert_eligible?: boolean | null
+  campaign_name?: string | null
+  client_name?: string | null
+  status_reason?: string | null
+}
+
+const PULSE_CATEGORY_LABELS: Array<[string, string]> = [
+  ['leads', 'לידים'],
+  ['engagement', 'אינגייג׳מנט'],
+  ['ecommerce', 'איקומרס'],
+]
+
+/**
+ * Per-category counts for the WhatsApp digest, from the campaign-level
+ * breakdown. Returns [] for legacy snapshots that have no breakdown, so the
+ * digest falls back to the client-level summary.
+ */
+export function buildPulseCategoryDigestLines(
+  rows: Array<{ campaign_breakdown?: PulseCampaignBreakdownRow[] | null; client_name?: string | null }>,
+): string[] {
+  const campaigns = rows.flatMap((row) =>
+    (Array.isArray(row.campaign_breakdown) ? row.campaign_breakdown : [])
+      .map((campaign) => ({ ...campaign, client_name: campaign.client_name ?? row.client_name ?? null })),
+  )
+  if (!campaigns.length) return []
+
+  const lines: string[] = ['*לפי קטגוריה:*']
+  for (const [goal, label] of PULSE_CATEGORY_LABELS) {
+    const inGoal = campaigns.filter((campaign) => campaign.goal === goal)
+    if (!inGoal.length) continue
+    const critical = inGoal.filter((campaign) => campaign.status === 'critical').length
+    const attention = inGoal.filter((campaign) => campaign.status === 'warning' || campaign.status === 'no_data').length
+    const healthy = inGoal.filter((campaign) => campaign.status === 'healthy').length
+    const countLabel = inGoal.length === 1 ? 'קמפיין אחד' : `${inGoal.length} קמפיינים`
+    lines.push(`${label}: 🔴 ${critical} · 🟡 ${attention} · 🟢 ${healthy} (${countLabel})`)
+  }
+
+  const unclassified = campaigns.filter((campaign) => campaign.goal === 'unknown').length
+  if (unclassified > 0) {
+    lines.push(`טעונים סיווג: ${unclassified} — לא נכללים בקטגוריות`)
+  }
+
+  const exceptions = campaigns.filter((campaign) => campaign.alert_eligible === true)
+  if (exceptions.length) {
+    lines.push('', '*חריגות מאומתות:*')
+    for (const campaign of exceptions.slice(0, 3)) {
+      const client = campaign.client_name ? `${campaign.client_name} — ` : ''
+      lines.push(`🔴 ${client}${campaign.campaign_name || 'קמפיין'}: ${campaign.status_reason || 'חריגה מתמשכת'}`)
+    }
+    if (exceptions.length > 3) lines.push(`ועוד ${exceptions.length - 3}`)
+  }
+
+  return lines
+}
+
 /** Keep only pulse rows for clients assigned to the given campaigner (client_team). */
 export function filterPulseRowsByClientIds<T extends { client_id: string }>(
   rows: T[],
@@ -700,11 +758,12 @@ export function countPulseStatuses(rows: Array<{ status?: string | null }>): Pul
  * Policy: never paste per-client Markdown tables on WhatsApp.
  */
 export function buildPulseWhatsAppDigest(
-  rows: Array<{ status?: string | null; client_name?: string | null; campaign_goal_mode?: string | null; is_ecommerce?: boolean | null; lead_goal_status?: string | null; ecommerce_goal_status?: string | null; leads_7d?: number | null; purchases_7d?: number | null; cpl_7d?: number | null; roas_7d?: number | null; cpl_change_pct?: number | null; roas_change_pct?: number | null; lead_spend_7d?: number | null; ecommerce_spend_7d?: number | null; spend_7d?: number | null }>,
+  rows: Array<{ status?: string | null; client_name?: string | null; campaign_goal_mode?: string | null; is_ecommerce?: boolean | null; lead_goal_status?: string | null; ecommerce_goal_status?: string | null; leads_7d?: number | null; purchases_7d?: number | null; cpl_7d?: number | null; roas_7d?: number | null; cpl_change_pct?: number | null; roas_change_pct?: number | null; lead_spend_7d?: number | null; ecommerce_spend_7d?: number | null; spend_7d?: number | null; campaign_breakdown?: PulseCampaignBreakdownRow[] | null }>,
   dashboardUrl: string,
   criticalIssues: PulseCriticalIssue[] = [],
 ): string {
   const goalRows = expandSnapshotsToGoalRows(rows as SnapshotExpandable[])
+  const categoryLines = buildPulseCategoryDigestLines(rows)
   const counts = countPulseStatuses(goalRows)
   const hybridClients = rows.filter((row) => snapshotGoalMode(row as SnapshotExpandable) === 'hybrid').length
   const goalHint = hybridClients > 0
@@ -729,6 +788,7 @@ export function buildPulseWhatsAppDigest(
       `*בדיקת דופק${name}${goalSuffix}*`,
       `סטטוס: ${label}`,
       metricLine,
+      ...(categoryLines.length ? ['', ...categoryLines] : []),
       ...issueLines,
       '',
       'פירוט מלא בדשבורד בדיקת דופק:',
@@ -742,6 +802,7 @@ export function buildPulseWhatsAppDigest(
     `🟢 *${counts.healthy}* תקינים`,
     `🟡 *${counts.attention}* לתשומת לב`,
     `🔴 *${counts.critical}* קריטיים`,
+    ...(categoryLines.length ? ['', ...categoryLines] : []),
     ...issueLines,
     '',
     'צפה בדשבורד בדיקת דופק:',

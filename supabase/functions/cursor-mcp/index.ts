@@ -89,6 +89,10 @@ const TOOLS = [
           type: "string",
           description: "Optional base branch (startingRef). Default: main.",
         },
+        goal_id: {
+          type: "string",
+          description: "Optional execution/autonomous goal id — reuses that goal's sticky Cursor agent (bc-…) instead of opening a new one.",
+        },
         context: {
           type: "string",
           description: "Optional extra context: error logs, file paths, links, constraints, acceptance criteria.",
@@ -830,11 +834,44 @@ async function handleToolCall(
       teachingBlock(ctx.tenantId) +
       callbackBlock;
     const meta = await resolveDispatchMeta(ctx.tenantId, context, task, "request_dev_task");
-    const fired = await fireCursorAgent(text, {
-      name: meta.displayName,
-      startingRef: branch || undefined,
-      tenantId: ctx.tenantId,
-    });
+    const goalId = String(args?.goal_id ?? "").trim();
+    let fired: FireResult;
+    if (goalId && ctx.tenantId && sb) {
+      const { data: goalRow } = await sb.from("goals").select("id, title, objective, constraints")
+        .eq("id", goalId).eq("tenant_id", ctx.tenantId).maybeSingle();
+      if (goalRow) {
+        const { dispatchToGoalCursor } = await import("../_shared/goal-cursor-dispatch.ts");
+        const g = await dispatchToGoalCursor(sb, {
+          tenantId: ctx.tenantId,
+          goalId,
+          goalTitle: String(goalRow.title),
+          objective: goalRow.objective,
+          stepTitle: task,
+          stepDescription: context,
+          constraints: goalRow.constraints,
+          startingRef: branch || undefined,
+        });
+        fired = {
+          id: g.cursorAgentId,
+          url: g.sessionUrl,
+          reused: g.reused,
+          delivered: g.delivered,
+          parallel: g.parallel,
+        };
+      } else {
+        fired = await fireCursorAgent(text, {
+          name: meta.displayName,
+          startingRef: branch || undefined,
+          tenantId: ctx.tenantId,
+        });
+      }
+    } else {
+      fired = await fireCursorAgent(text, {
+        name: meta.displayName,
+        startingRef: branch || undefined,
+        tenantId: ctx.tenantId,
+      });
+    }
     await logDispatch({
       tenantId: ctx.tenantId,
       agentId: ctx.agentId,
