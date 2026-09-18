@@ -93,7 +93,10 @@ jobs:
             echo "$CHANGED" | grep '^supabase/ops/' || true
 
             # Prefer the newest ops migration that triggered this push.
-            if echo "$CHANGED" | grep -qx 'supabase/ops/apply_pulse_campaign_breakdown_production.sql'; then
+            if echo "$CHANGED" | grep -qx 'supabase/ops/apply_recurring_human_tasks_production.sql'; then
+              FILE="supabase/ops/apply_recurring_human_tasks_production.sql"
+              NAME="apply_recurring_human_tasks_production"
+            elif echo "$CHANGED" | grep -qx 'supabase/ops/apply_pulse_campaign_breakdown_production.sql'; then
               FILE="supabase/ops/apply_pulse_campaign_breakdown_production.sql"
               NAME="apply_pulse_campaign_breakdown_production"
             elif echo "$CHANGED" | grep -qx 'supabase/ops/apply_goal_execution_and_autonomous_engine_production.sql'; then
