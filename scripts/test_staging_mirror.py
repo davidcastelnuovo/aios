@@ -82,6 +82,18 @@ class MirrorTests(unittest.TestCase):
         self.assertIn('ON CONFLICT(id) DO NOTHING', api.queries[0])
         self.assertNotIn('encrypted_password', api.queries[0])
 
+    def test_referenced_legacy_keys_cover_route_and_tag_tables(self):
+        self.assertIn('agent_brain_routes', mirror.REFERENCED_LEGACY_KEYS)
+        self.assertIn('chat_tags', mirror.REFERENCED_LEGACY_KEYS)
+        sql = mirror.referenced_legacy_reconcile_sql(
+            'chat_tags', 'name', 'old-id', 'new-id',
+            {'id': 'new-id', 'tenant_id': 'tenant', 'name': 'sales', 'color': '#fff', 'created_at': '2026-01-01T00:00:00Z'},
+            {'chat_contact_tags': 'tag_id'},
+            ['id', 'tenant_id', 'name', 'color', 'created_at'],
+        )
+        self.assertIn('UPDATE public."chat_contact_tags" SET "tag_id"=E\'new-id\'', sql)
+        self.assertIn('DELETE FROM public."chat_tags" WHERE id=E\'old-id\'', sql)
+
     def test_legacy_source_key_ambiguity_prevents_every_target_write(self):
         class API:
             def query(self, sql, source=False):
@@ -155,6 +167,20 @@ class MirrorTests(unittest.TestCase):
         self.assertNotIn('SET LOCAL session_replication_role', sql)
         self.assertNotIn('DISABLE TRIGGER ALL', sql)
         self.assertIn("tgenabled='O'",sql)
+
+    def test_source_orphans_are_skipped_without_counting_as_rejections(self):
+        class API:
+            def query(self, sql, source=False):
+                if source and 'EXISTS' in sql:
+                    return [{'present': False}]
+                raise AssertionError(sql)
+        rows = [{'key': {'id': '1'}, 'digest': 'x', 'row': {'id': '1', 'client_id': 'missing'}}]
+        kept, skipped = mirror.filter_rows_missing_source_parents(
+            API(), 'seo_monthly_updates', rows,
+            {'seo_monthly_updates': [{'parent': 'clients', 'column': 'client_id', 'parent_column': 'id'}]},
+        )
+        self.assertEqual(kept, [])
+        self.assertEqual(skipped, 1)
 
     def test_missing_column_blocks_preflight_and_secrets_not_managed(self):
         source = {'social_pages': {'pk':['id'],'columns':[{'name':x,'generated':''} for x in ['id','page_access_token','client_id']]}}
