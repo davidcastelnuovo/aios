@@ -32,6 +32,12 @@ import {
 } from '../_shared/pulse-delivery.ts'
 import { deliverInstantPulseAlerts } from '../_shared/pulse-instant-alerts.ts'
 import {
+  buildPulseSampleMessage,
+  isPulseSampleDeliveryTenant,
+  parsePulseSampleToPhone,
+  shouldDeliverInstantPulseAlerts,
+} from '../_shared/pulse-sample-delivery.mjs'
+import {
   buildPulseCampaignRows,
   classifyPulseCampaignGoal,
 } from '../_shared/pulse-campaign-goals.mjs'
@@ -222,6 +228,7 @@ Deno.serve(async (req) => {
     manualDeliveryBypass && typeof body.campaigner_name === 'string'
       ? body.campaigner_name.trim()
       : null
+  const sampleToPhoneRaw = parsePulseSampleToPhone(body, manualDeliveryBypass)
   const { data: settings, error: settingsError, legacySchema } = await loadPulseSettings(supabase, body.tenant_id)
   if (settingsError) return json({ error: settingsError.message }, 500)
   if (legacySchema) console.warn('[campaign-pulse] pulse_alert_rules missing; instant alerts disabled until schema deployment')
@@ -598,8 +605,16 @@ Deno.serve(async (req) => {
     }
     const { data: tenantRow } = await supabase.from('tenants').select('slug').eq('id', tenantId).maybeSingle()
     const tenantSlug = tenantRow?.slug || tenantId
+    const sampleToPhone = sampleToPhoneRaw ? normalizeNotifyPhone(sampleToPhoneRaw) : null
+    if (sampleToPhone && !isPulseSampleDeliveryTenant(tenantSlug)) {
+      results.push({
+        tenant_id: tenantId,
+        error: 'sample_to_phone is allowed only for marketingcaptain tenant',
+      })
+      continue
+    }
     let instantAlerts = { sent: 0, skipped: 0, candidates: 0, analyzed: 0 }
-    if (snapshots.length) {
+    if (snapshots.length && shouldDeliverInstantPulseAlerts(deliveryRequested, sampleToPhone)) {
       try {
         instantAlerts = await deliverInstantPulseAlerts({
           supabase,
@@ -646,7 +661,14 @@ Deno.serve(async (req) => {
         if (claim.error) console.error('Failed to claim campaign pulse delivery:', claim.error.message)
       }
     }
-    if (deliveryClaimed) {
+    if (deliveryClaimed && sampleToPhone) {
+      const sampleMessage = buildPulseSampleMessage(digest)
+      sent = await queuePulseWhatsApp(supabase, tenantId, tenantSlug, sampleMessage, sampleToPhone)
+      scopedDeliveries.push({ type: 'sample', phone: sampleToPhone, clients: snapshots.length, queued: sent })
+      if (!sent) {
+        console.error('[campaign-pulse] failed to queue sample pulse digest')
+      }
+    } else if (deliveryClaimed) {
       const skipPhones = new Set(
         [normalizeNotifyPhone(setting.campaign_pulse_phone)].filter((phone): phone is string => !!phone),
       )
