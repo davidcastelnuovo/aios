@@ -6,7 +6,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Skeleton } from "@/components/ui/skeleton";
+import { CarmenLoadingScreen } from "@/components/shared/CarmenLoadingScreen";
 import { Tabs } from "@/components/ui/tabs";
 import { ResponsiveTabsList, type ResponsiveTabItem } from "@/components/ui/responsive-tabs-list";
 import {
@@ -1210,11 +1210,8 @@ export default function DashboardView() {
 
   if (dashboardLoading) {
     return (
-      <div className="container mx-auto max-w-full overflow-x-hidden py-4 px-3 sm:py-8 sm:px-4 space-y-6">
-        <Skeleton className="h-8 w-64" />
-        <div className="grid gap-4 md:grid-cols-4">
-          {[1, 2, 3, 4].map(i => <Skeleton key={i} className="h-32" />)}
-        </div>
+      <div className="container mx-auto max-w-full overflow-x-hidden py-4 px-3 sm:py-8 sm:px-4">
+        <CarmenLoadingScreen messages={["כרמן מרכיבה את הדשבורד…", "מושכת את נתוני הפלטפורמות…"]} />
       </div>
     );
   }
@@ -1421,9 +1418,7 @@ export default function DashboardView() {
               <Button variant="outline" onClick={() => refetchRecords()}>נסה שוב</Button>
             </CardContent></Card>
           ) : recordsInitialLoad ? (
-            <div className="grid gap-4 md:grid-cols-4">
-              {[1, 2, 3, 4].map(i => <Skeleton key={i} className="h-32" />)}
-            </div>
+            <CarmenLoadingScreen variant="card" messages={["כרמן מושכת את נתוני הדוח…", "מסכמת לפי טווח התאריכים…"]} />
           ) : tables.length === 0 ? (
             <Card className="p-12 text-center">
               <h3 className="text-lg font-semibold mb-2">אין טבלאות משויכות ללקוח זה</h3>
