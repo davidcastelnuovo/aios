@@ -2,6 +2,7 @@
  * דשבורד בדיקת דופק — unified with agency dashboard: platform-centric campaign
  * breakdown plus pulse status, client-call, and campaign-touch columns.
  */
+/* eslint-disable @typescript-eslint/no-explicit-any */
 
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
@@ -37,7 +38,10 @@ import {
   isFacebookIntegration,
   type AgencyPlatformFilter,
 } from "@/lib/agencyCampaignData";
-import { PulseClientCampaignCard } from "@/components/pulse/PulseClientCampaignCard";
+import {
+  PulseCampaignGoalCard,
+  PulseClientCampaignCard,
+} from "@/components/pulse/PulseClientCampaignCard";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
 import { type OverallStatus } from "@/lib/healthScore";
@@ -57,12 +61,12 @@ import {
   applyClientCallToPulseSnapshot,
   filterPulseCallFlags,
   fetchPulseCampaignRecords,
-  filterDuplicateFacebookPulseTables,
   formatGoalChange,
   formatGoalEfficiency,
   formatGoalOutcomes,
   formatPulseMoney,
   getPulsePeriodBounds,
+  jerusalemYmd,
   platformGoalLabel,
   pulseGoalKeyForTable,
   PULSE_PERIOD_OPTIONS,
@@ -75,6 +79,12 @@ import {
   type PulsePeriod,
   type PulseSnapshotRow,
 } from "@/lib/pulseDashboard";
+import {
+  buildPulseCampaignRows,
+  pulseTrendWindows,
+  type PulseCampaignGoal,
+  type PulseCampaignGoalRow,
+} from "@/lib/pulseCampaignGoals";
 
 type ClientBase = {
   id: string;
@@ -120,11 +130,13 @@ export function CampaignPulseDashboard({
   const [filterService, setFilterService] = useState<"all" | "ppc_google" | "ppc_meta" | "seo" | "campaign">("campaign");
   const [filterCampaigner, setFilterCampaigner] = useState("all");
   const [platformFilter, setPlatformFilter] = useState<AgencyPlatformFilter>("all");
+  const [categoryTab, setCategoryTab] = useState<Exclude<PulseCampaignGoal, "unknown">>("leads");
   const [period, setPeriod] = useState<PulsePeriod>("last_7_days");
   const [overrideTarget, setOverrideTarget] = useState<PulseStatusOverrideTarget | null>(null);
   const [callLogTarget, setCallLogTarget] = useState<PulseClientCallTarget | null>(null);
   const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false);
   const periodBounds = useMemo(() => getPulsePeriodBounds(period), [period]);
+  const campaignTrendBounds = useMemo(() => pulseTrendWindows(jerusalemYmd()), []);
   const effectiveAgencyId = fixedAgencyId || (selectedAgency !== "all" ? selectedAgency : null);
 
   useEffect(() => {
@@ -180,6 +192,39 @@ export function CampaignPulseDashboard({
     } catch {
       toast.error("לא ניתן להעתיק קישור");
     }
+  }
+
+  async function saveCampaignTarget(
+    row: PulseCampaignGoalRow,
+    value: number,
+    kind: "cpl" | "cost_per_result" | "roas",
+  ) {
+    const table = pulseCampaignTables.find((candidate) => candidate.id === row.table_id);
+    if (!table) {
+      toast.error("לא נמצאה טבלת המקור של הקמפיין");
+      return;
+    }
+    const settings = { ...(table.integration_settings || {}) } as Record<string, unknown>;
+    const targets = {
+      ...((settings.pulse_targets as Record<string, unknown> | undefined) || {}),
+    };
+    const targetKey = row.campaign_id || row.campaign_name;
+    targets[targetKey] = {
+      kind,
+      [kind]: value,
+      source: "pulse_dashboard",
+      approved_at: new Date().toISOString(),
+    };
+    const { error } = await (supabase as any)
+      .from("crm_tables")
+      .update({ integration_settings: { ...settings, pulse_targets: targets } })
+      .eq("id", row.table_id);
+    if (error) {
+      toast.error(`שמירת היעד נכשלה: ${error.message}`);
+      throw error;
+    }
+    toast.success("היעד המאושר נשמר");
+    await refetchPulseTables();
   }
 
   const { data: crossTenantAgencyIds = [] } = useQuery({
@@ -271,15 +316,16 @@ export function CampaignPulseDashboard({
     queryFn: async () => {
       if (!tenantId || !clientIds.length) return [] as PulseSnapshotRow[];
       const baseColumns =
-        "client_id, agency_id, status, campaign_goal_mode, is_ecommerce, spend_7d, lead_spend_7d, ecommerce_spend_7d, leads_7d, cpl_7d, cpl_change_pct, purchases_7d, revenue_7d, roas_7d, roas_change_pct, lead_goal_status, ecommerce_goal_status, flags, data_fresh_through, calculated_at, last_meta_change_at, last_meta_change_type, last_meta_change_actor, last_meta_change_object, meta_change_availability";
+        "client_id, agency_id, status, campaign_goal_mode, is_ecommerce, spend_7d, lead_spend_7d, ecommerce_spend_7d, leads_7d, cpl_7d, cpl_change_pct, purchases_7d, revenue_7d, roas_7d, roas_change_pct, lead_goal_status, ecommerce_goal_status, campaign_breakdown, flags, data_fresh_through, calculated_at, last_meta_change_at, last_meta_change_type, last_meta_change_actor, last_meta_change_object, meta_change_availability";
+      const legacyBaseColumns = baseColumns.replace(", campaign_breakdown", "");
       const load = (columns: string) =>
         (supabase as any)
           .from("campaign_pulse_snapshots")
           .select(columns)
           .in("client_id", clientIds);
       let { data, error } = await load(`${baseColumns}, last_client_call_at, last_client_call_by`);
-      if (error && /last_client_call/.test(error.message ?? "")) {
-        ({ data, error } = await load(baseColumns));
+      if (error && /last_client_call|campaign_breakdown/.test(error.message ?? "")) {
+        ({ data, error } = await load(legacyBaseColumns));
       }
       if (error) throw error;
       return (data ?? []) as PulseSnapshotRow[];
@@ -323,7 +369,9 @@ export function CampaignPulseDashboard({
         .in("client_id", clientIds)
         .in("integration_type", ["facebook_insights", "facebook_ecommerce", "google_ads"]);
       if (error) throw error;
-      return filterDuplicateFacebookPulseTables(tables ?? []) as PulseCampaignTable[];
+      // Keep both Meta sources here. The campaign classifier deduplicates the
+      // same campaign/day after choosing the richer objective/outcome record.
+      return (tables ?? []) as PulseCampaignTable[];
     },
     enabled: !!tenantId && clientIds.length > 0,
     staleTime: 60_000,
@@ -342,10 +390,14 @@ export function CampaignPulseDashboard({
     queryKey: [
       "pulse-dash-records",
       pulseTableIds.join(","),
-      periodBounds.prevStartDate,
-      periodBounds.endDate,
+      campaignTrendBounds.queryStart,
+      campaignTrendBounds.queryEnd,
     ],
-    queryFn: () => fetchPulseCampaignRecords(pulseTableIds, periodBounds),
+    queryFn: () => fetchPulseCampaignRecords(pulseTableIds, {
+      ...periodBounds,
+      prevStartDate: campaignTrendBounds.queryStart,
+      endDate: campaignTrendBounds.queryEnd,
+    }),
     enabled: pulseTableIds.length > 0,
     staleTime: 30_000,
     placeholderData: (previous) => previous,
@@ -361,6 +413,15 @@ export function CampaignPulseDashboard({
       tableToClient,
     };
   }, [pulseCampaignTables, pulseCampaignRecords]);
+
+  const campaignGoalRows = useMemo(
+    () => buildPulseCampaignRows({
+      records: pulseCampaignRecords,
+      tables: pulseCampaignTables,
+      nowYmd: jerusalemYmd(),
+    }),
+    [pulseCampaignRecords, pulseCampaignTables],
+  );
 
   const refetchCampaignData = () => {
     refetchPulseTables();
@@ -517,6 +578,31 @@ export function CampaignPulseDashboard({
     return map;
   }, [filteredByRole]);
 
+  const visibleCampaignGoalRows = useMemo(() => {
+    return campaignGoalRows
+      .filter((row) => row.goal === categoryTab)
+      .filter((row) => {
+        const meta = clientMetaById.get(row.client_id);
+        if (!meta) return false;
+        if (search && !`${meta.name} ${row.campaign_name}`.toLowerCase().includes(search.toLowerCase())) return false;
+        if (platformFilter === "facebook" && row.platform !== "meta") return false;
+        if (platformFilter === "google_ads" && row.platform !== "google") return false;
+        const overall = row.status === "critical" ? "red" : row.status === "healthy" ? "green" : "yellow";
+        if (filterStatus !== "all" && overall !== filterStatus) return false;
+        return true;
+      })
+      .sort((a, b) => {
+        const rank = (status: string) => status === "critical" ? 0 : status === "warning" ? 1 : 2;
+        return rank(a.status) - rank(b.status)
+          || a.campaign_name.localeCompare(b.campaign_name, "he");
+      });
+  }, [campaignGoalRows, categoryTab, clientMetaById, search, platformFilter, filterStatus]);
+
+  const unclassifiedCampaignRows = useMemo(
+    () => campaignGoalRows.filter((row) => row.goal === "unknown" && clientMetaById.has(row.client_id)),
+    [campaignGoalRows, clientMetaById],
+  );
+
   function resolvePulseRowForCard(card: ReturnType<typeof buildClientCampaignTableData>[number]): PulseRow {
     const { platform, goal } = pulseGoalKeyForTable(card.integrationType, card.campaignType);
     const exactKey = platform ? `${card.clientId}:${platform}:${goal}` : null;
@@ -640,6 +726,18 @@ export function CampaignPulseDashboard({
   }, [campaignData?.tables]);
 
   const summary = useMemo(() => {
+    const categoryRows = campaignGoalRows.filter(
+      (row) => row.goal === categoryTab && clientMetaById.has(row.client_id),
+    );
+    if (categoryRows.length > 0) {
+      return {
+        red: categoryRows.filter((row) => row.status === "critical").length,
+        yellow: categoryRows.filter((row) => row.status === "warning" || row.status === "no_data").length,
+        green: categoryRows.filter((row) => row.status === "healthy").length,
+        total: categoryRows.length,
+        missingPulse: unclassifiedCampaignRows.length,
+      };
+    }
     const base = filterService === "campaign"
       ? rows.filter((c) => clientHasCampaignCoverage(c.services, tablesByClient.get(c.clientId)))
       : rows;
@@ -652,7 +750,15 @@ export function CampaignPulseDashboard({
         base.filter((c) => clientHasCampaignService(c.services) && !c.pulse).map((c) => c.clientId),
       ).size,
     };
-  }, [rows, filterService]);
+  }, [
+    rows,
+    filterService,
+    campaignGoalRows,
+    categoryTab,
+    clientMetaById,
+    unclassifiedCampaignRows.length,
+    tablesByClient,
+  ]);
 
   const freshness = useMemo(() => {
     const times = pulseRows.map((r) => r.calculated_at).filter(Boolean) as string[];
@@ -722,14 +828,16 @@ export function CampaignPulseDashboard({
             <h1 className="text-xl sm:text-2xl font-bold">דשבורד בדיקת דופק</h1>
           ) : null}
           <p className="text-muted-foreground text-xs sm:text-sm mt-0.5 break-words">
-            {summary.total} לקוחות קמפיין פעילים
+            {summary.total} {campaignGoalRows.length ? "קמפיינים בקטגוריה" : "לקוחות קמפיין פעילים"}
             {` · ${periodBounds.label}`}
             {period !== "last_7_days"
               ? ` (${periodBounds.startDate}–${periodBounds.endDate})`
               : ""}
             {freshness ? ` · עודכן ${freshness}` : ""}
             {pulseRecordsFetching ? " · טוען פירוט קמפיינים..." : ""}
-            {summary.missingPulse > 0 ? ` · ${summary.missingPulse} ממתינים לחישוב` : ""}
+            {summary.missingPulse > 0
+              ? ` · ${summary.missingPulse} ${campaignGoalRows.length ? "טעונים סיווג" : "ממתינים לחישוב"}`
+              : ""}
           </p>
         </div>
         <div className="flex gap-2 w-full sm:w-auto">
@@ -990,6 +1098,32 @@ export function CampaignPulseDashboard({
         )}
       </div>
 
+      <Tabs
+        value={categoryTab}
+        onValueChange={(value) => setCategoryTab(value as Exclude<PulseCampaignGoal, "unknown">)}
+        dir="rtl"
+      >
+        <TabsList className="grid h-auto w-full grid-cols-3">
+          <TabsTrigger value="leads">לידים</TabsTrigger>
+          <TabsTrigger value="engagement">אינגייג׳מנט</TabsTrigger>
+          <TabsTrigger value="ecommerce">איקומרס</TabsTrigger>
+        </TabsList>
+      </Tabs>
+
+      {unclassifiedCampaignRows.length > 0 ? (
+        <div className="rounded-md border border-amber-300 bg-amber-50 p-3 text-sm text-amber-950">
+          <strong>{unclassifiedCampaignRows.length} קמפיינים טעונים סיווג.</strong>
+          {" "}הם אינם משויכים אוטומטית ללידים ולא נכללים בסיכומי הקטגוריות.
+          <div className="mt-1 text-xs">
+            {unclassifiedCampaignRows
+              .slice(0, 5)
+              .map((row) => `${clientMetaById.get(row.client_id)?.name || "לקוח"} — ${row.campaign_name}`)
+              .join(" · ")}
+            {unclassifiedCampaignRows.length > 5 ? " · …" : ""}
+          </div>
+        </div>
+      ) : null}
+
       {(availablePlatforms.hasFacebook || availablePlatforms.hasGoogleAds) && (
         <Tabs value={platformFilter} onValueChange={(value) => setPlatformFilter(value as AgencyPlatformFilter)} dir="rtl">
           <TabsList className="h-auto flex-wrap gap-1">
@@ -1017,6 +1151,34 @@ export function CampaignPulseDashboard({
         </Tabs>
       )}
 
+      {campaignGoalRows.length > 0 ? (
+        <div className="space-y-4 min-w-0">
+          {visibleCampaignGoalRows.length === 0 ? (
+            <Card>
+              <CardContent className="py-10 text-center text-muted-foreground text-sm">
+                אין קמפיינים בקטגוריה ובסינון שנבחרו
+              </CardContent>
+            </Card>
+          ) : visibleCampaignGoalRows.map((row) => {
+            const meta = clientMetaById.get(row.client_id);
+            if (!meta) return null;
+            return (
+              <PulseCampaignGoalCard
+                key={row.campaign_key}
+                row={row}
+                clientName={meta.name}
+                campaignerName={meta.campaignerName}
+                onOpenClient={() => openClientCard(row.client_id)}
+                onSaveTarget={
+                  isOwner || isTeamManager || isSuperAdmin
+                    ? (value, kind) => saveCampaignTarget(row, value, kind)
+                    : undefined
+                }
+              />
+            );
+          })}
+        </div>
+      ) : (
       <div className="space-y-4 min-w-0">
         {displayItems.length === 0 ? (
           <Card>
@@ -1153,6 +1315,7 @@ export function CampaignPulseDashboard({
           })
         )}
       </div>
+      )}
       {dataUpdatedAt ? (
         <p className="text-xs text-muted-foreground">
           טבלאות לא מחוברות מוצגות כאן ליד הלקוח (צהוב) — לא נשלחות בוואטסאפ.
