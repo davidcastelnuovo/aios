@@ -11,8 +11,7 @@ COMMENT ON COLUMN public.campaign_pulse_snapshots.campaign_breakdown IS
 DO $alert_log$
 BEGIN
   IF to_regclass('public.pulse_instant_alert_log') IS NULL THEN
-    RAISE NOTICE 'pulse_instant_alert_log missing — run apply_pulse_refresh_and_instant_alerts.sql first';
-    RETURN;
+    RAISE EXCEPTION 'pulse_instant_alert_log missing — run apply_pulse_refresh_and_instant_alerts.sql first';
   END IF;
 
   ALTER TABLE public.pulse_instant_alert_log
@@ -123,15 +122,16 @@ BEGIN
 END;
 $operational_crons$;
 
--- Verification (visible in the apply logs)
+-- Verification. The Management API returns only the last statement, so the
+-- column check runs last and lands in the apply logs.
+SELECT jobname, schedule, active
+FROM cron.job
+WHERE jobname IN ('meta-operational-check-2h', 'google-ads-operational-check-2h')
+ORDER BY jobname;
+
 SELECT table_name, column_name
 FROM information_schema.columns
 WHERE table_schema = 'public'
   AND table_name IN ('campaign_pulse_snapshots', 'pulse_instant_alert_log')
   AND column_name IN ('campaign_breakdown', 'campaign_key', 'fingerprint', 'severity_score', 'evidence')
 ORDER BY table_name, column_name;
-
-SELECT jobname, schedule, active
-FROM cron.job
-WHERE jobname IN ('meta-operational-check-2h', 'google-ads-operational-check-2h')
-ORDER BY jobname;
