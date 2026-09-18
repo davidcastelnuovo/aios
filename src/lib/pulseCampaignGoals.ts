@@ -3,10 +3,14 @@
 import {
   buildPulseCampaignRows as buildRows,
   classifyPulseCampaignGoal as classifyGoal,
+  classificationDataFromStoredRow as classificationDataFromRow,
   campaignDeliveryStatusLabel as deliveryStatusLabel,
+  integrationTypeToGoal as tableIntegrationGoal,
+  isEcommerceReportTable as isEcommerceTable,
   pulseCampaignOutcome as campaignOutcome,
   pulseTrendWindows as trendWindows,
   resolveCampaignDeliveryStatus as resolveDeliveryStatus,
+  tableReportGoal as reportTableGoal,
 } from "../../supabase/functions/_shared/pulse-campaign-goals.mjs";
 
 export const campaignDeliveryStatusLabel = deliveryStatusLabel as (status: string) => string;
@@ -82,3 +86,24 @@ export const classifyPulseCampaignGoal = classifyGoal as (
 
 export const pulseCampaignOutcome = campaignOutcome;
 export const pulseTrendWindows = trendWindows;
+
+export const isEcommerceReportTable = isEcommerceTable as (table: {
+  integration_type?: string | null;
+  category?: string | null;
+  integration_settings?: { campaign_type?: string | null } | null;
+}) => boolean;
+
+export const integrationTypeToGoal = tableIntegrationGoal as (
+  integrationType: string | null | undefined,
+  table?: {
+    integration_type?: string | null;
+    category?: string | null;
+    integration_settings?: { campaign_type?: string | null } | null;
+  } | null,
+) => "leads" | "ecommerce" | null;
+
+export const classificationDataFromStoredRow = classificationDataFromRow as (
+  row?: Record<string, unknown>,
+) => Record<string, unknown>;
+
+export const tableReportGoal = reportTableGoal;

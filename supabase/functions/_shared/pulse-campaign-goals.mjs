@@ -134,6 +134,36 @@ export function tableReportGoal(table = {}) {
   return null
 }
 
+/** Single source of truth for “is this CRM table an ecommerce report?” */
+export function isEcommerceReportTable(table = {}) {
+  if (table.integration_type === 'facebook_ecommerce') return true
+  if (String(table.category || '').trim() === 'איקומרס') return true
+  return String(table.integration_settings?.campaign_type || '').trim().toLowerCase() === 'ecommerce'
+}
+
+/** Table-level default goal for pulse rollups (not per-campaign). */
+export function integrationTypeToGoal(integrationType, table) {
+  if (table && isEcommerceReportTable(table)) return 'ecommerce'
+  if (integrationType === 'facebook_ecommerce') return 'ecommerce'
+  if (integrationType === 'facebook_insights' || integrationType === 'google_ads') return 'leads'
+  return null
+}
+
+/** Map stored pulse breakdown / snapshot row back to classifier input. */
+export function classificationDataFromStoredRow(row = {}) {
+  if (row.data && typeof row.data === 'object') return row.data
+  return {
+    campaign_objective: row.campaign_objective ?? row.objective ?? null,
+    objective: row.campaign_objective ?? row.objective ?? null,
+    optimization_goal: row.optimization_goal ?? null,
+    campaign_type: row.campaign_type_hint ?? row.campaign_type ?? null,
+    result_kind: row.result_kind ?? row.outcome_kind ?? null,
+    campaign_name: row.campaign_name ?? null,
+    pulse_goal: row.pulse_goal ?? null,
+    campaign_goal: row.campaign_goal ?? null,
+  }
+}
+
 function tableReportDefaultGoal(context = {}) {
   const goal = tableReportGoal(context)
   return goal === 'leads' ? null : goal

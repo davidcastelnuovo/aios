@@ -1,7 +1,10 @@
 import { supabase } from "@/integrations/supabase/client";
 import { shouldIncludeInAdsDashboardAggregate } from "@/lib/adsEntityLevel";
 import {
+  classificationDataFromStoredRow,
   classifyPulseCampaignGoal,
+  integrationTypeToGoal,
+  isEcommerceReportTable,
   resolveCampaignDeliveryStatus,
   type PulseCampaignGoalRow,
 } from "@/lib/pulseCampaignGoals";
@@ -205,12 +208,6 @@ export function pulseClientsNeedingRecordBuild(input: {
   return needsBuild;
 }
 
-export function isEcommerceReportTable(table: PulseCampaignTable): boolean {
-  if (table.integration_type === "facebook_ecommerce") return true;
-  if (String(table.category || "").trim() === "איקומרס") return true;
-  return String(table.integration_settings?.campaign_type || "").trim().toLowerCase() === "ecommerce";
-}
-
 function tableClassificationContext(table: PulseCampaignTable): Record<string, unknown> {
   return {
     integration_type: table.integration_type,
@@ -249,29 +246,10 @@ export function pulseClientsWithMisclassifiedEcommerceReports(
 function applyFreshCampaignGoalClassification(
   row: PulseCampaignGoalRow,
   table: PulseCampaignTable | undefined,
-  settings: Record<string, unknown>,
 ): PulseCampaignGoalRow {
   if (!table) return row;
-  if (
-    isEcommerceReportTable(table)
-    && row.goal === "leads"
-    && !rowConfirmsLeadObjective(row)
-    && ((row.revenue_7d || 0) > 0 || row.outcome_kind === "purchases")
-  ) {
-    return {
-      ...row,
-      goal: "ecommerce",
-      classification_source: "table_report_type",
-    };
-  }
   const classification = classifyPulseCampaignGoal(
-    {
-      campaign_objective: row.campaign_objective,
-      optimization_goal: row.optimization_goal,
-      campaign_type: row.campaign_type_hint,
-      result_kind: row.result_kind,
-      campaign_name: row.campaign_name,
-    },
+    classificationDataFromStoredRow(row),
     tableClassificationContext(table),
   );
   if (classification.goal === "unknown" || classification.goal === row.goal) return row;
@@ -293,13 +271,7 @@ export function pulseClientsWithStaleCampaignGoals(
     const table = tableById.get(row.table_id);
     if (!table) continue;
     const fresh = classifyPulseCampaignGoal(
-      {
-        campaign_objective: row.campaign_objective,
-        optimization_goal: row.optimization_goal,
-        campaign_type: row.campaign_type_hint,
-        result_kind: row.result_kind,
-        campaign_name: row.campaign_name,
-      },
+      classificationDataFromStoredRow(row),
       tableClassificationContext(table),
     );
     if (fresh.goal !== "unknown" && fresh.goal !== row.goal) {
@@ -366,7 +338,7 @@ export function rehydrateCampaignBreakdownRows(
         alert_eligible: false,
       };
     }
-    return applyFreshCampaignGoalClassification(next, table, settings);
+    return applyFreshCampaignGoalClassification(next, table);
   });
 }
 
@@ -820,16 +792,6 @@ export function pulsePlatformLabel(platform: PulsePlatform): string {
 export function pulsePlatformKey(integrationType: string | null | undefined): PulsePlatform | null {
   if (integrationType === "google_ads") return "google";
   if (integrationType === "facebook_insights" || integrationType === "facebook_ecommerce") return "meta";
-  return null;
-}
-
-export function integrationTypeToGoal(
-  integrationType: string | null | undefined,
-  table?: PulseCampaignTable | null,
-): CampaignGoal | null {
-  if (table && isEcommerceReportTable(table)) return "ecommerce";
-  if (integrationType === "facebook_ecommerce") return "ecommerce";
-  if (integrationType === "facebook_insights" || integrationType === "google_ads") return "leads";
   return null;
 }
 

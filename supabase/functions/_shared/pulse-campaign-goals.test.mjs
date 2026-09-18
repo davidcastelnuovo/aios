@@ -4,9 +4,70 @@ import test from 'node:test'
 import {
   buildPulseCampaignRows,
   classifyPulseCampaignGoal,
+  integrationTypeToGoal,
+  isEcommerceReportTable,
   pulseCampaignOutcome,
   pulseTrendWindows,
 } from './pulse-campaign-goals.mjs'
+import { buildInsightRecord } from './fbInsights.ts'
+
+test('table helpers share one ecommerce definition across pulse and reports', () => {
+  const ecommerceTable = {
+    integration_type: 'facebook_insights',
+    category: 'איקומרס',
+    integration_settings: {},
+  }
+  assert.equal(isEcommerceReportTable(ecommerceTable), true)
+  assert.equal(integrationTypeToGoal('facebook_insights', ecommerceTable), 'ecommerce')
+  assert.equal(integrationTypeToGoal('facebook_insights', { integration_type: 'facebook_insights' }), 'leads')
+})
+
+test('fbInsights sync output classifies identically in pulse', () => {
+  const sales = buildInsightRecord(
+    {
+      date_start: '2026-09-17',
+      campaign_id: 'sale',
+      campaign_name: 'קמפיין מכירות | מבצעים ספטמבר',
+      spend: '462.60',
+      actions: [{ action_type: 'omni_purchase', value: '2' }],
+      action_values: [{ action_type: 'omni_purchase', value: '1200' }],
+    },
+    {
+      sale: {
+        id: 'sale',
+        name: 'קמפיין מכירות | מבצעים ספטמבר',
+        objective: 'OUTCOME_SALES',
+        effective_status: 'ACTIVE',
+        configured_status: 'ACTIVE',
+      },
+    },
+    {},
+    { sale: 'OFFSITE_CONVERSIONS' },
+  )
+  assert.equal(classifyPulseCampaignGoal(sales).goal, 'ecommerce')
+
+  const engagement = buildInsightRecord(
+    {
+      date_start: '2026-09-17',
+      campaign_id: 'eng',
+      campaign_name: 'קמפיין מעורבות | סרטונים חדש',
+      spend: '10',
+      actions: [{ action_type: 'video_view', value: '20' }],
+    },
+    {
+      eng: {
+        id: 'eng',
+        name: 'קמפיין מעורבות | סרטונים חדש',
+        objective: 'OUTCOME_ENGAGEMENT',
+        effective_status: 'ACTIVE',
+        configured_status: 'ACTIVE',
+      },
+    },
+    {},
+    { eng: 'THRUPLAY' },
+  )
+  assert.equal(classifyPulseCampaignGoal(engagement).goal, 'engagement')
+})
 
 test('classifies campaign objective and never defaults an unknown campaign to leads', () => {
   assert.equal(classifyPulseCampaignGoal({ campaign_objective: 'OUTCOME_LEADS' }).goal, 'leads')

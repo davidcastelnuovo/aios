@@ -452,21 +452,12 @@ export function isPulseDeliveryExcludedPhone(
   return PULSE_DELIVERY_EXCLUDED_PHONE_SUFFIXES.some((suffix) => digits.endsWith(suffix))
 }
 
-export function isEcommerceReportTable(table: CampaignTableLike): boolean {
-  if (table.integration_type === 'facebook_ecommerce') return true
-  if (String(table.category || '').trim() === 'איקומרס') return true
-  return String(table.integration_settings?.campaign_type || '').trim().toLowerCase() === 'ecommerce'
-}
+import {
+  isEcommerceReportTable,
+  integrationTypeToGoal,
+} from './pulse-campaign-goals.mjs'
 
-export function integrationTypeToGoal(
-  integrationType: string | null | undefined,
-  table?: CampaignTableLike | null,
-): CampaignGoal | null {
-  if (table && isEcommerceReportTable(table)) return 'ecommerce'
-  if (integrationType === 'facebook_ecommerce') return 'ecommerce'
-  if (integrationType === 'facebook_insights' || integrationType === 'google_ads') return 'leads'
-  return null
-}
+export { isEcommerceReportTable, integrationTypeToGoal }
 
 export function detectCampaignGoalMode(tables: CampaignTableLike[]): CampaignGoalMode {
   const goals = new Set<CampaignGoal>()
