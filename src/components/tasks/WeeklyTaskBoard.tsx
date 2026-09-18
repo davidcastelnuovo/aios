@@ -56,6 +56,15 @@ import {
   collectTaskAssigneeIds,
   shouldFanOutRecurringTasks,
 } from "@/lib/recurringTaskAssignees";
+import {
+  isRecurringBoardTask,
+  recurringTaskBelongsInBacklog,
+  shouldShowRecurringTaskNow,
+} from "@/lib/recurringTaskBoardFilter";
+import {
+  computeFirstOccurrenceDate,
+  type RecurrenceFrequency,
+} from "@/lib/taskRecurrence";
 import { fetchActiveCampaigners } from "@/lib/taskCampaigners";
 import { buildMineQueueOrFilter, fetchMineTaskIdentity } from "@/lib/mineTaskIdentity";
 import {
@@ -625,6 +634,9 @@ export function WeeklyTaskBoard() {
       if (isViewingAs && boardUserId) {
         filtered = filterTasksForBoardUserPreview(filtered, boardUserId, mineIdentity ?? null);
       }
+      filtered = filtered.filter((task) =>
+        shouldShowRecurringTaskNow(task, startOfDay(new Date())),
+      );
       return filtered;
     },
     [
@@ -797,9 +809,17 @@ export function WeeklyTaskBoard() {
       if (targetDate) {
         insertData.target_date = targetDate;
       }
-      if (validDate) {
-        insertData.due_date = format(validDate, "yyyy-MM-dd");
-        // Only save time if we have a valid date
+      let taskDueDate = validDate;
+      if (!taskDueDate && recurrenceFrequency) {
+        const first = computeFirstOccurrenceDate({
+          frequency: recurrenceFrequency as RecurrenceFrequency,
+          weekday: recurrenceWeekday,
+          monthday: recurrenceMonthday,
+        });
+        taskDueDate = first;
+      }
+      if (taskDueDate) {
+        insertData.due_date = format(taskDueDate, "yyyy-MM-dd");
         if (time) {
           insertData.due_time = time + ":00";
         }
@@ -1444,9 +1464,13 @@ export function WeeklyTaskBoard() {
   // Split tasks: backlog (overdue + unscheduled + untimed) vs scheduled in range
   const today = startOfDay(new Date());
   
-  // Backlog includes: overdue, no due_date, or has due_date but no due_time
+  // Backlog includes: overdue, no due_date, or has due_date but no due_time.
+  // Recurring tasks only appear here on their due day (not all week).
   const backlogTasks = tasks.filter((t) => {
     if (t.status === "done") return false;
+    if (isRecurringBoardTask(t)) {
+      return recurringTaskBelongsInBacklog(t, today);
+    }
     if (isTaskOverdue(t, today)) return true;
     if (t.due_date === null) return true;
     if (!t.due_time) return true;
@@ -1455,6 +1479,7 @@ export function WeeklyTaskBoard() {
 
   // Current range tasks: only those with both due_date AND due_time in range
   const currentRangeTasks = tasks.filter((t) => {
+    if (!shouldShowRecurringTaskNow(t, today)) return false;
     if (t.due_date === null) return false;
     if (!t.due_time) return false; // No time = goes to backlog
     const dueDate = new Date(t.due_date);
@@ -1466,6 +1491,7 @@ export function WeeklyTaskBoard() {
   const dailyTasks = tasks.filter((t) => {
     if (!t.due_date) return false;
     if (t.status === "done") return false;
+    if (!shouldShowRecurringTaskNow(t, startOfDay(currentDate))) return false;
     const dueDate = new Date(t.due_date);
     const isToday = format(dueDate, "yyyy-MM-dd") === format(currentDate, "yyyy-MM-dd");
     // For daily view, include all tasks for that day regardless of time
