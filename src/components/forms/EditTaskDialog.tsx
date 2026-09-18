@@ -80,6 +80,7 @@ const formSchema = z.object({
   sales_person_id: z.string().optional(),
   client_id: z.string().optional(),
   due_date: z.string().optional(),
+  recurrence_frequency: z.enum(["daily", "weekly", "monthly"]).nullable().default(null),
   status: z.enum(["open", "in_progress", "done"]),
   priority: z.number().min(1).max(10),
 }).refine((data) => {
@@ -228,6 +229,7 @@ export default function EditTaskDialog({ task, open, onOpenChange }: EditTaskDia
       sales_person_id: task.sales_person_id || "",
       client_id: task.client_id || "",
       due_date: task.due_date || "",
+      recurrence_frequency: task.recurrence_frequency || null,
       status: task.status || "open",
       priority: task.priority || 5,
     },
@@ -253,6 +255,8 @@ export default function EditTaskDialog({ task, open, onOpenChange }: EditTaskDia
         client_id: values.client_id || null,
         agency_id: agencyId,
         due_date: values.due_date || null,
+        recurrence_frequency: values.recurrence_frequency,
+        recurrence_interval: 1,
         status: values.status,
         priority: values.priority,
         task_type: "other" as const,
@@ -1356,6 +1360,38 @@ export default function EditTaskDialog({ task, open, onOpenChange }: EditTaskDia
                     <FormControl>
                       <Input type="date" {...field} />
                     </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name="recurrence_frequency"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel className="text-right block">חזרת משימה</FormLabel>
+                    <Select
+                      value={field.value ?? "none"}
+                      onValueChange={(value) => field.onChange(value === "none" ? null : value)}
+                    >
+                      <FormControl>
+                        <SelectTrigger>
+                          <SelectValue />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent className="bg-background z-50">
+                        <SelectItem value="none">לא חוזרת</SelectItem>
+                        <SelectItem value="daily">כל יום</SelectItem>
+                        <SelectItem value="weekly">כל שבוע</SelectItem>
+                        <SelectItem value="monthly">כל חודש</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    {field.value && (
+                      <p className="text-xs text-muted-foreground">
+                        בסימון המשימה כבוצעה ייווצר אוטומטית המופע הבא.
+                      </p>
+                    )}
                     <FormMessage />
                   </FormItem>
                 )}

@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { Calendar } from "@/components/ui/calendar";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
   Plus,
   Users,
@@ -15,6 +16,7 @@ import {
   CalendarDays,
   Flag,
   Link2,
+  Repeat,
   ChevronDown,
   ChevronRight,
 } from "lucide-react";
@@ -31,6 +33,7 @@ export interface QuickTaskPayload {
   executionTime?: string | null;
   /** Deadline to complete by (תאריך יעד) */
   targetDate?: string | null;
+  recurrenceFrequency?: "daily" | "weekly" | "monthly" | null;
 }
 
 interface QuickTaskInputProps {
@@ -43,7 +46,14 @@ interface QuickTaskInputProps {
 
 const COMPACT_WIDTH = 420;
 
-type LinksPanel = "menu" | "client" | "campaigner" | "execution" | "target";
+type RecurrenceFrequency = NonNullable<QuickTaskPayload["recurrenceFrequency"]>;
+type LinksPanel = "menu" | "client" | "campaigner" | "execution" | "target" | "recurrence";
+
+const RECURRENCE_LABELS: Record<RecurrenceFrequency, string> = {
+  daily: "כל יום",
+  weekly: "כל שבוע",
+  monthly: "כל חודש",
+};
 
 export function QuickTaskInput({
   onAddTask,
@@ -66,6 +76,7 @@ export function QuickTaskInput({
   const [executionDate, setExecutionDate] = useState<Date | undefined>(undefined);
   const [executionTime, setExecutionTime] = useState<string | null>(null);
   const [targetDate, setTargetDate] = useState<Date | undefined>(undefined);
+  const [recurrenceFrequency, setRecurrenceFrequency] = useState<RecurrenceFrequency | null>(null);
   const [executionOpen, setExecutionOpen] = useState(false);
   const [targetOpen, setTargetOpen] = useState(false);
   const [linksOpen, setLinksOpen] = useState(false);
@@ -117,6 +128,7 @@ export function QuickTaskInput({
     clientId,
     executionDate,
     targetDate,
+    recurrenceFrequency,
     reminderEnabled,
     campaignerId && campaignerId !== defaultCampaignerId,
   ].filter(Boolean).length;
@@ -132,6 +144,7 @@ export function QuickTaskInput({
     setExecutionDate(undefined);
     setExecutionTime(null);
     setTargetDate(undefined);
+    setRecurrenceFrequency(null);
     setLinksOpen(false);
     setLinksPanel("menu");
   };
@@ -154,6 +167,7 @@ export function QuickTaskInput({
       executionDate: executionDate ? format(executionDate, "yyyy-MM-dd") : null,
       executionTime: executionTime ?? null,
       targetDate: targetDate ? format(targetDate, "yyyy-MM-dd") : null,
+      recurrenceFrequency,
     });
     resetForm();
   };
@@ -278,6 +292,26 @@ export function QuickTaskInput({
     </div>
   ) : null;
 
+  const recurrencePicker = (
+    <Select
+      value={recurrenceFrequency ?? "none"}
+      onValueChange={(value) =>
+        setRecurrenceFrequency(value === "none" ? null : value as RecurrenceFrequency)
+      }
+    >
+      <SelectTrigger className={cn(chipClass(Boolean(recurrenceFrequency)), "w-[135px]")}>
+        <Repeat className="h-3.5 w-3.5 shrink-0" />
+        <SelectValue />
+      </SelectTrigger>
+      <SelectContent>
+        <SelectItem value="none">לא חוזרת</SelectItem>
+        <SelectItem value="daily">כל יום</SelectItem>
+        <SelectItem value="weekly">כל שבוע</SelectItem>
+        <SelectItem value="monthly">כל חודש</SelectItem>
+      </SelectContent>
+    </Select>
+  );
+
   const showExtras = isTyping && (clientsList || campaignersList || canSetReminder);
 
   return (
@@ -367,6 +401,12 @@ export function QuickTaskInput({
                   value={targetDate ? targetLabel : "ללא"}
                   onClick={() => setLinksPanel("target")}
                 />
+                <MenuRow
+                  icon={Repeat}
+                  label="חזרה"
+                  value={recurrenceFrequency ? RECURRENCE_LABELS[recurrenceFrequency] : "לא חוזרת"}
+                  onClick={() => setLinksPanel("recurrence")}
+                />
                 {reminderBlock && <div className="pt-1.5 px-1">{reminderBlock}</div>}
               </div>
             )}
@@ -418,6 +458,15 @@ export function QuickTaskInput({
                 <TargetCalendar date={targetDate} onDate={setTargetDate} />
               </div>
             )}
+            {linksPanel === "recurrence" && (
+              <div className="space-y-2">
+                <BackRow label="חזרת משימה" onBack={() => setLinksPanel("menu")} />
+                {recurrencePicker}
+                <p className="text-[11px] text-muted-foreground">
+                  בסימון המשימה כבוצעה ייפתח אוטומטית המופע הבא.
+                </p>
+              </div>
+            )}
           </PopoverContent>
         </Popover>
       )}
@@ -427,6 +476,7 @@ export function QuickTaskInput({
           <div className="flex flex-wrap items-center gap-1.5 min-w-0">
             {executionPicker}
             {targetPicker}
+            {recurrencePicker}
             {clientPicker}
             {campaignerPicker}
           </div>

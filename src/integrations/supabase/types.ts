@@ -8453,6 +8453,10 @@ export type Database = {
           notes: string | null
           overdue_notified_at: string | null
           priority: number
+          recurrence_frequency: string | null
+          recurrence_interval: number
+          recurrence_previous_task_id: string | null
+          recurrence_series_id: string | null
           sales_person_id: string | null
           sort_order: number | null
           status: Database["public"]["Enums"]["task_status"]
@@ -8484,6 +8488,10 @@ export type Database = {
           notes?: string | null
           overdue_notified_at?: string | null
           priority?: number
+          recurrence_frequency?: string | null
+          recurrence_interval?: number
+          recurrence_previous_task_id?: string | null
+          recurrence_series_id?: string | null
           sales_person_id?: string | null
           sort_order?: number | null
           status?: Database["public"]["Enums"]["task_status"]
@@ -8515,6 +8523,10 @@ export type Database = {
           notes?: string | null
           overdue_notified_at?: string | null
           priority?: number
+          recurrence_frequency?: string | null
+          recurrence_interval?: number
+          recurrence_previous_task_id?: string | null
+          recurrence_series_id?: string | null
           sales_person_id?: string | null
           sort_order?: number | null
           status?: Database["public"]["Enums"]["task_status"]
@@ -8558,6 +8570,13 @@ export type Database = {
             columns: ["lead_id"]
             isOneToOne: false
             referencedRelation: "leads"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tasks_recurrence_previous_task_id_fkey"
+            columns: ["recurrence_previous_task_id"]
+            isOneToOne: false
+            referencedRelation: "tasks"
             referencedColumns: ["id"]
           },
           {

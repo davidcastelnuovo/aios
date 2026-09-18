@@ -68,6 +68,7 @@ const formSchema = z.object({
   lead_id: z.string().optional(),
   agency_id: z.string().optional(),
   due_date: z.string().optional(),
+  recurrence_frequency: z.enum(["daily", "weekly", "monthly"]).nullable().default(null),
   self_reminder_enabled: z.boolean().default(false),
   self_reminder_at: z.string().optional(),
   status: z.enum(["open", "in_progress", "done"]),
@@ -153,6 +154,7 @@ export default function AddTaskForm({ clientId, leadId, agencyId, defaultCampaig
       lead_id: leadId || "",
       agency_id: agencyId || "",
       due_date: "",
+      recurrence_frequency: null,
       self_reminder_enabled: false,
       self_reminder_at: "",
       status: "open",
@@ -405,6 +407,8 @@ export default function AddTaskForm({ clientId, leadId, agencyId, defaultCampaig
         lead_id: values.task_category === "lead" ? values.lead_id : null,
         agency_id: finalAgencyId,
         due_date: values.due_date || null,
+        recurrence_frequency: values.recurrence_frequency,
+        recurrence_interval: 1,
         self_reminder_at:
           isSelfAssigned && values.self_reminder_enabled && values.self_reminder_at
             ? new Date(values.self_reminder_at).toISOString()
@@ -880,6 +884,38 @@ export default function AddTaskForm({ clientId, leadId, agencyId, defaultCampaig
                 </p>
               </div>
             )}
+
+            <FormField
+              control={form.control}
+              name="recurrence_frequency"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>חזרת משימה</FormLabel>
+                  <Select
+                    value={field.value ?? "none"}
+                    onValueChange={(value) => field.onChange(value === "none" ? null : value)}
+                  >
+                    <FormControl>
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent className="bg-background z-50">
+                      <SelectItem value="none">לא חוזרת</SelectItem>
+                      <SelectItem value="daily">כל יום</SelectItem>
+                      <SelectItem value="weekly">כל שבוע</SelectItem>
+                      <SelectItem value="monthly">כל חודש</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  {field.value && (
+                    <p className="text-xs text-muted-foreground">
+                      בסימון המשימה כבוצעה ייווצר אוטומטית המופע הבא.
+                    </p>
+                  )}
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
 
             {/* Show additional fields for client/lead tasks */}
             {(taskCategory === "client" || taskCategory === "lead") && (

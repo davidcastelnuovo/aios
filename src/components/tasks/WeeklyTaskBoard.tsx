@@ -96,6 +96,10 @@ interface Task {
   target_date?: string | null;
   duration_minutes?: number;
   google_calendar_event_id?: string | null;
+  recurrence_frequency?: "daily" | "weekly" | "monthly" | null;
+  recurrence_interval?: number;
+  recurrence_series_id?: string | null;
+  recurrence_previous_task_id?: string | null;
   clients?: { name: string; agency_id?: string | null } | null;
   leads?: { company_name?: string | null; contact_name?: string | null } | null;
   task_updates?: { id: string }[];
@@ -721,6 +725,7 @@ export function WeeklyTaskBoard() {
       campaignerId,
       selfReminderAt,
       targetDate,
+      recurrenceFrequency,
     }: {
       title: string;
       date: Date | null;
@@ -729,6 +734,7 @@ export function WeeklyTaskBoard() {
       campaignerId?: string | null;
       selfReminderAt?: string | null;
       targetDate?: string | null;
+      recurrenceFrequency?: "daily" | "weekly" | "monthly" | null;
     }) => {
       if (!tenantId) throw new Error("TENANT_NOT_READY");
       // A task attached to a client must carry that client's agency, otherwise
@@ -762,6 +768,8 @@ export function WeeklyTaskBoard() {
         campaigner_id: assignedCampaignerId,
         sales_person_id: assignedCampaignerId ? null : assignedSalesPersonId,
         client_id: clientId ?? null,
+        recurrence_frequency: recurrenceFrequency ?? null,
+        recurrence_interval: 1,
       };
       if (selfReminderAt) {
         insertData.self_reminder_at = selfReminderAt;
@@ -876,6 +884,7 @@ export function WeeklyTaskBoard() {
       campaignerId: payload.campaignerId,
       selfReminderAt: payload.selfReminderAt,
       targetDate: payload.targetDate,
+      recurrenceFrequency: payload.recurrenceFrequency,
     });
   };
 
