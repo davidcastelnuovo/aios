@@ -238,7 +238,7 @@ export default function DynamicTables() {
     return filtered;
   }, [clients, editAgencyId, isRestrictedCampaignerViewer, isSeoOnlyViewer, assignedClientIds]);
 
-  const { data: tables, isLoading } = useQuery({
+  const { data: tables, isLoading, isPending, isFetching } = useQuery({
     queryKey: ['crm-tables', tenantId],
     queryFn: async () => {
       const { data: { session } } = await supabase.auth.getSession();
@@ -260,7 +260,12 @@ export default function DynamicTables() {
   });
 
   // Fetch dashboards across own tenant + shared agencies (e.g. DMM-MC under DMM).
-  const { data: dashboards = [], isLoading: dashboardsLoading } = useQuery({
+  const {
+    data: dashboardsData,
+    isLoading: dashboardsLoading,
+    isPending: dashboardsPending,
+    isFetching: dashboardsFetching,
+  } = useQuery({
     queryKey: ['crm-dashboards', tenantId],
     queryFn: async () => {
       if (!tenantId) return [];
@@ -268,6 +273,17 @@ export default function DynamicTables() {
     },
     enabled: !!tenantId,
   });
+  const dashboards = dashboardsData ?? [];
+
+  // A query still gated on `enabled` reports isLoading=false, so these lists
+  // used to paint "אין דוחות" for a frame before the fetch had even started.
+  const listQueryEnabled = !!tenantId;
+  const tablesResolving =
+    !tables && listQueryEnabled && isQueryResolving(isPending, isLoading, isFetching);
+  const dashboardsResolving =
+    !dashboardsData &&
+    listQueryEnabled &&
+    isQueryResolving(dashboardsPending, dashboardsLoading, dashboardsFetching);
 
   // Filter tables by selected agency and role
   const filteredTables = useMemo(() => {
@@ -707,7 +723,7 @@ export default function DynamicTables() {
               </SelectContent>
             </Select>
           </div>
-          {isLoading ? (
+          {tablesResolving ? (
             <CarmenLoadingScreen variant="card" messages={["כרמן אוספת את הדוחות…", "בודקת שיוך ללקוחות…"]} />
           ) : !filteredTables || filteredTables.length === 0 ? (
             <Card className="p-12 text-center">
@@ -983,7 +999,7 @@ export default function DynamicTables() {
               className="text-right"
             />
           </div>
-          {dashboardsLoading ? (
+          {dashboardsResolving ? (
             <CarmenLoadingScreen variant="card" messages={["כרמן אוספת את הדשבורדים…"]} />
           ) : dashboards.length === 0 ? (
             <Card className="p-12 text-center">

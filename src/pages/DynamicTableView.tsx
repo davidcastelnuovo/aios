@@ -247,7 +247,13 @@ export default function DynamicTableView({ embedTableSlug, embedMode, summaryOnl
     }
   };
 
-  const { data: table, isLoading: tablesLoading, isFetching: tablesFetching, error: tablesError } = useQuery({
+  const {
+    data: table,
+    isLoading: tablesLoading,
+    isPending: tablesPending,
+    isFetching: tablesFetching,
+    error: tablesError,
+  } = useQuery({
     queryKey: ['crm-tables', tenantId, tableSlug],
     queryFn: async () => {
       if (!tableSlug) return null;
@@ -1548,7 +1554,11 @@ export default function DynamicTableView({ embedTableSlug, embedMode, summaryOnl
   // Only block on the first load. Background refetches (refetchOnMount: always,
   // window focus, invalidations) must keep showing the cached table — otherwise
   // SEO/client reports blank out to a skeleton and look "gone".
-  const resolvingTables = table == null && (tablesLoading || tablesFetching);
+  // isPending also covers the window where the query is still gated on the
+  // tenant, which is when "טבלה לא נמצאה" used to flash.
+  const tableQueryEnabled = !!tenantId && !!tableSlug;
+  const resolvingTables =
+    table == null && ((tableQueryEnabled && tablesPending) || tablesLoading || tablesFetching);
 
   if (resolvingTables) {
     return (
