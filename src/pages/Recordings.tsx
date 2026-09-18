@@ -779,6 +779,10 @@ export default function Recordings() {
           open={!!transcriptViewRec}
           onOpenChange={(open) => !open && setTranscriptViewRec(null)}
           recording={transcriptViewRec}
+          tenantId={currentTenantId ?? undefined}
+          recordingIds={groupIds(transcriptViewRec)}
+          onSummarized={(summaryMd) =>
+            setTranscriptViewRec((prev) => prev ? { ...prev, summary_md: summaryMd } : prev)}
         />
       )}
 
