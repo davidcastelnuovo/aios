@@ -32,7 +32,8 @@ import {
 } from "@/components/ui/select";
 import { Card, CardContent } from "@/components/ui/card";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { ChevronDown, Facebook, Filter, LayoutGrid, Link2, RefreshCw, Search } from "lucide-react";
+import { ChevronDown, Facebook, Filter, LayoutGrid, Link2, RefreshCw, Search, ShoppingBag, Sparkles, Users } from "lucide-react";
+import { cn } from "@/lib/utils";
 import {
   buildClientCampaignTableData,
   isFacebookIntegration,
@@ -119,6 +120,33 @@ export type CampaignPulseDashboardProps = {
   fixedAgencyId?: string | null;
   showTitle?: boolean;
 };
+
+const PULSE_CATEGORY_TABS = [
+  {
+    value: "leads" as const,
+    label: "לידים",
+    icon: Users,
+    triggerClassName:
+      "gap-1.5 text-violet-700/90 data-[state=active]:bg-violet-100 data-[state=active]:text-violet-900 data-[state=active]:border-violet-300 data-[state=active]:shadow-sm border border-transparent",
+    iconClassName: "text-violet-600",
+  },
+  {
+    value: "engagement" as const,
+    label: "אינגייג׳מנט",
+    icon: Sparkles,
+    triggerClassName:
+      "gap-1.5 text-sky-700/90 data-[state=active]:bg-sky-100 data-[state=active]:text-sky-900 data-[state=active]:border-sky-300 data-[state=active]:shadow-sm border border-transparent",
+    iconClassName: "text-sky-600",
+  },
+  {
+    value: "ecommerce" as const,
+    label: "איקומרס",
+    icon: ShoppingBag,
+    triggerClassName:
+      "gap-1.5 text-emerald-700/90 data-[state=active]:bg-emerald-100 data-[state=active]:text-emerald-900 data-[state=active]:border-emerald-300 data-[state=active]:shadow-sm border border-transparent",
+    iconClassName: "text-emerald-600",
+  },
+];
 
 export function CampaignPulseDashboard({
   fixedAgencyId = null,
@@ -1026,45 +1054,6 @@ export function CampaignPulseDashboard({
         </div>
       </div>
 
-      <div className="grid grid-cols-3 gap-2 sm:gap-3">
-        <Card
-          className="cursor-pointer hover:shadow-md transition-shadow border-red-200 bg-surface-status-red"
-          onClick={() => setFilterStatus(filterStatus === "red" ? "all" : "red")}
-        >
-          <CardContent className="p-2 sm:p-4 flex items-center gap-2 sm:gap-3 min-w-0">
-            <span className="text-xl sm:text-3xl leading-none shrink-0">🔴</span>
-            <div className="min-w-0">
-              <p className="text-lg sm:text-2xl font-bold text-red-700">{summary.red}</p>
-              <p className="text-[11px] sm:text-sm text-red-600 truncate">דורשים טיפול</p>
-            </div>
-          </CardContent>
-        </Card>
-        <Card
-          className="cursor-pointer hover:shadow-md transition-shadow border-yellow-200 bg-surface-status-yellow"
-          onClick={() => setFilterStatus(filterStatus === "yellow" ? "all" : "yellow")}
-        >
-          <CardContent className="p-2 sm:p-4 flex items-center gap-2 sm:gap-3 min-w-0">
-            <span className="text-xl sm:text-3xl leading-none shrink-0">🟡</span>
-            <div className="min-w-0">
-              <p className="text-lg sm:text-2xl font-bold text-yellow-700">{summary.yellow}</p>
-              <p className="text-[11px] sm:text-sm text-yellow-600 truncate">לתשומת לב</p>
-            </div>
-          </CardContent>
-        </Card>
-        <Card
-          className="cursor-pointer hover:shadow-md transition-shadow border-green-200 bg-surface-status-green"
-          onClick={() => setFilterStatus(filterStatus === "green" ? "all" : "green")}
-        >
-          <CardContent className="p-2 sm:p-4 flex items-center gap-2 sm:gap-3 min-w-0">
-            <span className="text-xl sm:text-3xl leading-none shrink-0">🟢</span>
-            <div className="min-w-0">
-              <p className="text-lg sm:text-2xl font-bold text-green-700">{summary.green}</p>
-              <p className="text-[11px] sm:text-sm text-green-600 truncate">תקינים</p>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-
       {/* Mobile filters — search + single filter dropdown */}
       <div className="flex flex-col gap-2 md:hidden w-full min-w-0">
         <div className="relative w-full min-w-0">
@@ -1262,17 +1251,101 @@ export function CampaignPulseDashboard({
         )}
       </div>
 
-      <Tabs
-        value={categoryTab}
-        onValueChange={(value) => setCategoryTab(value as Exclude<PulseCampaignGoal, "unknown">)}
-        dir="rtl"
-      >
-        <TabsList className="grid h-auto w-full grid-cols-3">
-          <TabsTrigger value="leads">לידים</TabsTrigger>
-          <TabsTrigger value="engagement">אינגייג׳מנט</TabsTrigger>
-          <TabsTrigger value="ecommerce">איקומרס</TabsTrigger>
-        </TabsList>
-      </Tabs>
+      <div className="grid grid-cols-3 gap-2 sm:gap-3">
+        <Card
+          className="cursor-pointer hover:shadow-md transition-shadow border-red-200 bg-surface-status-red"
+          onClick={() => setFilterStatus(filterStatus === "red" ? "all" : "red")}
+        >
+          <CardContent className="p-2 sm:p-4 flex items-center gap-2 sm:gap-3 min-w-0">
+            <span className="text-xl sm:text-3xl leading-none shrink-0">🔴</span>
+            <div className="min-w-0">
+              <p className="text-lg sm:text-2xl font-bold text-red-700">{summary.red}</p>
+              <p className="text-[11px] sm:text-sm text-red-600 truncate">דורשים טיפול</p>
+            </div>
+          </CardContent>
+        </Card>
+        <Card
+          className="cursor-pointer hover:shadow-md transition-shadow border-yellow-200 bg-surface-status-yellow"
+          onClick={() => setFilterStatus(filterStatus === "yellow" ? "all" : "yellow")}
+        >
+          <CardContent className="p-2 sm:p-4 flex items-center gap-2 sm:gap-3 min-w-0">
+            <span className="text-xl sm:text-3xl leading-none shrink-0">🟡</span>
+            <div className="min-w-0">
+              <p className="text-lg sm:text-2xl font-bold text-yellow-700">{summary.yellow}</p>
+              <p className="text-[11px] sm:text-sm text-yellow-600 truncate">לתשומת לב</p>
+            </div>
+          </CardContent>
+        </Card>
+        <Card
+          className="cursor-pointer hover:shadow-md transition-shadow border-green-200 bg-surface-status-green"
+          onClick={() => setFilterStatus(filterStatus === "green" ? "all" : "green")}
+        >
+          <CardContent className="p-2 sm:p-4 flex items-center gap-2 sm:gap-3 min-w-0">
+            <span className="text-xl sm:text-3xl leading-none shrink-0">🟢</span>
+            <div className="min-w-0">
+              <p className="text-lg sm:text-2xl font-bold text-green-700">{summary.green}</p>
+              <p className="text-[11px] sm:text-sm text-green-600 truncate">תקינים</p>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+        <Tabs
+          value={categoryTab}
+          onValueChange={(value) => setCategoryTab(value as Exclude<PulseCampaignGoal, "unknown">)}
+          dir="rtl"
+          className="min-w-0 flex-1"
+        >
+          <TabsList className="grid h-auto w-full grid-cols-3 gap-1 bg-muted/70 p-1 sm:inline-flex sm:w-auto">
+            {PULSE_CATEGORY_TABS.map((tab) => {
+              const Icon = tab.icon;
+              return (
+                <TabsTrigger
+                  key={tab.value}
+                  value={tab.value}
+                  className={cn("text-xs sm:text-sm", tab.triggerClassName)}
+                >
+                  <Icon className={cn("h-4 w-4 shrink-0", tab.iconClassName)} />
+                  {tab.label}
+                </TabsTrigger>
+              );
+            })}
+          </TabsList>
+        </Tabs>
+
+        {(availablePlatforms.hasFacebook || availablePlatforms.hasGoogleAds) ? (
+          <Tabs
+            value={platformFilter}
+            onValueChange={(value) => setPlatformFilter(value as AgencyPlatformFilter)}
+            dir="rtl"
+            className="shrink-0"
+          >
+            <TabsList className="h-auto w-full flex-wrap justify-start gap-1 sm:w-auto sm:justify-end">
+              <TabsTrigger value="all" className="gap-2">
+                <LayoutGrid className="h-4 w-4" />
+                הכל
+              </TabsTrigger>
+              {availablePlatforms.hasFacebook && (
+                <TabsTrigger value="facebook" className="gap-2">
+                  <Facebook className="h-4 w-4 text-blue-600" />
+                  Facebook
+                </TabsTrigger>
+              )}
+              {availablePlatforms.hasGoogleAds && (
+                <TabsTrigger value="google_ads" className="gap-2">
+                  <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" aria-hidden>
+                    <path d="M3.654 14.916l6.26-10.857c.68-1.18 2.184-1.59 3.361-.916l.004.003c1.178.68 1.586 2.184.909 3.361l-6.26 10.857c-.68 1.18-2.184 1.59-3.361.916l-.004-.003c-1.178-.68-1.586-2.184-.909-3.361z" fill="#FBBC04" />
+                    <path d="M14.088 14.916l6.26-10.857c.68-1.18.27-2.684-.909-3.361l-.004-.003c-1.177-.674-2.681-.264-3.361.916l-6.26 10.857c-.68 1.18-.27 2.684.909 3.361l.004.003c1.177.674 2.681.264 3.361-.916z" fill="#4285F4" />
+                    <circle cx="6" cy="18" r="3.5" fill="#34A853" />
+                  </svg>
+                  Google Ads
+                </TabsTrigger>
+              )}
+            </TabsList>
+          </Tabs>
+        ) : null}
+      </div>
 
       {unclassifiedCampaignRows.length > 0 ? (
         <div className="rounded-md border border-amber-300 bg-amber-50 p-3 text-sm text-amber-950">
@@ -1287,33 +1360,6 @@ export function CampaignPulseDashboard({
           </div>
         </div>
       ) : null}
-
-      {(availablePlatforms.hasFacebook || availablePlatforms.hasGoogleAds) && (
-        <Tabs value={platformFilter} onValueChange={(value) => setPlatformFilter(value as AgencyPlatformFilter)} dir="rtl">
-          <TabsList className="h-auto flex-wrap gap-1">
-            <TabsTrigger value="all" className="gap-2">
-              <LayoutGrid className="h-4 w-4" />
-              הכל
-            </TabsTrigger>
-            {availablePlatforms.hasFacebook && (
-              <TabsTrigger value="facebook" className="gap-2">
-                <Facebook className="h-4 w-4 text-blue-600" />
-                Facebook
-              </TabsTrigger>
-            )}
-            {availablePlatforms.hasGoogleAds && (
-              <TabsTrigger value="google_ads" className="gap-2">
-                <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" aria-hidden>
-                  <path d="M3.654 14.916l6.26-10.857c.68-1.18 2.184-1.59 3.361-.916l.004.003c1.178.68 1.586 2.184.909 3.361l-6.26 10.857c-.68 1.18-2.184 1.59-3.361.916l-.004-.003c-1.178-.68-1.586-2.184-.909-3.361z" fill="#FBBC04" />
-                  <path d="M14.088 14.916l6.26-10.857c.68-1.18.27-2.684-.909-3.361l-.004-.003c-1.177-.674-2.681-.264-3.361.916l-6.26 10.857c-.68 1.18-.27 2.684.909 3.361l.004.003c1.177.674 2.681.264 3.361-.916z" fill="#4285F4" />
-                  <circle cx="6" cy="18" r="3.5" fill="#34A853" />
-                </svg>
-                Google Ads
-              </TabsTrigger>
-            )}
-          </TabsList>
-        </Tabs>
-      )}
 
       {clientGoalRollups.length > 0 ? (
         <div className="space-y-4 min-w-0">
