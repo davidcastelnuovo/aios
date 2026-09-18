@@ -72,6 +72,8 @@ import { useTerminology } from "@/hooks/useTerminology";
 import { useCrossTenantAgencyIds } from "@/hooks/useCrossTenantAgencyIds";
 import { useCampaigners, useSalesPeople } from "@/hooks/useEntityLists";
 import { priorityBarColor } from "@/lib/taskPriority";
+import { TaskRecurrenceFields, type TaskRecurrenceValue } from "@/components/tasks/TaskRecurrenceFields";
+import type { RecurrenceFrequency } from "@/lib/taskRecurrence";
 
 const formSchema = z.object({
   title: z.string().min(1, "שם המשימה הוא שדה חובה"),
@@ -80,7 +82,10 @@ const formSchema = z.object({
   sales_person_id: z.string().optional(),
   client_id: z.string().optional(),
   due_date: z.string().optional(),
+  due_time: z.string().optional(),
   recurrence_frequency: z.enum(["daily", "weekly", "monthly"]).nullable().default(null),
+  recurrence_weekday: z.number().min(0).max(6).nullable().default(null),
+  recurrence_monthday: z.number().min(1).max(31).nullable().default(null),
   status: z.enum(["open", "in_progress", "done"]),
   priority: z.number().min(1).max(10),
 }).refine((data) => {
@@ -229,11 +234,19 @@ export default function EditTaskDialog({ task, open, onOpenChange }: EditTaskDia
       sales_person_id: task.sales_person_id || "",
       client_id: task.client_id || "",
       due_date: task.due_date || "",
+      due_time: task.due_time ? String(task.due_time).substring(0, 5) : "",
       recurrence_frequency: task.recurrence_frequency || null,
+      recurrence_weekday: task.recurrence_weekday ?? null,
+      recurrence_monthday: task.recurrence_monthday ?? null,
       status: task.status || "open",
       priority: task.priority || 5,
     },
   });
+
+  const recurrenceFrequency = form.watch("recurrence_frequency");
+  const recurrenceWeekday = form.watch("recurrence_weekday");
+  const recurrenceMonthday = form.watch("recurrence_monthday");
+  const dueTime = form.watch("due_time");
 
   const mutation = useMutation({
     mutationFn: async (values: z.infer<typeof formSchema>) => {
@@ -255,8 +268,13 @@ export default function EditTaskDialog({ task, open, onOpenChange }: EditTaskDia
         client_id: values.client_id || null,
         agency_id: agencyId,
         due_date: values.due_date || null,
+        due_time: values.due_time
+          ? (values.due_time.length === 5 ? `${values.due_time}:00` : values.due_time)
+          : null,
         recurrence_frequency: values.recurrence_frequency,
         recurrence_interval: 1,
+        recurrence_weekday: values.recurrence_frequency === "weekly" ? values.recurrence_weekday : null,
+        recurrence_monthday: values.recurrence_frequency === "monthly" ? values.recurrence_monthday : null,
         status: values.status,
         priority: values.priority,
         task_type: "other" as const,
@@ -1368,30 +1386,23 @@ export default function EditTaskDialog({ task, open, onOpenChange }: EditTaskDia
               <FormField
                 control={form.control}
                 name="recurrence_frequency"
-                render={({ field }) => (
+                render={() => (
                   <FormItem>
-                    <FormLabel className="text-right block">חזרת משימה</FormLabel>
-                    <Select
-                      value={field.value ?? "none"}
-                      onValueChange={(value) => field.onChange(value === "none" ? null : value)}
-                    >
-                      <FormControl>
-                        <SelectTrigger>
-                          <SelectValue />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent className="bg-background z-50">
-                        <SelectItem value="none">לא חוזרת</SelectItem>
-                        <SelectItem value="daily">כל יום</SelectItem>
-                        <SelectItem value="weekly">כל שבוע</SelectItem>
-                        <SelectItem value="monthly">כל חודש</SelectItem>
-                      </SelectContent>
-                    </Select>
-                    {field.value && (
-                      <p className="text-xs text-muted-foreground">
-                        בסימון המשימה כבוצעה ייווצר אוטומטית המופע הבא.
-                      </p>
-                    )}
+                    <FormLabel className="text-right block">משימה קבועה</FormLabel>
+                    <TaskRecurrenceFields
+                      value={{
+                        frequency: recurrenceFrequency,
+                        weekday: recurrenceWeekday,
+                        monthday: recurrenceMonthday,
+                        time: dueTime || null,
+                      }}
+                      onChange={(next: TaskRecurrenceValue) => {
+                        form.setValue("recurrence_frequency", next.frequency);
+                        form.setValue("recurrence_weekday", next.weekday);
+                        form.setValue("recurrence_monthday", next.monthday);
+                        form.setValue("due_time", next.time || "");
+                      }}
+                    />
                     <FormMessage />
                   </FormItem>
                 )}

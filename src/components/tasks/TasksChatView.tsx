@@ -13,6 +13,7 @@ import { isTaskOverdue } from "@/lib/taskDeadline";
 import { embedCount } from "@/lib/embedCount";
 import { filterTasksForChatSearch, sortTasksForChatList } from "@/lib/taskBoardQuery";
 import type { OpenClosedFilter } from "@/lib/taskFilters";
+import { describeRecurrence } from "@/lib/taskRecurrence";
 
 function formatDueShort(value: string): string | null {
   const parsed = new Date(value);
@@ -54,6 +55,8 @@ export type ChatTask = {
   google_calendar_event_id?: string | null;
   duration_minutes?: number | null;
   recurrence_frequency?: "daily" | "weekly" | "monthly" | null;
+  recurrence_weekday?: number | null;
+  recurrence_monthday?: number | null;
   clients?: { name: string; agency_id?: string | null } | null;
   leads?: { company_name?: string | null; contact_name?: string | null } | null;
   campaigners?: { full_name: string } | null;
@@ -322,11 +325,12 @@ export function TasksChatView({
                           {task.recurrence_frequency && (
                             <Badge variant="outline" className="text-[10px] h-4 gap-0.5 px-1.5 border-violet-300 text-violet-700">
                               <Repeat className="h-2.5 w-2.5" />
-                              {task.recurrence_frequency === "daily"
-                                ? "יומית"
-                                : task.recurrence_frequency === "weekly"
-                                  ? "שבועית"
-                                  : "חודשית"}
+                              {describeRecurrence({
+                                frequency: task.recurrence_frequency,
+                                weekday: task.recurrence_weekday,
+                                monthday: task.recurrence_monthday,
+                                time: task.due_time,
+                              }) || "חוזרת"}
                             </Badge>
                           )}
                           {(task.clients?.name || task.leads?.company_name || task.leads?.contact_name) && (

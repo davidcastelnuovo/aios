@@ -98,6 +98,8 @@ interface Task {
   google_calendar_event_id?: string | null;
   recurrence_frequency?: "daily" | "weekly" | "monthly" | null;
   recurrence_interval?: number;
+  recurrence_weekday?: number | null;
+  recurrence_monthday?: number | null;
   recurrence_series_id?: string | null;
   recurrence_previous_task_id?: string | null;
   clients?: { name: string; agency_id?: string | null } | null;
@@ -726,6 +728,9 @@ export function WeeklyTaskBoard() {
       selfReminderAt,
       targetDate,
       recurrenceFrequency,
+      recurrenceWeekday,
+      recurrenceMonthday,
+      collaboratorIds,
     }: {
       title: string;
       date: Date | null;
@@ -735,6 +740,9 @@ export function WeeklyTaskBoard() {
       selfReminderAt?: string | null;
       targetDate?: string | null;
       recurrenceFrequency?: "daily" | "weekly" | "monthly" | null;
+      recurrenceWeekday?: number | null;
+      recurrenceMonthday?: number | null;
+      collaboratorIds?: string[];
     }) => {
       if (!tenantId) throw new Error("TENANT_NOT_READY");
       // A task attached to a client must carry that client's agency, otherwise
@@ -770,6 +778,8 @@ export function WeeklyTaskBoard() {
         client_id: clientId ?? null,
         recurrence_frequency: recurrenceFrequency ?? null,
         recurrence_interval: 1,
+        recurrence_weekday: recurrenceFrequency === "weekly" ? recurrenceWeekday ?? null : null,
+        recurrence_monthday: recurrenceFrequency === "monthly" ? recurrenceMonthday ?? null : null,
       };
       if (selfReminderAt) {
         insertData.self_reminder_at = selfReminderAt;
@@ -787,6 +797,21 @@ export function WeeklyTaskBoard() {
       // Note: time without date is not saved to prevent orphaned times
       const { data: newTask, error } = await supabase.from("tasks").insert(insertData).select().single();
       if (error) throw error;
+
+      const uniqueCollaborators = Array.from(
+        new Set((collaboratorIds || []).filter((id) => id && id !== assignedCampaignerId)),
+      );
+      if (uniqueCollaborators.length > 0) {
+        const { error: collabError } = await supabase.from("task_collaborators").insert(
+          uniqueCollaborators.map((campaignerCollaboratorId) => ({
+            task_id: newTask.id,
+            campaigner_id: campaignerCollaboratorId,
+            tenant_id: tenantId,
+            added_by: boardUserId,
+          })),
+        );
+        if (collabError) throw collabError;
+      }
 
       // אם יש תאריך ושעה - יצור גם אירוע ביומן גוגל ושמור את ה-eventId
       if (validDate && time) {
@@ -885,6 +910,9 @@ export function WeeklyTaskBoard() {
       selfReminderAt: payload.selfReminderAt,
       targetDate: payload.targetDate,
       recurrenceFrequency: payload.recurrenceFrequency,
+      recurrenceWeekday: payload.recurrenceWeekday,
+      recurrenceMonthday: payload.recurrenceMonthday,
+      collaboratorIds: payload.collaboratorIds,
     });
   };
 

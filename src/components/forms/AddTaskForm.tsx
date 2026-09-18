@@ -33,6 +33,12 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { TaskRecurrenceFields, type TaskRecurrenceValue } from "@/components/tasks/TaskRecurrenceFields";
+import {
+  computeFirstOccurrenceDate,
+  formatLocalDate,
+  type RecurrenceFrequency,
+} from "@/lib/taskRecurrence";
 import { toast } from "sonner";
 import { ChevronDown, ChevronUp, Check, ChevronsUpDown, Plus } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -68,7 +74,11 @@ const formSchema = z.object({
   lead_id: z.string().optional(),
   agency_id: z.string().optional(),
   due_date: z.string().optional(),
+  due_time: z.string().optional(),
   recurrence_frequency: z.enum(["daily", "weekly", "monthly"]).nullable().default(null),
+  recurrence_weekday: z.number().min(0).max(6).nullable().default(null),
+  recurrence_monthday: z.number().min(1).max(31).nullable().default(null),
+  collaborator_ids: z.array(z.string()).default([]),
   self_reminder_enabled: z.boolean().default(false),
   self_reminder_at: z.string().optional(),
   status: z.enum(["open", "in_progress", "done"]),
@@ -154,7 +164,11 @@ export default function AddTaskForm({ clientId, leadId, agencyId, defaultCampaig
       lead_id: leadId || "",
       agency_id: agencyId || "",
       due_date: "",
+      due_time: "",
       recurrence_frequency: null,
+      recurrence_weekday: null,
+      recurrence_monthday: null,
+      collaborator_ids: [],
       self_reminder_enabled: false,
       self_reminder_at: "",
       status: "open",
@@ -189,6 +203,26 @@ export default function AddTaskForm({ clientId, leadId, agencyId, defaultCampaig
   const selfReminderEnabled = useWatch({
     control: form.control,
     name: "self_reminder_enabled",
+  });
+  const recurrenceFrequency = useWatch({
+    control: form.control,
+    name: "recurrence_frequency",
+  });
+  const recurrenceWeekday = useWatch({
+    control: form.control,
+    name: "recurrence_weekday",
+  });
+  const recurrenceMonthday = useWatch({
+    control: form.control,
+    name: "recurrence_monthday",
+  });
+  const dueTime = useWatch({
+    control: form.control,
+    name: "due_time",
+  });
+  const collaboratorIds = useWatch({
+    control: form.control,
+    name: "collaborator_ids",
   });
   const isSelfAssigned = Boolean(userCampaignerId && selectedCampaignerId === userCampaignerId);
 
@@ -398,6 +432,19 @@ export default function AddTaskForm({ clientId, leadId, agencyId, defaultCampaig
       const currentUserId = sessionData?.session?.user?.id;
       const effectiveCreatorId = isViewingAs && viewAsUserId ? viewAsUserId : currentUserId;
 
+      let dueDate = values.due_date || null;
+      let dueTimeValue = values.due_time || null;
+      if (values.recurrence_frequency) {
+        const first = computeFirstOccurrenceDate({
+          frequency: values.recurrence_frequency as RecurrenceFrequency,
+          weekday: values.recurrence_weekday,
+          monthday: values.recurrence_monthday,
+          preferredDate: values.due_date ? new Date(`${values.due_date}T12:00:00`) : null,
+        });
+        dueDate = formatLocalDate(first);
+        dueTimeValue = values.due_time || null;
+      }
+
       const taskPayload = {
         title: values.title,
         notes: values.notes || null,
@@ -406,9 +453,12 @@ export default function AddTaskForm({ clientId, leadId, agencyId, defaultCampaig
         client_id: values.task_category === "client" ? values.client_id : null,
         lead_id: values.task_category === "lead" ? values.lead_id : null,
         agency_id: finalAgencyId,
-        due_date: values.due_date || null,
+        due_date: dueDate,
+        due_time: dueTimeValue ? (dueTimeValue.length === 5 ? `${dueTimeValue}:00` : dueTimeValue) : null,
         recurrence_frequency: values.recurrence_frequency,
         recurrence_interval: 1,
+        recurrence_weekday: values.recurrence_frequency === "weekly" ? values.recurrence_weekday : null,
+        recurrence_monthday: values.recurrence_frequency === "monthly" ? values.recurrence_monthday : null,
         self_reminder_at:
           isSelfAssigned && values.self_reminder_enabled && values.self_reminder_at
             ? new Date(values.self_reminder_at).toISOString()
@@ -425,8 +475,27 @@ export default function AddTaskForm({ clientId, leadId, agencyId, defaultCampaig
         impersonated_by: isViewingAs ? currentUserId : null,
       };
 
-      const { error } = await supabase.from("tasks").insert([taskPayload]);
+      const { data: created, error } = await supabase
+        .from("tasks")
+        .insert([taskPayload])
+        .select("id")
+        .single();
       if (error) throw error;
+
+      const uniqueCollaborators = Array.from(
+        new Set((values.collaborator_ids || []).filter((id) => id && id !== finalCampaignerId)),
+      );
+      if (uniqueCollaborators.length > 0 && created?.id) {
+        const { error: collabError } = await supabase.from("task_collaborators").insert(
+          uniqueCollaborators.map((campaignerCollaboratorId) => ({
+            task_id: created.id,
+            campaigner_id: campaignerCollaboratorId,
+            tenant_id: tenantId,
+            added_by: effectiveCreatorId,
+          })),
+        );
+        if (collabError) throw collabError;
+      }
 
       // task_assigned is fired by trg_notify_task_notification_worker.
       // (AFTER INSERT OR UPDATE OF campaigner_id ON public.tasks). Do not invoke it
@@ -888,34 +957,63 @@ export default function AddTaskForm({ clientId, leadId, agencyId, defaultCampaig
             <FormField
               control={form.control}
               name="recurrence_frequency"
-              render={({ field }) => (
+              render={() => (
                 <FormItem>
-                  <FormLabel>חזרת משימה</FormLabel>
-                  <Select
-                    value={field.value ?? "none"}
-                    onValueChange={(value) => field.onChange(value === "none" ? null : value)}
-                  >
-                    <FormControl>
-                      <SelectTrigger>
-                        <SelectValue />
-                      </SelectTrigger>
-                    </FormControl>
-                    <SelectContent className="bg-background z-50">
-                      <SelectItem value="none">לא חוזרת</SelectItem>
-                      <SelectItem value="daily">כל יום</SelectItem>
-                      <SelectItem value="weekly">כל שבוע</SelectItem>
-                      <SelectItem value="monthly">כל חודש</SelectItem>
-                    </SelectContent>
-                  </Select>
-                  {field.value && (
-                    <p className="text-xs text-muted-foreground">
-                      בסימון המשימה כבוצעה ייווצר אוטומטית המופע הבא.
-                    </p>
-                  )}
+                  <FormLabel>משימה קבועה</FormLabel>
+                  <TaskRecurrenceFields
+                    value={{
+                      frequency: recurrenceFrequency,
+                      weekday: recurrenceWeekday,
+                      monthday: recurrenceMonthday,
+                      time: dueTime || null,
+                    }}
+                    onChange={(next: TaskRecurrenceValue) => {
+                      form.setValue("recurrence_frequency", next.frequency);
+                      form.setValue("recurrence_weekday", next.weekday);
+                      form.setValue("recurrence_monthday", next.monthday);
+                      form.setValue("due_time", next.time || "");
+                    }}
+                  />
                   <FormMessage />
                 </FormItem>
               )}
             />
+
+            {visibleCampaigners && visibleCampaigners.length > 0 && (
+              <FormItem>
+                <FormLabel>אנשים נוספים על המשימה</FormLabel>
+                <div className="flex flex-wrap gap-1.5 rounded-md border p-2">
+                  {visibleCampaigners
+                    .filter((campaigner) => campaigner.id !== selectedCampaignerId)
+                    .map((campaigner) => {
+                      const selected = (collaboratorIds || []).includes(campaigner.id);
+                      return (
+                        <button
+                          key={campaigner.id}
+                          type="button"
+                          className={cn(
+                            "rounded-full border px-2.5 py-1 text-xs transition-colors",
+                            selected
+                              ? "border-primary bg-primary/10 text-foreground"
+                              : "border-border text-muted-foreground hover:border-primary/40",
+                          )}
+                          onClick={() => {
+                            const current = form.getValues("collaborator_ids") || [];
+                            form.setValue(
+                              "collaborator_ids",
+                              selected
+                                ? current.filter((id) => id !== campaigner.id)
+                                : [...current, campaigner.id],
+                            );
+                          }}
+                        >
+                          {campaigner.full_name}
+                        </button>
+                      );
+                    })}
+                </div>
+              </FormItem>
+            )}
 
             {/* Show additional fields for client/lead tasks */}
             {(taskCategory === "client" || taskCategory === "lead") && (

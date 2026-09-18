@@ -28,6 +28,8 @@ import { useUserRole } from "@/hooks/useUserRole";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { useCrossTenantAgencyIds } from "@/hooks/useCrossTenantAgencyIds";
 import { TimeSlotPicker } from "./TimeSlotPicker";
+import { TaskRecurrenceFields, type TaskRecurrenceValue } from "./TaskRecurrenceFields";
+import { TaskChecklistSection } from "./TaskChecklistSection";
 import { EditLeadDialog } from "@/components/forms/EditLeadDialog";
 import { NotesWithAttachments, type TaskAttachment } from "./NotesWithAttachments";
 import { fetchActiveCampaigners } from "@/lib/taskCampaigners";
@@ -35,6 +37,7 @@ import { syncTaskCalendarEvent } from "@/lib/calendarApi";
 import { coerceHumanTaskStatus } from "@/lib/taskStatus";
 import { PRIORITY_BAR_LABELS, priorityBarColor } from "@/lib/taskPriority";
 import { notifyTaskCollaboratorAdded, notifyTaskUpdateAdded } from "@/lib/notifyTaskPeers";
+import type { RecurrenceFrequency } from "@/lib/taskRecurrence";
 
 const DURATION_OPTIONS = [30, 60, 90, 120, 150, 180] as const;
 const FRAME = "rounded-xl border border-border/60 bg-card shadow-sm text-right";
@@ -78,7 +81,9 @@ interface Task {
   self_reminder_at?: string | null;
   google_calendar_event_id?: string | null;
   duration_minutes?: number | null;
-  recurrence_frequency?: "daily" | "weekly" | "monthly" | null;
+  recurrence_frequency?: RecurrenceFrequency | null;
+  recurrence_weekday?: number | null;
+  recurrence_monthday?: number | null;
 }
 
 interface TaskDetailDialogProps {
@@ -113,7 +118,12 @@ export function TaskDetailDialog({
   const [status, setStatus] = useState<"open" | "in_progress" | "done">("open");
   const [dueDate, setDueDate] = useState<Date | undefined>(undefined);
   const [targetDate, setTargetDate] = useState<Date | undefined>(undefined);
-  const [recurrenceFrequency, setRecurrenceFrequency] = useState<"daily" | "weekly" | "monthly" | null>(null);
+  const [recurrence, setRecurrence] = useState<TaskRecurrenceValue>({
+    frequency: null,
+    weekday: null,
+    monthday: null,
+    time: null,
+  });
   const [clientId, setClientId] = useState("");
   const [leadId, setLeadId] = useState("");
   const [dueTime, setDueTime] = useState<string | null>(null);
@@ -168,10 +178,15 @@ export function TaskDetailDialog({
         setStatus(coerceHumanTaskStatus(t.status));
         setDueDate(parseOptionalDate(t.due_date));
         setTargetDate(parseOptionalDate(t.target_date));
-        setRecurrenceFrequency(t.recurrence_frequency || null);
+        setDueTime(t.due_time ? (t.due_time as string).substring(0, 5) : null);
+        setRecurrence({
+          frequency: (t.recurrence_frequency as RecurrenceFrequency | null) || null,
+          weekday: t.recurrence_weekday ?? null,
+          monthday: t.recurrence_monthday ?? null,
+          time: t.due_time ? String(t.due_time).substring(0, 5) : null,
+        });
         setClientId(t.client_id || "");
         setLeadId(t.lead_id || "");
-        setDueTime(t.due_time ? (t.due_time as string).substring(0, 5) : null);
         const rawDuration = Number((t as { duration_minutes?: number }).duration_minutes) || 30;
         setDurationMinutes((DURATION_OPTIONS as readonly number[]).includes(rawDuration) ? rawDuration : 30);
         setAssignedCampaignerId(t.campaigner_id || "");
@@ -320,7 +335,10 @@ export function TaskDetailDialog({
       }
       const nextDueDate = isUsableDate(dueDate) ? format(dueDate, "yyyy-MM-dd") : null;
       const nextTargetDate = isUsableDate(targetDate) ? format(targetDate, "yyyy-MM-dd") : null;
-      const nextDueTime = dueTime ? dueTime + ":00" : null;
+      const effectiveDueTime = recurrence.frequency
+        ? (recurrence.time || dueTime)
+        : dueTime;
+      const nextDueTime = effectiveDueTime ? effectiveDueTime + ":00" : null;
       const { error } = await supabase
         .from("tasks")
         .update({
@@ -331,8 +349,10 @@ export function TaskDetailDialog({
           due_date: nextDueDate,
           due_time: nextDueTime,
           target_date: nextTargetDate,
-          recurrence_frequency: recurrenceFrequency,
+          recurrence_frequency: recurrence.frequency,
           recurrence_interval: 1,
+          recurrence_weekday: recurrence.frequency === "weekly" ? recurrence.weekday : null,
+          recurrence_monthday: recurrence.frequency === "monthly" ? recurrence.monthday : null,
           duration_minutes: durationMinutes,
           client_id: clientId || null,
           lead_id: leadId || null,
@@ -763,29 +783,19 @@ export function TaskDetailDialog({
                   </Popover>
                 </div>
               </div>
-              <div className="flex items-center gap-2 py-1.5 border-t">
-                <div className="w-[4.25rem] shrink-0 flex items-center gap-1 text-[11px] text-muted-foreground">
+              <div className="py-1.5 border-t space-y-2">
+                <div className="flex items-center gap-1 text-[11px] text-muted-foreground">
                   <Repeat className="h-3 w-3" />
-                  חזרה
+                  חזרה קבועה
                 </div>
-                <Select
-                  value={recurrenceFrequency ?? "none"}
-                  onValueChange={(value) =>
-                    setRecurrenceFrequency(
-                      value === "none" ? null : value as "daily" | "weekly" | "monthly",
-                    )
-                  }
-                >
-                  <SelectTrigger className="h-7 bg-card text-xs flex-1">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="none">לא חוזרת</SelectItem>
-                    <SelectItem value="daily">כל יום</SelectItem>
-                    <SelectItem value="weekly">כל שבוע</SelectItem>
-                    <SelectItem value="monthly">כל חודש</SelectItem>
-                  </SelectContent>
-                </Select>
+                <TaskRecurrenceFields
+                  compact
+                  value={recurrence}
+                  onChange={(next) => {
+                    setRecurrence(next);
+                    if (next.time) setDueTime(next.time);
+                  }}
+                />
               </div>
               {Boolean(userCampaignerId && assignedCampaignerId === userCampaignerId) && (
                 <div className="flex items-center gap-2 py-1.5 border-t">
@@ -811,6 +821,10 @@ export function TaskDetailDialog({
                 </div>
               )}
             </section>
+
+            {task?.id && tenantId && (
+              <TaskChecklistSection taskId={task.id} tenantId={tenantId} />
+            )}
 
             <NotesWithAttachments
               value={notes}
