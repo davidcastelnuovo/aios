@@ -25,11 +25,12 @@ type Slide = {
 
 type Props = {
   snapshot: SeoMonthlyShareSnapshot;
-  /** When true, hide chrome (for PDF capture). */
+  /** Uses a deterministic desktop width for PDF capture. */
   captureMode?: boolean;
   className?: string;
-  /** Controlled slide index (optional). */
+  /** @deprecated The report is now a continuous page. */
   slideIndex?: number;
+  /** @deprecated The report is now a continuous page. */
   onSlideIndexChange?: (index: number) => void;
 };
 
@@ -288,7 +289,7 @@ function SlideChrome({
   );
 }
 
-function CoverSlide({ snapshot }: { snapshot: SeoMonthlyShareSnapshot }) {
+export function CoverSlide({ snapshot }: { snapshot: SeoMonthlyShareSnapshot }) {
   const status = STATUS_LABELS[snapshot.status];
   const intro = snapshot.work.summary?.trim() || "";
   return (
@@ -339,7 +340,7 @@ function TrendPill({ value, suffix }: { value: number; suffix?: string }) {
   );
 }
 
-function MetricsSlide({ snapshot }: { snapshot: SeoMonthlyShareSnapshot }) {
+export function MetricsSlide({ snapshot }: { snapshot: SeoMonthlyShareSnapshot }) {
   const search = snapshot.search;
   const metricOf = (key: string) => snapshot.metrics.find((m) => m.key === key);
 
@@ -508,7 +509,7 @@ function MetricsSlide({ snapshot }: { snapshot: SeoMonthlyShareSnapshot }) {
   );
 }
 
-function KeywordsSlide({ snapshot }: { snapshot: SeoMonthlyShareSnapshot }) {
+export function KeywordsSlide({ snapshot }: { snapshot: SeoMonthlyShareSnapshot }) {
   const withSearchData = snapshot.keywords.some((k) => k.impressions != null);
   const rows = snapshot.keywords.slice(0, 20);
   const half = Math.ceil(rows.length / 2);
@@ -589,7 +590,7 @@ function KeywordsSlide({ snapshot }: { snapshot: SeoMonthlyShareSnapshot }) {
   );
 }
 
-function SummarySlide({ snapshot }: { snapshot: SeoMonthlyShareSnapshot }) {
+export function SummarySlide({ snapshot }: { snapshot: SeoMonthlyShareSnapshot }) {
   const narrative = buildSeoPerformanceSummary(snapshot);
   return (
     <div className="max-w-3xl space-y-6">
@@ -599,7 +600,7 @@ function SummarySlide({ snapshot }: { snapshot: SeoMonthlyShareSnapshot }) {
   );
 }
 
-function OnsiteSlide({ snapshot }: { snapshot: SeoMonthlyShareSnapshot }) {
+export function OnsiteSlide({ snapshot }: { snapshot: SeoMonthlyShareSnapshot }) {
   const unique = dedupeBy(snapshot.work.onsite, (item) => dedupeKey(item.title));
   const items = unique.slice(0, 10);
   return (
@@ -634,7 +635,7 @@ function OnsiteSlide({ snapshot }: { snapshot: SeoMonthlyShareSnapshot }) {
   );
 }
 
-function ArticlesSlide({ snapshot }: { snapshot: SeoMonthlyShareSnapshot }) {
+export function ArticlesSlide({ snapshot }: { snapshot: SeoMonthlyShareSnapshot }) {
   const unique = dedupeBy(snapshot.work.articles, (item) => dedupeKey(item.title));
   const items = unique.slice(0, 8);
   return (
@@ -677,7 +678,7 @@ function ArticlesSlide({ snapshot }: { snapshot: SeoMonthlyShareSnapshot }) {
   );
 }
 
-function LinksSlide({ snapshot }: { snapshot: SeoMonthlyShareSnapshot }) {
+export function LinksSlide({ snapshot }: { snapshot: SeoMonthlyShareSnapshot }) {
   const fromRecent = snapshot.recentLinks?.length
     ? snapshot.recentLinks
     : snapshot.work.links.map((l) => ({
@@ -744,7 +745,7 @@ function LinksSlide({ snapshot }: { snapshot: SeoMonthlyShareSnapshot }) {
   );
 }
 
-function ClosingSlide({ snapshot }: { snapshot: SeoMonthlyShareSnapshot }) {
+export function ClosingSlide({ snapshot }: { snapshot: SeoMonthlyShareSnapshot }) {
   // Closing slide is "what we did this month" — never inflate with prior-month links.
   const counts = [
     {
