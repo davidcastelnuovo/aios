@@ -1,7 +1,7 @@
 import { useMemo, useRef, useState } from "react";
 import { format, startOfMonth, subMonths } from "date-fns";
 import { he } from "date-fns/locale";
-import { Download, ExternalLink, FileText, Loader2 } from "lucide-react";
+import { ArrowRight, Download, ExternalLink, FileText, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -50,6 +50,10 @@ type Props = {
   ahrefsReports?: any[];
   forceRelevant?: string[];
   forceIrrelevant?: string[];
+  /** Render as a standalone page: the report fills the screen, controls move into its sticky header. */
+  fullPage?: boolean;
+  /** Shown as "back to dashboard" in the sticky header when in full-page mode. */
+  onBack?: () => void;
 };
 
 function monthLabel(month: string): string {
@@ -68,6 +72,8 @@ export function PublicSeoMonthlyWorkView({
   ahrefsReports = [],
   forceRelevant = [],
   forceIrrelevant = [],
+  fullPage = false,
+  onBack,
 }: Props) {
   const captureStackRef = useRef<HTMLDivElement>(null);
   const [exporting, setExporting] = useState(false);
@@ -218,6 +224,83 @@ export function PublicSeoMonthlyWorkView({
       setExporting(false);
     }
   };
+
+  const backButton = onBack ? (
+    <Button
+      type="button"
+      variant="outline"
+      onClick={onBack}
+      className="h-10 gap-1.5 border-[#0f766e]/30 bg-white text-sm font-semibold text-[#0f766e] hover:bg-[#0f766e]/10 hover:text-[#0f766e]"
+    >
+      <ArrowRight className="h-4 w-4" />
+      חזרה לדשבורד
+    </Button>
+  ) : null;
+
+  const monthPicker = (
+    <Select value={selected?.month || selectedMonth} onValueChange={setSelectedMonth}>
+      <SelectTrigger className="h-10 w-[128px] border-slate-300 bg-white text-sm text-[#172a32] sm:w-[150px]">
+        <SelectValue />
+      </SelectTrigger>
+      <SelectContent>
+        {sortedMonths.map((m) => (
+          <SelectItem key={m.month} value={m.month}>
+            {monthLabel(m.month)}
+          </SelectItem>
+        ))}
+      </SelectContent>
+    </Select>
+  );
+
+  const pdfButton = (
+    <Button
+      type="button"
+      variant="outline"
+      className="h-10 gap-1.5 border-slate-300 bg-white text-sm text-[#172a32]"
+      disabled={exporting || !hasAnyWork}
+      onClick={handleExportPdf}
+    >
+      {exporting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
+      PDF
+    </Button>
+  );
+
+  if (fullPage) {
+    const emptyMessage =
+      sortedMonths.length === 0
+        ? "עדיין אין סיכום עבודה חודשית לשיתוף."
+        : `אין פריטי עבודה לחודש ${monthLabel(selected?.month || selectedMonth)}.`;
+
+    return (
+      <div className="min-h-screen bg-[#f6f8f5]" dir="rtl">
+        {hasAnyWork ? (
+          <SeoMonthlyLandingPage
+            key={`${snapshot.month}-${snapshot.generatedAt}`}
+            snapshot={snapshot}
+            headerAction={
+              <div className="flex flex-wrap items-center gap-2">
+                {backButton}
+                {sortedMonths.length > 0 && monthPicker}
+                {pdfButton}
+              </div>
+            }
+          />
+        ) : (
+          <>
+            <header className="sticky top-0 z-20 border-b border-slate-200/80 bg-[#f6f8f5]/95 px-4 py-3 backdrop-blur md:px-12 md:py-4">
+              <div className="mx-auto flex max-w-6xl flex-wrap items-center gap-2">
+                {backButton}
+                {sortedMonths.length > 0 && monthPicker}
+              </div>
+            </header>
+            <p className="px-4 py-16 text-center text-sm text-slate-500">{emptyMessage}</p>
+          </>
+        )}
+
+        <SeoMonthlyLandingPageCapture snapshot={snapshot} reportRef={captureStackRef} />
+      </div>
+    );
+  }
 
   if (sortedMonths.length === 0) {
     return (

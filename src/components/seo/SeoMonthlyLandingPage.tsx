@@ -1,4 +1,4 @@
-import { useMemo, type RefObject } from "react";
+import { useMemo, type ReactNode, type RefObject } from "react";
 import { cn } from "@/lib/utils";
 import type { SeoMonthlyShareSnapshot } from "@/lib/seoMonthlyShareSnapshot";
 import {
@@ -17,6 +17,8 @@ type Props = {
   snapshot: SeoMonthlyShareSnapshot;
   captureMode?: boolean;
   className?: string;
+  /** Controls rendered inside the sticky header (e.g. back to dashboard). */
+  headerAction?: ReactNode;
 };
 
 function ReportSection({
@@ -36,23 +38,33 @@ function ReportSection({
   return <ClosingSlide snapshot={snapshot} />;
 }
 
-export function SeoMonthlyLandingPage({ snapshot, captureMode = false, className }: Props) {
+export function SeoMonthlyLandingPage({
+  snapshot,
+  captureMode = false,
+  className,
+  headerAction,
+}: Props) {
   const sections = useMemo(() => buildSeoMonthlySlides(snapshot), [snapshot]);
 
   return (
     <article
       dir="rtl"
       className={cn(
-        "seo-monthly-report min-h-full overflow-x-hidden bg-[#f6f8f5] font-heebo text-[#172a32]",
+        // `overflow-x-clip` (not hidden) keeps the sticky header pinned — hidden would
+        // make this article a scroll container and break `position: sticky`.
+        "seo-monthly-report min-h-full overflow-x-clip bg-[#f6f8f5] font-heebo text-[#172a32]",
         captureMode ? "w-[1120px]" : "w-full",
         className,
       )}
     >
-      <header className="sticky top-0 z-20 border-b border-slate-200/80 bg-[#f6f8f5]/95 px-6 py-4 backdrop-blur md:px-12">
-        <div className="mx-auto flex max-w-6xl items-center justify-between gap-4">
-          <div>
-            <p className="text-xs font-bold tracking-[0.18em] text-[#0f766e]">AIOS SEO</p>
-            <p className="text-sm text-slate-500">{snapshot.monthLabel}</p>
+      <header className="sticky top-0 z-20 border-b border-slate-200/80 bg-[#f6f8f5]/95 px-4 py-3 backdrop-blur md:px-12 md:py-4">
+        <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-3">
+          <div className="flex min-w-0 flex-wrap items-center gap-2 sm:gap-3">
+            {!captureMode && headerAction}
+            <div className={cn("min-w-0", !captureMode && headerAction && "hidden sm:block")}>
+              <p className="text-xs font-bold tracking-[0.18em] text-[#0f766e]">AIOS SEO</p>
+              <p className="truncate text-sm text-slate-500">{snapshot.monthLabel}</p>
+            </div>
           </div>
           {!captureMode && (
             <nav className="hidden items-center gap-5 text-xs text-slate-500 lg:flex" aria-label="תוכן הדוח">
