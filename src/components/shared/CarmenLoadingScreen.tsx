@@ -15,6 +15,14 @@ const FRAME_GLANCE = "/carmen/carmen-working-c.webp";
 
 const ALL_FRAMES = [FRAME_KEYS_UP, FRAME_KEYS_DOWN, FRAME_GLANCE];
 
+/** Feathered ellipse over the keyboard, where the two typing poses differ. */
+const HANDS_MASK =
+  "radial-gradient(ellipse 26% 19% at 57% 79%, #000 40%, rgba(0,0,0,0.6) 70%, transparent 100%)";
+
+/** Same idea for the wink: borrow only the eyes from the glance frame. */
+const EYES_MASK =
+  "radial-gradient(ellipse 12% 8% at 49% 30%, #000 45%, rgba(0,0,0,0.5) 75%, transparent 100%)";
+
 const DEFAULT_MESSAGES = [
   "כרמן אוספת את הנתונים…",
   "מסדרת את הטבלאות…",
@@ -101,11 +109,14 @@ export function CarmenWorkingScene({
           decoding="async"
           className="absolute inset-0 h-full w-full object-cover"
         />
+        {/* Second pose, masked to the hands: swapping the full render makes the
+            whole picture twitch, because the two frames differ everywhere. */}
         <img
           src={FRAME_KEYS_DOWN}
           alt=""
           aria-hidden
           decoding="async"
+          style={{ maskImage: HANDS_MASK, WebkitMaskImage: HANDS_MASK }}
           className="absolute inset-0 h-full w-full animate-carmen-keystroke object-cover motion-reduce:animate-none motion-reduce:opacity-100"
         />
         <img
@@ -113,6 +124,7 @@ export function CarmenWorkingScene({
           alt=""
           aria-hidden
           decoding="async"
+          style={{ maskImage: EYES_MASK, WebkitMaskImage: EYES_MASK }}
           className="absolute inset-0 h-full w-full animate-carmen-glance object-cover opacity-0 motion-reduce:hidden"
         />
 
@@ -128,7 +140,7 @@ export function CarmenWorkingScene({
             <span
               key={i}
               className="absolute bottom-[22%] h-1.5 w-1.5 rounded-[2px] bg-cyan-300/90 animate-carmen-data-rise motion-reduce:hidden"
-              style={{ left: `${52 + i * 6}%`, animationDelay: `${i * 0.45}s` }}
+              style={{ left: `${52 + i * 6}%`, animationDelay: `${i * 0.8}s` }}
             />
           ))}
         </div>
@@ -156,7 +168,7 @@ export function CarmenLoadingScreen({
   className,
 }: CarmenLoadingScreenProps) {
   const visible = useVisibleAfter(delayMs);
-  const message = useRotatingMessage(messages, 2200);
+  const message = useRotatingMessage(messages, 3400);
 
   if (!visible) return null;
 
@@ -174,7 +186,12 @@ export function CarmenLoadingScreen({
       >
         <CarmenWorkingScene size="sm" />
         <div className="flex flex-col gap-1">
-          <span className="text-sm font-medium text-foreground">{message}</span>
+          <span
+            key={message}
+            className="animate-in text-sm font-medium text-foreground fade-in duration-700"
+          >
+            {message}
+          </span>
           <TypingDots />
         </div>
       </div>
@@ -198,7 +215,9 @@ export function CarmenLoadingScreen({
       <div className="flex flex-col items-center gap-2 text-center">
         <p className="text-base font-semibold text-foreground">{title}</p>
         <div className="flex items-center gap-2">
-          <p className="text-sm text-muted-foreground">{message}</p>
+          <p key={message} className="animate-in text-sm text-muted-foreground fade-in duration-700">
+            {message}
+          </p>
           <TypingDots />
         </div>
       </div>
