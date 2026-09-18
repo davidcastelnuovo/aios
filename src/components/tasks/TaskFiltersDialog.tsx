@@ -15,7 +15,8 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
-import { RotateCcw } from "lucide-react";
+import { RotateCcw, Repeat } from "lucide-react";
+import { Checkbox } from "@/components/ui/checkbox";
 import { defaultTaskFilters, resolveMineTaskAssignee, type TaskFilterState } from "@/lib/taskFilters";
 
 export { defaultTaskFilters, resolveMineTaskAssignee, type TaskFilterState };
@@ -126,6 +127,25 @@ export function TaskFiltersDialog({
               </SelectContent>
             </Select>
           </div>
+
+          <label className="flex items-start gap-2 rounded-lg border p-3 cursor-pointer hover:bg-muted/40">
+            <Checkbox
+              checked={filters.showAllRecurring}
+              onCheckedChange={(checked) =>
+                setFilters((prev) => ({ ...prev, showAllRecurring: Boolean(checked) }))
+              }
+              className="mt-0.5"
+            />
+            <span className="space-y-0.5">
+              <span className="flex items-center gap-1.5 text-sm font-medium">
+                <Repeat className="h-3.5 w-3.5 text-muted-foreground" />
+                הצג משימות חוזרות לפני מועדן
+              </span>
+              <span className="block text-xs text-muted-foreground leading-snug">
+                לעריכה ותצוגה אצלך ואצל קמפיינרים — גם כשהמועד עוד לא הגיע.
+              </span>
+            </span>
+          </label>
         </div>
 
         <DialogFooter className="flex gap-2 sm:gap-2">

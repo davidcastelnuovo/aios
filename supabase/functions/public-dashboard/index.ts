@@ -69,12 +69,20 @@ function getDateRange(filter: string, integrationType?: string | null): { startD
       startDate = new Date(Date.UTC(y, m, d - 30)).toISOString().split("T")[0];
       endDate = yesterdayStr;
       break;
+    case "last_60_days":
+      startDate = new Date(Date.UTC(y, m, d - 60)).toISOString().split("T")[0];
+      endDate = yesterdayStr;
+      break;
     case 'last_70_days':
       startDate = new Date(Date.UTC(y, m, d - 70)).toISOString().split("T")[0];
       endDate = yesterdayStr;
       break;
     case "last_90_days":
       startDate = new Date(Date.UTC(y, m, d - 90)).toISOString().split("T")[0];
+      endDate = yesterdayStr;
+      break;
+    case "last_120_days":
+      startDate = new Date(Date.UTC(y, m, d - 120)).toISOString().split("T")[0];
       endDate = yesterdayStr;
       break;
     case "last_180_days":

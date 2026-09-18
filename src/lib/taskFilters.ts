@@ -21,6 +21,8 @@ export interface TaskFilterState {
   relatedId: string;
   relatedLabel: string;
   openClosed: OpenClosedFilter;
+  /** When true, open recurring tasks stay visible before their due day (for editing / assignee preview). */
+  showAllRecurring: boolean;
 }
 
 /**
@@ -36,6 +38,7 @@ export const defaultTaskFilters: TaskFilterState = {
   relatedId: "",
   relatedLabel: "",
   openClosed: "open",
+  showAllRecurring: false,
 };
 
 export function isMineQueueFilter(campaignerFilter: string): boolean {
@@ -87,6 +90,7 @@ type StoredTasksFilterPreset = {
   relatedId?: string;
   relatedLabel?: string;
   openClosed?: string;
+  showAllRecurring?: boolean;
   clientId?: string;
 };
 
@@ -128,6 +132,7 @@ export function serializeTasksFilterPreset(filters: TaskFilterState): StoredTask
     relatedId: filters.relatedId,
     relatedLabel: filters.relatedLabel,
     openClosed: filters.openClosed,
+    showAllRecurring: filters.showAllRecurring,
   };
 }
 
@@ -144,6 +149,7 @@ export function parseTasksFilterPreset(stored: StoredTasksFilterPreset | null | 
     period: parsePeriod(stored?.period),
     ...related,
     openClosed,
+    showAllRecurring: stored?.showAllRecurring === true,
   };
 }
 

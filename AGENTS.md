@@ -1,76 +1,33 @@
-## Environments (standing — read first)
+# AIOS agent instructions
 
-**There IS a development environment. Never tell David or Carmen that it does not exist.**
+This is the canonical instruction file for all coding agents; `CLAUDE.md` is a relative symlink to it. Edit shared rules here and keep task-specific procedures in the linked docs.
 
-Source of truth: `docs/ENVIRONMENTS.md`. Cursor rule: `.cursor/rules/environments.mdc`.
+## Environments and production safeguards
 
-- The **development environment** is the Vercel Preview URL of this branch. It talks to AIOS Staging.
-- Flow: **Feature → Preview → merge `develop` (Staging) → verify → `main` (Production)**. Never use Production as a development environment.
-- `main` = Production. `develop` = Staging. Feature work = `feature/*` or `fix/*`.
-- This Cloud Agent's local `.env` still points at Production. That is **not** proof Staging is missing.
-- **NEVER MODIFY PRODUCTION DIRECTLY.** No direct commits to `main`, no ad-hoc Production SQL, no Production migrations without Staging + David's `מאשר לפרודקשן`.
-- When a task is done, **always send David the development environment link**: the Vercel Preview URL for this branch (and the in-app path). If the work is on `develop`, also send `STAGING_DOMAIN=https://staging.aios.co.il`.
-- Merge feature PRs to **`develop` first**; verify on Staging. Merge **`develop` → `main`** only after `מאשר לפרודקשן`.
+- Development exists: each feature branch's Vercel Preview talks to AIOS Staging; `develop` is Staging and `main` is Production.
+- Follow **Feature → Preview → develop → verify on Staging → main**; use `feature/*` or `fix/*` for feature work.
+- **Never modify Production directly:** no direct commits to `main`, ad-hoc Production SQL, or Production migrations without Staging verification and David's **`מאשר לפרודקשן`**.
+- A local checkout pointing at Production is not evidence that Staging is missing. Confirm the environment before running anything that writes data; keep test accounts and test data out of Production.
 
-## WhatsApp connections — NEVER mix (standing)
+## Working style
 
-Cursor rule: `.cursor/rules/whatsapp-connections.mdc`.
+- Default to action for authorized work; pause for genuinely ambiguous, architecturally significant, destructive, irreversible, or unexpected external-facing actions.
+- Reply in at most **3 short sentences**, with no preambles, recaps, or tables unless asked; for longer topics, take one step at a time and wait.
+- Prefer what to do or what happened; explain architecture only when asked.
 
-| Connection | Whose phone | Use for |
-| --- | --- | --- |
-| **Manus** (`manus_wa`) | Carmen | Carmen chat + her group membership |
-| **Green API** (`green_api`) | Operator (David) | CRM chat / broadcasts — **not** Carmen membership |
-| **Meta Cloud API** | Business number | Official Cloud API |
+## Pull requests
 
-Hard rules for every agent:
-1. Carmen group allowlists / sync = **Manus only** (Gateway `list-groups` or `chat_messages.provider='manus_wa'`).
-2. **Never** dump the full `whatsapp_groups` table into Carmen permissions — it includes Green API operator groups.
-3. Staging Manus is often `mocked` without tokens — do **not** "fix" by copying Green API groups or Production WA tokens.
-4. Automations stay connection-scoped (`carmen_integration_id` / Manus vs Green). Do not bypass dual-channel guards.
+- Target `develop` for feature PRs, including through `create-pr`; draft status is optional.
+- Merge only when the user explicitly requests it; creating a PR, passing checks, or completing a task is not merge approval.
+- Leave auto-merge disabled and merge-triggering labels unset unless the user explicitly requests merging; Production approval still applies.
 
-## graphify
+## Read before the relevant task
 
-This project has a knowledge graph at graphify-out/ with god nodes, community structure, and cross-file relationships.
-
-When the user types `/graphify`, use the installed graphify skill or instructions before doing anything else.
-
-Rules:
-- Before architecture or implementation work, prefer the shared `aios-system-graph` MCP tools (`query_system_graph` and `graph_status`) when available. They read the centrally maintained graph of `main` without requiring a local Graphify installation.
-- For codebase questions, first run `graphify query "<question>"` when graphify-out/graph.json exists. Use `graphify path "<A>" "<B>"` for relationships and `graphify explain "<concept>"` for focused concepts. These return a scoped subgraph, usually much smaller than GRAPH_REPORT.md or raw grep output.
-- Dirty graphify-out/ files are expected after hooks or incremental updates; dirty graph files are not a reason to skip graphify. Only skip graphify if the task is about stale or incorrect graph output, or the user explicitly says not to use it.
-- If graphify-out/wiki/index.md exists, use it for broad navigation instead of raw source browsing.
-- Read graphify-out/GRAPH_REPORT.md only for broad architecture review or when query/path/explain do not surface enough context.
-- After modifying code, run `graphify update .` to keep the graph current (AST-only, no API cost).
-
-## David — tone (standing)
-
-- Reply in **at most 3 short sentences**. No preambles, recaps, or tables unless he asked.
-- If something needs more: **one step at a time**, wait for him. Do not dump the whole explanation.
-- Prefer what to do / what happened. Skip “why the architecture exists” unless he asks.
-
-## Cursor Cloud specific instructions
-
-Scope note: this environment sets up the **frontend web app** (the core product surface). The backend is the hosted/remote Supabase project (`SUPABASE_PRODUCTION_PROJECT_ID=<configured-outside-git>`), not a local stack — there is no local DB/`supabase start` config, so no local backend is needed to run and use the app.
-
-Services and how to run them:
-- **Frontend (Vite + React + TS)** — start with `pnpm dev`; it serves on `http://localhost:8080` (host `::`, port fixed in `vite.config.ts`). Other scripts (in `package.json`): `pnpm build`, `pnpm build:dev`, `pnpm preview`, `pnpm lint`.
-- The app reads `VITE_SUPABASE_*` from the committed root `.env`. **This Cloud Agent checkout still talks to Production Supabase** — do not create throwaway accounts or write test data. Staging credentials live in Vercel Preview+`develop` only (`docs/ENVIRONMENTS.md`). The backend project refs are `<configured-outside-git>`.
-
-Non-obvious gotchas:
-- Package manager is `pnpm` (a `pnpm-workspace.yaml` exists). Multiple lockfiles coexist (`package-lock.json`, `pnpm-lock.yaml`, `bun.lock*`) but Vercel/production and this dev setup use different managers; prefer `pnpm` locally for consistency. `bun` is not installed here.
-- `pnpm lint` (`eslint .`) lints the whole repo including `supabase/functions/**` (Deno) and currently reports thousands of **pre-existing** errors (mostly `@typescript-eslint/no-explicit-any`, plus Deno-specific code). This is the baseline repo state — a non-zero lint exit is expected and not caused by env setup.
-- The Chrome extension in `extension/` is a **separate** product with its own `package.json`/lockfile (`bun`); it is not part of the root workspace and is optional for core dev.
-- When capturing screen recordings of the app, note that Chrome's GPU-composited surface may not be captured by the recorder (shows a black screen / spinning cube). Screenshots capture the real page correctly; prefer screenshots for UI evidence here.
-
-Verification / token budget:
-- **Branch freshness:** before opening/updating a PR, `git fetch origin <base>` and merge/rebase so HEAD contains the latest base. CI `Require PR up to date with base` must stay green — never merge a stale branch (it overwrites newer fixes). Staging (`develop`) auto-syncs from `main` after Production pushes.
-- Shared-agency dashboards + permission personas: `pnpm test:guards` (and CI) must stay green — never list `crm_dashboards` by UI `tenant_id` alone in `DynamicTables` / client Reports; use `fetchAccessibleDashboards`. When changing RLS / `user_can_*` / `is_seo_staff` / `useUserRole.isSeo` / `crm-tables` scope, extend `scripts/permission-personas.config.json` if adding a persona class. Postmortems: `docs/postmortems/2026-09-09-dmm-dashboards-regression.md`, `docs/postmortems/2026-09-09-hybrid-seo-report-access-regression.md`.
-- Small UI changes: verify with `pnpm build` (and a focused lint of changed files if useful). Do **not** run browser sessions, click-throughs, or screenshots/recordings unless the user explicitly asked for a visual check.
-- Data / production changes: verify with SQL against the hosted project. That is the source of truth; do not add a UI walkthrough on top.
-- Skip extra “manual testing” loops by default. If a check is not needed to prove the change, do not run it.
-
-Preview / merge (standing rule for every Cloud Agent):
-- **Always send David the Vercel preview URL** (the development environment link) when you finish work on a branch, and again after every follow-up that pushes new commits. Include the in-app path when known (e.g. `/t/<tenant>/marketing/department/copy`).
-- **Tenant path is required for in-app pages.** Bare routes like `/signatures` 404 — always use `/t/<tenant-slug-or-id>/…` (e.g. `/t/<tenant>/signatures`). Public routes without tenant (e.g. `/sign/:token`) are the exception.
-- **Do not merge to `main` until he has that preview link and explicitly says `מאשר לפרודקשן`.** Coordinate with other open agents the same way — each agent sends its own branch preview; nobody merges on another agent's behalf.
-- **Exception — safe bugfix auto-merge:** PRs to `main` from `fix/*` or `cursor/fix-*` branches may carry label `safe-bugfix` (≤8 files, no migrations/ops/workflow edits). After `CI — frontend build` passes, GitHub auto-merges. Postmortems: `docs/postmortems/`. See `docs/postmortems/2026-09-01-clients-dialog-import.md` for the Clients Dialog incident.
+- **Codebase questions, architecture, implementation, or `/graphify`:** read `docs/agents/discovery.md` before exploring; it defines graph lookup, fallback, and update procedures.
+- **Environment setup or deployment configuration:** read `docs/ENVIRONMENTS.md`, the environment source of truth, before changing configuration.
+- **Running the app, changing code or permissions, verifying a change, or capturing visuals:** read `docs/agents/development.md` before execution for environment checks, permission guards, and focused verification.
+- **Creating/updating a PR, marking it ready, merging, deploying, or reporting completed branch work:** read `docs/agents/releases.md` for branch freshness and preview reporting.
+- **WhatsApp connections, groups, permissions, sync, or automations; AI providers; Carmen memory, profiles, bridges, or voice; or a Carmen-delegated task:** read the relevant sections of `docs/agents/carmen.md` before acting.
+- **Creating or updating issues:** use Linear team **AIO** and read `docs/agents/issue-tracker.md`.
+- **Triaging issues:** read `docs/agents/triage-labels.md` for the five labels in AIO's **Triage** group.
+- **Exploring domain concepts or recording decisions:** read `docs/agents/domain.md` for the single-context glossary and ADR conventions.
