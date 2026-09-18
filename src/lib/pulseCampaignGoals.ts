@@ -3,9 +3,21 @@
 import {
   buildPulseCampaignRows as buildRows,
   classifyPulseCampaignGoal as classifyGoal,
+  classificationDataFromStoredRow as classificationDataFromRow,
+  campaignDeliveryStatusLabel as deliveryStatusLabel,
+  integrationTypeToGoal as tableIntegrationGoal,
+  isEcommerceReportTable as isEcommerceTable,
   pulseCampaignOutcome as campaignOutcome,
   pulseTrendWindows as trendWindows,
+  resolveCampaignDeliveryStatus as resolveDeliveryStatus,
+  tableReportGoal as reportTableGoal,
 } from "../../supabase/functions/_shared/pulse-campaign-goals.mjs";
+
+export const campaignDeliveryStatusLabel = deliveryStatusLabel as (status: string) => string;
+export const resolveCampaignDeliveryStatus = resolveDeliveryStatus as (
+  data?: Record<string, unknown>,
+  integrationSettings?: Record<string, unknown>,
+) => "active" | "paused" | "removed" | "other" | "unknown";
 
 export type PulseCampaignGoal = "leads" | "engagement" | "ecommerce" | "unknown";
 
@@ -17,7 +29,12 @@ export type PulseCampaignGoalRow = {
   table_id: string;
   platform: "meta" | "google";
   goal: PulseCampaignGoal;
-  classification_source: "explicit_mapping" | "platform_goal" | "unclassified";
+  delivery_status?: "active" | "paused" | "removed" | "other" | "unknown";
+  classification_source: "explicit_mapping" | "platform_goal" | "table_report_type" | "unclassified";
+  campaign_objective?: string | null;
+  optimization_goal?: string | null;
+  campaign_type_hint?: string | null;
+  result_kind?: string | null;
   outcome_kind: string | null;
   status: "healthy" | "warning" | "critical" | "no_data";
   status_tier: "normal" | "watch" | "exception" | "missing_data" | "needs_classification";
@@ -56,6 +73,7 @@ export const buildPulseCampaignRows = buildRows as (input: {
     id: string;
     client_id: string;
     integration_type?: string | null;
+    category?: string | null;
     integration_settings?: Record<string, unknown> | null;
   }>;
   nowYmd: string;
@@ -68,3 +86,24 @@ export const classifyPulseCampaignGoal = classifyGoal as (
 
 export const pulseCampaignOutcome = campaignOutcome;
 export const pulseTrendWindows = trendWindows;
+
+export const isEcommerceReportTable = isEcommerceTable as (table: {
+  integration_type?: string | null;
+  category?: string | null;
+  integration_settings?: { campaign_type?: string | null } | null;
+}) => boolean;
+
+export const integrationTypeToGoal = tableIntegrationGoal as (
+  integrationType: string | null | undefined,
+  table?: {
+    integration_type?: string | null;
+    category?: string | null;
+    integration_settings?: { campaign_type?: string | null } | null;
+  } | null,
+) => "leads" | "ecommerce" | null;
+
+export const classificationDataFromStoredRow = classificationDataFromRow as (
+  row?: Record<string, unknown>,
+) => Record<string, unknown>;
+
+export const tableReportGoal = reportTableGoal;

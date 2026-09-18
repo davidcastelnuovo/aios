@@ -1,6 +1,13 @@
 import { supabase } from "@/integrations/supabase/client";
 import { shouldIncludeInAdsDashboardAggregate } from "@/lib/adsEntityLevel";
-import type { PulseCampaignGoalRow } from "@/lib/pulseCampaignGoals";
+import {
+  classificationDataFromStoredRow,
+  classifyPulseCampaignGoal,
+  integrationTypeToGoal,
+  isEcommerceReportTable,
+  resolveCampaignDeliveryStatus,
+  type PulseCampaignGoalRow,
+} from "@/lib/pulseCampaignGoals";
 
 /**
  * Helpers for the Pulse Check dashboard (דשבורד בדיקת דופק).
@@ -49,7 +56,7 @@ export type PulseSnapshotRow = {
   last_client_call_by: string | null;
 };
 
-export type CampaignGoal = "leads" | "ecommerce";
+export type CampaignGoal = "leads" | "engagement" | "ecommerce";
 export type CampaignGoalMode = CampaignGoal | "hybrid";
 
 export type PulseGoalDisplayRow = {
@@ -167,7 +174,591 @@ export function formatPulseMoney(value: number | null | undefined): string {
 }
 
 export function goalLabel(goal: CampaignGoal): string {
-  return goal === "ecommerce" ? "איקומרס" : "לידים";
+  if (goal === "ecommerce") return "איקומרס";
+  if (goal === "engagement") return "אינגייג׳מנט";
+  return "לידים";
+}
+
+/** Precomputed per-campaign rows persisted on campaign_pulse_snapshots. */
+export function collectCampaignBreakdownFromSnapshots(
+  snapshots: PulseSnapshotRow[],
+): PulseCampaignGoalRow[] {
+  const rows: PulseCampaignGoalRow[] = [];
+  for (const snapshot of snapshots) {
+    if (!Array.isArray(snapshot.campaign_breakdown)) continue;
+    rows.push(...snapshot.campaign_breakdown);
+  }
+  return rows;
+}
+
+/** Clients with campaign tables but no stored campaign_breakdown on snapshot. */
+export function pulseClientsNeedingRecordBuild(input: {
+  snapshots: PulseSnapshotRow[];
+  tables: PulseCampaignTable[];
+}): string[] {
+  const clientsWithTables = new Set(input.tables.map((table) => table.client_id));
+  const snapshotByClient = new Map(input.snapshots.map((row) => [row.client_id, row]));
+  const needsBuild: string[] = [];
+  for (const clientId of clientsWithTables) {
+    const snapshot = snapshotByClient.get(clientId);
+    if (!snapshot || !Array.isArray(snapshot.campaign_breakdown)) {
+      needsBuild.push(clientId);
+    }
+  }
+  return needsBuild;
+}
+
+function tableClassificationContext(table: PulseCampaignTable): Record<string, unknown> {
+  return {
+    integration_type: table.integration_type,
+    integration_settings: table.integration_settings || {},
+    category: table.category,
+  };
+}
+
+/** Pulse dashboard only tracks campaigns that spent in the current window. */
+export function filterPulseCampaignRowsWithSpend(rows: PulseCampaignGoalRow[]): PulseCampaignGoalRow[] {
+  return rows.filter((row) => (row.spend_7d || 0) > 0);
+}
+
+function rowConfirmsLeadObjective(row: PulseCampaignGoalRow): boolean {
+  const objective = String(row.campaign_objective || "").trim().toUpperCase();
+  return objective.includes("OUTCOME_LEADS") || objective.includes("LEAD_GENERATION");
+}
+
+/** Ecommerce report rows stored as leads without a confirmed lead objective. */
+export function pulseClientsWithMisclassifiedEcommerceReports(
+  breakdownRows: PulseCampaignGoalRow[],
+  tables: PulseCampaignTable[],
+): string[] {
+  const tableById = new Map(tables.map((table) => [table.id, table]));
+  const stale = new Set<string>();
+  for (const row of breakdownRows) {
+    const table = tableById.get(row.table_id);
+    if (!table || !isEcommerceReportTable(table)) continue;
+    if (row.goal === "leads" && !rowConfirmsLeadObjective(row)) {
+      stale.add(row.client_id);
+    }
+  }
+  return Array.from(stale);
+}
+
+function applyFreshCampaignGoalClassification(
+  row: PulseCampaignGoalRow,
+  table: PulseCampaignTable | undefined,
+): PulseCampaignGoalRow {
+  if (!table) return row;
+  const classification = classifyPulseCampaignGoal(
+    classificationDataFromStoredRow(row),
+    tableClassificationContext(table),
+  );
+  if (classification.goal === "unknown" || classification.goal === row.goal) return row;
+  return {
+    ...row,
+    goal: classification.goal,
+    classification_source: classification.source,
+  };
+}
+
+/** Clients whose stored breakdown goal no longer matches objective/report rules. */
+export function pulseClientsWithStaleCampaignGoals(
+  breakdownRows: PulseCampaignGoalRow[],
+  tables: PulseCampaignTable[],
+): string[] {
+  const tableById = new Map(tables.map((table) => [table.id, table]));
+  const stale = new Set<string>();
+  for (const row of breakdownRows) {
+    const table = tableById.get(row.table_id);
+    if (!table) continue;
+    const fresh = classifyPulseCampaignGoal(
+      classificationDataFromStoredRow(row),
+      tableClassificationContext(table),
+    );
+    if (fresh.goal !== "unknown" && fresh.goal !== row.goal) {
+      stale.add(row.client_id);
+    }
+  }
+  return Array.from(stale);
+}
+
+export type PulseCampaignDeliveryHint = {
+  table_id: string;
+  campaign_id: string;
+  effective_status: string | null;
+  date: string;
+};
+
+const PAUSED_ROW_PATCH = {
+  status: "healthy" as const,
+  status_tier: "normal" as const,
+  status_reason: "קמפיין מושהה — אין הוצאה פעילה שדורשת טיפול",
+  alert_eligible: false,
+};
+
+/** Apply delivery status + paused/removed criteria without a full crm_records rebuild. */
+export function rehydrateCampaignBreakdownRows(
+  rows: PulseCampaignGoalRow[],
+  tables: PulseCampaignTable[],
+  hints: PulseCampaignDeliveryHint[] = [],
+): PulseCampaignGoalRow[] {
+  const tableById = new Map(tables.map((table) => [table.id, table]));
+  const settingsByTable = new Map(
+    tables.map((table) => [table.id, table.integration_settings || {}]),
+  );
+  const hintByKey = new Map<string, PulseCampaignDeliveryHint>();
+  for (const hint of hints) {
+    const key = `${hint.table_id}:${hint.campaign_id}`;
+    const prev = hintByKey.get(key);
+    if (!prev || hint.date > prev.date) hintByKey.set(key, hint);
+  }
+
+  return rows.map((row) => {
+    const settings = settingsByTable.get(row.table_id) || {};
+    const hint = row.campaign_id ? hintByKey.get(`${row.table_id}:${row.campaign_id}`) : undefined;
+    const delivery_status = row.delivery_status && row.delivery_status !== "unknown"
+      ? row.delivery_status
+      : resolveCampaignDeliveryStatus(
+        {
+          campaign_id: row.campaign_id,
+          effective_status: hint?.effective_status,
+          configured_status: hint?.effective_status,
+        },
+        settings,
+      );
+    const table = tableById.get(row.table_id);
+    let next: PulseCampaignGoalRow = { ...row, delivery_status };
+    if (delivery_status === "paused") {
+      next = { ...next, ...PAUSED_ROW_PATCH };
+    } else if (delivery_status === "removed") {
+      next = {
+        ...next,
+        status: "healthy",
+        status_tier: "normal",
+        status_reason: "קמפיין הוסר/לא פעיל",
+        alert_eligible: false,
+      };
+    }
+    return applyFreshCampaignGoalClassification(next, table);
+  });
+}
+
+export function pulseMetaTablesNeedingDeliveryHints(
+  rows: PulseCampaignGoalRow[],
+  tables: PulseCampaignTable[],
+): string[] {
+  const metaTableIds = new Set(
+    tables
+      .filter((table) => table.integration_type === "facebook_insights" || table.integration_type === "facebook_ecommerce")
+      .map((table) => table.id),
+  );
+  const needsHint = new Set<string>();
+  for (const row of rows) {
+    if (!metaTableIds.has(row.table_id)) continue;
+    if (row.delivery_status && row.delivery_status !== "unknown") continue;
+    needsHint.add(row.table_id);
+  }
+  return Array.from(needsHint);
+}
+
+const DELIVERY_HINT_PAGE = 1000;
+const DELIVERY_HINT_MAX = 8000;
+const DELIVERY_HINT_TABLE_CHUNK = 15;
+
+/** Latest effective_status per campaign — 7-day window only (not full pulse trend). */
+export async function fetchPulseCampaignDeliveryHints(
+  tableIds: string[],
+  lookbackStart: string,
+): Promise<PulseCampaignDeliveryHint[]> {
+  if (!tableIds.length) return [];
+  const hints: PulseCampaignDeliveryHint[] = [];
+  for (let offset = 0; offset < tableIds.length; offset += DELIVERY_HINT_TABLE_CHUNK) {
+    const chunk = tableIds.slice(offset, offset + DELIVERY_HINT_TABLE_CHUNK);
+    for (let from = 0; from < DELIVERY_HINT_MAX; from += DELIVERY_HINT_PAGE) {
+      const to = from + DELIVERY_HINT_PAGE - 1;
+      const { data, error } = await supabase
+        .from("crm_records")
+        .select("table_id, data")
+        .in("table_id", chunk)
+        .filter("data->>date", "gte", lookbackStart)
+        .range(from, to);
+      if (error) throw error;
+      if (!data?.length) break;
+      for (const record of data) {
+        const dataRow = record.data || {};
+        const campaignId = dataRow.campaign_id || dataRow.campaignId;
+        const date = typeof dataRow.date === "string" ? dataRow.date : null;
+        if (!campaignId || !date) continue;
+        if (String(dataRow.entity_level || "campaign").toLowerCase() !== "campaign") continue;
+        hints.push({
+          table_id: record.table_id,
+          campaign_id: String(campaignId),
+          effective_status: dataRow.effective_status ? String(dataRow.effective_status) : null,
+          date,
+        });
+      }
+      if (data.length < DELIVERY_HINT_PAGE) break;
+    }
+  }
+  const latest = new Map<string, PulseCampaignDeliveryHint>();
+  for (const hint of hints) {
+    const key = `${hint.table_id}:${hint.campaign_id}`;
+    const prev = latest.get(key);
+    if (!prev || hint.date > prev.date) latest.set(key, hint);
+  }
+  return Array.from(latest.values());
+}
+
+export function pulseFallbackTableIds(
+  tables: PulseCampaignTable[],
+  clientIds: string[],
+): string[] {
+  const pending = new Set(clientIds);
+  return tables.filter((table) => pending.has(table.client_id)).map((table) => table.id);
+}
+
+export type PulseClientGoalRollup = {
+  rowKey: string;
+  client_id: string;
+  platform: PulsePlatform;
+  platformLabel: string;
+  goal: CampaignGoal;
+  status: PulseStatus;
+  status_reason: string;
+  spend_7d: number;
+  outcomes_7d: number | null;
+  revenue_7d: number;
+  efficiency: number | null;
+  change_pct: number | null;
+  efficiency_kind: "cpl" | "roas" | "cost_per_result";
+  flags: string[];
+  data_fresh_through: string | null;
+  calculated_at: string | null;
+  last_meta_change_at: string | null;
+  last_meta_change_type: string | null;
+  last_meta_change_actor: string | null;
+  last_meta_change_object: string | null;
+  meta_change_availability: string | null;
+  last_client_call_at: string | null;
+  last_client_call_by: string | null;
+  last_campaign_change_at: string | null;
+  campaigns: PulseCampaignGoalRow[];
+};
+
+const PULSE_STATUS_RANK: Record<PulseStatus, number> = {
+  critical: 0,
+  warning: 1,
+  no_data: 2,
+  healthy: 3,
+};
+
+function worstPulseStatusFromList(statuses: PulseStatus[]): PulseStatus {
+  if (!statuses.length) return "no_data";
+  return statuses.reduce((worst, status) =>
+    PULSE_STATUS_RANK[status] < PULSE_STATUS_RANK[worst] ? status : worst,
+  );
+}
+
+type CampaignRowWithDelivery = PulseCampaignGoalRow & {
+  delivery_status?: string | null;
+};
+
+function isUnknownDelivery(status: string | null | undefined): boolean {
+  return !status || status === "unknown" || status === "other";
+}
+
+/** Rollup status reflects confirmed-active campaigns only — never flash red on unknown/paused. */
+export function rollupStatusFromCampaigns(
+  campaigns: CampaignRowWithDelivery[],
+  options: { deliveryHintsPending?: boolean } = {},
+): {
+  status: PulseStatus;
+  status_reason: string;
+} {
+  const active = campaigns.filter((row) => row.delivery_status === "active");
+  const pausedOrRemoved = campaigns.filter(
+    (row) => row.delivery_status === "paused" || row.delivery_status === "removed",
+  );
+  const unknown = campaigns.filter((row) => isUnknownDelivery(row.delivery_status));
+
+  if (active.length) {
+    const status = worstPulseStatusFromList(active.map((row) => row.status));
+    const statusReason =
+      active.find((row) => row.status === status)?.status_reason ||
+      active[0]?.status_reason ||
+      "";
+    if (unknown.length && options.deliveryHintsPending && status !== "critical") {
+      return {
+        status: "warning",
+        status_reason: "מאמתים סטטוס קמפיין לפני סיכום סופי",
+      };
+    }
+    return { status, status_reason: statusReason };
+  }
+
+  if (pausedOrRemoved.length) {
+    return {
+      status: "healthy",
+      status_reason: unknown.length && options.deliveryHintsPending
+        ? "מאמתים סטטוס — הקמפיינים הפעילים מושהים"
+        : "כל הקמפיינים מושהים — אין הוצאה פעילה שדורשת טיפול",
+    };
+  }
+
+  if (unknown.length) {
+    if (options.deliveryHintsPending) {
+      return {
+        status: "warning",
+        status_reason: "ממתין לאימות סטטוס פעיל/מושהה — לא מסומן אדום עד שמאשרים",
+      };
+    }
+    const worst = worstPulseStatusFromList(unknown.map((row) => row.status));
+    if (worst === "critical") {
+      return {
+        status: "warning",
+        status_reason: "נדרש אימות סטטוס קמפיין לפני התראה",
+      };
+    }
+    return {
+      status: worst,
+      status_reason:
+        unknown.find((row) => row.status === worst)?.status_reason ||
+        unknown[0]?.status_reason ||
+        "",
+    };
+  }
+
+  return {
+    status: "no_data",
+    status_reason: "אין קמפיינים פעילים בקטגוריה",
+  };
+}
+
+export function rollupNeedsDeliveryHints(
+  campaigns: CampaignRowWithDelivery[],
+  metaTableIds: Set<string>,
+): boolean {
+  return campaigns.some(
+    (row) => metaTableIds.has(row.table_id) && isUnknownDelivery(row.delivery_status),
+  );
+}
+
+function rollupEfficiency(
+  goal: CampaignGoal,
+  spend: number,
+  outcomes: number | null,
+  revenue: number,
+): number | null {
+  if (goal === "ecommerce") {
+    return spend > 0 ? roundMetric(revenue / spend) : null;
+  }
+  if (outcomes === null || outcomes <= 0) return null;
+  return roundMetric(spend / outcomes);
+}
+
+/** One dashboard row per client × platform × goal (not per individual campaign). */
+export function rollupCampaignRowsByClientGoal(input: {
+  campaignRows: PulseCampaignGoalRow[];
+  snapshotsByClient: Map<string, PulseSnapshotRow>;
+  deliveryHintsPending?: boolean;
+  metaTableIds?: Set<string>;
+}): PulseClientGoalRollup[] {
+  const groups = new Map<string, PulseCampaignGoalRow[]>();
+  for (const row of input.campaignRows) {
+    if (row.goal === "unknown") continue;
+    const key = `${row.client_id}:${row.platform}:${row.goal}`;
+    const list = groups.get(key) || [];
+    list.push(row);
+    groups.set(key, list);
+  }
+
+  const rollups: PulseClientGoalRollup[] = [];
+  for (const [key, campaigns] of groups) {
+    const parts = key.split(":");
+    const client_id = parts[0];
+    const platform = parts[1] as PulsePlatform;
+    const goal = parts[2] as CampaignGoal;
+    const snapshot = input.snapshotsByClient.get(client_id) ?? null;
+    const spend_7d = campaigns.reduce((total, row) => total + (row.spend_7d || 0), 0);
+    const outcomeValues = campaigns.map((row) => row.outcomes_7d);
+    const hasAnyOutcome = outcomeValues.some((value) => value !== null);
+    const outcomes_7d = hasAnyOutcome
+      ? outcomeValues.reduce((total, value) => total + (value ?? 0), 0)
+      : null;
+    const revenue_7d = campaigns.reduce((total, row) => total + (row.revenue_7d || 0), 0);
+    const efficiency_kind =
+      goal === "ecommerce" ? "roas" : goal === "engagement" ? "cost_per_result" : "cpl";
+    const efficiency = rollupEfficiency(goal, spend_7d, outcomes_7d, revenue_7d);
+    const hintsPending = Boolean(
+      input.deliveryHintsPending
+      && input.metaTableIds
+      && rollupNeedsDeliveryHints(campaigns, input.metaTableIds),
+    );
+    const { status, status_reason: statusReason } = rollupStatusFromCampaigns(campaigns, {
+      deliveryHintsPending: hintsPending,
+    });
+    const flags = Array.from(new Set(campaigns.flatMap((row) =>
+      row.status !== "healthy" && row.status_reason ? [row.status_reason] : [],
+    )));
+    const campaignTouches = campaigns
+      .map((row) => row.last_change_at)
+      .filter((value): value is string => !!value);
+    let last_campaign_change_at = campaignTouches.sort().at(-1) ?? null;
+    if (platform === "meta" && snapshot?.last_meta_change_at) {
+      if (!last_campaign_change_at || snapshot.last_meta_change_at > last_campaign_change_at) {
+        last_campaign_change_at = snapshot.last_meta_change_at;
+      }
+    }
+    const trendWeighted = campaigns.reduce(
+      (acc, row) => {
+        if (row.trend_7d_pct === null || !row.spend_7d) return acc;
+        acc.weighted += row.trend_7d_pct * row.spend_7d;
+        acc.spend += row.spend_7d;
+        return acc;
+      },
+      { weighted: 0, spend: 0 },
+    );
+    const change_pct =
+      trendWeighted.spend > 0 ? roundMetric(trendWeighted.weighted / trendWeighted.spend, 1) : null;
+    const freshestDates = campaigns
+      .map((row) => row.data_fresh_through)
+      .filter((value): value is string => !!value)
+      .sort();
+    rollups.push({
+      rowKey: key,
+      client_id,
+      platform,
+      platformLabel: pulsePlatformLabel(platform),
+      goal,
+      status,
+      status_reason: statusReason,
+      spend_7d,
+      outcomes_7d,
+      revenue_7d,
+      efficiency,
+      change_pct,
+      efficiency_kind,
+      flags,
+      data_fresh_through: freshestDates.at(-1) ?? snapshot?.data_fresh_through ?? null,
+      calculated_at: snapshot?.calculated_at ?? null,
+      last_meta_change_at: platform === "meta" ? snapshot?.last_meta_change_at ?? null : null,
+      last_meta_change_type: platform === "meta" ? snapshot?.last_meta_change_type ?? null : null,
+      last_meta_change_actor: platform === "meta" ? snapshot?.last_meta_change_actor ?? null : null,
+      last_meta_change_object: platform === "meta" ? snapshot?.last_meta_change_object ?? null : null,
+      meta_change_availability:
+        platform === "meta"
+          ? snapshot?.meta_change_availability ?? null
+          : last_campaign_change_at
+            ? "available"
+            : "not_applicable",
+      last_client_call_at: snapshot?.last_client_call_at ?? null,
+      last_client_call_by: snapshot?.last_client_call_by ?? null,
+      last_campaign_change_at,
+      campaigns: campaigns.sort((a, b) => a.campaign_name.localeCompare(b.campaign_name, "he")),
+    });
+  }
+
+  return rollups.sort((a, b) =>
+    PULSE_STATUS_RANK[a.status] - PULSE_STATUS_RANK[b.status]
+    || a.client_id.localeCompare(b.client_id)
+    || a.platform.localeCompare(b.platform)
+    || a.goal.localeCompare(b.goal),
+  );
+}
+
+export function formatCampaignTouchSummary(rollup: Pick<
+  PulseClientGoalRollup,
+  | "last_campaign_change_at"
+  | "last_meta_change_at"
+  | "meta_change_availability"
+>): string {
+  const at = rollup.last_campaign_change_at || rollup.last_meta_change_at;
+  if (!at) {
+    if (rollup.meta_change_availability === "no_campaign_change_in_30d") return "לא נמצא";
+    return "לא זמין";
+  }
+  return new Date(at).toLocaleDateString("he-IL", {
+    timeZone: "Asia/Jerusalem",
+    day: "numeric",
+    month: "numeric",
+    year: "numeric",
+  });
+}
+
+export function formatCampaignTouchDetails(rollup: PulseClientGoalRollup): string {
+  const at = rollup.last_campaign_change_at || rollup.last_meta_change_at;
+  if (!at) {
+    if (rollup.meta_change_availability === "no_campaign_change_in_30d") {
+      return "לא נמצא שינוי בקמפיין ב-30 הימים האחרונים";
+    }
+    return "לא זמין";
+  }
+  const when = new Date(at).toLocaleString("he-IL", {
+    timeZone: "Asia/Jerusalem",
+    dateStyle: "short",
+    timeStyle: "short",
+  });
+  const lines = [`תאריך: ${when}`];
+  if (rollup.last_meta_change_type) lines.push(`סוג: ${rollup.last_meta_change_type}`);
+  if (rollup.last_meta_change_object) lines.push(`אובייקט: ${rollup.last_meta_change_object}`);
+  if (rollup.last_meta_change_actor) lines.push(`מי ביצע: ${rollup.last_meta_change_actor}`);
+  if (rollup.campaigns.length > 1) {
+    lines.push(`קמפיינים בקבוצה: ${rollup.campaigns.map((row) => row.campaign_name).join(", ")}`);
+  }
+  return lines.join("\n");
+}
+
+export function formatRollupEfficiency(row: Pick<
+  PulseClientGoalRollup,
+  "efficiency_kind" | "efficiency"
+>): string {
+  if (row.efficiency === null || row.efficiency === undefined) return "—";
+  if (row.efficiency_kind === "roas") return `ROAS ${row.efficiency}`;
+  return `₪${row.efficiency}`;
+}
+
+export function formatRollupOutcomes(row: Pick<PulseClientGoalRollup, "goal" | "outcomes_7d">): string {
+  if (row.outcomes_7d === null) return "—";
+  return String(row.outcomes_7d);
+}
+
+export type PulseCampaignAlertAck = {
+  client_id?: string;
+  campaign_id: string;
+  campaign_name: string | null;
+  acknowledged_at: string | null;
+  created_at: string;
+  alert_type: string;
+};
+
+export function resolveCampaignOperatorTouch(
+  campaign: Pick<PulseCampaignGoalRow, "campaign_id" | "campaign_name" | "last_change_at" | "delivery_status">,
+  alerts: PulseCampaignAlertAck[],
+): { at: string | null; label: string } {
+  const matches = alerts.filter((alert) =>
+    alert.campaign_id && campaign.campaign_id && alert.campaign_id === campaign.campaign_id,
+  );
+  const latestAck = matches
+    .filter((alert) => alert.acknowledged_at)
+    .sort((a, b) => String(b.acknowledged_at).localeCompare(String(a.acknowledged_at)))[0];
+  if (latestAck?.acknowledged_at) {
+    return { at: latestAck.acknowledged_at, label: "אושרה התראה" };
+  }
+  if (campaign.delivery_status === "paused" && campaign.last_change_at) {
+    return { at: campaign.last_change_at, label: "הושהה בפלטפורמה" };
+  }
+  if (campaign.last_change_at) {
+    return { at: campaign.last_change_at, label: "שינוי אחרון" };
+  }
+  return { at: null, label: "לא תועד" };
+}
+
+export function formatOperatorTouch(at: string | null): string {
+  if (!at) return "לא תועד";
+  return new Date(at).toLocaleString("he-IL", {
+    timeZone: "Asia/Jerusalem",
+    dateStyle: "short",
+    timeStyle: "short",
+  });
 }
 
 export type PulsePlatform = "meta" | "google";
@@ -176,6 +767,7 @@ export type PulseCampaignTable = {
   id: string;
   client_id: string;
   integration_type: string | null;
+  category?: string | null;
   campaign_active?: boolean | null;
   last_sync_at?: string | null;
   integration_settings?: Record<string, unknown> | null;
@@ -200,12 +792,6 @@ export function pulsePlatformLabel(platform: PulsePlatform): string {
 export function pulsePlatformKey(integrationType: string | null | undefined): PulsePlatform | null {
   if (integrationType === "google_ads") return "google";
   if (integrationType === "facebook_insights" || integrationType === "facebook_ecommerce") return "meta";
-  return null;
-}
-
-export function integrationTypeToGoal(integrationType: string | null | undefined): CampaignGoal | null {
-  if (integrationType === "facebook_ecommerce") return "ecommerce";
-  if (integrationType === "facebook_insights" || integrationType === "google_ads") return "leads";
   return null;
 }
 
@@ -406,7 +992,7 @@ function goalsForPlatform(tables: PulseCampaignTable[], platform: PulsePlatform)
   const goals = new Set<CampaignGoal>();
   for (const table of tables) {
     if (pulsePlatformKey(table.integration_type) !== platform) continue;
-    const goal = integrationTypeToGoal(table.integration_type);
+    const goal = integrationTypeToGoal(table.integration_type, table);
     if (goal) goals.add(goal);
   }
   return goals.size ? Array.from(goals) : ["leads"];
@@ -492,7 +1078,7 @@ export function expandPulseToPlatformGoalRows(input: {
     for (const goal of goalsForPlatform(configuredTables, platform)) {
       const goalTableIds = new Set(
         platformActive
-          .filter((table) => integrationTypeToGoal(table.integration_type) === goal)
+          .filter((table) => integrationTypeToGoal(table.integration_type, table) === goal)
           .map((table) => table.id),
       );
       const goalRecords = platformRecords.filter((record) => goalTableIds.has(record.table_id));
@@ -505,9 +1091,9 @@ export function expandPulseToPlatformGoalRows(input: {
 
       const metrics = computeGoalMetricsForBounds(goalRecords, goal, bounds);
       const goalConfigured = platformConfigured.filter(
-        (table) => integrationTypeToGoal(table.integration_type) === goal,
+        (table) => integrationTypeToGoal(table.integration_type, table) === goal,
       );
-      const goalActive = platformActive.filter((table) => integrationTypeToGoal(table.integration_type) === goal);
+      const goalActive = platformActive.filter((table) => integrationTypeToGoal(table.integration_type, table) === goal);
 
       const { status, flags } = classifyPlatformGoalStatus({
         platform,

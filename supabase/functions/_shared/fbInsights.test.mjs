@@ -65,6 +65,35 @@ test('messaging objective is synced as engagement with an exact conversation out
   assert.equal(row.frequency, 1.25)
 })
 
+test('sales objective stores purchase results for pulse classification', () => {
+  const row = buildInsightRecord(
+    {
+      date_start: '2026-09-17',
+      campaign_id: 'sale',
+      campaign_name: 'קמפיין מכירות | מבצעים ספטמבר',
+      spend: '462.60',
+      actions: [{ action_type: 'omni_purchase', value: '2' }],
+      action_values: [{ action_type: 'omni_purchase', value: '1200' }],
+    },
+    {
+      sale: {
+        id: 'sale',
+        name: 'קמפיין מכירות | מבצעים ספטמבר',
+        objective: 'OUTCOME_SALES',
+        effective_status: 'ACTIVE',
+        configured_status: 'ACTIVE',
+      },
+    },
+    {},
+    { sale: 'OFFSITE_CONVERSIONS' },
+  )
+
+  assert.equal(row.campaign_type, 'ecommerce')
+  assert.equal(row.campaign_objective, 'OUTCOME_SALES')
+  assert.equal(row.result_kind, 'purchases')
+  assert.equal(row.purchases, 2)
+})
+
 test('latest campaign updated_time is flushed from the campaign object', () => {
   assert.equal(
     latestCampaignUpdatedTime({
