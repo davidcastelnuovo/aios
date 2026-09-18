@@ -4,6 +4,7 @@ import {
   buildTaskAppLink,
   formatTaskNotificationMessage,
   resolveTaskNotificationLinkTenantId,
+  resolveTaskNotificationSenderTenantIds,
 } from './task-notification-message.ts'
 
 const task = {
@@ -43,6 +44,25 @@ test('creator notifications use the creator home tenant, not the assignee tenant
     fallbackTenantId: 'dmm-tenant',
   })
   assert.equal(linkTenantId, 'dmm-tenant')
+})
+
+test('sender tenant prefers the assignee home tenant before the client tenant', () => {
+  const senderTenantIds = resolveTaskNotificationSenderTenantIds({
+    notifyCreator: false,
+    campaignerTenantId: 'marketing-captain-tenant',
+    fallbackTenantId: 'dmm-tenant',
+  })
+  assert.deepEqual(senderTenantIds, ['marketing-captain-tenant', 'dmm-tenant'])
+})
+
+test('creator sender tenant prefers the creator home tenant before the client tenant', () => {
+  const senderTenantIds = resolveTaskNotificationSenderTenantIds({
+    notifyCreator: true,
+    creatorHomeTenantId: 'dmm-tenant',
+    campaignerTenantId: 'marketing-captain-tenant',
+    fallbackTenantId: 'marketing-captain-tenant',
+  })
+  assert.deepEqual(senderTenantIds, ['dmm-tenant', 'marketing-captain-tenant'])
 })
 
 test('new assignment identifies the person who gave the task', () => {

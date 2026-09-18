@@ -13,6 +13,7 @@ import { withManyChatDestinationLock } from '../_shared/manychat-destination-loc
 import {
   formatTaskNotificationMessage,
   resolveTaskNotificationLinkTenantId,
+  resolveTaskNotificationSenderTenantIds,
 } from '../_shared/task-notification-message.ts'
 import { resolveTenantHomeAgencyId } from '../_shared/resolve-tenant-agency.ts'
 import { claimFacebookLeadAutomationRun, claimFacebookLeadWhatsAppSend, claimIdenticalWhatsAppSend, releaseFacebookLeadAutomationRun, releaseFacebookLeadWhatsAppSend } from '../_shared/facebook-lead-dedup.ts'
@@ -585,6 +586,80 @@ const CLIENT_FOLLOW_UP_NOTIFICATION_TYPES = new Set([
   'client_follow_up_reminder',
   'client_follow_up_reminder_manager',
 ])
+
+async function resolveCarmenSenderForTenant(
+  supabase: any,
+  tenantId: string,
+): Promise<{ carmenStep: any | null; integration: any | null; reason?: string }> {
+  const { data: triggerSteps, error: triggerStepsError } = await supabase
+    .from('automation_flow_steps')
+    .select('automation_id, configuration, created_at')
+    .eq('tenant_id', tenantId)
+    .eq('step_type', 'trigger')
+    .eq('action_type', 'carmen_whatsapp_session')
+    .order('created_at', { ascending: true })
+  if (triggerStepsError) throw triggerStepsError
+
+  const automationIds = [...new Set((triggerSteps || []).map((step: any) => step.automation_id))]
+  if (!automationIds.length) {
+    return { carmenStep: null, integration: null, reason: 'no Carmen flow' }
+  }
+
+  const { data: activeAutomations, error: automationsError } = await supabase
+    .from('automations')
+    .select('id, name')
+    .in('id', automationIds)
+    .eq('active', true)
+  if (automationsError) throw automationsError
+
+  const activeIds = new Set((activeAutomations || []).map((automation: any) => automation.id))
+  const rankedSteps = (triggerSteps || [])
+    .filter((step: any) => activeIds.has(step.automation_id))
+    .sort((a: any, b: any) => {
+      const aAll = (a.configuration?.carmen_scope_mode || 'all') === 'all' ? 0 : 1
+      const bAll = (b.configuration?.carmen_scope_mode || 'all') === 'all' ? 0 : 1
+      return aAll - bAll
+    })
+  const carmenStep = rankedSteps[0]
+  if (!carmenStep) {
+    return { carmenStep: null, integration: null, reason: 'tenant Carmen flow is inactive' }
+  }
+
+  const { data: actionStep, error: actionStepError } = await supabase
+    .from('automation_flow_steps')
+    .select('configuration')
+    .eq('automation_id', carmenStep.automation_id)
+    .eq('step_type', 'action')
+    .in('action_type', ['send_manus_message', 'send_greenapi_message', 'send_green_api_message'])
+    .order('created_at', { ascending: true })
+    .limit(1)
+    .maybeSingle()
+  if (actionStepError) throw actionStepError
+
+  const integrationId = actionStep?.configuration?.green_api_integration_id
+    || actionStep?.configuration?.integration_id
+    || carmenStep.configuration?.carmen_integration_id
+    || null
+
+  let integrationQuery = supabase
+    .from('tenant_integrations')
+    .select('id, user_id')
+    .eq('tenant_id', tenantId)
+    .eq('is_active', true)
+  integrationQuery = integrationId
+    ? integrationQuery.eq('id', integrationId)
+    : integrationQuery.in('integration_type', ['green_api', 'greenapi', 'manus_wa', 'manuswa']).order('created_at', { ascending: false }).limit(1)
+  const { data: integrations, error: integrationError } = await integrationQuery
+  if (integrationError) throw integrationError
+
+  const integration = integrations?.[0]
+  if (!integration?.user_id) {
+    return { carmenStep, integration: null, reason: 'Carmen integration missing' }
+  }
+
+  return { carmenStep, integration }
+}
+
 async function sendTaskNotificationFromTenantCarmen(supabase: any, requestBody: any) {
   const taskId = String(requestBody?.data?.task_id || '').trim()
   if (!taskId) return { handled: false }
@@ -795,70 +870,43 @@ async function sendTaskNotificationFromTenantCarmen(supabase: any, requestBody: 
     }
   }
 
-  // Select Carmen inside the client's tenant. Prefer the general tenant Carmen
-  // flow over phone/group-specific variants, then dispatch through that flow's
-  // own WhatsApp action step so DMM and Marketing Captain never share a sender.
-  const { data: triggerSteps, error: triggerStepsError } = await supabase
-    .from('automation_flow_steps')
-    .select('automation_id, configuration, created_at')
-    .eq('tenant_id', notificationTenantId)
-    .eq('step_type', 'trigger')
-    .eq('action_type', 'carmen_whatsapp_session')
-    .order('created_at', { ascending: true })
-  if (triggerStepsError) throw triggerStepsError
+  // Carmen sender = the recipient's own tenant line whenever that tenant runs an
+  // active Carmen flow, with the client/task tenant as fallback. Routing purely by
+  // the client tenant made a Marketing Captain teammate hear about his own task
+  // from the DMM Carmen number, which reads as "nothing was sent".
+  const senderTenantCandidates = resolveTaskNotificationSenderTenantIds({
+    notifyCreator,
+    creatorHomeTenantId,
+    campaignerTenantId: campaigner?.tenant_id || null,
+    salesPersonTenantId: salesPerson?.tenant_id || null,
+    fallbackTenantId: notificationTenantId,
+  })
 
-  const automationIds = [...new Set((triggerSteps || []).map((step: any) => step.automation_id))]
-  if (!automationIds.length) {
+  let senderTenantId: string | null = null
+  let carmenStep: any = null
+  let integration: any = null
+  const senderReasons = new Map<string, string>()
+
+  for (const candidateTenantId of senderTenantCandidates) {
+    const resolved = await resolveCarmenSenderForTenant(supabase, candidateTenantId)
+    if (resolved.carmenStep && resolved.integration?.user_id) {
+      senderTenantId = candidateTenantId
+      carmenStep = resolved.carmenStep
+      integration = resolved.integration
+      break
+    }
+    if (resolved.reason) senderReasons.set(candidateTenantId, resolved.reason)
+  }
+
+  if (!senderTenantId || !carmenStep || !integration) {
+    const reason = senderReasons.get(notificationTenantId)
+      || [...senderReasons.values()].pop()
+      || null
+    if (reason === 'tenant Carmen flow is inactive') {
+      return { handled: true, sent: false, reason, tenant_id: notificationTenantId }
+    }
     // Let the regular task_assigned automation path handle tenants that do not
     // use a Carmen WhatsApp flow.
-    return { handled: false }
-  }
-  const { data: activeAutomations, error: automationsError } = await supabase
-    .from('automations')
-    .select('id, name')
-    .in('id', automationIds)
-    .eq('active', true)
-  if (automationsError) throw automationsError
-  const activeIds = new Set((activeAutomations || []).map((automation: any) => automation.id))
-  const rankedSteps = (triggerSteps || [])
-    .filter((step: any) => activeIds.has(step.automation_id))
-    .sort((a: any, b: any) => {
-      const aAll = (a.configuration?.carmen_scope_mode || 'all') === 'all' ? 0 : 1
-      const bAll = (b.configuration?.carmen_scope_mode || 'all') === 'all' ? 0 : 1
-      return aAll - bAll
-    })
-  const carmenStep = rankedSteps[0]
-  if (!carmenStep) {
-    return { handled: true, sent: false, reason: 'tenant Carmen flow is inactive', tenant_id: notificationTenantId }
-  }
-
-  const { data: actionStep, error: actionStepError } = await supabase
-    .from('automation_flow_steps')
-    .select('configuration')
-    .eq('automation_id', carmenStep.automation_id)
-    .eq('step_type', 'action')
-    .in('action_type', ['send_manus_message', 'send_greenapi_message', 'send_green_api_message'])
-    .order('created_at', { ascending: true })
-    .limit(1)
-    .maybeSingle()
-  if (actionStepError) throw actionStepError
-  const integrationId = actionStep?.configuration?.green_api_integration_id
-    || actionStep?.configuration?.integration_id
-    || carmenStep.configuration?.carmen_integration_id
-    || null
-
-  let integrationQuery = supabase
-    .from('tenant_integrations')
-    .select('id, user_id')
-    .eq('tenant_id', notificationTenantId)
-    .eq('is_active', true)
-  integrationQuery = integrationId
-    ? integrationQuery.eq('id', integrationId)
-    : integrationQuery.in('integration_type', ['green_api', 'greenapi', 'manus_wa', 'manuswa']).order('created_at', { ascending: false }).limit(1)
-  const { data: integrations, error: integrationError } = await integrationQuery
-  if (integrationError) throw integrationError
-  const integration = integrations?.[0]
-  if (!integration?.user_id) {
     return { handled: false }
   }
 
@@ -898,7 +946,7 @@ async function sendTaskNotificationFromTenantCarmen(supabase: any, requestBody: 
   const sent = await sendCarmenReplyViaActionStep({
     supabase,
     automationId: carmenStep.automation_id,
-    tenantId: notificationTenantId,
+    tenantId: senderTenantId,
     connectionUserId: integration.user_id,
     chatId: `${String(recipient.phone).replace(/\D/g, '')}@c.us`,
     phoneNumber: recipient.phone,
@@ -911,6 +959,7 @@ async function sendTaskNotificationFromTenantCarmen(supabase: any, requestBody: 
     task_id: task.id,
     client_id: client?.id || null,
     tenant_id: notificationTenantId,
+    sender_tenant_id: senderTenantId,
     link_tenant_id: linkTenantId,
     recipient_tenant_slug: recipientTenantSlug,
     campaigner_id: campaigner?.id || null,
@@ -924,6 +973,7 @@ async function sendTaskNotificationFromTenantCarmen(supabase: any, requestBody: 
     notification_type: notificationType,
     client_id: client?.id || null,
     tenant_id: notificationTenantId,
+    sender_tenant_id: senderTenantId,
     link_tenant_id: linkTenantId,
     recipient_tenant_slug: recipientTenantSlug,
     campaigner_id: campaigner?.id || null,
