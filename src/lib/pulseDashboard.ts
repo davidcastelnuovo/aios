@@ -205,6 +205,58 @@ export function pulseClientsNeedingRecordBuild(input: {
   return needsBuild;
 }
 
+export function isEcommerceReportTable(table: PulseCampaignTable): boolean {
+  if (table.integration_type === "facebook_ecommerce") return true;
+  return String(table.integration_settings?.campaign_type || "").trim().toLowerCase() === "ecommerce";
+}
+
+function rowConfirmsLeadObjective(row: PulseCampaignGoalRow): boolean {
+  const objective = String(row.campaign_objective || "").trim().toUpperCase();
+  return objective.includes("OUTCOME_LEADS") || objective.includes("LEAD_GENERATION");
+}
+
+/** Ecommerce report rows stored as leads without a confirmed lead objective. */
+export function pulseClientsWithMisclassifiedEcommerceReports(
+  breakdownRows: PulseCampaignGoalRow[],
+  tables: PulseCampaignTable[],
+): string[] {
+  const tableById = new Map(tables.map((table) => [table.id, table]));
+  const stale = new Set<string>();
+  for (const row of breakdownRows) {
+    const table = tableById.get(row.table_id);
+    if (!table || !isEcommerceReportTable(table)) continue;
+    if (row.goal === "leads" && !rowConfirmsLeadObjective(row)) {
+      stale.add(row.client_id);
+    }
+  }
+  return Array.from(stale);
+}
+
+function applyFreshCampaignGoalClassification(
+  row: PulseCampaignGoalRow,
+  table: PulseCampaignTable | undefined,
+  settings: Record<string, unknown>,
+): PulseCampaignGoalRow {
+  if (!table) return row;
+  const classification = classifyPulseCampaignGoal(
+    {
+      campaign_objective: row.campaign_objective,
+      optimization_goal: row.optimization_goal,
+      campaign_type: row.campaign_type_hint,
+    },
+    {
+      integration_type: table.integration_type,
+      integration_settings: settings,
+    },
+  );
+  if (classification.goal === "unknown" || classification.goal === row.goal) return row;
+  return {
+    ...row,
+    goal: classification.goal,
+    classification_source: classification.source,
+  };
+}
+
 /** Clients whose stored breakdown goal no longer matches objective/report rules. */
 export function pulseClientsWithStaleCampaignGoals(
   breakdownRows: PulseCampaignGoalRow[],
@@ -253,6 +305,7 @@ export function rehydrateCampaignBreakdownRows(
   tables: PulseCampaignTable[],
   hints: PulseCampaignDeliveryHint[] = [],
 ): PulseCampaignGoalRow[] {
+  const tableById = new Map(tables.map((table) => [table.id, table]));
   const settingsByTable = new Map(
     tables.map((table) => [table.id, table.integration_settings || {}]),
   );
@@ -276,20 +329,20 @@ export function rehydrateCampaignBreakdownRows(
         },
         settings,
       );
+    const table = tableById.get(row.table_id);
+    let next: PulseCampaignGoalRow = { ...row, delivery_status };
     if (delivery_status === "paused") {
-      return { ...row, delivery_status, ...PAUSED_ROW_PATCH };
-    }
-    if (delivery_status === "removed") {
-      return {
-        ...row,
-        delivery_status,
+      next = { ...next, ...PAUSED_ROW_PATCH };
+    } else if (delivery_status === "removed") {
+      next = {
+        ...next,
         status: "healthy",
         status_tier: "normal",
         status_reason: "קמפיין הוסר/לא פעיל",
         alert_eligible: false,
       };
     }
-    return { ...row, delivery_status };
+    return applyFreshCampaignGoalClassification(next, table, settings);
   });
 }
 

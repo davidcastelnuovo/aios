@@ -62,6 +62,7 @@ import {
   expandPulseToPlatformGoalRows,
   fetchPulseCampaignDeliveryHints,
   pulseClientsNeedingRecordBuild,
+  pulseClientsWithMisclassifiedEcommerceReports,
   pulseClientsWithStaleCampaignGoals,
   pulseFallbackTableIds,
   pulseMetaTablesNeedingDeliveryHints,
@@ -430,6 +431,7 @@ export function CampaignPulseDashboard({
         tables: pulseCampaignTables,
       }),
       ...pulseClientsWithStaleCampaignGoals(breakdown, pulseCampaignTables),
+      ...pulseClientsWithMisclassifiedEcommerceReports(breakdown, pulseCampaignTables),
     ]));
   }, [pulseRows, pulseCampaignTables]);
 

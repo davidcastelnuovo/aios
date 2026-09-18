@@ -151,10 +151,21 @@ export function classifyPulseCampaignGoal(data = {}, context = {}) {
     return { goal: 'engagement', source: 'explicit_mapping' }
   }
 
-  const derived = goalFromDerivedCampaignType(data.campaign_type)
-  if (derived) return { goal: derived, source: 'explicit_mapping' }
-
   const reportDefault = tableReportDefaultGoal(ctx)
+  const derived = goalFromDerivedCampaignType(data.campaign_type)
+  if (derived) {
+    // Ecommerce report tables: ignore fbInsights "lead" heuristic unless objective confirms leads.
+    if (
+      derived === 'leads'
+      && reportDefault === 'ecommerce'
+      && !objectiveGoal
+      && !optimizationGoal
+    ) {
+      return { goal: reportDefault, source: 'table_report_type' }
+    }
+    return { goal: derived, source: 'explicit_mapping' }
+  }
+
   if (reportDefault) return { goal: reportDefault, source: 'table_report_type' }
 
   return { goal: 'unknown', source: 'unclassified' }
