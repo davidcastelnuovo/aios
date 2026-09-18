@@ -34,6 +34,8 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { CarmenLoadingScreen } from "@/components/shared/CarmenLoadingScreen";
+import { CarmenRouteProgress } from "@/components/shared/CarmenRouteProgress";
+import { useCarmenContentFade } from "@/hooks/useCarmenContentFade";
 
 function RouteContentLoader() {
   return <CarmenLoadingScreen />;
@@ -48,6 +50,7 @@ export function AppLayout() {
   const { userId } = useCurrentUser();
   const { currentTenantId, setCurrentTenantId, currentTenant } = useTenant();
   const commandCenterAccess = useCommandCenterAccess();
+  const contentFadeRef = useCarmenContentFade<HTMLDivElement>();
   const sidecar = useCommandCenterSidecar();
 
   // Fetch available tenants for the user
@@ -269,7 +272,11 @@ export function AppLayout() {
             </header>
             <main className="flex min-h-0 flex-1 flex-col overflow-hidden">
               <CommandCenterSidecarShell>
-                <div className="flex h-full min-h-0 flex-1 flex-col overflow-y-auto">
+                <div
+                  ref={contentFadeRef}
+                  className="flex h-full min-h-0 flex-1 flex-col overflow-y-auto"
+                >
+                  <CarmenRouteProgress />
                   <RoutedModulePermissionGate>
                     <Suspense fallback={<RouteContentLoader />}>
                       <Outlet />

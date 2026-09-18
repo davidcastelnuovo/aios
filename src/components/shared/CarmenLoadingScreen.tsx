@@ -1,5 +1,10 @@
-import { useEffect, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { cn } from "@/lib/utils";
+import {
+  carmenSceneJustEnded,
+  registerCarmenScene,
+  registerCarmenWait,
+} from "@/lib/carmenLoaderSignal";
 
 /**
  * Carmen "working" loading screen — shown while a route chunk or its data is
@@ -47,32 +52,91 @@ function prefersReducedMotion() {
   return window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 }
 
-function useRotatingMessage(messages: string[], intervalMs: number) {
-  const [index, setIndex] = useState(0);
+/** Kept across mounts so a hand-off continues the sequence instead of restarting. */
+let lastMessageIndex = 0;
+
+function useRotatingMessage(messages: string[], intervalMs: number, resume: boolean) {
+  const [index, setIndex] = useState(() => (resume ? lastMessageIndex : 0));
 
   useEffect(() => {
     if (messages.length < 2 || prefersReducedMotion()) return;
     const timer = window.setInterval(
-      () => setIndex((current) => (current + 1) % messages.length),
+      () =>
+        setIndex((current) => {
+          lastMessageIndex = (current + 1) % messages.length;
+          return lastMessageIndex;
+        }),
       intervalMs,
     );
     return () => window.clearInterval(timer);
   }, [messages, intervalMs]);
 
-  return messages[Math.min(index, messages.length - 1)];
+  return messages[index % messages.length];
 }
 
-/** Hold back the loader briefly so fast navigations don't flicker a screen. */
-function useVisibleAfter(delayMs: number) {
-  const [visible, setVisible] = useState(delayMs <= 0);
+/**
+ * Hold the scene back so short waits only ever show the thin route bar, then
+ * fade it in. A scene that follows straight after another one (route chunk →
+ * page query) skips the wait, so the two read as a single loading moment.
+ */
+function useSceneVisible(delayMs: number) {
+  const [continued] = useState(carmenSceneJustEnded);
+  const [visible, setVisible] = useState(() => continued || delayMs <= 0);
 
   useEffect(() => {
-    if (delayMs <= 0) return;
+    if (visible) return;
     const timer = window.setTimeout(() => setVisible(true), delayMs);
     return () => window.clearTimeout(timer);
-  }, [delayMs]);
+  }, [visible, delayMs]);
 
-  return visible;
+  useEffect(() => (visible ? registerCarmenScene() : registerCarmenWait()), [visible]);
+
+  return { visible, continued };
+}
+
+/**
+ * React removes the scene the instant its data lands, which reads as a cut.
+ * On unmount we hand a positioned copy to the body and fade that out, so the
+ * scene dissolves while the freshly loaded content fades in underneath.
+ */
+function useFadeOutOnUnmount<T extends HTMLElement>(active: boolean) {
+  const ref = useRef<T>(null);
+
+  useLayoutEffect(() => {
+    if (!active) return;
+    const element = ref.current;
+    return () => {
+      if (!element?.isConnected || prefersReducedMotion()) return;
+
+      const rect = element.getBoundingClientRect();
+      if (rect.width === 0 || rect.height === 0) return;
+
+      const ghost = element.cloneNode(true) as HTMLElement;
+      Object.assign(ghost.style, {
+        position: "fixed",
+        left: `${rect.left}px`,
+        right: "auto",
+        top: `${rect.top}px`,
+        width: `${rect.width}px`,
+        height: `${rect.height}px`,
+        margin: "0",
+        pointerEvents: "none",
+        zIndex: "45",
+      });
+      document.body.appendChild(ghost);
+
+      const remove = () => ghost.remove();
+      ghost
+        .animate([{ opacity: 1 }, { opacity: 0, transform: "scale(0.985)" }], {
+          duration: 260,
+          easing: "ease-in",
+        })
+        .addEventListener("finish", remove);
+      window.setTimeout(remove, 800);
+    };
+  }, [active]);
+
+  return ref;
 }
 
 type CarmenSceneSize = "sm" | "md" | "lg";
@@ -155,7 +219,7 @@ export interface CarmenLoadingScreenProps {
   title?: string;
   /** Rotating status lines; pass one item to keep it static. */
   messages?: string[];
-  /** Wait this long before showing anything, so quick loads stay silent. */
+  /** Wait this long before showing the scene; the thin route bar covers this gap. */
   delayMs?: number;
   className?: string;
 }
@@ -164,25 +228,29 @@ export function CarmenLoadingScreen({
   variant = "page",
   title = "כרמן מכינה לך את המסך",
   messages = DEFAULT_MESSAGES,
-  delayMs = 120,
+  delayMs = 450,
   className,
 }: CarmenLoadingScreenProps) {
-  const visible = useVisibleAfter(delayMs);
-  const message = useRotatingMessage(messages, 3400);
+  const { visible, continued } = useSceneVisible(delayMs);
+  const message = useRotatingMessage(messages, 3400, continued);
+  const fadeOutRef = useFadeOutOnUnmount<HTMLDivElement>(visible);
 
   if (!visible) return null;
+
+  // A continued scene is already on screen from the previous step — no re-entry.
+  const enter = continued
+    ? ""
+    : "animate-in fade-in zoom-in-95 slide-in-from-bottom-2 duration-700";
 
   if (variant === "inline") {
     return (
       <div
+        ref={fadeOutRef}
         dir="rtl"
         role="status"
         aria-live="polite"
         aria-busy
-        className={cn(
-          "flex animate-in items-center gap-3 fade-in duration-300",
-          className,
-        )}
+        className={cn("flex items-center gap-3", enter, className)}
       >
         <CarmenWorkingScene size="sm" />
         <div className="flex flex-col gap-1">
@@ -200,13 +268,15 @@ export function CarmenLoadingScreen({
 
   return (
     <div
+      ref={fadeOutRef}
       dir="rtl"
       role="status"
       aria-live="polite"
       aria-busy
       className={cn(
-        "flex w-full animate-in flex-col items-center justify-center gap-5 fade-in duration-300",
+        "flex w-full flex-col items-center justify-center gap-5",
         variant === "page" ? "min-h-[60vh] p-8" : "py-10",
+        enter,
         className,
       )}
     >
