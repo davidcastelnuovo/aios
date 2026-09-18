@@ -114,6 +114,14 @@ export function parseCreateGoalResponse(raw: unknown): CreateExecutionGoalResult
   };
 }
 
+export type ManualGuidanceResult = {
+  ok?: boolean;
+  dispatched?: boolean;
+  awaiting?: boolean;
+  request_id?: string;
+  reason?: string;
+};
+
 export async function createExecutionGoal(
   token: string,
   tenantId: string,
@@ -121,9 +129,10 @@ export async function createExecutionGoal(
     title: string;
     autonomous?: boolean;
     description?: string;
+    objective?: string;
     completion_criteria?: string;
   },
-): Promise<CreateExecutionGoalResult> {
+): Promise<CreateExecutionGoalResult & { kick?: { status?: string; summary?: string; error?: string } }> {
   const raw = await goalExecutionAction(token, {
     action: "create",
     tenant_id: tenantId,
@@ -131,9 +140,14 @@ export async function createExecutionGoal(
     execution_mode: true,
     autonomous: !!args.autonomous,
     description: args.description,
+    objective: args.objective,
     completion_criteria: args.completion_criteria,
   });
-  return parseCreateGoalResponse(raw);
+  const parsed = parseCreateGoalResponse(raw);
+  const kick = (raw && typeof raw === "object" ? (raw as { kick?: unknown }).kick : undefined) as
+    | { status?: string; summary?: string; error?: string }
+    | undefined;
+  return { ...parsed, kick };
 }
 
 export async function goalExecutionAction(
@@ -170,13 +184,14 @@ export async function sendGoalManualGuidance(
   tenantId: string,
   goalId: string,
   guidance: string,
-) {
-  return goalExecutionAction(token, {
+): Promise<ManualGuidanceResult> {
+  const raw = await goalExecutionAction(token, {
     action: "manual_guidance",
     tenant_id: tenantId,
     goal_id: goalId,
     guidance,
   });
+  return (raw && typeof raw === "object" ? raw : {}) as ManualGuidanceResult;
 }
 
 export const GOAL_STATUS_LABELS: Record<ExecutionGoalStatus, string> = {
