@@ -25,6 +25,8 @@ export type ExecutionGoal = {
   objective?: string | null;
   iteration_count?: number | null;
   next_run_at?: string | null;
+  cursor_agent_id?: string | null;
+  cursor_session_url?: string | null;
   created_at: string;
   updated_at: string;
 };

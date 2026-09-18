@@ -205,6 +205,12 @@ function GoalDetailView({
         {goal.completion_criteria && !goal.autonomous_mode && (
           <p className="mt-1 text-[var(--cc-text-dim)]">קריטריונים: {goal.completion_criteria}</p>
         )}
+        {goal.cursor_session_url && (
+          <a href={goal.cursor_session_url} target="_blank" rel="noreferrer"
+            className="mt-1 inline-flex items-center gap-1 text-[var(--cc-accent)]">
+            Cursor session (sticky ליעד) <ExternalLink className="h-3 w-3" />
+          </a>
+        )}
         {goal.autonomous_mode && goal.engine_status !== "COMPLETED" && (
           <button type="button" onClick={onRunIteration} disabled={busy}
             className="mt-2 flex items-center gap-1 rounded border border-[var(--cc-line)] px-2 py-1 text-[10px] hover:border-[var(--cc-accent)]">

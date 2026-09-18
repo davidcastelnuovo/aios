@@ -47,6 +47,8 @@ export type AutonomousGoalRow = {
   execution_mode?: boolean;
   completion_criteria?: string | null;
   priority?: string;
+  cursor_agent_id?: string | null;
+  cursor_session_url?: string | null;
   created_at: string;
   updated_at: string;
 };
@@ -398,31 +400,77 @@ async function executePlanStep(
 
   try {
     if (step.action_type === "cursor") {
-      // Phase 2: structured Technical Job protocol. Phase 1: queue dev_task linked to goal.
-      const { createDevTask } = await import("./dev-tasks.ts");
-      const devTask = await createDevTask(supabase, {
+      const { dispatchToGoalCursor } = await import("./goal-cursor-dispatch.ts");
+      const { OPEN_DEV_STATUSES } = await import("./dev-tasks.ts");
+      const acceptance = state.criteria.map((c) => c.description).join("\n");
+
+      const cursorResult = await dispatchToGoalCursor(supabase, {
         tenantId: state.goal.tenant_id,
-        brief: {
-          title: step.title,
-          problem: step.description || state.goal.objective || state.goal.title,
-          acceptance_criteria: state.criteria.map((c) => c.description).join("\n"),
-          requested_by: "carmen_autonomous_goal",
-          environment: "staging",
-          base_branch: "develop",
-        },
         goalId: state.goal.id,
-        assignedAgent: "cursor",
-        priority: "normal",
+        goalTitle: state.goal.title,
+        objective: state.goal.objective || state.goal.title,
+        stepTitle: step.title,
+        stepDescription: step.description || undefined,
+        acceptanceCriteria: acceptance,
+        constraints: state.goal.constraints,
       });
+
+      // One dev_task tracker per goal — reuse open row, link to sticky session.
+      let devTaskId: string | null = null;
+      const { data: existingDev } = await supabase.from("dev_tasks").select("id, cursor_session_id")
+        .eq("goal_id", state.goal.id).eq("tenant_id", state.goal.tenant_id)
+        .in("status", OPEN_DEV_STATUSES).order("created_at", { ascending: false }).limit(1).maybeSingle();
+
+      if (existingDev?.id) {
+        devTaskId = existingDev.id;
+        if (!existingDev.cursor_session_id) {
+          const { attachDevTaskSession } = await import("./dev-tasks.ts");
+          await attachDevTaskSession(supabase, {
+            tenantId: state.goal.tenant_id,
+            taskId: existingDev.id,
+            cursorSessionId: cursorResult.cursorAgentId,
+            cursorSessionUrl: cursorResult.sessionUrl,
+          });
+        }
+      } else {
+        const { createDevTask, attachDevTaskSession } = await import("./dev-tasks.ts");
+        const devTask = await createDevTask(supabase, {
+          tenantId: state.goal.tenant_id,
+          brief: {
+            title: state.goal.title,
+            problem: state.goal.objective || state.goal.title,
+            acceptance_criteria: acceptance,
+            requested_by: "carmen_autonomous_goal",
+            environment: "staging",
+            base_branch: "develop",
+          },
+          goalId: state.goal.id,
+          assignedAgent: "cursor",
+          priority: "normal",
+        });
+        devTaskId = devTask.id;
+        await attachDevTaskSession(supabase, {
+          tenantId: state.goal.tenant_id,
+          taskId: devTask.id,
+          cursorSessionId: cursorResult.cursorAgentId,
+          cursorSessionUrl: cursorResult.sessionUrl,
+        });
+      }
+
       await supabase.from("goal_actions").update({
         status: "completed",
-        result: { dev_task_id: devTask.id, cursor_session_url: devTask.cursor_session_url },
+        result: {
+          dev_task_id: devTaskId,
+          cursor_agent_id: cursorResult.cursorAgentId,
+          cursor_session_url: cursorResult.sessionUrl,
+          reused_session: cursorResult.reused,
+        },
         completed_at: new Date().toISOString(),
       }).eq("id", action.id);
       await supabase.from("goal_plan_steps").update({
         status: "done",
         completed_at: new Date().toISOString(),
-        metadata: { dev_task_id: devTask.id },
+        metadata: { dev_task_id: devTaskId, cursor_agent_id: cursorResult.cursorAgentId },
       }).eq("id", step.id);
       return { done: true };
     }
@@ -650,6 +698,24 @@ export async function runGoalIteration(
       next_run_at: finalGate.complete ? null : new Date(Date.now() + 60_000).toISOString(),
       stuck_score: stuck.score,
     }).eq("id", goalId);
+
+    if (!finalGate.complete) {
+      const { runPostIterationEfficiencyReview } = await import("./goal-efficiency-review.ts");
+      const eff = await runPostIterationEfficiencyReview(supabase, {
+        tenantId,
+        goalId,
+        goalTitle: afterState?.goal.title || goal.title,
+        objective: afterState?.goal.objective || goal.objective,
+        iterationId,
+        iterationNumber,
+        stuckScore: stuck.score,
+        constraints: afterState?.goal.constraints || goal.constraints,
+      });
+      if (!eff.review.efficient) {
+        summary += `;efficiency_score:${eff.review.score}`;
+        if (eff.cursor_dispatched) summary += ";cursor_optimize_sent";
+      }
+    }
 
     await supabase.from("goal_loop_iterations").update({
       status: "completed",

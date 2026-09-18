@@ -19,7 +19,8 @@ Both can coexist on the same `goals` row (`execution_mode` + `autonomous_mode`).
 | --- | --- | --- |
 | **1 — Core Goal Engine** | DB, Goal Contract, worker loop, scheduler, persistence | ✅ Done |
 | **1b — Unify with Execution Mode** | Single `createUnifiedGoal`, extended GoalsPanel | ✅ This PR |
-| **2 — Cursor Execution** | Technical Job protocol, callback/status, evidence from PR/CI | Planned |
+| **2 — Cursor Execution** | Per-goal sticky agent (`goals.cursor_agent_id`), follow-ups not new agents | ✅ Partial |
+| **2b — Resource efficiency** | Post-iteration review → Cursor optimize instruction | ✅ This PR |
 | **3 — Model Router** | Profiles, provider adapters, failover metrics | Partial (`_shared/model-router.ts` stub) |
 | **4 — Verifier** | Criteria engine + completion gate | Partial (gate in engine; HTTP/SQL checks Phase 4) |
 | **5 — Tool Builder** | Missing capability → Cursor sub-goal → registry | Planned |
