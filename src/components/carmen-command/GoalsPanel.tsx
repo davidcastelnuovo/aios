@@ -13,6 +13,7 @@ import {
   GOAL_STATUS_LABELS,
   getExecutionGoal,
   goalExecutionAction,
+  createExecutionGoal,
   listExecutionGoals,
   runGoalIteration,
   sendGoalManualGuidance,
@@ -55,35 +56,23 @@ export function GoalsPanel({ tenantId }: { tenantId: string | null }) {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) throw new Error("לא מחובר");
       const schemaHint = (msg: string) =>
-        /does not exist|unknown column|autonomous_mode|goal_success_criteria|schema cache/i.test(msg);
+        /does not exist|unknown column|autonomous_mode|goal_success_criteria|schema cache|לא החזיר יעד/i.test(msg);
 
-      let result: {
-        goal: ExecutionGoal;
-        possible_duplicates?: unknown[];
-        autonomous_deferred?: boolean;
-        notice?: string;
-      };
-
+      let result;
       try {
-        result = await goalExecutionAction(session.access_token, {
-          action: "create",
-          tenant_id: tenantId,
+        result = await createExecutionGoal(session.access_token, tenantId, {
           title: newTitle.trim(),
-          execution_mode: true,
           autonomous,
-        }) as typeof result;
+        });
       } catch (firstErr: unknown) {
         const msg = firstErr instanceof Error ? firstErr.message : String(firstErr);
         if (!autonomous || !schemaHint(msg)) throw firstErr;
-        result = await goalExecutionAction(session.access_token, {
-          action: "create",
-          tenant_id: tenantId,
+        result = await createExecutionGoal(session.access_token, tenantId, {
           title: newTitle.trim(),
-          execution_mode: true,
           autonomous: false,
-        }) as typeof result;
+        });
         result.autonomous_deferred = true;
-        result.notice = "היעד נוצר במצב ידני — מנוע אוטונומי יופעל אחרי merge ל-develop.";
+        result.notice = "היעד נוצר במצב ידני — מנוע אוטונומי יופעל אחרי עדכון Staging.";
       }
 
       if (result.autonomous_deferred || result.notice) {

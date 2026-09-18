@@ -86,6 +86,56 @@ export async function getExecutionGoal(token: string, tenantId: string, id: stri
   return json;
 }
 
+export type CreateExecutionGoalResult = {
+  goal: ExecutionGoal;
+  criteria?: unknown[];
+  possible_duplicates?: unknown[];
+  autonomous_deferred?: boolean;
+  notice?: string;
+};
+
+export function parseCreateGoalResponse(raw: unknown): CreateExecutionGoalResult {
+  const row = (raw && typeof raw === "object" ? raw : {}) as Record<string, unknown>;
+  const goal = row.goal as ExecutionGoal | undefined;
+  if (!goal?.id) {
+    const serverError = row.error || row.message;
+    throw new Error(
+      serverError
+        ? String(serverError)
+        : "השרת לא החזיר יעד — ייתכן שמיגרציה חסרה על Staging. נסה שוב אחרי merge ל-develop.",
+    );
+  }
+  return {
+    goal,
+    criteria: row.criteria as unknown[] | undefined,
+    possible_duplicates: row.possible_duplicates as unknown[] | undefined,
+    autonomous_deferred: !!row.autonomous_deferred,
+    notice: row.notice ? String(row.notice) : undefined,
+  };
+}
+
+export async function createExecutionGoal(
+  token: string,
+  tenantId: string,
+  args: {
+    title: string;
+    autonomous?: boolean;
+    description?: string;
+    completion_criteria?: string;
+  },
+): Promise<CreateExecutionGoalResult> {
+  const raw = await goalExecutionAction(token, {
+    action: "create",
+    tenant_id: tenantId,
+    title: args.title.trim(),
+    execution_mode: true,
+    autonomous: !!args.autonomous,
+    description: args.description,
+    completion_criteria: args.completion_criteria,
+  });
+  return parseCreateGoalResponse(raw);
+}
+
 export async function goalExecutionAction(
   token: string,
   payload: Record<string, unknown>,
@@ -99,6 +149,10 @@ export async function goalExecutionAction(
   if (!res.ok) {
     const detail = json?.error || json?.message || json?.details || `HTTP ${res.status}`;
     throw new Error(String(detail));
+  }
+  if (payload.action === "create" && json && typeof json === "object" && !(json as { goal?: unknown }).goal) {
+    const err = (json as { error?: string }).error;
+    if (err) throw new Error(String(err));
   }
   return json;
 }
