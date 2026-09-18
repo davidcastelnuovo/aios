@@ -59,7 +59,7 @@ import {
 import {
   isRecurringBoardTask,
   recurringTaskBelongsInBacklog,
-  shouldShowRecurringTaskNow,
+  shouldShowRecurringTaskOnBoard,
 } from "@/lib/recurringTaskBoardFilter";
 import {
   computeFirstOccurrenceDate,
@@ -580,6 +580,40 @@ export function WeeklyTaskBoard() {
         collabSet.has(task.id) ? { ...task, collaborator_for_me: true } : task
       ));
 
+      if (filters.showAllRecurring) {
+        let recurringQuery = supabase
+          .from("tasks")
+          .select(TASK_BOARD_SELECT)
+          .or(buildTasksBoardScopeOrFilter(boardScope))
+          .not("recurrence_frequency", "is", null)
+          .neq("status", "done");
+        recurringQuery = applyBoardFilters(recurringQuery);
+        if (isMineQueueFilter(effectiveCampaignerFilter)) {
+          const mine = mineIdentity!;
+          const mode = effectiveCampaignerFilter === "mine_assigned" ? "mine_assigned" : "mine";
+          const queueOr = buildMineQueueOrFilter(mine, mode);
+          if (queueOr) {
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            recurringQuery = (recurringQuery as any).or(queueOr);
+          }
+        } else if (effectiveCampaignerFilter === "none") {
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          recurringQuery = (recurringQuery as any).is("campaigner_id", null);
+        } else if (effectiveCampaignerFilter !== "all") {
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          recurringQuery = (recurringQuery as any).eq("campaigner_id", effectiveCampaignerFilter);
+        }
+        const { data: recurringExtra, error: recurringError } = await recurringQuery;
+        if (recurringError) throw recurringError;
+        taskRows = taskRows.concat((recurringExtra || []) as FullTask[]);
+        const seenRecurring = new Set<string>();
+        taskRows = taskRows.filter((task) => {
+          if (seenRecurring.has(task.id)) return false;
+          seenRecurring.add(task.id);
+          return true;
+        });
+      }
+
       const creatorIds = Array.from(new Set(
         taskRows.map((task) => task.created_by).filter((id): id is string => Boolean(id))
       ));
@@ -635,7 +669,10 @@ export function WeeklyTaskBoard() {
         filtered = filterTasksForBoardUserPreview(filtered, boardUserId, mineIdentity ?? null);
       }
       filtered = filtered.filter((task) =>
-        shouldShowRecurringTaskNow(task, startOfDay(new Date())),
+        shouldShowRecurringTaskOnBoard(task, {
+          showAllRecurring: filters.showAllRecurring,
+          asOf: startOfDay(new Date()),
+        }),
       );
       return filtered;
     },
@@ -645,6 +682,7 @@ export function WeeklyTaskBoard() {
       filters.relatedKind,
       filters.relatedId,
       filters.period,
+      filters.showAllRecurring,
       viewMode,
       tenantId,
       crossTenantAgencyIds,
@@ -1469,7 +1507,7 @@ export function WeeklyTaskBoard() {
   const backlogTasks = tasks.filter((t) => {
     if (t.status === "done") return false;
     if (isRecurringBoardTask(t)) {
-      return recurringTaskBelongsInBacklog(t, today);
+      return recurringTaskBelongsInBacklog(t, today, filters.showAllRecurring);
     }
     if (isTaskOverdue(t, today)) return true;
     if (t.due_date === null) return true;
@@ -1479,7 +1517,9 @@ export function WeeklyTaskBoard() {
 
   // Current range tasks: only those with both due_date AND due_time in range
   const currentRangeTasks = tasks.filter((t) => {
-    if (!shouldShowRecurringTaskNow(t, today)) return false;
+    if (!shouldShowRecurringTaskOnBoard(t, { showAllRecurring: filters.showAllRecurring, asOf: today })) {
+      return false;
+    }
     if (t.due_date === null) return false;
     if (!t.due_time) return false; // No time = goes to backlog
     const dueDate = new Date(t.due_date);
@@ -1491,7 +1531,14 @@ export function WeeklyTaskBoard() {
   const dailyTasks = tasks.filter((t) => {
     if (!t.due_date) return false;
     if (t.status === "done") return false;
-    if (!shouldShowRecurringTaskNow(t, startOfDay(currentDate))) return false;
+    if (
+      !shouldShowRecurringTaskOnBoard(t, {
+        showAllRecurring: filters.showAllRecurring,
+        asOf: startOfDay(currentDate),
+      })
+    ) {
+      return false;
+    }
     const dueDate = new Date(t.due_date);
     const isToday = format(dueDate, "yyyy-MM-dd") === format(currentDate, "yyyy-MM-dd");
     // For daily view, include all tasks for that day regardless of time
@@ -1504,6 +1551,7 @@ export function WeeklyTaskBoard() {
     filters.association !== "all",
     filters.period !== "all",
     filters.relatedKind !== "all",
+    filters.showAllRecurring,
   ].filter(Boolean).length;
 
   const openFiltersDialog = (includeToolbar: boolean) => {
@@ -1799,6 +1847,10 @@ export function WeeklyTaskBoard() {
               openClosedFilter={filters.openClosed}
               onOpenClosedFilterChange={(openClosed) =>
                 setFilters((prev) => ({ ...prev, openClosed }))
+              }
+              showAllRecurring={filters.showAllRecurring}
+              onShowAllRecurringChange={(showAllRecurring) =>
+                setFilters((prev) => ({ ...prev, showAllRecurring }))
               }
               listSearch={chatListSearch}
               onListSearchChange={setChatListSearch}

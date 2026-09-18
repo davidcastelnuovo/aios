@@ -4,6 +4,7 @@ import { startOfDay } from "date-fns";
 import {
   recurringTaskBelongsInBacklog,
   shouldShowRecurringTaskNow,
+  shouldShowRecurringTaskOnBoard,
 } from "./recurringTaskBoardFilter.ts";
 
 const monday = startOfDay(new Date(2026, 8, 14));
@@ -44,4 +45,13 @@ test("recurring untimed shows in backlog only on due day", () => {
 test("non-recurring tasks are not filtered", () => {
   const task = { due_date: "2026-09-20", status: "open" };
   assert.equal(shouldShowRecurringTaskNow(task, monday), true);
+});
+
+test("showAllRecurring reveals future recurring tasks", () => {
+  const task = {
+    recurrence_frequency: "weekly",
+    due_date: "2026-09-16",
+    status: "open",
+  };
+  assert.equal(shouldShowRecurringTaskOnBoard(task, { showAllRecurring: true, asOf: monday }), true);
 });
