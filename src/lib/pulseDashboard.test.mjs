@@ -14,6 +14,7 @@ import {
   pulseFallbackTableIds,
   rehydrateCampaignBreakdownRows,
   rollupCampaignRowsByClientGoal,
+  rollupStatusFromCampaigns,
   formatPulseChange,
   getPulsePeriodBounds,
   platformGoalLabel,
@@ -299,6 +300,7 @@ test("rolls per-campaign rows into one client card per platform and goal", () =>
       goal: "leads",
       status: "healthy",
       status_reason: "ok",
+      delivery_status: "active",
       spend_7d: 100,
       outcomes_7d: 5,
       revenue_7d: 0,
@@ -316,6 +318,7 @@ test("rolls per-campaign rows into one client card per platform and goal", () =>
       goal: "leads",
       status: "critical",
       status_reason: "bad",
+      delivery_status: "active",
       spend_7d: 50,
       outcomes_7d: 0,
       revenue_7d: 0,
@@ -379,4 +382,61 @@ test("rolls per-campaign rows into one client card per platform and goal", () =>
   assert.equal(metaLeads.last_client_call_at, "2026-09-15T12:00:00.000Z");
   const googleEngagement = rollups.find((row) => row.platform === "google" && row.goal === "engagement");
   assert.equal(googleEngagement.last_campaign_change_at, "2026-09-11T07:00:00.000Z");
+});
+
+test("rollup: paused-unknown critical does not flash red before Meta hints land", () => {
+  const base = {
+    client_id: "maimad",
+    table_id: "t-meta",
+    platform: "meta",
+    goal: "leads",
+    spend_7d: 100,
+    outcomes_7d: 5,
+    revenue_7d: 0,
+  };
+  // Snapshot rows: delivery_status not stored yet — one paused campaign still marked critical.
+  const beforeHints = [
+    {
+      ...base,
+      campaign_key: "meta:id:1",
+      campaign_id: "1",
+      campaign_name: "Leads A",
+      status: "healthy",
+      status_reason: "ok",
+    },
+    {
+      ...base,
+      campaign_key: "meta:id:2",
+      campaign_id: "2",
+      campaign_name: "Leads B",
+      status: "healthy",
+      status_reason: "ok",
+    },
+    {
+      ...base,
+      campaign_key: "meta:id:3",
+      campaign_id: "3",
+      campaign_name: "Old paused",
+      status: "critical",
+      status_reason: "קמפיין נעצר",
+    },
+  ];
+
+  assert.equal(
+    rollupStatusFromCampaigns(beforeHints, { deliveryHintsPending: true }).status,
+    "warning",
+  );
+  assert.equal(rollupStatusFromCampaigns(beforeHints).status, "warning");
+
+  const afterHints = [
+    { ...beforeHints[0], delivery_status: "active" },
+    { ...beforeHints[1], delivery_status: "active" },
+    {
+      ...beforeHints[2],
+      delivery_status: "paused",
+      status: "healthy",
+      status_reason: "קמפיין מושהה — אין הוצאה פעילה שדורשת טיפול",
+    },
+  ];
+  assert.equal(rollupStatusFromCampaigns(afterHints).status, "healthy");
 });

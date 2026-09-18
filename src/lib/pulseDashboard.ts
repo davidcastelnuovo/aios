@@ -321,7 +321,13 @@ export async function fetchPulseCampaignDeliveryHints(
       if (data.length < DELIVERY_HINT_PAGE) break;
     }
   }
-  return hints;
+  const latest = new Map<string, PulseCampaignDeliveryHint>();
+  for (const hint of hints) {
+    const key = `${hint.table_id}:${hint.campaign_id}`;
+    const prev = latest.get(key);
+    if (!prev || hint.date > prev.date) latest.set(key, hint);
+  }
+  return Array.from(latest.values());
 }
 
 export function pulseFallbackTableIds(
@@ -378,29 +384,84 @@ type CampaignRowWithDelivery = PulseCampaignGoalRow & {
   delivery_status?: string | null;
 };
 
-/** Rollup status reflects active campaigns only — paused/removed are good management. */
-export function rollupStatusFromCampaigns(campaigns: CampaignRowWithDelivery[]): {
+function isUnknownDelivery(status: string | null | undefined): boolean {
+  return !status || status === "unknown" || status === "other";
+}
+
+/** Rollup status reflects confirmed-active campaigns only — never flash red on unknown/paused. */
+export function rollupStatusFromCampaigns(
+  campaigns: CampaignRowWithDelivery[],
+  options: { deliveryHintsPending?: boolean } = {},
+): {
   status: PulseStatus;
   status_reason: string;
 } {
   const active = campaigns.filter((row) => row.delivery_status === "active");
-  const pool = active.length
-    ? active
-    : campaigns.filter((row) => row.delivery_status !== "paused" && row.delivery_status !== "removed");
-  if (!pool.length) {
+  const pausedOrRemoved = campaigns.filter(
+    (row) => row.delivery_status === "paused" || row.delivery_status === "removed",
+  );
+  const unknown = campaigns.filter((row) => isUnknownDelivery(row.delivery_status));
+
+  if (active.length) {
+    const status = worstPulseStatusFromList(active.map((row) => row.status));
+    const statusReason =
+      active.find((row) => row.status === status)?.status_reason ||
+      active[0]?.status_reason ||
+      "";
+    if (unknown.length && options.deliveryHintsPending && status !== "critical") {
+      return {
+        status: "warning",
+        status_reason: "מאמתים סטטוס קמפיין לפני סיכום סופי",
+      };
+    }
+    return { status, status_reason: statusReason };
+  }
+
+  if (pausedOrRemoved.length) {
     return {
       status: "healthy",
-      status_reason: active.length === 0 && campaigns.some((row) => row.delivery_status === "paused")
-        ? "כל הקמפיינים מושהים — אין הוצאה פעילה שדורשת טיפול"
-        : "אין קמפיינים פעילים בקטגוריה",
+      status_reason: unknown.length && options.deliveryHintsPending
+        ? "מאמתים סטטוס — הקמפיינים הפעילים מושהים"
+        : "כל הקמפיינים מושהים — אין הוצאה פעילה שדורשת טיפול",
     };
   }
-  const status = worstPulseStatusFromList(pool.map((row) => row.status));
-  const statusReason =
-    pool.find((row) => row.status === status)?.status_reason ||
-    pool[0]?.status_reason ||
-    "";
-  return { status, status_reason: statusReason };
+
+  if (unknown.length) {
+    if (options.deliveryHintsPending) {
+      return {
+        status: "warning",
+        status_reason: "ממתין לאימות סטטוס פעיל/מושהה — לא מסומן אדום עד שמאשרים",
+      };
+    }
+    const worst = worstPulseStatusFromList(unknown.map((row) => row.status));
+    if (worst === "critical") {
+      return {
+        status: "warning",
+        status_reason: "נדרש אימות סטטוס קמפיין לפני התראה",
+      };
+    }
+    return {
+      status: worst,
+      status_reason:
+        unknown.find((row) => row.status === worst)?.status_reason ||
+        unknown[0]?.status_reason ||
+        "",
+    };
+  }
+
+  return {
+    status: "no_data",
+    status_reason: "אין קמפיינים פעילים בקטגוריה",
+  };
+}
+
+export function rollupNeedsDeliveryHints(
+  campaigns: CampaignRowWithDelivery[],
+  metaTableIds: Set<string>,
+): boolean {
+  return campaigns.some(
+    (row) => metaTableIds.has(row.table_id) && isUnknownDelivery(row.delivery_status),
+  );
 }
 
 function rollupEfficiency(
@@ -420,6 +481,8 @@ function rollupEfficiency(
 export function rollupCampaignRowsByClientGoal(input: {
   campaignRows: PulseCampaignGoalRow[];
   snapshotsByClient: Map<string, PulseSnapshotRow>;
+  deliveryHintsPending?: boolean;
+  metaTableIds?: Set<string>;
 }): PulseClientGoalRollup[] {
   const groups = new Map<string, PulseCampaignGoalRow[]>();
   for (const row of input.campaignRows) {
@@ -447,7 +510,14 @@ export function rollupCampaignRowsByClientGoal(input: {
     const efficiency_kind =
       goal === "ecommerce" ? "roas" : goal === "engagement" ? "cost_per_result" : "cpl";
     const efficiency = rollupEfficiency(goal, spend_7d, outcomes_7d, revenue_7d);
-    const { status, status_reason: statusReason } = rollupStatusFromCampaigns(campaigns);
+    const hintsPending = Boolean(
+      input.deliveryHintsPending
+      && input.metaTableIds
+      && rollupNeedsDeliveryHints(campaigns, input.metaTableIds),
+    );
+    const { status, status_reason: statusReason } = rollupStatusFromCampaigns(campaigns, {
+      deliveryHintsPending: hintsPending,
+    });
     const flags = Array.from(new Set(campaigns.flatMap((row) =>
       row.status !== "healthy" && row.status_reason ? [row.status_reason] : [],
     )));

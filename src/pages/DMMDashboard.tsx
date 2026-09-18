@@ -449,6 +449,20 @@ export function CampaignPulseDashboard({
     return pulseMetaTablesNeedingDeliveryHints(primed, pulseCampaignTables);
   }, [snapshotCampaignRows, pulseCampaignTables]);
 
+  const metaTableIdSet = useMemo(
+    () =>
+      new Set(
+        pulseCampaignTables
+          .filter(
+            (table) =>
+              table.integration_type === "facebook_insights"
+              || table.integration_type === "facebook_ecommerce",
+          )
+          .map((table) => table.id),
+      ),
+    [pulseCampaignTables],
+  );
+
   const {
     data: deliveryHints = [],
     isFetching: deliveryHintsFetching,
@@ -686,8 +700,10 @@ export function CampaignPulseDashboard({
     () => rollupCampaignRowsByClientGoal({
       campaignRows: campaignGoalRows,
       snapshotsByClient: pulseByClient,
+      deliveryHintsPending: deliveryHintsFetching,
+      metaTableIds: metaTableIdSet,
     }),
-    [campaignGoalRows, pulseByClient],
+    [campaignGoalRows, pulseByClient, deliveryHintsFetching, metaTableIdSet],
   );
 
   const visibleClientGoalRollups = useMemo(() => {
