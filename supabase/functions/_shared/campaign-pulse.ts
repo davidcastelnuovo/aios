@@ -707,7 +707,8 @@ export function buildPulseCategoryDigestLines(
     const critical = inGoal.filter((campaign) => campaign.status === 'critical').length
     const attention = inGoal.filter((campaign) => campaign.status === 'warning' || campaign.status === 'no_data').length
     const healthy = inGoal.filter((campaign) => campaign.status === 'healthy').length
-    lines.push(`${label}: 🔴 ${critical} · 🟡 ${attention} · 🟢 ${healthy} (${inGoal.length} קמפיינים)`)
+    const countLabel = inGoal.length === 1 ? 'קמפיין אחד' : `${inGoal.length} קמפיינים`
+    lines.push(`${label}: 🔴 ${critical} · 🟡 ${attention} · 🟢 ${healthy} (${countLabel})`)
   }
 
   const unclassified = campaigns.filter((campaign) => campaign.goal === 'unknown').length

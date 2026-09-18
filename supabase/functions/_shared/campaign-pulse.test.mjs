@@ -543,7 +543,7 @@ test("category digest lines summarize the three campaign goals", () => {
   ]);
 
   assert.match(lines.join("\n"), /לידים: 🔴 1 · 🟡 0 · 🟢 1 \(2 קמפיינים\)/);
-  assert.match(lines.join("\n"), /אינגייג׳מנט: 🔴 0 · 🟡 1 · 🟢 0/);
+  assert.match(lines.join("\n"), /אינגייג׳מנט: 🔴 0 · 🟡 1 · 🟢 0 \(קמפיין אחד\)/);
   assert.match(lines.join("\n"), /איקומרס: 🔴 0 · 🟡 0 · 🟢 1/);
   assert.match(lines.join("\n"), /טעונים סיווג: 1/);
   assert.match(lines.join("\n"), /לקוח א — לידים חורף: CPL ₪180/);
