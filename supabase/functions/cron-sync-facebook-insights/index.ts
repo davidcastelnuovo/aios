@@ -2,6 +2,7 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.75.0';
 import { fireIntegrationAlert } from '../_shared/fireIntegrationAlert.ts';
 import {
   buildAllLevelInsightRecords,
+  buildCampaignOptimizationGoalMap,
   buildResultLeadTypeMap,
   type CampaignStatus,
   type InsightRecord,
@@ -235,6 +236,7 @@ Deno.serve(async (req) => {
         const campaignObjectives: Record<string, string | null | undefined> = {};
         for (const c of Object.values(campaignStatuses)) campaignObjectives[c.id] = c.objective;
         const resultLeadTypes = buildResultLeadTypeMap(adsets, campaignObjectives);
+        const optimizationGoals = buildCampaignOptimizationGoalMap(adsets);
 
         // Also fetch ad account status
         const accountUrl = `https://graph.facebook.com/v21.0/${adAccountId}?fields=account_status,disable_reason,name&access_token=${accessToken}`;
@@ -263,6 +265,7 @@ Deno.serve(async (req) => {
           accessToken,
           campaignStatuses,
           resultLeadTypes,
+          optimizationGoals,
         );
         const campaignInsights = insights.filter((row) => (row.entity_level || 'campaign') === 'campaign');
         console.log(`[cron-sync-facebook-insights] ${table.name}: synced ${insights.length} rows`, levelCounts);
