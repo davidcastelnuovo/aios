@@ -2,6 +2,7 @@ import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { cn } from "@/lib/utils";
 import {
   carmenSceneJustEnded,
+  registerCarmenFadeOutCanceler,
   registerCarmenScene,
   registerCarmenWait,
 } from "@/lib/carmenLoaderSignal";
@@ -89,7 +90,8 @@ function useSceneVisible(delayMs: number) {
     return () => window.clearTimeout(timer);
   }, [visible, delayMs]);
 
-  useEffect(() => (visible ? registerCarmenScene() : registerCarmenWait()), [visible]);
+  // Layout phase so a hand-off registers (and cancels any dissolve ghost) before paint.
+  useLayoutEffect(() => (visible ? registerCarmenScene() : registerCarmenWait()), [visible]);
 
   return { visible, continued };
 }
@@ -98,6 +100,9 @@ function useSceneVisible(delayMs: number) {
  * React removes the scene the instant its data lands, which reads as a cut.
  * On unmount we hand a positioned copy to the body and fade that out, so the
  * scene dissolves while the freshly loaded content fades in underneath.
+ *
+ * If another Carmen wait/scene registers during the hand-off, that registration
+ * cancels this ghost so the eye does not double up and jump.
  */
 function useFadeOutOnUnmount<T extends HTMLElement>(active: boolean) {
   const ref = useRef<T>(null);
@@ -125,7 +130,23 @@ function useFadeOutOnUnmount<T extends HTMLElement>(active: boolean) {
       });
       document.body.appendChild(ghost);
 
-      const remove = () => ghost.remove();
+      let removed = false;
+      const remove = () => {
+        if (removed) return;
+        removed = true;
+        ghost.remove();
+        unsubscribe();
+      };
+
+      const unsubscribe = registerCarmenFadeOutCanceler(() => {
+        try {
+          ghost.getAnimations?.().forEach((a) => a.cancel());
+        } catch {
+          /* ignore */
+        }
+        remove();
+      });
+
       ghost
         .animate([{ opacity: 1 }, { opacity: 0, transform: "scale(0.985)" }], {
           duration: 260,
