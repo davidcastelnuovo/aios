@@ -8,35 +8,71 @@ ALTER TABLE public.campaign_pulse_snapshots
 COMMENT ON COLUMN public.campaign_pulse_snapshots.campaign_breakdown IS
   'Deterministic campaign rows classified by platform objective/explicit mapping into leads, engagement, ecommerce, or unknown. Includes complete-day 3d/7d trends, weekday-normalized 28d baseline, approved target, status reason, and alert eligibility.';
 
-DO $alert_log$
-BEGIN
-  IF to_regclass('public.pulse_instant_alert_log') IS NULL THEN
-    RAISE EXCEPTION 'pulse_instant_alert_log missing — run apply_pulse_refresh_and_instant_alerts.sql first';
-  END IF;
+-- Instant pulse alert prerequisites. Production already has these from
+-- apply_pulse_refresh_and_instant_alerts.sql; the guards keep this file re-runnable
+-- and let it self-heal an environment that missed that apply.
+ALTER TABLE public.tenant_heartbeat_settings
+  ADD COLUMN IF NOT EXISTS pulse_alert_rules jsonb NOT NULL DEFAULT '{
+    "instant_wa_enabled": true,
+    "no_contact_enabled": true,
+    "no_contact_days": 14,
+    "cpl_spike_enabled": true,
+    "cpl_spike_pct": 50,
+    "disconnected_enabled": true
+  }'::jsonb;
 
-  ALTER TABLE public.pulse_instant_alert_log
-    DROP CONSTRAINT IF EXISTS pulse_instant_alert_log_rule_type_check;
+COMMENT ON COLUMN public.tenant_heartbeat_settings.pulse_alert_rules IS
+  'Tenant-level instant pulse WhatsApp alert toggles and thresholds.';
 
-  ALTER TABLE public.pulse_instant_alert_log
-    ADD CONSTRAINT pulse_instant_alert_log_rule_type_check
-    CHECK (rule_type IN ('no_contact', 'cpl_spike', 'connection_lost', 'campaign_exception'));
+CREATE TABLE IF NOT EXISTS public.pulse_instant_alert_log (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  tenant_id uuid NOT NULL REFERENCES public.tenants(id) ON DELETE CASCADE,
+  client_id uuid REFERENCES public.clients(id) ON DELETE CASCADE,
+  rule_type text NOT NULL,
+  message text NOT NULL,
+  recipient_phone text,
+  sent_at timestamptz NOT NULL DEFAULT now()
+);
 
-  ALTER TABLE public.pulse_instant_alert_log
-    ADD COLUMN IF NOT EXISTS campaign_key text,
-    ADD COLUMN IF NOT EXISTS fingerprint text,
-    ADD COLUMN IF NOT EXISTS severity_score numeric,
-    ADD COLUMN IF NOT EXISTS evidence jsonb NOT NULL DEFAULT '{}'::jsonb;
+CREATE INDEX IF NOT EXISTS idx_pulse_instant_alert_log_dedupe
+  ON public.pulse_instant_alert_log (tenant_id, client_id, rule_type, sent_at DESC);
 
-  CREATE INDEX IF NOT EXISTS idx_pulse_instant_alert_log_campaign_dedupe
-    ON public.pulse_instant_alert_log (
-      tenant_id,
-      client_id,
-      campaign_key,
-      rule_type,
-      sent_at DESC
-    );
-END;
-$alert_log$;
+ALTER TABLE public.pulse_instant_alert_log ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "pulse_instant_alert_log_read" ON public.pulse_instant_alert_log;
+CREATE POLICY "pulse_instant_alert_log_read"
+  ON public.pulse_instant_alert_log
+  FOR SELECT
+  TO authenticated
+  USING (
+    public.is_super_admin(auth.uid())
+    OR tenant_id = public.get_user_tenant_id(auth.uid())
+  );
+
+GRANT SELECT ON public.pulse_instant_alert_log TO authenticated;
+GRANT ALL ON public.pulse_instant_alert_log TO service_role;
+
+ALTER TABLE public.pulse_instant_alert_log
+  DROP CONSTRAINT IF EXISTS pulse_instant_alert_log_rule_type_check;
+
+ALTER TABLE public.pulse_instant_alert_log
+  ADD CONSTRAINT pulse_instant_alert_log_rule_type_check
+  CHECK (rule_type IN ('no_contact', 'cpl_spike', 'connection_lost', 'campaign_exception'));
+
+ALTER TABLE public.pulse_instant_alert_log
+  ADD COLUMN IF NOT EXISTS campaign_key text,
+  ADD COLUMN IF NOT EXISTS fingerprint text,
+  ADD COLUMN IF NOT EXISTS severity_score numeric,
+  ADD COLUMN IF NOT EXISTS evidence jsonb NOT NULL DEFAULT '{}'::jsonb;
+
+CREATE INDEX IF NOT EXISTS idx_pulse_instant_alert_log_campaign_dedupe
+  ON public.pulse_instant_alert_log (
+    tenant_id,
+    client_id,
+    campaign_key,
+    rule_type,
+    sent_at DESC
+  );
 
 -- Cheap operational checks every two hours. They read campaign/account status only;
 -- the heavier Insights sync that feeds the pulse KPI windows stays on its own cadence.
