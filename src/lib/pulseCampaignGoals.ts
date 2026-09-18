@@ -26,7 +26,10 @@ export type PulseCampaignGoalRow = {
   platform: "meta" | "google";
   goal: PulseCampaignGoal;
   delivery_status?: "active" | "paused" | "removed" | "other" | "unknown";
-  classification_source: "explicit_mapping" | "platform_goal" | "unclassified";
+  classification_source: "explicit_mapping" | "platform_goal" | "table_report_type" | "unclassified";
+  campaign_objective?: string | null;
+  optimization_goal?: string | null;
+  campaign_type_hint?: string | null;
   outcome_kind: string | null;
   status: "healthy" | "warning" | "critical" | "no_data";
   status_tier: "normal" | "watch" | "exception" | "missing_data" | "needs_classification";

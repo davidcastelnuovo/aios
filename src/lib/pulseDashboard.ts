@@ -1,6 +1,7 @@
 import { supabase } from "@/integrations/supabase/client";
 import { shouldIncludeInAdsDashboardAggregate } from "@/lib/adsEntityLevel";
 import {
+  classifyPulseCampaignGoal,
   resolveCampaignDeliveryStatus,
   type PulseCampaignGoalRow,
 } from "@/lib/pulseCampaignGoals";
@@ -202,6 +203,34 @@ export function pulseClientsNeedingRecordBuild(input: {
     }
   }
   return needsBuild;
+}
+
+/** Clients whose stored breakdown goal no longer matches objective/report rules. */
+export function pulseClientsWithStaleCampaignGoals(
+  breakdownRows: PulseCampaignGoalRow[],
+  tables: PulseCampaignTable[],
+): string[] {
+  const tableById = new Map(tables.map((table) => [table.id, table]));
+  const stale = new Set<string>();
+  for (const row of breakdownRows) {
+    const table = tableById.get(row.table_id);
+    if (!table) continue;
+    const fresh = classifyPulseCampaignGoal(
+      {
+        campaign_objective: row.campaign_objective,
+        optimization_goal: row.optimization_goal,
+        campaign_type: row.campaign_type_hint,
+      },
+      {
+        integration_type: table.integration_type,
+        integration_settings: table.integration_settings || {},
+      },
+    );
+    if (fresh.goal !== "unknown" && fresh.goal !== row.goal) {
+      stale.add(row.client_id);
+    }
+  }
+  return Array.from(stale);
 }
 
 export type PulseCampaignDeliveryHint = {

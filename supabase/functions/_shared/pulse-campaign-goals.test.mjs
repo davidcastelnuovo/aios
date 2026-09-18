@@ -10,17 +10,87 @@ import {
 
 test('classifies campaign objective and never defaults an unknown campaign to leads', () => {
   assert.equal(classifyPulseCampaignGoal({ campaign_objective: 'OUTCOME_LEADS' }).goal, 'leads')
+  assert.equal(classifyPulseCampaignGoal({ campaign_objective: 'OUTCOME_TRAFFIC' }).goal, 'engagement')
   assert.equal(classifyPulseCampaignGoal({ campaign_type: 'traffic' }).goal, 'engagement')
   assert.equal(classifyPulseCampaignGoal({ optimization_goal: 'THRUPLAY' }).goal, 'engagement')
   assert.equal(classifyPulseCampaignGoal({ campaign_objective: 'OUTCOME_SALES' }).goal, 'ecommerce')
   assert.equal(classifyPulseCampaignGoal({ campaign_name: 'קמפיין קיץ' }).goal, 'unknown')
   assert.equal(
+    classifyPulseCampaignGoal({
+      campaign_objective: 'OUTCOME_SALES',
+      campaign_type: 'lead',
+    }).goal,
+    'ecommerce',
+  )
+  assert.equal(
+    classifyPulseCampaignGoal({}, { integration_type: 'facebook_ecommerce' }).goal,
+    'ecommerce',
+  )
+  assert.equal(
     classifyPulseCampaignGoal(
       { campaign_objective: 'OUTCOME_SALES' },
-      { campaign_type: 'leads' },
+      { integration_settings: { campaign_type: 'leads' } },
     ).goal,
     'ecommerce',
   )
+})
+
+test('ecommerce report tables classify purchase campaigns and rebuild mixed clients', () => {
+  const tables = [{
+    id: 't-ecom',
+    client_id: 'abihail',
+    integration_type: 'facebook_ecommerce',
+    integration_settings: {},
+  }]
+  const dates = ['2026-09-11', '2026-09-12', '2026-09-13', '2026-09-14', '2026-09-15', '2026-09-16', '2026-09-17']
+  const records = []
+  for (const date of dates) {
+    records.push(
+      {
+        table_id: 't-ecom',
+        data: {
+          date,
+          campaign_id: 'sale',
+          campaign_name: 'Purchase',
+          campaign_objective: 'OUTCOME_SALES',
+          campaign_type: 'ecommerce',
+          spend: 40,
+          purchases: 2,
+          purchase_value: 200,
+        },
+      },
+      {
+        table_id: 't-ecom',
+        data: {
+          date,
+          campaign_id: 'video',
+          campaign_name: 'Views',
+          campaign_objective: 'OUTCOME_ENGAGEMENT',
+          optimization_goal: 'THRUPLAY',
+          campaign_type: 'traffic',
+          spend: 20,
+          video_views: 50,
+        },
+      },
+      {
+        table_id: 't-ecom',
+        data: {
+          date,
+          campaign_id: 'lead',
+          campaign_name: 'Lead form',
+          campaign_objective: 'OUTCOME_LEADS',
+          campaign_type: 'lead',
+          spend: 10,
+          leads: 1,
+        },
+      },
+    )
+  }
+  const rows = buildPulseCampaignRows({ records, tables, nowYmd: '2026-09-18' })
+  assert.deepEqual(rows.map((row) => row.goal).sort(), ['ecommerce', 'engagement', 'leads'])
+  const purchase = rows.find((row) => row.campaign_id === 'sale')
+  assert.equal(purchase.outcome_kind, 'purchases')
+  assert.equal(purchase.outcomes_7d, 14)
 })
 
 test('keeps a missing outcome missing instead of converting it to zero', () => {

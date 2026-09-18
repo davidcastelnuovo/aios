@@ -414,10 +414,10 @@ Deno.serve(async (req) => {
         const recordsForGoal = (goal: 'leads' | 'ecommerce') =>
           records.filter((row: any) => {
             const table = tableById.get(row.table_id)
-            return classifyPulseCampaignGoal(
-              row.data || {},
-              table?.integration_settings || {},
-            ).goal === goal
+            return classifyPulseCampaignGoal(row.data || {}, {
+              integration_type: table?.integration_type,
+              integration_settings: table?.integration_settings || {},
+            }).goal === goal
           })
         const leadRecords = recordsForGoal('leads')
         const ecommerceRecords = recordsForGoal('ecommerce')

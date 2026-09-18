@@ -64,30 +64,72 @@ function includesTerm(values, terms) {
   return values.some((value) => terms.some((term) => value.includes(term)))
 }
 
-export function classifyPulseCampaignGoal(data = {}, _integrationSettings = {}) {
-  // Per-campaign only — table-level integration_settings.campaign_type must not
-  // blanket-classify every row (e.g. PMax table tagged "leads").
-  const explicit = normalizedTerms(
-    data.pulse_goal,
-    data.campaign_type,
-    data.campaign_goal,
-  )
+const META_OBJECTIVE_GOAL = [
+  ['ecommerce', ['OUTCOME_SALES', 'PRODUCT_CATALOG_SALES', 'CATALOG_SALES']],
+  ['leads', ['OUTCOME_LEADS', 'LEAD_GENERATION']],
+  ['engagement', [
+    'OUTCOME_TRAFFIC', 'OUTCOME_ENGAGEMENT', 'OUTCOME_AWARENESS',
+    'LINK_CLICKS', 'MESSAGES', 'REACH', 'VIDEO_VIEWS',
+  ]],
+]
+
+function goalFromListedObjective(objective) {
+  const normalized = String(objective || '').trim().toUpperCase()
+  if (!normalized) return null
+  for (const [goal, tokens] of META_OBJECTIVE_GOAL) {
+    if (tokens.some((token) => normalized === token || normalized.includes(token))) return goal
+  }
+  return null
+}
+
+function goalFromOptimizationGoal(optimizationGoal) {
+  const normalized = String(optimizationGoal || '').trim().toUpperCase()
+  if (!normalized) return null
+  if (includesTerm([normalized], ECOMMERCE_TERMS) || normalized.includes('PURCHASE') || normalized.includes('VALUE')) {
+    return 'ecommerce'
+  }
+  if (includesTerm([normalized], LEAD_TERMS)) return 'leads'
+  if (includesTerm([normalized], ENGAGEMENT_TERMS)) return 'engagement'
+  return null
+}
+
+function goalFromDerivedCampaignType(campaignType) {
+  const normalized = String(campaignType || '').trim().toLowerCase()
+  if (normalized === 'ecommerce') return 'ecommerce'
+  if (normalized === 'traffic') return 'engagement'
+  if (normalized === 'lead') return 'leads'
+  return null
+}
+
+function tableReportDefaultGoal(context = {}) {
+  if (context.integration_type === 'facebook_ecommerce') return 'ecommerce'
+  const settings = context.integration_settings || {}
+  const tableCampaignType = String(settings.campaign_type || '').trim().toLowerCase()
+  if (tableCampaignType === 'ecommerce') return 'ecommerce'
+  return null
+}
+
+function classificationContext(context = {}) {
+  return {
+    integration_type: context.integration_type || null,
+    integration_settings: context.integration_settings || {},
+  }
+}
+
+/** Classify by campaign objective first; fall back to report type only when unknown. */
+export function classifyPulseCampaignGoal(data = {}, context = {}) {
+  const ctx = classificationContext(context)
+
+  const objectiveGoal = goalFromListedObjective(data.campaign_objective || data.objective)
+  if (objectiveGoal) return { goal: objectiveGoal, source: 'platform_goal' }
+
+  const optimizationGoal = goalFromOptimizationGoal(data.optimization_goal)
+  if (optimizationGoal) return { goal: optimizationGoal, source: 'platform_goal' }
+
   const platform = normalizedTerms(
-    data.campaign_objective,
-    data.objective,
-    data.optimization_goal,
     data.conversion_action_category,
     data.bidding_strategy_type,
   )
-  if (includesTerm(explicit, ECOMMERCE_TERMS)) {
-    return { goal: 'ecommerce', source: 'explicit_mapping' }
-  }
-  if (includesTerm(explicit, LEAD_TERMS)) {
-    return { goal: 'leads', source: 'explicit_mapping' }
-  }
-  if (includesTerm(explicit, ENGAGEMENT_TERMS)) {
-    return { goal: 'engagement', source: 'explicit_mapping' }
-  }
   if (includesTerm(platform, ECOMMERCE_TERMS)) {
     return { goal: 'ecommerce', source: 'platform_goal' }
   }
@@ -97,6 +139,24 @@ export function classifyPulseCampaignGoal(data = {}, _integrationSettings = {}) 
   if (includesTerm(platform, ENGAGEMENT_TERMS)) {
     return { goal: 'engagement', source: 'platform_goal' }
   }
+
+  const manual = normalizedTerms(data.pulse_goal, data.campaign_goal)
+  if (includesTerm(manual, ECOMMERCE_TERMS)) {
+    return { goal: 'ecommerce', source: 'explicit_mapping' }
+  }
+  if (includesTerm(manual, LEAD_TERMS)) {
+    return { goal: 'leads', source: 'explicit_mapping' }
+  }
+  if (includesTerm(manual, ENGAGEMENT_TERMS)) {
+    return { goal: 'engagement', source: 'explicit_mapping' }
+  }
+
+  const derived = goalFromDerivedCampaignType(data.campaign_type)
+  if (derived) return { goal: derived, source: 'explicit_mapping' }
+
+  const reportDefault = tableReportDefaultGoal(ctx)
+  if (reportDefault) return { goal: reportDefault, source: 'table_report_type' }
+
   return { goal: 'unknown', source: 'unclassified' }
 }
 
@@ -178,7 +238,10 @@ function numberValue(data, fields) {
 
 function recordScore(record, table) {
   const data = record.data || {}
-  const classification = classifyPulseCampaignGoal(data, table?.integration_settings || {})
+  const classification = classifyPulseCampaignGoal(data, {
+    integration_type: table?.integration_type,
+    integration_settings: table?.integration_settings || {},
+  })
   let score = classification.goal === 'unknown' ? 0 : 10
   if (data.campaign_id) score += 2
   if (pulseCampaignOutcome(data, classification.goal).field) score += 3
@@ -449,10 +512,10 @@ export function buildPulseCampaignRows({
 
   for (const items of campaigns.values()) {
     const sample = items.sort((a, b) => b.record.data.date.localeCompare(a.record.data.date))[0]
-    const classification = classifyPulseCampaignGoal(
-      sample.record.data,
-      sample.table.integration_settings || {},
-    )
+    const classification = classifyPulseCampaignGoal(sample.record.data, {
+      integration_type: sample.table.integration_type,
+      integration_settings: sample.table.integration_settings || {},
+    })
     const outcome = pulseCampaignOutcome(sample.record.data, classification.goal)
     const campaignRecords = items.map((item) => item.record)
     const inWindow = (start, end) => campaignRecords.filter((row) => row.data.date >= start && row.data.date <= end)
@@ -496,6 +559,9 @@ export function buildPulseCampaignRows({
       table_id: sample.table.id,
       platform: sample.platform,
       goal: classification.goal,
+      campaign_objective: sample.record.data.campaign_objective || sample.record.data.objective || null,
+      optimization_goal: sample.record.data.optimization_goal || null,
+      campaign_type_hint: sample.record.data.campaign_type || null,
       delivery_status: deliveryStatus,
       classification_source: classification.source,
       outcome_kind: outcome.kind,

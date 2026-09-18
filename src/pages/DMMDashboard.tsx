@@ -62,6 +62,7 @@ import {
   expandPulseToPlatformGoalRows,
   fetchPulseCampaignDeliveryHints,
   pulseClientsNeedingRecordBuild,
+  pulseClientsWithStaleCampaignGoals,
   pulseFallbackTableIds,
   pulseMetaTablesNeedingDeliveryHints,
   rehydrateCampaignBreakdownRows,
@@ -421,13 +422,16 @@ export function CampaignPulseDashboard({
     staleTime: 60_000,
   });
 
-  const clientsNeedingRecordBuild = useMemo(
-    () => pulseClientsNeedingRecordBuild({
-      snapshots: pulseRows,
-      tables: pulseCampaignTables,
-    }),
-    [pulseRows, pulseCampaignTables],
-  );
+  const clientsNeedingRecordBuild = useMemo(() => {
+    const breakdown = collectCampaignBreakdownFromSnapshots(pulseRows);
+    return Array.from(new Set([
+      ...pulseClientsNeedingRecordBuild({
+        snapshots: pulseRows,
+        tables: pulseCampaignTables,
+      }),
+      ...pulseClientsWithStaleCampaignGoals(breakdown, pulseCampaignTables),
+    ]));
+  }, [pulseRows, pulseCampaignTables]);
 
   const fallbackTableIds = useMemo(
     () => pulseFallbackTableIds(pulseCampaignTables, clientsNeedingRecordBuild),
