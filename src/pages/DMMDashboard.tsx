@@ -19,10 +19,12 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "@/components/ui/popover";
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+  SheetTrigger,
+} from "@/components/ui/sheet";
 import {
   Select,
   SelectContent,
@@ -156,7 +158,7 @@ export function CampaignPulseDashboard({
   const queryClient = useQueryClient();
   const navigate = useNavigate();
   const { buildPath, tenantSlug } = useTenantPath();
-  const { selectedAgency, setSelectedAgency, agencies } = useAgency();
+  const { selectedAgency, setSelectedAgency } = useAgency();
   const { isOwner, isTeamManager, isSuperAdmin, isCampaigner, isSeo, campaignerId } = useUserRole();
   const { userAgencyIds } = useUserAgencies();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -732,6 +734,21 @@ export function CampaignPulseDashboard({
         if (search && !meta.name.toLowerCase().includes(search.toLowerCase())) return false;
         if (platformFilter === "facebook" && row.platform !== "meta") return false;
         if (platformFilter === "google_ads" && row.platform !== "google") return false;
+        if (filterService === "campaign") {
+          const clientTables = tablesByClient.get(row.client_id) ?? [];
+          if (!clientHasCampaignCoverage(meta.services, clientTables)) return false;
+        }
+        if (filterService === "ppc_meta" && row.platform !== "meta") return false;
+        if (filterService === "ppc_google" && row.platform !== "google") return false;
+        if (
+          filterService !== "all"
+          && filterService !== "campaign"
+          && filterService !== "ppc_meta"
+          && filterService !== "ppc_google"
+          && !meta.services.includes(filterService)
+        ) {
+          return false;
+        }
         const manualOverride = activeOverrideByClient.get(row.client_id)?.override_status;
         const overall = manualOverride ?? pulseStatusToOverall(row.status);
         if (filterStatus !== "all" && overall !== filterStatus) return false;
@@ -753,6 +770,8 @@ export function CampaignPulseDashboard({
     search,
     platformFilter,
     filterStatus,
+    filterService,
+    tablesByClient,
     activeOverrideByClient,
   ]);
 
@@ -944,19 +963,15 @@ export function CampaignPulseDashboard({
 
   const mobileActiveFilterCount = useMemo(() => {
     let count = 0;
-    if (selectedAgency && selectedAgency !== "all") count += 1;
     if (period !== "last_7_days") count += 1;
     if (filterStatus !== "all") count += 1;
     if (filterService !== "campaign") count += 1;
     if (showCampaignerPicker && filterCampaigner !== "all") count += 1;
     return count;
-  }, [selectedAgency, period, filterStatus, filterService, filterCampaigner, showCampaignerPicker]);
+  }, [period, filterStatus, filterService, filterCampaigner, showCampaignerPicker]);
 
   const mobileFilterSummary = useMemo(() => {
     const parts: string[] = [];
-    if (selectedAgency && selectedAgency !== "all") {
-      parts.push(agencies?.find((a) => a.id === selectedAgency)?.name ?? "סוכנות");
-    }
     if (period !== "last_7_days") {
       parts.push(PULSE_PERIOD_OPTIONS.find((o) => o.value === period)?.label ?? period);
     }
@@ -977,8 +992,6 @@ export function CampaignPulseDashboard({
     }
     return parts.length ? parts.join(" · ") : "כל הסינונים";
   }, [
-    selectedAgency,
-    agencies,
     period,
     filterStatus,
     filterService,
@@ -1065,8 +1078,8 @@ export function CampaignPulseDashboard({
             className="pr-9 w-full"
           />
         </div>
-        <Popover open={mobileFiltersOpen} onOpenChange={setMobileFiltersOpen}>
-          <PopoverTrigger asChild>
+        <Sheet open={mobileFiltersOpen} onOpenChange={setMobileFiltersOpen}>
+          <SheetTrigger asChild>
             <Button
               variant="outline"
               className="w-full justify-between font-normal h-10 px-3"
@@ -1083,115 +1096,87 @@ export function CampaignPulseDashboard({
               </span>
               <ChevronDown className="h-4 w-4 shrink-0 opacity-50 mr-1" />
             </Button>
-          </PopoverTrigger>
-          <PopoverContent
-            className="w-[min(calc(100vw-1.5rem),22rem)] p-3 space-y-3"
-            align="start"
-            dir="rtl"
-          >
-            {!fixedAgencyId && agencies && agencies.length > 1 && (
+          </SheetTrigger>
+          <SheetContent side="bottom" className="max-h-[85vh] overflow-y-auto" dir="rtl">
+            <SheetHeader>
+              <SheetTitle>סינון</SheetTitle>
+            </SheetHeader>
+            <div className="mt-4 space-y-4">
               <div className="space-y-1">
-                <Label className="text-xs text-muted-foreground">סוכנות</Label>
-                <Select value={selectedAgency} onValueChange={setSelectedAgency}>
+                <Label className="text-xs text-muted-foreground">טווח זמן</Label>
+                <Select value={period} onValueChange={(v) => setPeriod(v as PulsePeriod)}>
                   <SelectTrigger className="w-full">
-                    <SelectValue placeholder="כל הסוכנויות" />
+                    <SelectValue placeholder="טווח זמן" />
                   </SelectTrigger>
                   <SelectContent className="bg-background z-[200]">
-                    <SelectItem value="all">כל הסוכנויות</SelectItem>
-                    {agencies.map((a) => (
-                      <SelectItem key={a.id} value={a.id}>{a.name}</SelectItem>
+                    {PULSE_PERIOD_OPTIONS.map((opt) => (
+                      <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
               </div>
-            )}
-            <div className="space-y-1">
-              <Label className="text-xs text-muted-foreground">טווח זמן</Label>
-              <Select value={period} onValueChange={(v) => setPeriod(v as PulsePeriod)}>
-                <SelectTrigger className="w-full">
-                  <SelectValue placeholder="טווח זמן" />
-                </SelectTrigger>
-                <SelectContent className="bg-background z-[200]">
-                  {PULSE_PERIOD_OPTIONS.map((opt) => (
-                    <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-1">
-              <Label className="text-xs text-muted-foreground">סטטוס</Label>
-              <Select value={filterStatus} onValueChange={(v) => setFilterStatus(v as any)}>
-                <SelectTrigger className="w-full">
-                  <SelectValue placeholder="כל הסטטוסים" />
-                </SelectTrigger>
-                <SelectContent className="bg-background z-[200]">
-                  <SelectItem value="all">כל הסטטוסים</SelectItem>
-                  <SelectItem value="red">🔴 דורש טיפול</SelectItem>
-                  <SelectItem value="yellow">🟡 לתשומת לב</SelectItem>
-                  <SelectItem value="green">🟢 תקין</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-1">
-              <Label className="text-xs text-muted-foreground">שירות</Label>
-              <Select value={filterService} onValueChange={(v) => setFilterService(v as any)}>
-                <SelectTrigger className="w-full">
-                  <SelectValue placeholder="שירותים" />
-                </SelectTrigger>
-                <SelectContent className="bg-background z-[200]">
-                  <SelectItem value="campaign">קמפיין (Meta/Google)</SelectItem>
-                  <SelectItem value="all">כל השירותים</SelectItem>
-                  <SelectItem value="ppc_google">PPC Google</SelectItem>
-                  <SelectItem value="ppc_meta">PPC Meta</SelectItem>
-                  <SelectItem value="seo">SEO</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            {showCampaignerPicker && (
               <div className="space-y-1">
-                <Label className="text-xs text-muted-foreground">קמפיינר</Label>
-                <Select value={filterCampaigner} onValueChange={setFilterCampaigner}>
+                <Label className="text-xs text-muted-foreground">סטטוס</Label>
+                <Select value={filterStatus} onValueChange={(v) => setFilterStatus(v as any)}>
                   <SelectTrigger className="w-full">
-                    <SelectValue placeholder="קמפיינר" />
+                    <SelectValue placeholder="כל הסטטוסים" />
                   </SelectTrigger>
                   <SelectContent className="bg-background z-[200]">
-                    <SelectItem value="all">כל הקמפיינרים</SelectItem>
-                    {campaigners.map((campaigner) => (
-                      <SelectItem key={campaigner.id} value={campaigner.id}>
-                        {campaigner.full_name}
-                      </SelectItem>
-                    ))}
+                    <SelectItem value="all">כל הסטטוסים</SelectItem>
+                    <SelectItem value="red">🔴 דורש טיפול</SelectItem>
+                    <SelectItem value="yellow">🟡 לתשומת לב</SelectItem>
+                    <SelectItem value="green">🟢 תקין</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
-            )}
-            <Button
-              variant="secondary"
-              size="sm"
-              className="w-full"
-              onClick={() => setMobileFiltersOpen(false)}
-            >
-              סגור
-            </Button>
-          </PopoverContent>
-        </Popover>
+              <div className="space-y-1">
+                <Label className="text-xs text-muted-foreground">שירות</Label>
+                <Select value={filterService} onValueChange={(v) => setFilterService(v as any)}>
+                  <SelectTrigger className="w-full">
+                    <SelectValue placeholder="שירותים" />
+                  </SelectTrigger>
+                  <SelectContent className="bg-background z-[200]">
+                    <SelectItem value="campaign">קמפיין (Meta/Google)</SelectItem>
+                    <SelectItem value="all">כל השירותים</SelectItem>
+                    <SelectItem value="ppc_google">PPC Google</SelectItem>
+                    <SelectItem value="ppc_meta">PPC Meta</SelectItem>
+                    <SelectItem value="seo">SEO</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              {showCampaignerPicker && (
+                <div className="space-y-1">
+                  <Label className="text-xs text-muted-foreground">קמפיינר</Label>
+                  <Select value={filterCampaigner} onValueChange={setFilterCampaigner}>
+                    <SelectTrigger className="w-full">
+                      <SelectValue placeholder="קמפיינר" />
+                    </SelectTrigger>
+                    <SelectContent className="bg-background z-[200]">
+                      <SelectItem value="all">כל הקמפיינרים</SelectItem>
+                      {campaigners.map((campaigner) => (
+                        <SelectItem key={campaigner.id} value={campaigner.id}>
+                          {campaigner.full_name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
+              <Button
+                variant="secondary"
+                size="sm"
+                className="w-full"
+                onClick={() => setMobileFiltersOpen(false)}
+              >
+                סגור
+              </Button>
+            </div>
+          </SheetContent>
+        </Sheet>
       </div>
 
-      {/* Desktop filters — inline row */}
+      {/* Desktop filters — inline row (agency filter lives in AppLayout header) */}
       <div className="hidden md:flex flex-wrap gap-2 items-center">
-        {!fixedAgencyId && agencies && agencies.length > 1 && (
-          <Select value={selectedAgency} onValueChange={setSelectedAgency}>
-            <SelectTrigger className="w-[180px]">
-              <SelectValue placeholder="כל הסוכנויות" />
-            </SelectTrigger>
-            <SelectContent className="bg-background">
-              <SelectItem value="all">כל הסוכנויות</SelectItem>
-              {agencies.map((a) => (
-                <SelectItem key={a.id} value={a.id}>{a.name}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        )}
         <Select value={period} onValueChange={(v) => setPeriod(v as PulsePeriod)}>
           <SelectTrigger className="w-[170px]">
             <SelectValue placeholder="טווח זמן" />
