@@ -39,9 +39,15 @@ export type PulseCampaignGoalRow = {
   impressions_7d: number;
   reach_7d: number;
   frequency_7d: number | null;
+  spend_today: number;
+  outcomes_today: number | null;
+  revenue_today: number;
+  efficiency_today: number | null;
   data_fresh_through: string | null;
   last_change_at: string | null;
+  last_sync_at: string | null;
   partial_today_excluded: boolean;
+  today_partial_included: boolean;
 };
 
 export const buildPulseCampaignRows = buildRows as (input: {

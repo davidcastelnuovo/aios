@@ -28,13 +28,14 @@ test('keeps a missing outcome missing instead of converting it to zero', () => {
   assert.equal(pulseCampaignOutcome({ clicks: 0 }, 'engagement').value, 0)
 })
 
-test('uses complete days and a non-overlapping 28-day baseline', () => {
+test('uses complete days for trends and still fetches today as a partial window', () => {
   assert.deepEqual(pulseTrendWindows('2026-09-18'), {
     current3: { start: '2026-09-15', end: '2026-09-17' },
     current7: { start: '2026-09-11', end: '2026-09-17' },
     baseline: { start: '2026-08-14', end: '2026-09-10' },
+    today: '2026-09-18',
     queryStart: '2026-08-14',
-    queryEnd: '2026-09-17',
+    queryEnd: '2026-09-18',
   })
 })
 
@@ -111,4 +112,29 @@ test('persistent target breach becomes an evidence-backed exception', () => {
   assert.equal(row.status, 'critical')
   assert.equal(row.alert_eligible, true)
   assert.equal(row.target_value, 30)
+})
+
+test('afternoon partial today is shown separately and does not inflate the 7-day window', () => {
+  const tables = [{
+    id: 't1',
+    client_id: 'c1',
+    integration_type: 'facebook_insights',
+    integration_settings: {
+      last_sync_at: '2026-09-18T11:00:00.000Z',
+      last_campaign_updated_at: '2026-09-18T10:30:00.000Z',
+      last_meta_activity: { at: '2026-09-18T10:45:00.000Z', type: 'updated ad', actor: 'דנה', object: 'Lead' },
+    },
+  }]
+  const records = [
+    { table_id: 't1', data: { date: '2026-09-17', campaign_id: 'lead', campaign_type: 'lead', spend: 70, leads: 1, updated_time: '2026-09-17T08:00:00.000Z' } },
+    { table_id: 't1', data: { date: '2026-09-18', campaign_id: 'lead', campaign_type: 'lead', spend: 999, leads: 9, updated_time: '2026-09-18T09:00:00.000Z' } },
+  ]
+  const row = buildPulseCampaignRows({ records, tables, nowYmd: '2026-09-18' })[0]
+  assert.equal(row.spend_7d, 70)
+  assert.equal(row.spend_today, 999)
+  assert.equal(row.outcomes_today, 9)
+  assert.equal(row.today_partial_included, true)
+  assert.equal(row.data_fresh_through, '2026-09-18')
+  assert.equal(row.last_change_at, '2026-09-18T10:45:00.000Z')
+  assert.equal(row.last_sync_at, '2026-09-18T11:00:00.000Z')
 })

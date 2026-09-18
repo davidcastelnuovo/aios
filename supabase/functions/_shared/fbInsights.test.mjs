@@ -7,6 +7,7 @@ import {
   FB_INSIGHTS_FIELD_TYPES,
   buildCampaignOptimizationGoalMap,
   buildInsightRecord,
+  latestCampaignUpdatedTime,
 } from './fbInsights.ts'
 
 test('Facebook CRM field definitions stay aligned', () => {
@@ -62,4 +63,14 @@ test('messaging objective is synced as engagement with an exact conversation out
   assert.equal(row.conversations, 8)
   assert.equal(row.reach, 800)
   assert.equal(row.frequency, 1.25)
+})
+
+test('latest campaign updated_time is flushed from the campaign object', () => {
+  assert.equal(
+    latestCampaignUpdatedTime({
+      a: { id: 'a', name: 'A', effective_status: 'ACTIVE', configured_status: 'ACTIVE', updated_time: '2026-09-17T08:00:00+0000' },
+      b: { id: 'b', name: 'B', effective_status: 'ACTIVE', configured_status: 'ACTIVE', updated_time: '2026-09-18T10:30:00+0000' },
+    }),
+    '2026-09-18T10:30:00+0000',
+  )
 })

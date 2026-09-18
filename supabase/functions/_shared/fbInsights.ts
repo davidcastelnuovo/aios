@@ -604,3 +604,77 @@ export async function buildAllLevelInsightRecords(
 
   return { records: allRows, levelCounts };
 }
+
+export type LastMetaActivity = {
+  at: string | null
+  type: string | null
+  actor: string | null
+  object: string | null
+  availability: string
+  fetched_at?: string
+}
+
+const META_ACTIVITY_OBJECTS = new Set(['CAMPAIGN', 'AD_SET', 'AD'])
+
+export function latestCampaignUpdatedTime(
+  campaigns: Record<string, CampaignStatus> | CampaignStatus[] = {},
+): string | null {
+  const list = Array.isArray(campaigns) ? campaigns : Object.values(campaigns)
+  const times = list.map((campaign) => campaign?.updated_time).filter(Boolean) as string[]
+  return times.sort().at(-1) || null
+}
+
+export function cachedLastMetaActivity(settings: Record<string, unknown> | null | undefined): LastMetaActivity | null {
+  const cached = settings?.last_meta_activity
+  if (!cached || typeof cached !== 'object') return null
+  const activity = cached as LastMetaActivity
+  if (!activity.at && !activity.availability) return null
+  return activity
+}
+
+/** Last campaign/ad-set/ad edit from Meta Ads Manager activities (not insights). */
+export async function fetchLastMetaCampaignActivity(
+  token: string | null,
+  adAccountId: string | null,
+): Promise<LastMetaActivity> {
+  if (!adAccountId) return { at: null, type: null, actor: null, object: null, availability: 'ad_account_not_connected' }
+  if (!token) return { at: null, type: null, actor: null, object: null, availability: 'meta_token_unavailable' }
+  const controller = new AbortController()
+  const timer = setTimeout(() => controller.abort(), 2500)
+  try {
+    const account = String(adAccountId).replace(/^act_/, '')
+    const since = new Date(Date.now() - 30 * 86400000).toISOString()
+    const params = new URLSearchParams({
+      fields: 'event_time,date_time_in_timezone,event_type,translated_event_type,actor_name,object_id,object_name,object_type',
+      add_children: 'true',
+      since,
+      limit: '100',
+      access_token: token,
+    })
+    const response = await fetch(
+      `https://graph.facebook.com/v21.0/act_${account}/activities?${params}`,
+      { signal: controller.signal },
+    )
+    const payload = await response.json()
+    if (!response.ok || payload?.error || !Array.isArray(payload?.data)) {
+      return { at: null, type: null, actor: null, object: null, availability: 'meta_api_unavailable' }
+    }
+    const latest = payload.data
+      .filter((activity: { object_type?: string }) => META_ACTIVITY_OBJECTS.has(String(activity?.object_type || '').toUpperCase()))
+      .sort((a: { event_time?: string; date_time_in_timezone?: string }, b: { event_time?: string; date_time_in_timezone?: string }) =>
+        new Date(b.event_time || b.date_time_in_timezone || 0).getTime() - new Date(a.event_time || a.date_time_in_timezone || 0).getTime())[0]
+    if (!latest) return { at: null, type: null, actor: null, object: null, availability: 'no_campaign_change_in_30d' }
+    return {
+      at: latest.event_time || latest.date_time_in_timezone || null,
+      type: latest.translated_event_type || latest.event_type || null,
+      actor: latest.actor_name || null,
+      object: latest.object_name || latest.object_id || null,
+      availability: 'available',
+      fetched_at: new Date().toISOString(),
+    }
+  } catch {
+    return { at: null, type: null, actor: null, object: null, availability: 'meta_api_unavailable' }
+  } finally {
+    clearTimeout(timer)
+  }
+}

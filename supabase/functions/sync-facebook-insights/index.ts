@@ -8,6 +8,8 @@ import {
   FB_INSIGHTS_FIELD_KEYS,
   FB_INSIGHTS_FIELD_NAMES,
   FB_INSIGHTS_FIELD_TYPES,
+  fetchLastMetaCampaignActivity,
+  latestCampaignUpdatedTime,
 } from '../_shared/fbInsights.ts';
 
 const corsHeaders = {
@@ -360,6 +362,9 @@ Deno.serve(async (req) => {
       }
     }
 
+    const lastCampaignUpdatedAt = latestCampaignUpdatedTime(campaignStatuses);
+    const lastMetaActivity = await fetchLastMetaCampaignActivity(accessToken, adAccountId);
+
     // Update last_sync_at / account status without wiping concurrent currency edits
     const { data: freshTable } = await supabase
       .from('crm_tables')
@@ -373,6 +378,9 @@ Deno.serve(async (req) => {
         integration_settings: {
           ...currentSettings,
           last_sync_at: new Date().toISOString(),
+          last_insights_until: untilStr,
+          last_campaign_updated_at: lastCampaignUpdatedAt,
+          last_meta_activity: lastMetaActivity,
           account_status: accountStatus,
           account_disable_reason: accountDisableReason,
         }

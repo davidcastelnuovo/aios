@@ -122,8 +122,9 @@ export function pulseTrendWindows(nowYmd) {
     current3: { start: ymd(current3Start), end: ymd(end) },
     current7: { start: ymd(current7Start), end: ymd(end) },
     baseline: { start: ymd(addDays(current7Start, -28)), end: ymd(addDays(current7Start, -1)) },
+    today: ymd(today),
     queryStart: ymd(addDays(current7Start, -28)),
-    queryEnd: ymd(end),
+    queryEnd: ymd(today),
   }
 }
 
@@ -395,6 +396,7 @@ export function buildPulseCampaignRows({
     const inWindow = (start, end) => campaignRecords.filter((row) => row.data.date >= start && row.data.date <= end)
     const current3 = aggregate(inWindow(windows.current3.start, windows.current3.end), classification.goal, outcome.kind)
     const current7 = aggregate(inWindow(windows.current7.start, windows.current7.end), classification.goal, outcome.kind)
+    const today = aggregate(inWindow(windows.today, windows.today), classification.goal, outcome.kind)
     const baselineRows = inWindow(windows.baseline.start, windows.baseline.end)
     const baseline3 = normalizedBaseline(baselineRows, classification.goal, outcome.kind, current3Dates)
     const baseline7 = normalizedBaseline(baselineRows, classification.goal, outcome.kind, current7Dates)
@@ -411,8 +413,15 @@ export function buildPulseCampaignRows({
     const lowerIsBetter = !useRoas
     const efficiency3 = useRoas ? current3.roas : current3.efficiency
     const efficiency7 = useRoas ? current7.roas : current7.efficiency
+    const efficiencyToday = useRoas ? today.roas : today.efficiency
     const baselineEfficiency3 = useRoas ? baseline3.roas : baseline3.efficiency
     const baselineEfficiency7 = useRoas ? baseline7.roas : baseline7.efficiency
+    const settings = sample.table.integration_settings || {}
+    const lastChangeCandidates = [
+      ...items.map((item) => item.record.data.updated_time),
+      settings.last_campaign_updated_at,
+      settings.last_meta_activity?.at,
+    ].filter(Boolean).map(String).sort()
 
     rows.push({
       campaign_key: sample.identity.key,
@@ -444,9 +453,15 @@ export function buildPulseCampaignRows({
       impressions_7d: round(current7.impressions),
       reach_7d: round(current7.reach),
       frequency_7d: round(current7.frequency),
-      data_fresh_through: current7.freshest,
-      last_change_at: sample.record.data.updated_time || null,
+      spend_today: round(today.spend),
+      outcomes_today: round(today.outcomes),
+      revenue_today: round(today.revenue),
+      efficiency_today: round(efficiencyToday),
+      data_fresh_through: today.freshest || current7.freshest,
+      last_change_at: lastChangeCandidates.at(-1) || null,
+      last_sync_at: settings.last_sync_at || null,
       partial_today_excluded: true,
+      today_partial_included: Boolean(today.freshest),
     })
   }
 

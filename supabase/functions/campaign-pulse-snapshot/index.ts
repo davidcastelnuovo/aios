@@ -16,6 +16,7 @@ import {
   tableMatchesServices,
   worstPulseStatus,
 } from '../_shared/campaign-pulse.ts'
+import { cachedLastMetaActivity, fetchLastMetaCampaignActivity } from '../_shared/fbInsights.ts'
 import { normalizeNotifyPhone } from '../_shared/carmen-notify-target.ts'
 import {
   buildPulsePreviewMessage,
@@ -51,9 +52,6 @@ const jerusalemYmd = (value = new Date()) =>
     day: '2-digit',
   }).format(value)
 
-const META_GRAPH_VERSION = 'v21.0'
-const META_ACTIVITY_OBJECTS = new Set(['CAMPAIGN', 'AD_SET', 'AD'])
-
 function clientCampaignServices(client: any): Set<string> {
   return servicesFromClient(client?.services)
 }
@@ -71,52 +69,6 @@ async function getMetaToken(supabase: any, tenantId: string): Promise<string | n
     if (source.data?.api_key) data = { ...data, api_key: source.data.api_key }
   }
   return data?.api_key || null
-}
-
-async function getLastMetaCampaignChange(
-  token: string | null,
-  adAccountId: string | null,
-): Promise<{ at: string | null; type: string | null; actor: string | null; object: string | null; availability: string }> {
-  if (!adAccountId) return { at: null, type: null, actor: null, object: null, availability: 'ad_account_not_connected' }
-  if (!token) return { at: null, type: null, actor: null, object: null, availability: 'meta_token_unavailable' }
-  const controller = new AbortController()
-  const timer = setTimeout(() => controller.abort(), 2500)
-  try {
-    const account = String(adAccountId).replace(/^act_/, '')
-    const since = new Date(Date.now() - 30 * 86400000).toISOString()
-    const params = new URLSearchParams({
-      fields: 'event_time,date_time_in_timezone,event_type,translated_event_type,actor_name,object_id,object_name,object_type',
-      add_children: 'true',
-      since,
-      limit: '100',
-      access_token: token,
-    })
-    const response = await fetch(
-      `https://graph.facebook.com/${META_GRAPH_VERSION}/act_${account}/activities?${params}`,
-      { signal: controller.signal },
-    )
-    const payload = await response.json()
-    if (!response.ok || payload?.error || !Array.isArray(payload?.data)) {
-      console.warn('[campaign-pulse] Meta activities unavailable', account, payload?.error?.code || response.status)
-      return { at: null, type: null, actor: null, object: null, availability: 'meta_api_unavailable' }
-    }
-    const latest = payload.data
-      .filter((activity: any) => META_ACTIVITY_OBJECTS.has(String(activity?.object_type || '').toUpperCase()))
-      .sort((a: any, b: any) => new Date(b.event_time || b.date_time_in_timezone || 0).getTime() - new Date(a.event_time || a.date_time_in_timezone || 0).getTime())[0]
-    if (!latest) return { at: null, type: null, actor: null, object: null, availability: 'no_campaign_change_in_30d' }
-    return {
-      at: latest.event_time || latest.date_time_in_timezone || null,
-      type: latest.translated_event_type || latest.event_type || null,
-      actor: latest.actor_name || null,
-      object: latest.object_name || latest.object_id || null,
-      availability: 'available',
-    }
-  } catch (error) {
-    console.warn('[campaign-pulse] Meta activities error', error instanceof Error ? error.message : String(error))
-    return { at: null, type: null, actor: null, object: null, availability: 'meta_api_unavailable' }
-  } finally {
-    clearTimeout(timer)
-  }
 }
 
 function bearerAuthorized(authHeader: string | null): boolean {
@@ -425,13 +377,16 @@ Deno.serve(async (req) => {
         const adAccountId = tableSettings.ad_account_id || tableSettings.account_id || tableSettings.meta_account_id || null
         let lastMetaChange = { at: null as string | null, type: null as string | null, actor: null as string | null, object: null as string | null, availability: 'not_applicable' }
         if (metaTable) {
-          if (adAccountId && metaToken && metaActivityCalls < MAX_META_ACTIVITY_CALLS) {
+          const cachedActivity = cachedLastMetaActivity(tableSettings)
+          if (cachedActivity) {
+            lastMetaChange = cachedActivity
+          } else if (adAccountId && metaToken && metaActivityCalls < MAX_META_ACTIVITY_CALLS) {
             metaActivityCalls += 1
-            lastMetaChange = await getLastMetaCampaignChange(metaToken, adAccountId)
+            lastMetaChange = await fetchLastMetaCampaignActivity(metaToken, adAccountId)
           } else if (adAccountId && metaToken) {
             lastMetaChange = { at: null, type: null, actor: null, object: null, availability: 'meta_api_skipped_budget' }
           } else {
-            lastMetaChange = await getLastMetaCampaignChange(metaToken, adAccountId)
+            lastMetaChange = await fetchLastMetaCampaignActivity(metaToken, adAccountId)
           }
         }
         let records: any[] = []

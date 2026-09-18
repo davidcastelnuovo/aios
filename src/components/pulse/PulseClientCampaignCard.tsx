@@ -130,6 +130,7 @@ export function PulseCampaignGoalCard({
         <div className="grid gap-2 text-xs sm:grid-cols-2 lg:grid-cols-4">
           <div><span className="text-muted-foreground">קמפיינר: </span>{campaignerName}</div>
           <div><span className="text-muted-foreground">נתונים עד: </span>{formatDate(row.data_fresh_through)}</div>
+          <div><span className="text-muted-foreground">סנכרון אחרון: </span>{formatDate(row.last_sync_at)}</div>
           <div><span className="text-muted-foreground">שינוי אחרון: </span>{formatDate(row.last_change_at)}</div>
           <div><span className="text-muted-foreground">סיווג: </span>{row.classification_source === "unclassified" ? "לא מזוהה" : "מטרת קמפיין"}</div>
         </div>
@@ -152,10 +153,20 @@ export function PulseCampaignGoalCard({
             </>
           ) : null}
         </div>
+        {row.today_partial_included ? (
+          <div className="rounded-md border border-dashed bg-background/80 p-3 text-sm">
+            <div className="text-xs text-muted-foreground">היום עד הסנכרון האחרון — חלקי, לא נכנס למגמת 3/7 ימים</div>
+            <div className="mt-1 flex flex-wrap gap-x-4 gap-y-1">
+              <span>הוצאה: <strong>{formatCurrency(row.spend_today)}</strong></span>
+              <span>{outcomeLabel(row.outcome_kind)}: <strong>{row.outcomes_today ?? "חסר"}</strong></span>
+              <span>{efficiencyLabel}: <strong>{row.efficiency_today ?? "—"}</strong></span>
+            </div>
+          </div>
+        ) : null}
         <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
           <span className="text-muted-foreground">
             מגמה מול בסיס 28 יום מותאם לימי השבוע: 3 ימים {row.trend_3d_pct ?? "—"}% · 7 ימים {row.trend_7d_pct ?? "—"}%
-            {" · "}היום החלקי לא נכלל
+            {" · "}מגמות על ימים מלאים בלבד
           </span>
           <div className="flex items-center gap-1">
             {onSaveTarget && row.goal !== "unknown" ? (
