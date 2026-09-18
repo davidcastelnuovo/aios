@@ -2,6 +2,13 @@
 // optional auto marketing brief. Used by summarize-recording (manual, JWT) and
 // ingest-extension-recording (automatic, after extension upload).
 import { zipSync } from "https://esm.sh/fflate@0.8.2";
+import {
+  buildExtractionSystemPrompt,
+  buildSummaryUserPrompt,
+  LONG_TRANSCRIPT_THRESHOLD,
+  MEETING_SUMMARY_SYSTEM_PROMPT,
+  splitTranscript,
+} from "./meeting-summary-prompts.ts";
 
 export class AiHttpError extends Error {
   status: number;
@@ -13,11 +20,11 @@ export class AiHttpError extends Error {
 
 // ─── AI summary ───
 
-export async function generateMeetingSummary(
+async function requestMeetingCompletion(
   openaiKey: string,
-  transcript: string,
-  recordingInfo: string,
-  focusPrompt: string,
+  systemPrompt: string,
+  userPrompt: string,
+  maxCompletionTokens: number,
 ): Promise<string> {
   const aiResponse = await fetch(
     "https://api.openai.com/v1/chat/completions",
@@ -28,48 +35,15 @@ export async function generateMeetingSummary(
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        model: 'gpt-4o-mini',
+        model: "gpt-4o-mini",
+        temperature: 0.1,
+        max_completion_tokens: maxCompletionTokens,
         messages: [
-          {
-            role: "system",
-            content: `אתה עוזר מקצועי לסיכום פגישות עסקיות. כתוב סיכום מקיף, ברור ומאורגן בעברית, בפורמט Markdown.
-אל תמציא מידע — סכם רק מה שמופיע בתמלול. אם סעיף מסוים לא רלוונטי לפגישה, השמט אותו לגמרי (אל תכתוב "אין").
-אם התמלול כולל תוויות דוברים (שמות או "מקליט:"/"משתתפים:" עם חותמות זמן) — נצל אותן: שייך אמירות, החלטות ומשימות לאדם הנכון בשמו.
-
-מבנה הסיכום (בסדר הזה):
-## תקציר מנהלים
-2–4 משפטים שמסכמים את מהות הפגישה והתוצאה שלה.
-
-## נושאים שנדונו
-לכל נושא: כותרת קצרה (###) ופסקה או נקודות שמסכמות את הדיון, כולל עמדות של דוברים שונים.
-
-## החלטות
-רשימת ההחלטות שהתקבלו, כל החלטה בשורה.
-
-## משימות לביצוע
-טבלה: | משימה | אחראי | דדליין (אם צוין) |
-
-## נקודות חשובות
-נקודות כאב, הזדמנויות, סיכונים או דגשים שעלו — במיוחד מדברי הלקוח.
-
-## ציטוטים מרכזיים
-2–4 ציטוטים חשובים, כל אחד עם שם הדובר.
-
-## שלבים הבאים
-מה קורה אחרי הפגישה, כולל פגישות המשך אם נקבעו.`,
-          },
-          {
-            role: "user",
-            content: `סכם את הפגישה הבאה:
-
-${recordingInfo ? "פרטי הפגישה:\n" + recordingInfo + "\n\n" : ""}תמלול/הערות:
-${transcript}${focusPrompt}
-
-אנא כתוב סיכום מקצועי ומובנה של הפגישה.`,
-          },
+          { role: "system", content: systemPrompt },
+          { role: "user", content: userPrompt },
         ],
       }),
-    }
+    },
   );
 
   if (!aiResponse.ok) {
@@ -85,9 +59,45 @@ ${transcript}${focusPrompt}
   }
 
   const aiData = await aiResponse.json();
-  const summary = aiData.choices?.[0]?.message?.content;
-  if (!summary) throw new Error("לא התקבל סיכום מה-AI");
-  return summary;
+  const content = aiData.choices?.[0]?.message?.content;
+  if (!content) throw new Error("לא התקבל סיכום מה-AI");
+  return content;
+}
+
+export async function generateMeetingSummary(
+  openaiKey: string,
+  transcript: string,
+  recordingInfo: string,
+  focusPrompt: string,
+): Promise<string> {
+  let source = transcript;
+
+  // Long meetings need a coverage pass before synthesis. Asking one completion
+  // to both scan a long transcript and write polished prose caused late agenda
+  // items to disappear and encouraged the model to fill gaps.
+  if (transcript.length > LONG_TRANSCRIPT_THRESHOLD) {
+    const chunks = splitTranscript(transcript);
+    const extractedChunks = await Promise.all(
+      chunks.map((chunk, index) =>
+        requestMeetingCompletion(
+          openaiKey,
+          buildExtractionSystemPrompt(index + 1, chunks.length),
+          `חלק ${index + 1} מתוך ${chunks.length}:\n\n${chunk}`,
+          4_000,
+        )
+      ),
+    );
+    source = extractedChunks
+      .map((notes, index) => `### ממצאים מחלק ${index + 1}\n${notes}`)
+      .join("\n\n");
+  }
+
+  return await requestMeetingCompletion(
+    openaiKey,
+    MEETING_SUMMARY_SYSTEM_PROMPT,
+    buildSummaryUserPrompt(source, recordingInfo, focusPrompt),
+    7_000,
+  );
 }
 
 // ─── Save summary: DOCX → storage → attachments → summary_file_url ───
