@@ -3,6 +3,8 @@ import { useSearchParams } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { CarmenLoadingScreen } from "@/components/shared/CarmenLoadingScreen";
+import { isQueryResolving } from "@/lib/queryUi";
 import { Badge } from "@/components/ui/badge";
 import { Users, Building2, Globe, Coins, Phone, Mail, LayoutGrid, Table as TableIcon, MessageCircle, Edit, Search, Plus, Trash2, FolderOpen, ExternalLink, Download, Filter, FileSpreadsheet, Upload, Copy, Wand2, CheckCircle2, XCircle, Loader2 as Loader2Icon } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -282,7 +284,7 @@ export default function Clients() {
     staleTime: 1000 * 60 * 10,
   });
 
-  const { data: clients, isLoading } = useQuery({
+  const { data: clients, isLoading, isPending, isFetching } = useQuery({
     queryKey: ["clients", tenantId, campaignerId, isCampaigner, isTeamManager, isOwner, isSuperAdmin, selectedAgency, (agencies?.length || 0)],
     queryFn: async () => {
       if (!tenantId) return [] as any[];
@@ -328,6 +330,9 @@ export default function Clients() {
       return false;
     });
   }, [clients, tenantId, userAgencyIds, isOwner, isSuperAdmin]);
+
+  // Never show "no clients" while the list is still on its way.
+  const clientsResolving = !clients && isQueryResolving(isPending, isLoading, isFetching);
 
 
   const { data: campaigners } = useAssignableCampaigners({ activeOnly: true });
@@ -885,7 +890,12 @@ export default function Clients() {
       </Dialog>
 
       <div className={viewMode === "chat" ? "flex-1 min-h-0 overflow-hidden" : "flex-1 min-h-0 overflow-y-auto"}>
-      {viewMode === "chat" ? (
+      {clientsResolving ? (
+        <CarmenLoadingScreen
+          variant="card"
+          messages={["כרמן אוספת את רשימת הלקוחות…", "מסדרת לפי סוכנות…"]}
+        />
+      ) : viewMode === "chat" ? (
         <ClientsChatView
           key={pendingChatClientId ?? deepLinkClientId ?? "chat"}
           clients={visibleClients || []}
@@ -1425,7 +1435,7 @@ export default function Clients() {
       )}
       </div>
 
-      {visibleClients?.length === 0 && (
+      {!clientsResolving && visibleClients?.length === 0 && (
         <Card>
           <CardContent className="flex flex-col items-center justify-center py-16">
             <Users className="h-16 w-16 text-muted-foreground mb-4" />

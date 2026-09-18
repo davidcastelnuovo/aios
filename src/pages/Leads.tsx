@@ -2,6 +2,8 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Link, useSearchParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { CarmenLoadingScreen } from "@/components/shared/CarmenLoadingScreen";
+import { isQueryResolving } from "@/lib/queryUi";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Mail, Phone, ExternalLink, Trash2, Building2, DollarSign, LayoutGrid, GripVertical, ChevronDown, ChevronUp, User, Users, Calendar as CalendarIcon, Search, X, Settings2, CheckSquare, Download, Clock, Tag, Filter, FileSpreadsheet, Pencil, Archive, Loader2, ChevronLeft, ChevronRight } from "lucide-react";
@@ -1416,6 +1418,10 @@ export default function Leads() {
     return allLeads;
   }, [isKanbanView, tableLeads, kanbanStageData, accumulatedLeads]);
 
+  // The lists default to [] while the query runs — gate the empty state on that.
+  const hasLeadSource = isKanbanView ? !!kanbanStageData : !!tableLeads;
+  const leadsResolving = !hasLeadSource && isQueryResolving(isLoading, isLoading, isFetching);
+
   // Calculate total leads count for Kanban view from RPC data
   const kanbanTotalLeadsCount = useMemo(() => {
     if (!kanbanStageData) return 0;
@@ -2781,7 +2787,12 @@ export default function Leads() {
         }}
       />
 
-      {leads?.length === 0 ? (
+      {leadsResolving ? (
+        <CarmenLoadingScreen
+          variant="card"
+          messages={["כרמן מושכת את הלידים…", "מסדרת לפי שלב בצינור…"]}
+        />
+      ) : leads?.length === 0 ? (
         <Card>
           <CardContent className="py-12 text-center">
             <p className="text-muted-foreground mb-4">
