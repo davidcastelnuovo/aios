@@ -40,6 +40,36 @@ function parseAgentResponse(raw: string): { url: string; id: string } {
   return { url, id: id || url };
 }
 
+export async function getPlanStepCursorAgent(
+  supabase: { from: (t: string) => any },
+  planStepId: string,
+): Promise<{ cursorAgentId: string; sessionUrl: string } | null> {
+  const { data } = await supabase.from("goal_plan_steps")
+    .select("cursor_agent_id, cursor_session_url")
+    .eq("id", planStepId)
+    .maybeSingle();
+  const id = String(data?.cursor_agent_id || "").trim();
+  if (!id.startsWith("bc-")) return null;
+  return {
+    cursorAgentId: id,
+    sessionUrl: String(data?.cursor_session_url || `https://cursor.com/agents/${id}`),
+  };
+}
+
+export async function savePlanStepCursorAgent(
+  supabase: { from: (t: string) => any },
+  planStepId: string,
+  cursorAgentId: string,
+  sessionUrl: string,
+): Promise<void> {
+  if (!cursorAgentId.startsWith("bc-")) return;
+  await supabase.from("goal_plan_steps").update({
+    cursor_agent_id: cursorAgentId,
+    cursor_session_url: sessionUrl || `https://cursor.com/agents/${cursorAgentId}`,
+    updated_at: new Date().toISOString(),
+  }).eq("id", planStepId);
+}
+
 export async function getGoalCursorAgent(
   supabase: { from: (t: string) => any },
   goalId: string,
@@ -151,12 +181,15 @@ export function buildGoalTechnicalPrompt(args: {
   stepDescription?: string;
   acceptanceCriteria?: string;
   constraints?: Record<string, unknown>;
+  subProjectLabel?: string;
+  subProjectKey?: string;
 }): string {
   return [
     "[Carmen Autonomous Goal · Technical Job]",
     `goal_id: ${args.goalId}`,
     `Goal: ${args.goalTitle}`,
     args.objective ? `Objective: ${args.objective}` : "",
+    args.subProjectLabel ? `Sub-project / department: ${args.subProjectLabel} (${args.subProjectKey || ""})` : "",
     "",
     `Task:\n${args.stepTitle}`,
     args.stepDescription ? `\nDetails:\n${args.stepDescription}` : "",
@@ -164,8 +197,10 @@ export function buildGoalTechnicalPrompt(args: {
     args.constraints && Object.keys(args.constraints).length
       ? `\nConstraints:\n${JSON.stringify(args.constraints, null, 2)}` : "",
     "",
-    "Work on branch develop / Staging first. One PR per goal when possible.",
-    "This is a follow-up on the SAME goal session — do not restart from scratch unless necessary.",
+    "Work on branch develop / Staging first.",
+    args.subProjectKey
+      ? "This sub-project has its OWN dedicated Cursor agent — stay scoped to this department only."
+      : "This is a follow-up on the SAME goal session — do not restart from scratch unless necessary.",
   ].filter(Boolean).join("\n");
 }
 
@@ -182,10 +217,16 @@ export async function dispatchToGoalCursor(
     acceptanceCriteria?: string;
     constraints?: Record<string, unknown>;
     startingRef?: string;
+    planStepId?: string;
+    subProjectKey?: string;
+    subProjectLabel?: string;
+    useStepSticky?: boolean;
   },
 ): Promise<GoalCursorFireResult> {
   const apiKey = Deno.env.get("CURSOR_API_KEY") || "";
   if (!apiKey) throw new Error("CURSOR_API_KEY not configured");
+
+  const useStepSticky = args.useStepSticky ?? !!(args.planStepId && args.subProjectKey);
 
   const prompt = buildGoalTechnicalPrompt({
     goalId: args.goalId,
@@ -195,9 +236,13 @@ export async function dispatchToGoalCursor(
     stepDescription: args.stepDescription,
     acceptanceCriteria: args.acceptanceCriteria,
     constraints: args.constraints,
+    subProjectKey: args.subProjectKey,
+    subProjectLabel: args.subProjectLabel,
   });
 
-  const existing = await getGoalCursorAgent(supabase, args.goalId);
+  const existing = useStepSticky && args.planStepId
+    ? await getPlanStepCursorAgent(supabase, args.planStepId)
+    : await getGoalCursorAgent(supabase, args.goalId);
   let result: GoalCursorFireResult;
 
   if (existing) {
@@ -206,24 +251,28 @@ export async function dispatchToGoalCursor(
       result = followed;
     } else if (followed && !followed.delivered) {
       const parallel = await createGoalCursorAgent(apiKey, prompt, {
-        name: `Goal: ${args.goalTitle}`.slice(0, 100),
+        name: (args.subProjectLabel || args.goalTitle).slice(0, 100),
         startingRef: args.startingRef,
       });
       result = { ...parallel, parallel: true };
     } else {
       result = await createGoalCursorAgent(apiKey, prompt, {
-        name: `Goal: ${args.goalTitle}`.slice(0, 100),
+        name: (args.subProjectLabel || args.goalTitle).slice(0, 100),
         startingRef: args.startingRef,
       });
     }
   } else {
     result = await createGoalCursorAgent(apiKey, prompt, {
-      name: `Goal: ${args.goalTitle}`.slice(0, 100),
+      name: (args.subProjectLabel || args.goalTitle).slice(0, 100),
       startingRef: args.startingRef,
     });
   }
 
-  await saveGoalCursorAgent(supabase, args.goalId, result.cursorAgentId, result.sessionUrl);
+  if (useStepSticky && args.planStepId) {
+    await savePlanStepCursorAgent(supabase, args.planStepId, result.cursorAgentId, result.sessionUrl);
+  } else {
+    await saveGoalCursorAgent(supabase, args.goalId, result.cursorAgentId, result.sessionUrl);
+  }
 
   try {
     await supabase.from("goal_events").insert({

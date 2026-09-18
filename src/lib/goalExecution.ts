@@ -42,6 +42,13 @@ export type GoalCriterion = {
 export type AutonomousEngineSnapshot = {
   goal: ExecutionGoal;
   criteria: GoalCriterion[];
+  parallel_tracks?: Array<{
+    id: string;
+    key?: string | null;
+    label: string;
+    status: string;
+    cursor_session_url?: string | null;
+  }>;
   completion_gate: { complete: boolean; pending: GoalCriterion[]; failed: GoalCriterion[] };
   recent_iterations: Array<{ iteration_number: number; phase: string; status: string; summary?: string | null }>;
   blockers: Array<{ title: string }>;

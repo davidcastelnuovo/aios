@@ -181,6 +181,12 @@ function GoalDetailView({
   const approvals = (detail.pending_approvals as Array<{ title: string; tool_name?: string }>) || [];
   const progress = Number(detail.progress_percent ?? goal.progress_percent ?? 0);
   const engine = detail.autonomous_engine as AutonomousEngineSnapshot | null | undefined;
+  const parallelTracks = (engine?.parallel_tracks || []) as Array<{
+    label: string;
+    key?: string;
+    status: string;
+    cursor_session_url?: string | null;
+  }>;
 
   return (
     <div className="space-y-3">
@@ -219,6 +225,24 @@ function GoalDetailView({
           </button>
         )}
       </div>
+
+      {parallelTracks.length > 0 && (
+        <section>
+          <p className="font-semibold">מסלולים מקבילים (Cursor)</p>
+          <ul className="mt-1 space-y-1">
+            {parallelTracks.map((t, i) => (
+              <li key={t.key || i} className="text-[var(--cc-text-dim)]">
+                • {t.label} ({t.status})
+                {t.cursor_session_url && (
+                  <a href={t.cursor_session_url} target="_blank" rel="noreferrer" className="mr-1 text-[var(--cc-accent)]">
+                    agent <ExternalLink className="inline h-3 w-3" />
+                  </a>
+                )}
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
 
       {engine?.criteria?.length ? (
         <section>

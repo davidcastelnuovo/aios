@@ -79,6 +79,11 @@ export type GoalPlanStepRow = {
   priority: number;
   metadata: Record<string, unknown>;
   sort_order: number;
+  sub_project_key?: string | null;
+  sub_project_label?: string | null;
+  parallel_track?: boolean;
+  cursor_agent_id?: string | null;
+  cursor_session_url?: string | null;
 };
 
 type SupabaseLike = { from: (t: string) => any };
@@ -321,18 +326,36 @@ async function planGoalIfNeeded(
   const prompt = `You are Carmen's autonomous goal planner. Given this Goal Contract context, output JSON:
 {
   "plan_steps": [
-    { "title": "...", "description": "...", "action_type": "model|cursor|verify|observe", "priority": 1-10 }
+    {
+      "title": "...",
+      "description": "...",
+      "action_type": "model|cursor|verify|observe",
+      "priority": 1-10,
+      "parallel_track": false,
+      "sub_project_key": "optional slug e.g. creative|copy|seo|campaigners",
+      "sub_project_label": "optional Hebrew label e.g. מחלקת קריאייטיב"
+    }
   ],
   "notes": "brief planning notes"
 }
 Rules:
-- Technical/code changes MUST use action_type "cursor" (never pretend code was written in text).
-- Keep 2-6 steps max for this iteration.
-- action_type "verify" for explicit verification steps.
+- Technical/code changes MUST use action_type "cursor".
+- When the goal spans multiple departments/modules that can work independently, create MULTIPLE cursor steps with parallel_track=true and distinct sub_project_key (each gets its own Cursor agent).
+- Example: marketing department goal → parallel cursor steps for creative, copy, seo, campaigners.
+- Non-parallel steps (verify, observe, model) run sequentially after parallel tracks dispatch.
+- Keep 2-8 steps max.
 Context:
 ${JSON.stringify(ctx, null, 2)}`;
 
-  const result = await modelRouterJSON<{ plan_steps?: Array<{ title: string; description?: string; action_type?: string; priority?: number }> }>(
+  const result = await modelRouterJSON<{ plan_steps?: Array<{
+    title: string;
+    description?: string;
+    action_type?: string;
+    priority?: number;
+    parallel_track?: boolean;
+    sub_project_key?: string;
+    sub_project_label?: string;
+  }> }>(
     "DEEP_REASON",
     prompt,
   );
@@ -348,11 +371,12 @@ ${JSON.stringify(ctx, null, 2)}`;
     throw new Error(result.failoverReason || "planning_failed");
   }
 
-  const steps = result.data.plan_steps.slice(0, 6);
+  const steps = result.data.plan_steps.slice(0, 8);
   for (const [i, step] of steps.entries()) {
     const actionType = ["model", "cursor", "verify", "observe", "tool"].includes(step.action_type || "")
       ? step.action_type!
       : "model";
+    const parallelTrack = !!(step.parallel_track && actionType === "cursor" && step.sub_project_key);
     await supabase.from("goal_plan_steps").insert({
       tenant_id: state.goal.tenant_id,
       goal_id: state.goal.id,
@@ -362,7 +386,10 @@ ${JSON.stringify(ctx, null, 2)}`;
       status: "pending",
       priority: step.priority ?? 5,
       sort_order: i,
-      metadata: {},
+      parallel_track: parallelTrack,
+      sub_project_key: parallelTrack ? step.sub_project_key : null,
+      sub_project_label: parallelTrack ? (step.sub_project_label || step.title) : null,
+      metadata: parallelTrack ? { parallel_track: true } : {},
     });
   }
 
@@ -373,12 +400,36 @@ ${JSON.stringify(ctx, null, 2)}`;
   }).eq("id", state.goal.id);
 }
 
+async function monitorInProgressCursorSteps(
+  supabase: SupabaseLike,
+  state: NonNullable<Awaited<ReturnType<typeof loadGoalState>>>,
+): Promise<number> {
+  const { selectInProgressCursorTracks } = await import("./goal-parallel-orchestration.ts");
+  const tracks = selectInProgressCursorTracks(state.planSteps);
+  let completed = 0;
+  for (const step of tracks) {
+    const devTaskId = (step.metadata as Record<string, unknown>)?.dev_task_id as string | undefined;
+    if (!devTaskId) continue;
+    const { data: dt } = await supabase.from("dev_tasks")
+      .select("status, pr_url").eq("id", devTaskId).maybeSingle();
+    if (dt && ["pr_opened", "ready_for_review", "done"].includes(dt.status)) {
+      await supabase.from("goal_plan_steps").update({
+        status: "done",
+        completed_at: new Date().toISOString(),
+        metadata: { ...step.metadata, pr_url: dt.pr_url, completed_via: "dev_task_status" },
+      }).eq("id", step.id);
+      completed++;
+    }
+  }
+  return completed;
+}
+
 async function executePlanStep(
   supabase: SupabaseLike,
   state: NonNullable<Awaited<ReturnType<typeof loadGoalState>>>,
   step: GoalPlanStepRow,
   iterationId: string,
-): Promise<{ done: boolean; blocked?: boolean; blockerTitle?: string }> {
+): Promise<{ done: boolean; blocked?: boolean; blockerTitle?: string; monitoring?: boolean; dispatched?: boolean }> {
   const input = { step_id: step.id, title: step.title, action_type: step.action_type };
   const inputHash = hashInput(input);
 
@@ -400,6 +451,11 @@ async function executePlanStep(
 
   try {
     if (step.action_type === "cursor") {
+      const parallelTrack = step.parallel_track || !!(step.metadata as Record<string, unknown>)?.parallel_track;
+      if (step.status === "in_progress" && step.cursor_agent_id) {
+        return { done: false, monitoring: true };
+      }
+
       const { dispatchToGoalCursor } = await import("./goal-cursor-dispatch.ts");
       const { OPEN_DEV_STATUSES } = await import("./dev-tasks.ts");
       const acceptance = state.criteria.map((c) => c.description).join("\n");
@@ -413,36 +469,45 @@ async function executePlanStep(
         stepDescription: step.description || undefined,
         acceptanceCriteria: acceptance,
         constraints: state.goal.constraints,
+        planStepId: step.id,
+        subProjectKey: step.sub_project_key || undefined,
+        subProjectLabel: step.sub_project_label || step.title,
+        useStepSticky: parallelTrack,
       });
 
-      // One dev_task tracker per goal — reuse open row, link to sticky session.
-      let devTaskId: string | null = null;
-      const { data: existingDev } = await supabase.from("dev_tasks").select("id, cursor_session_id")
-        .eq("goal_id", state.goal.id).eq("tenant_id", state.goal.tenant_id)
-        .in("status", OPEN_DEV_STATUSES).order("created_at", { ascending: false }).limit(1).maybeSingle();
+      // Parallel tracks: one dev_task per sub-project. Single-track: one per goal.
+      let devTaskId = (step.metadata as Record<string, unknown>)?.dev_task_id as string | undefined;
+      const { createDevTask, attachDevTaskSession } = await import("./dev-tasks.ts");
 
-      if (existingDev?.id) {
-        devTaskId = existingDev.id;
-        if (!existingDev.cursor_session_id) {
-          const { attachDevTaskSession } = await import("./dev-tasks.ts");
+      if (!devTaskId && !parallelTrack) {
+        const { data: existingDev } = await supabase.from("dev_tasks").select("id, cursor_session_id")
+          .eq("goal_id", state.goal.id).eq("tenant_id", state.goal.tenant_id)
+          .in("status", OPEN_DEV_STATUSES).order("created_at", { ascending: false }).limit(1).maybeSingle();
+        if (existingDev?.id) devTaskId = existingDev.id;
+      }
+
+      if (devTaskId) {
+        const { data: dt } = await supabase.from("dev_tasks").select("cursor_session_id")
+          .eq("id", devTaskId).maybeSingle();
+        if (!dt?.cursor_session_id) {
           await attachDevTaskSession(supabase, {
             tenantId: state.goal.tenant_id,
-            taskId: existingDev.id,
+            taskId: devTaskId,
             cursorSessionId: cursorResult.cursorAgentId,
             cursorSessionUrl: cursorResult.sessionUrl,
           });
         }
       } else {
-        const { createDevTask, attachDevTaskSession } = await import("./dev-tasks.ts");
         const devTask = await createDevTask(supabase, {
           tenantId: state.goal.tenant_id,
           brief: {
-            title: state.goal.title,
-            problem: state.goal.objective || state.goal.title,
+            title: parallelTrack ? `${state.goal.title} · ${step.sub_project_label || step.title}` : state.goal.title,
+            problem: step.description || state.goal.objective || state.goal.title,
             acceptance_criteria: acceptance,
             requested_by: "carmen_autonomous_goal",
             environment: "staging",
             base_branch: "develop",
+            scope: parallelTrack ? `sub_project:${step.sub_project_key}` : undefined,
           },
           goalId: state.goal.id,
           assignedAgent: "cursor",
@@ -467,12 +532,17 @@ async function executePlanStep(
         },
         completed_at: new Date().toISOString(),
       }).eq("id", action.id);
+      const stepStatus = parallelTrack ? "in_progress" : "done";
       await supabase.from("goal_plan_steps").update({
-        status: "done",
-        completed_at: new Date().toISOString(),
-        metadata: { dev_task_id: devTaskId, cursor_agent_id: cursorResult.cursorAgentId },
+        status: stepStatus,
+        completed_at: parallelTrack ? null : new Date().toISOString(),
+        metadata: {
+          dev_task_id: devTaskId,
+          cursor_agent_id: cursorResult.cursorAgentId,
+          parallel_track: parallelTrack,
+        },
       }).eq("id", step.id);
-      return { done: true };
+      return { done: !parallelTrack, dispatched: parallelTrack };
     }
 
     if (step.action_type === "verify") {
@@ -637,6 +707,19 @@ export async function runGoalIteration(
         goalId, tenantId, eventType: "autonomous_goal_completed",
         detail: { iteration: iterationNumber },
       });
+      const { notifyDavidStagingReady } = await import("./goal-parallel-orchestration.ts");
+      await notifyDavidStagingReady(supabase, {
+        tenantId,
+        goalId,
+        goalTitle: goal.title,
+        subProjects: state.planSteps
+          .filter((s) => s.sub_project_key)
+          .map((s) => ({
+            label: s.sub_project_label || s.title,
+            sessionUrl: s.cursor_session_url,
+            status: s.status,
+          })),
+      });
       return { status: "COMPLETED", summary: "completion_gate_passed" };
     }
 
@@ -668,19 +751,47 @@ export async function runGoalIteration(
     const freshState = await loadGoalState(supabase, tenantId, goalId);
     if (!freshState) throw new Error("state_lost");
 
-    const nextStep = freshState.planSteps
-      .filter((s) => s.status === "pending")
-      .sort((a, b) => a.priority - b.priority || a.sort_order - b.sort_order)[0];
+    const {
+      selectParallelDispatchBatch,
+      selectNextSequentialStep,
+      selectInProgressCursorTracks,
+    } = await import("./goal-parallel-orchestration.ts");
 
-    let summary = "noop";
-    if (nextStep) {
-      const exec = await executePlanStep(supabase, freshState, nextStep, iterationId);
-      summary = exec.done ? `step_done:${nextStep.title}` : `step_failed:${nextStep.title}`;
-    } else if (freshState.goal.engine_status === "VERIFYING") {
-      summary = "awaiting_verification_evidence";
+    const monitored = await monitorInProgressCursorSteps(supabase, freshState);
+    let summary = monitored > 0 ? `tracks_completed:${monitored}` : "noop";
+
+    const parallelBatch = selectParallelDispatchBatch(freshState.planSteps);
+    if (parallelBatch.length >= 2) {
+      const results = await Promise.all(
+        parallelBatch.map((s) => executePlanStep(supabase, freshState, s, iterationId)),
+      );
+      const ok = results.filter((r) => r.dispatched || r.done).length;
+      summary = `parallel_dispatch:${ok}/${parallelBatch.length}`;
     } else {
-      await planGoalIfNeeded(supabase, freshState, iterationId);
-      summary = "replanned";
+      const inProgress = selectInProgressCursorTracks(freshState.planSteps);
+      if (inProgress.length > 0 && summary === "noop") {
+        summary = `monitoring:${inProgress.length}_tracks`;
+      } else {
+        const nextStep = selectNextSequentialStep(freshState.planSteps)
+          || freshState.planSteps
+            .filter((s) => s.status === "pending")
+            .sort((a, b) => a.priority - b.priority || a.sort_order - b.sort_order)[0];
+        if (nextStep) {
+          const exec = await executePlanStep(supabase, freshState, nextStep, iterationId);
+          summary = exec.dispatched
+            ? `dispatched:${nextStep.title}`
+            : exec.monitoring
+              ? `monitoring:${nextStep.title}`
+              : exec.done
+                ? `step_done:${nextStep.title}`
+                : `step_failed:${nextStep.title}`;
+        } else if (freshState.goal.engine_status === "VERIFYING") {
+          summary = "awaiting_verification_evidence";
+        } else if (inProgress.length === 0) {
+          await planGoalIfNeeded(supabase, freshState, iterationId);
+          summary = "replanned";
+        }
+      }
     }
 
     const afterState = await loadGoalState(supabase, tenantId, goalId);
@@ -723,6 +834,22 @@ export async function runGoalIteration(
       completed_at: new Date().toISOString(),
     }).eq("id", iterationId);
 
+    if (finalGate.complete) {
+      const { notifyDavidStagingReady } = await import("./goal-parallel-orchestration.ts");
+      await notifyDavidStagingReady(supabase, {
+        tenantId,
+        goalId,
+        goalTitle: afterState?.goal.title || goal.title,
+        subProjects: (afterState?.planSteps || [])
+          .filter((s) => s.sub_project_key)
+          .map((s) => ({
+            label: s.sub_project_label || s.title,
+            sessionUrl: s.cursor_session_url,
+            status: s.status,
+          })),
+      });
+    }
+
     return { status: finalGate.complete ? "COMPLETED" : nextStatus, summary };
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
@@ -757,10 +884,22 @@ export async function getAutonomousGoalStatus(
   const { data: evidence } = await supabase.from("goal_evidence")
     .select("id, criterion_id, evidence_type, verified_at")
     .eq("goal_id", goalId).order("verified_at", { ascending: false }).limit(10);
+  const parallelTracks = state.planSteps
+    .filter((s) => s.parallel_track || s.sub_project_key)
+    .map((s) => ({
+      id: s.id,
+      key: s.sub_project_key,
+      label: s.sub_project_label || s.title,
+      status: s.status,
+      cursor_agent_id: s.cursor_agent_id,
+      cursor_session_url: s.cursor_session_url,
+    }));
+
   return {
     goal: state.goal,
     criteria: state.criteria,
     plan_steps: state.planSteps,
+    parallel_tracks: parallelTracks,
     blockers: state.blockers.filter((b) => b.status === "open"),
     completion_gate: gate,
     recent_iterations: iterations || [],
