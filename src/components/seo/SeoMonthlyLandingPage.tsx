@@ -11,7 +11,7 @@ import {
   OnsiteSlide,
   SummarySlide,
   buildSeoMonthlySlides,
-} from "@/components/seo/SeoMonthlySlideshow";
+} from "@/components/seo/SeoMonthlyReportSections";
 
 type Props = {
   snapshot: SeoMonthlyShareSnapshot;
@@ -44,7 +44,6 @@ export function SeoMonthlyLandingPage({ snapshot, captureMode = false, className
       dir="rtl"
       className={cn(
         "seo-monthly-report min-h-full overflow-x-hidden bg-[#f6f8f5] font-heebo text-[#172a32]",
-        "[&_.seo-report-section_*]:!text-[#172a32] [&_.seo-report-section_a]:!text-[#0f766e]",
         captureMode ? "w-[1120px]" : "w-full",
         className,
       )}
