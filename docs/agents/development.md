@@ -3,10 +3,10 @@
 ## Environment and commands
 
 - Before running the app or data checks, read `docs/ENVIRONMENTS.md` and confirm which Supabase environment the current checkout uses without exposing credentials. A Cloud Agent checkout may point at Production; do not create throwaway accounts or test data there.
-- Prefer `pnpm` locally despite the multiple lockfiles. Check installed tools in the current environment instead of assuming `bun` or other runtimes are available.
+- Use `pnpm` for the root app and keep `pnpm-lock.yaml` as its only lockfile. Check the current environment for the required runtime and package-manager versions.
 - Read `package.json` for scripts and `vite.config.ts` for the development server address and port.
 - The frontend uses hosted Supabase; check the current repository configuration before assuming a local backend exists or is required.
-- Treat `extension/` as a separate product with its own package configuration; it is optional for core frontend work.
+- Treat `extension/` as a separate product with its own package configuration and `extension/bun.lock`; use its Bun setup when working there. It is optional for core frontend work.
 
 ## Verification
 
