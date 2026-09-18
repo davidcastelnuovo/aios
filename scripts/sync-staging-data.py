@@ -160,7 +160,26 @@ LEGACY_KEYS = {
     'user_permissions': (['user_id', 'module'], ''),
     'menu_items': (['tenant_id', 'menu_key'], ''),
     'seo_monthly_updates': (['client_id', 'month'], ''),
+    'seo_monthly_shares': (['client_id', 'month'], ''),
     'ai_skills': (['slug'], "scope='global'"),
+    'agent_memory': (['tenant_id', 'agent_id', 'category', 'title'], "category IN ('instructions','instruction')"),
+    'publishing_articles': (['tenant_id', 'target_url', 'primary_keyword'], ''),
+}
+
+# Logical keys whose Staging IDs differ from Production but are referenced by
+# child foreign keys. Reconcile by inserting the canonical row, repointing
+# children, then removing the legacy Staging row.
+REFERENCED_LEGACY_KEYS = {
+    'agent_brain_routes': {
+        'keys': ['tenant_id', 'slug'],
+        'unique': 'slug',
+        'children': {'ai_agents': 'brain_route_id', 'ai_conversations': 'brain_route_id'},
+    },
+    'chat_tags': {
+        'keys': ['tenant_id', 'name'],
+        'unique': 'name',
+        'children': {'chat_contact_tags': 'tag_id'},
+    },
 }
 
 
@@ -225,6 +244,100 @@ def reconcile_legacy_keys(api, table):
         seen.add(key)
     for group in batches(rows):
         api.query(legacy_key_sql(table['name'], keys, group, predicate))
+
+
+def referenced_legacy_reconcile_sql(table, unique_field, old_id, new_id, source_row, children, columns):
+    relation = 'public.' + ident(table)
+    fields = ','.join(map(ident, columns))
+    unique = ident(unique_field)
+    child_sql = '\n'.join(
+        f"UPDATE public.{ident(child)} SET {ident(column)}={literal(new_id)} WHERE {ident(column)}={literal(old_id)};"
+        for child, column in children.items()
+    )
+    return f"""BEGIN; SET LOCAL lock_timeout='3s'; SET LOCAL statement_timeout='90s';
+{IMPORT_GATE}
+DO $reconcile$ BEGIN
+ IF NOT EXISTS(SELECT 1 FROM {relation} WHERE id={literal(new_id)}) THEN
+  UPDATE {relation} SET {unique}={unique}||'__reconcile__'||left(id::text,8) WHERE id={literal(old_id)};
+  INSERT INTO {relation} ({fields})
+  SELECT {','.join('x.' + ident(column) for column in columns)}
+  FROM jsonb_populate_record(NULL::{relation},{json_sql(source_row)}) x;
+ END IF;
+ {child_sql}
+ DELETE FROM {relation} WHERE id={literal(old_id)};
+ INSERT INTO environment_sync.key_reconciliations(table_name,old_id,new_id,reconciled_at)
+ VALUES({literal(table)},{literal(old_id)},{literal(new_id)},now())
+ ON CONFLICT(table_name,old_id,new_id) DO NOTHING;
+ DELETE FROM environment_sync.managed_rows WHERE table_name={literal(table)}
+ AND row_key @> jsonb_build_object('id',{literal(old_id)});
+END $reconcile$;
+COMMIT;"""
+
+
+def reconcile_referenced_legacy_keys(api, table):
+    rule = REFERENCED_LEGACY_KEYS.get(table['name'])
+    if not rule: return
+    keys, unique_field, children = rule['keys'], rule['unique'], rule['children']
+    columns = table['columns']
+    relation = 'public.' + ident(table['name'])
+    matches = ' AND '.join(f't.{ident(key)}=s.{ident(key)}' for key in keys)
+    key_fields = ','.join(map(ident, ['id'] + keys))
+    source_keys = read_all(api, f"SELECT {key_fields} FROM {relation} t", source=True)
+    mappings = api.query(f"""SELECT t.id AS old_id, s.id AS new_id
+FROM {relation} t
+JOIN jsonb_populate_recordset(NULL::{relation},{json_sql(source_keys)}) s ON {matches}
+WHERE t.id <> s.id""")
+    if not mappings: return
+    source_rows = {
+        row['id']: row
+        for row in read_all(api, f"SELECT {','.join(map(ident, columns))} FROM {relation} t", source=True)
+    }
+    for mapping in mappings:
+        source_row = source_rows.get(mapping['new_id'])
+        if not source_row: continue
+        api.query(referenced_legacy_reconcile_sql(
+            table['name'], unique_field, mapping['old_id'], mapping['new_id'], source_row, children, columns))
+
+
+def load_outbound_foreign_keys(api):
+    rows = api.query("""SELECT child.relname AS child, parent.relname AS parent, a.attname AS column,
+(SELECT parent_col.attname FROM pg_attribute parent_col
+ WHERE parent_col.attrelid=c.confrelid AND parent_col.attnum=c.confkey[1]) AS parent_column
+FROM pg_constraint c
+JOIN pg_class child ON child.oid=c.conrelid
+JOIN pg_class parent ON parent.oid=c.confrelid
+JOIN pg_namespace n ON n.oid=child.relnamespace
+JOIN pg_attribute a ON a.attrelid=c.conrelid AND a.attnum=c.conkey[1]
+WHERE c.contype='f' AND n.nspname='public' AND cardinality(c.confkey)=1""")
+    grouped = {}
+    for row in rows:
+        grouped.setdefault(row['child'], []).append(row)
+    return grouped
+
+
+def filter_rows_missing_source_parents(api, table_name, rows, outbound_fks):
+    foreign_keys = outbound_fks.get(table_name, [])
+    if not foreign_keys or not rows: return rows, 0
+    kept, skipped = [], 0
+    for row in rows:
+        payload = row['row']
+        orphan = False
+        for foreign_key in foreign_keys:
+            value = payload.get(foreign_key['column'])
+            if value is None: continue
+            parent_column = foreign_key['parent_column']
+            present = api.query(
+                f"SELECT EXISTS(SELECT 1 FROM public.{ident(foreign_key['parent'])} WHERE {ident(parent_column)}={literal(value)}) AS present",
+                source=True,
+            )[0]['present']
+            if not present:
+                orphan = True
+                break
+        if orphan:
+            skipped += 1
+        else:
+            kept.append(row)
+    return kept, skipped
 
 
 class Management:
@@ -465,7 +578,7 @@ SELECT table_name,now(),source_rows,changed_rows FROM jsonb_to_recordset({json_s
 ON CONFLICT(table_name) DO UPDATE SET last_success_at=EXCLUDED.last_success_at,source_rows=EXCLUDED.source_rows,changed_rows=EXCLUDED.changed_rows""")
 
 
-def mirror_table(api, table, *, delete_only=False, inventory=None, previous_rows=None, record_state=True):
+def mirror_table(api, table, *, delete_only=False, inventory=None, previous_rows=None, record_state=True, outbound_fks=None):
     name, keys, columns = table['name'], table['keys'], table['columns']
     relation = 'public.' + ident(name)
     # One aggregate row avoids Management API result-row caps. No customer body
@@ -488,7 +601,7 @@ def mirror_table(api, table, *, delete_only=False, inventory=None, previous_rows
         duplicate = api.query(f'SELECT EXISTS(SELECT 1 FROM {relation} GROUP BY {",".join(map(ident,keys))} HAVING count(*)>1) AS duplicate')[0]['duplicate']
         if duplicate:
             raise RuntimeError(f'{name}: duplicate Staging keys; reconciliation required')
-    applied = rejected = 0
+    applied = rejected = skipped_orphans = 0
     for group in batches(changed):
         matches = ' AND '.join(f't.{ident(k)}=s.{ident(k)}' for k in keys)
         requested = [item['key'] for item in group]
@@ -496,6 +609,9 @@ def mirror_table(api, table, *, delete_only=False, inventory=None, previous_rows
         # between inventory and fetch; its newer version must never be skipped.
         rows = api.query(f"SELECT {key_sql(keys)} AS key, md5({row_value}::text) AS digest, {row_value} AS row FROM {relation} t JOIN jsonb_populate_recordset(NULL::{relation},{json_sql(requested)}) s ON {matches}", source=True)
         if rows:
+            if outbound_fks is not None:
+                rows, skipped = filter_rows_missing_source_parents(api, name, rows, outbound_fks)
+                skipped_orphans += skipped
             for statement, count in bounded_apply_batches(name, keys, columns, rows, table.get('array_columns', []), table.get('required_arrays', [])):
                 outcome = api.query(statement)
                 rejected_count = outcome[0]['rejected_rows']
@@ -517,7 +633,10 @@ DELETE FROM environment_sync.managed_rows WHERE table_name={literal(name)} AND r
         deleted += len(gone)
     if not delete_only and record_state and not rejected:
         api.query(f"INSERT INTO environment_sync.table_state(table_name,last_success_at,source_rows,changed_rows) VALUES({literal(name)},now(),{len(fingerprints)},{applied}) ON CONFLICT(table_name) DO UPDATE SET last_success_at=EXCLUDED.last_success_at,source_rows=EXCLUDED.source_rows,changed_rows=EXCLUDED.changed_rows")
-    return {'table': name, 'source_rows': len(fingerprints), 'changed_rows': applied, 'removed_rows': deleted, 'rejected_rows': rejected}
+    result = {'table': name, 'source_rows': len(fingerprints), 'changed_rows': applied, 'removed_rows': deleted, 'rejected_rows': rejected}
+    if skipped_orphans:
+        result['skipped_source_orphans'] = skipped_orphans
+    return result
 
 
 def main():
@@ -543,11 +662,14 @@ def main():
         raise RuntimeError('Staging Edge deployments changed since containment verification')
     foreign_keys = api.query("SELECT child.relname AS child,parent.relname AS parent FROM pg_catalog.pg_constraint c JOIN pg_catalog.pg_class child ON child.oid=c.conrelid JOIN pg_catalog.pg_class parent ON parent.oid=c.confrelid JOIN pg_catalog.pg_namespace n ON n.oid=child.relnamespace WHERE c.contype='f' AND n.nspname='public'")
     plan = dependency_order(plan, foreign_keys)
+    outbound_fks = load_outbound_foreign_keys(api)
     incoming, previous = load_inventory(api, plan)
     results = []
     def apply_table(table):
         reconcile_legacy_keys(api, table)
-        result = mirror_table(api, table, inventory=incoming[table['name']], previous_rows=previous.get(table['name'], []), record_state=False)
+        reconcile_referenced_legacy_keys(api, table)
+        result = mirror_table(api, table, inventory=incoming[table['name']], previous_rows=previous.get(table['name'], []),
+                              record_state=False, outbound_fks=outbound_fks)
         results.append(result)
         print(json.dumps(result), flush=True)
     ensure_identity_parents(api, referenced_auth_users(api, plan))
