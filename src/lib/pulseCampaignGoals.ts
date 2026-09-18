@@ -68,6 +68,7 @@ export const buildPulseCampaignRows = buildRows as (input: {
     id: string;
     client_id: string;
     integration_type?: string | null;
+    category?: string | null;
     integration_settings?: Record<string, unknown> | null;
   }>;
   nowYmd: string;

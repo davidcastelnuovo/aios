@@ -207,7 +207,21 @@ export function pulseClientsNeedingRecordBuild(input: {
 
 export function isEcommerceReportTable(table: PulseCampaignTable): boolean {
   if (table.integration_type === "facebook_ecommerce") return true;
+  if (String(table.category || "").trim() === "איקומרס") return true;
   return String(table.integration_settings?.campaign_type || "").trim().toLowerCase() === "ecommerce";
+}
+
+function tableClassificationContext(table: PulseCampaignTable): Record<string, unknown> {
+  return {
+    integration_type: table.integration_type,
+    integration_settings: table.integration_settings || {},
+    category: table.category,
+  };
+}
+
+/** Pulse dashboard only tracks campaigns that spent in the current window. */
+export function filterPulseCampaignRowsWithSpend(rows: PulseCampaignGoalRow[]): PulseCampaignGoalRow[] {
+  return rows.filter((row) => (row.spend_7d || 0) > 0);
 }
 
 function rowConfirmsLeadObjective(row: PulseCampaignGoalRow): boolean {
@@ -238,16 +252,25 @@ function applyFreshCampaignGoalClassification(
   settings: Record<string, unknown>,
 ): PulseCampaignGoalRow {
   if (!table) return row;
+  if (
+    isEcommerceReportTable(table)
+    && row.goal === "leads"
+    && !rowConfirmsLeadObjective(row)
+    && ((row.revenue_7d || 0) > 0 || row.outcome_kind === "purchases")
+  ) {
+    return {
+      ...row,
+      goal: "ecommerce",
+      classification_source: "table_report_type",
+    };
+  }
   const classification = classifyPulseCampaignGoal(
     {
       campaign_objective: row.campaign_objective,
       optimization_goal: row.optimization_goal,
       campaign_type: row.campaign_type_hint,
     },
-    {
-      integration_type: table.integration_type,
-      integration_settings: settings,
-    },
+    tableClassificationContext(table),
   );
   if (classification.goal === "unknown" || classification.goal === row.goal) return row;
   return {
@@ -273,10 +296,7 @@ export function pulseClientsWithStaleCampaignGoals(
         optimization_goal: row.optimization_goal,
         campaign_type: row.campaign_type_hint,
       },
-      {
-        integration_type: table.integration_type,
-        integration_settings: table.integration_settings || {},
-      },
+      tableClassificationContext(table),
     );
     if (fresh.goal !== "unknown" && fresh.goal !== row.goal) {
       stale.add(row.client_id);
@@ -771,6 +791,7 @@ export type PulseCampaignTable = {
   id: string;
   client_id: string;
   integration_type: string | null;
+  category?: string | null;
   campaign_active?: boolean | null;
   last_sync_at?: string | null;
   integration_settings?: Record<string, unknown> | null;
@@ -798,7 +819,11 @@ export function pulsePlatformKey(integrationType: string | null | undefined): Pu
   return null;
 }
 
-export function integrationTypeToGoal(integrationType: string | null | undefined): CampaignGoal | null {
+export function integrationTypeToGoal(
+  integrationType: string | null | undefined,
+  table?: PulseCampaignTable | null,
+): CampaignGoal | null {
+  if (table && isEcommerceReportTable(table)) return "ecommerce";
   if (integrationType === "facebook_ecommerce") return "ecommerce";
   if (integrationType === "facebook_insights" || integrationType === "google_ads") return "leads";
   return null;
@@ -1001,7 +1026,7 @@ function goalsForPlatform(tables: PulseCampaignTable[], platform: PulsePlatform)
   const goals = new Set<CampaignGoal>();
   for (const table of tables) {
     if (pulsePlatformKey(table.integration_type) !== platform) continue;
-    const goal = integrationTypeToGoal(table.integration_type);
+    const goal = integrationTypeToGoal(table.integration_type, table);
     if (goal) goals.add(goal);
   }
   return goals.size ? Array.from(goals) : ["leads"];
@@ -1087,7 +1112,7 @@ export function expandPulseToPlatformGoalRows(input: {
     for (const goal of goalsForPlatform(configuredTables, platform)) {
       const goalTableIds = new Set(
         platformActive
-          .filter((table) => integrationTypeToGoal(table.integration_type) === goal)
+          .filter((table) => integrationTypeToGoal(table.integration_type, table) === goal)
           .map((table) => table.id),
       );
       const goalRecords = platformRecords.filter((record) => goalTableIds.has(record.table_id));
@@ -1100,9 +1125,9 @@ export function expandPulseToPlatformGoalRows(input: {
 
       const metrics = computeGoalMetricsForBounds(goalRecords, goal, bounds);
       const goalConfigured = platformConfigured.filter(
-        (table) => integrationTypeToGoal(table.integration_type) === goal,
+        (table) => integrationTypeToGoal(table.integration_type, table) === goal,
       );
-      const goalActive = platformActive.filter((table) => integrationTypeToGoal(table.integration_type) === goal);
+      const goalActive = platformActive.filter((table) => integrationTypeToGoal(table.integration_type, table) === goal);
 
       const { status, flags } = classifyPlatformGoalStatus({
         platform,

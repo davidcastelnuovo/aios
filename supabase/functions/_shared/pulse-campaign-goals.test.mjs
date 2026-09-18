@@ -29,6 +29,13 @@ test('classifies campaign objective and never defaults an unknown campaign to le
   assert.equal(
     classifyPulseCampaignGoal(
       { campaign_type: 'lead' },
+      { integration_type: 'facebook_insights', category: 'איקומרס' },
+    ).goal,
+    'ecommerce',
+  )
+  assert.equal(
+    classifyPulseCampaignGoal(
+      { campaign_type: 'lead' },
       { integration_type: 'facebook_ecommerce' },
     ).goal,
     'ecommerce',

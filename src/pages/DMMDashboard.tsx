@@ -69,6 +69,7 @@ import {
   rehydrateCampaignBreakdownRows,
   applyClientCallToPulseSnapshot,
   filterPulseCallFlags,
+  filterPulseCampaignRowsWithSpend,
   fetchPulseCampaignRecords,
   formatGoalChange,
   formatGoalEfficiency,
@@ -411,7 +412,7 @@ export function CampaignPulseDashboard({
       if (!tenantId || !clientIds.length) return [] as PulseCampaignTable[];
       const { data: tables, error } = await supabase
         .from("crm_tables")
-        .select("id, client_id, integration_type, campaign_active, last_sync_at, integration_settings")
+        .select("id, client_id, integration_type, category, campaign_active, last_sync_at, integration_settings")
         .in("client_id", clientIds)
         .in("integration_type", ["facebook_insights", "facebook_ecommerce", "google_ads"]);
       if (error) throw error;
@@ -702,14 +703,19 @@ export function CampaignPulseDashboard({
     return map;
   }, [filteredByRole]);
 
+  const spendingCampaignRows = useMemo(
+    () => filterPulseCampaignRowsWithSpend(campaignGoalRows),
+    [campaignGoalRows],
+  );
+
   const clientGoalRollups = useMemo(
     () => rollupCampaignRowsByClientGoal({
-      campaignRows: campaignGoalRows,
+      campaignRows: spendingCampaignRows,
       snapshotsByClient: pulseByClient,
       deliveryHintsPending: deliveryHintsFetching,
       metaTableIds: metaTableIdSet,
     }),
-    [campaignGoalRows, pulseByClient, deliveryHintsFetching, metaTableIdSet],
+    [spendingCampaignRows, pulseByClient, deliveryHintsFetching, metaTableIdSet],
   );
 
   const visibleClientGoalRollups = useMemo(() => {
@@ -746,8 +752,8 @@ export function CampaignPulseDashboard({
   ]);
 
   const unclassifiedCampaignRows = useMemo(
-    () => campaignGoalRows.filter((row) => row.goal === "unknown" && clientMetaById.has(row.client_id)),
-    [campaignGoalRows, clientMetaById],
+    () => spendingCampaignRows.filter((row) => row.goal === "unknown" && clientMetaById.has(row.client_id)),
+    [spendingCampaignRows, clientMetaById],
   );
 
   function resolvePulseRowForCard(card: ReturnType<typeof buildClientCampaignTableData>[number]): PulseRow {

@@ -24,6 +24,7 @@ export type PulseStatus = 'healthy' | 'warning' | 'critical' | 'no_data'
 export type CampaignTableLike = {
   id?: string
   integration_type?: string | null
+  category?: string | null
   campaign_active?: boolean | null
   last_sync_at?: string | null
   integration_settings?: Record<string, unknown> | null
@@ -451,7 +452,17 @@ export function isPulseDeliveryExcludedPhone(
   return PULSE_DELIVERY_EXCLUDED_PHONE_SUFFIXES.some((suffix) => digits.endsWith(suffix))
 }
 
-export function integrationTypeToGoal(integrationType: string | null | undefined): CampaignGoal | null {
+export function isEcommerceReportTable(table: CampaignTableLike): boolean {
+  if (table.integration_type === 'facebook_ecommerce') return true
+  if (String(table.category || '').trim() === 'איקומרס') return true
+  return String(table.integration_settings?.campaign_type || '').trim().toLowerCase() === 'ecommerce'
+}
+
+export function integrationTypeToGoal(
+  integrationType: string | null | undefined,
+  table?: CampaignTableLike | null,
+): CampaignGoal | null {
+  if (table && isEcommerceReportTable(table)) return 'ecommerce'
   if (integrationType === 'facebook_ecommerce') return 'ecommerce'
   if (integrationType === 'facebook_insights' || integrationType === 'google_ads') return 'leads'
   return null
@@ -461,7 +472,7 @@ export function detectCampaignGoalMode(tables: CampaignTableLike[]): CampaignGoa
   const goals = new Set<CampaignGoal>()
   for (const table of tables) {
     if (table.campaign_active === false) continue
-    const goal = integrationTypeToGoal(table.integration_type)
+    const goal = integrationTypeToGoal(table.integration_type, table)
     if (goal) goals.add(goal)
   }
   if (goals.has('leads') && goals.has('ecommerce')) return 'hybrid'

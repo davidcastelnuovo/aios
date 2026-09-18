@@ -101,18 +101,29 @@ function goalFromDerivedCampaignType(campaignType) {
   return null
 }
 
-function tableReportDefaultGoal(context = {}) {
-  if (context.integration_type === 'facebook_ecommerce') return 'ecommerce'
-  const settings = context.integration_settings || {}
+/** Report/table configuration — not a per-campaign guess. */
+export function tableReportGoal(table = {}) {
+  const integrationType = table.integration_type
+  const settings = table.integration_settings || {}
+  const category = String(table.category || '').trim()
+  if (integrationType === 'facebook_ecommerce') return 'ecommerce'
+  if (category === 'איקומרס') return 'ecommerce'
   const tableCampaignType = String(settings.campaign_type || '').trim().toLowerCase()
   if (tableCampaignType === 'ecommerce') return 'ecommerce'
+  if (integrationType === 'facebook_insights' || integrationType === 'google_ads') return 'leads'
   return null
+}
+
+function tableReportDefaultGoal(context = {}) {
+  const goal = tableReportGoal(context)
+  return goal === 'leads' ? null : goal
 }
 
 function classificationContext(context = {}) {
   return {
     integration_type: context.integration_type || null,
     integration_settings: context.integration_settings || {},
+    category: context.category || null,
   }
 }
 
@@ -252,6 +263,7 @@ function recordScore(record, table) {
   const classification = classifyPulseCampaignGoal(data, {
     integration_type: table?.integration_type,
     integration_settings: table?.integration_settings || {},
+    category: table?.category,
   })
   let score = classification.goal === 'unknown' ? 0 : 10
   if (data.campaign_id) score += 2
@@ -526,6 +538,7 @@ export function buildPulseCampaignRows({
     const classification = classifyPulseCampaignGoal(sample.record.data, {
       integration_type: sample.table.integration_type,
       integration_settings: sample.table.integration_settings || {},
+      category: sample.table.category,
     })
     const outcome = pulseCampaignOutcome(sample.record.data, classification.goal)
     const campaignRecords = items.map((item) => item.record)

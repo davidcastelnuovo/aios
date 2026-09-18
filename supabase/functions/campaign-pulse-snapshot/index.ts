@@ -300,7 +300,7 @@ Deno.serve(async (req) => {
     const clientIds = campaignClients.map((client: any) => client.id)
     const tableResult = clientIds.length
       ? await supabase.from('crm_tables')
-          .select('id, client_id, integration_type, integration_settings, campaign_active, last_sync_at')
+          .select('id, client_id, integration_type, category, integration_settings, campaign_active, last_sync_at')
           .in('client_id', clientIds)
           .in('integration_type', [...CAMPAIGN_TABLE_TYPES])
       : { data: [], error: null }
@@ -417,6 +417,7 @@ Deno.serve(async (req) => {
             return classifyPulseCampaignGoal(row.data || {}, {
               integration_type: table?.integration_type,
               integration_settings: table?.integration_settings || {},
+              category: table?.category,
             }).goal === goal
           })
         const leadRecords = recordsForGoal('leads')
@@ -445,11 +446,11 @@ Deno.serve(async (req) => {
         const latestCall = latestCallByClient.get(client.id) || null
         const lastClientCallAt = clientCallDataAvailable ? (latestCall?.last_client_call_at || null) : undefined
         const stoppedCount = stoppedByClient.get(client.id) || 0
-        const leadTables = activeTables.filter((table: any) => integrationTypeToGoal(table.integration_type) === 'leads')
-        const ecommerceTables = activeTables.filter((table: any) => integrationTypeToGoal(table.integration_type) === 'ecommerce')
+        const leadTables = activeTables.filter((table: any) => integrationTypeToGoal(table.integration_type, table) === 'leads')
+        const ecommerceTables = activeTables.filter((table: any) => integrationTypeToGoal(table.integration_type, table) === 'ecommerce')
         const leadClassification = classifyCampaignPulseStatus({
           activeTables: leadTables,
-          hasConfiguredCampaignTable: configuredForClient.some((table: any) => integrationTypeToGoal(table.integration_type) === 'leads'),
+          hasConfiguredCampaignTable: configuredForClient.some((table: any) => integrationTypeToGoal(table.integration_type, table) === 'leads'),
           recentRecordCount: leadRecords.filter((row: any) => row.data?.date && row.data.date >= d30Str).length,
           isEcommerce: false,
           spend7: leadMetrics.spend,
@@ -463,7 +464,7 @@ Deno.serve(async (req) => {
         })
         const ecommerceClassification = classifyCampaignPulseStatus({
           activeTables: ecommerceTables,
-          hasConfiguredCampaignTable: configuredForClient.some((table: any) => integrationTypeToGoal(table.integration_type) === 'ecommerce'),
+          hasConfiguredCampaignTable: configuredForClient.some((table: any) => integrationTypeToGoal(table.integration_type, table) === 'ecommerce'),
           recentRecordCount: ecommerceRecords.filter((row: any) => row.data?.date && row.data.date >= d30Str).length,
           isEcommerce: true,
           spend7: ecommerceMetrics.spend,
