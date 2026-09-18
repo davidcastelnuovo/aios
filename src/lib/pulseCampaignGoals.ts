@@ -3,9 +3,12 @@
 import {
   buildPulseCampaignRows as buildRows,
   classifyPulseCampaignGoal as classifyGoal,
+  campaignDeliveryStatusLabel as deliveryStatusLabel,
   pulseCampaignOutcome as campaignOutcome,
   pulseTrendWindows as trendWindows,
 } from "../../supabase/functions/_shared/pulse-campaign-goals.mjs";
+
+export const campaignDeliveryStatusLabel = deliveryStatusLabel as (status: string) => string;
 
 export type PulseCampaignGoal = "leads" | "engagement" | "ecommerce" | "unknown";
 
@@ -17,6 +20,7 @@ export type PulseCampaignGoalRow = {
   table_id: string;
   platform: "meta" | "google";
   goal: PulseCampaignGoal;
+  delivery_status?: "active" | "paused" | "removed" | "other" | "unknown";
   classification_source: "explicit_mapping" | "platform_goal" | "unclassified";
   outcome_kind: string | null;
   status: "healthy" | "warning" | "critical" | "no_data";

@@ -17,9 +17,12 @@ import {
   formatLastClientCall,
   formatMetaChangeDetails,
   formatPulseMoney,
+  formatOperatorTouch,
   formatRollupEfficiency,
   formatRollupOutcomes,
   goalLabel,
+  resolveCampaignOperatorTouch,
+  type PulseCampaignAlertAck,
   metaChangeSummary,
   overallStatusLabel,
   platformGoalLabel,
@@ -31,7 +34,7 @@ import {
   type PulseSnapshotRow,
 } from "@/lib/pulseDashboard";
 import { ExternalLink, Pencil } from "lucide-react";
-import type { PulseCampaignGoalRow } from "@/lib/pulseCampaignGoals";
+import { campaignDeliveryStatusLabel, type PulseCampaignGoalRow } from "@/lib/pulseCampaignGoals";
 import { Input } from "@/components/ui/input";
 
 const PLATFORM_CONFIG: Record<string, { name: string; color: string }> = {
@@ -88,6 +91,7 @@ export function PulseClientGoalRollupCard({
   onOpenClient,
   onCallLog,
   onSaveTarget,
+  alertAcks = [],
 }: {
   rollup: PulseClientGoalRollup;
   clientName: string;
@@ -99,6 +103,7 @@ export function PulseClientGoalRollupCard({
   onOpenClient: () => void;
   onCallLog: () => void;
   onSaveTarget?: (row: PulseCampaignGoalRow, value: number, kind: "cpl" | "cost_per_result" | "roas") => Promise<void>;
+  alertAcks?: PulseCampaignAlertAck[];
 }) {
   const [expanded, setExpanded] = useState(false);
   const statusText = manualOverride
@@ -146,8 +151,12 @@ export function PulseClientGoalRollupCard({
             <Badge variant="outline">{platformGoalLabel({ platformLabel: rollup.platformLabel, goal: rollup.goal })}</Badge>
             {manualOverride ? <Badge variant="secondary" className="text-[10px]">ידני</Badge> : null}
           </CardTitle>
-          <div className="text-left text-xs text-muted-foreground">
-            {rollup.campaigns.length} {rollup.campaigns.length === 1 ? "קמפיין" : "קמפיינים"}
+          <div className="text-left text-xs text-muted-foreground space-y-0.5">
+            <div>
+              {rollup.campaigns.filter((row) => row.delivery_status === "active").length} פעילים
+              {" · "}
+              {rollup.campaigns.filter((row) => row.delivery_status === "paused").length} מושהים
+            </div>
           </div>
         </div>
 
@@ -238,6 +247,7 @@ export function PulseClientGoalRollupCard({
                 row={campaign}
                 clientName={clientName}
                 campaignerName={campaignerName}
+                alertAcks={alertAcks}
                 onOpenClient={onOpenClient}
                 onSaveTarget={onSaveTarget ? (value, kind) => onSaveTarget(campaign, value, kind) : undefined}
               />
@@ -253,15 +263,18 @@ export function PulseCampaignGoalCard({
   row,
   clientName,
   campaignerName,
+  alertAcks = [],
   onOpenClient,
   onSaveTarget,
 }: {
   row: PulseCampaignGoalRow;
   clientName: string;
   campaignerName: string;
+  alertAcks?: PulseCampaignAlertAck[];
   onOpenClient: () => void;
   onSaveTarget?: (value: number, kind: "cpl" | "cost_per_result" | "roas") => Promise<void>;
 }) {
+  const operatorTouch = resolveCampaignOperatorTouch(row, alertAcks);
   const defaultTargetKind =
     row.goal === "ecommerce" ? "roas" : row.goal === "engagement" ? "cost_per_result" : "cpl";
   const [targetDraft, setTargetDraft] = useState(row.target_value?.toString() || "");
@@ -291,9 +304,14 @@ export function PulseCampaignGoalCard({
             <span className="truncate">{clientName}</span>
             <Badge variant="outline">{campaignGoalLabel(row.goal)}</Badge>
           </CardTitle>
-          <div className="text-left">
+          <div className="text-left space-y-1">
             <div className="font-semibold">{row.campaign_name}</div>
-            <div className="text-xs text-muted-foreground">{row.platform === "meta" ? "Meta" : "Google Ads"}</div>
+            <div className="flex flex-wrap items-center gap-1 text-xs text-muted-foreground">
+              <span>{row.platform === "meta" ? "Meta" : "Google Ads"}</span>
+              <Badge variant={row.delivery_status === "active" ? "default" : "secondary"} className="text-[10px]">
+                {campaignDeliveryStatusLabel(row.delivery_status || "unknown")}
+              </Badge>
+            </div>
           </div>
         </div>
 
@@ -311,6 +329,12 @@ export function PulseCampaignGoalCard({
           <div><span className="text-muted-foreground">נתונים עד: </span>{formatDate(row.data_fresh_through)}</div>
           <div><span className="text-muted-foreground">סנכרון אחרון: </span>{formatDate(row.last_sync_at)}</div>
           <div><span className="text-muted-foreground">שינוי אחרון: </span>{formatDate(row.last_change_at)}</div>
+          <div>
+            <span className="text-muted-foreground">טיפול קמפיינר: </span>
+            {operatorTouch.at
+              ? `${formatOperatorTouch(operatorTouch.at)} (${operatorTouch.label})`
+              : "לא תועד"}
+          </div>
           <div><span className="text-muted-foreground">סיווג: </span>{row.classification_source === "unclassified" ? "לא מזוהה" : "מטרת קמפיין"}</div>
         </div>
       </CardHeader>

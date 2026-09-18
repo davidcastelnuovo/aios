@@ -2,6 +2,50 @@ const DAY_MS = 86_400_000
 
 export const PULSE_CAMPAIGN_GOALS = ['leads', 'engagement', 'ecommerce']
 
+const PAUSED_DELIVERY_STATUSES = new Set([
+  'PAUSED', 'CAMPAIGN_PAUSED', 'ADSET_PAUSED', 'AD_PAUSED',
+])
+const ACTIVE_DELIVERY_STATUSES = new Set([
+  'ACTIVE', 'ENABLED', 'ELIGIBLE', 'LIMITED', 'LEARNING',
+])
+const REMOVED_DELIVERY_STATUSES = new Set([
+  'REMOVED', 'DELETED', 'ARCHIVED', 'DISAPPROVED',
+])
+
+export function resolveCampaignDeliveryStatus(data = {}, integrationSettings = {}) {
+  const raw = String(
+    data.effective_status
+    || data.configured_status
+    || data.campaign_status
+    || data.status
+    || '',
+  ).trim().toUpperCase()
+  if (raw) {
+    if (PAUSED_DELIVERY_STATUSES.has(raw) || raw.includes('PAUSED')) return 'paused'
+    if (ACTIVE_DELIVERY_STATUSES.has(raw)) return 'active'
+    if (REMOVED_DELIVERY_STATUSES.has(raw)) return 'removed'
+    return 'other'
+  }
+  const campaignId = String(data.campaign_id || data.campaignId || '')
+  const states = integrationSettings.operational_campaign_states
+  if (campaignId && states && typeof states === 'object') {
+    const state = states[campaignId]
+    const status = String(state?.status || '').toUpperCase()
+    if (status === 'PAUSED') return 'paused'
+    if (status === 'ENABLED') return 'active'
+    if (status === 'REMOVED') return 'removed'
+  }
+  return 'unknown'
+}
+
+export function campaignDeliveryStatusLabel(status) {
+  if (status === 'active') return 'פעיל'
+  if (status === 'paused') return 'מושהה'
+  if (status === 'removed') return 'הוסר'
+  if (status === 'other') return 'לא פעיל'
+  return 'לא ידוע'
+}
+
 const LEAD_TERMS = ['LEAD', 'CONTACT', 'SUBMIT_APPLICATION', 'QUALIFIED_LEAD']
 const ENGAGEMENT_TERMS = [
   'ENGAGEMENT', 'TRAFFIC', 'VIDEO_VIEW', 'THRUPLAY', 'MESSAGE', 'CONVERSATION',
@@ -253,7 +297,25 @@ function round(value, digits = 2) {
   return Math.round(value * factor) / factor
 }
 
-function classifyStatus({ goal, current3, current7, baseline3, baseline7, target }) {
+function classifyStatus({ goal, current3, current7, baseline3, baseline7, target, deliveryStatus = 'unknown' }) {
+  if (deliveryStatus === 'paused') {
+    return {
+      status: 'healthy',
+      tier: 'normal',
+      reason: current7.spend > 0
+        ? 'קמפיין מושהה — ההוצאה בחלון היא מלפני ההשהיה'
+        : 'קמפיין מושהה — אין הוצאה פעילה',
+      alertEligible: false,
+    }
+  }
+  if (deliveryStatus === 'removed') {
+    return {
+      status: 'healthy',
+      tier: 'normal',
+      reason: 'קמפיין הוסר/לא פעיל',
+      alertEligible: false,
+    }
+  }
   if (goal === 'unknown') {
     return {
       status: 'warning',
@@ -400,7 +462,9 @@ export function buildPulseCampaignRows({
     const baselineRows = inWindow(windows.baseline.start, windows.baseline.end)
     const baseline3 = normalizedBaseline(baselineRows, classification.goal, outcome.kind, current3Dates)
     const baseline7 = normalizedBaseline(baselineRows, classification.goal, outcome.kind, current7Dates)
-    const target = approvedTarget(sample.table.integration_settings || {}, sample.record.data, classification.goal)
+    const tableSettings = sample.table.integration_settings || {}
+    const deliveryStatus = resolveCampaignDeliveryStatus(sample.record.data, tableSettings)
+    const target = approvedTarget(tableSettings, sample.record.data, classification.goal)
     const status = classifyStatus({
       goal: classification.goal,
       current3,
@@ -408,6 +472,7 @@ export function buildPulseCampaignRows({
       baseline3,
       baseline7,
       target,
+      deliveryStatus,
     })
     const useRoas = classification.goal === 'ecommerce' && target?.kind !== 'cpa'
     const lowerIsBetter = !useRoas
@@ -416,7 +481,7 @@ export function buildPulseCampaignRows({
     const efficiencyToday = useRoas ? today.roas : today.efficiency
     const baselineEfficiency3 = useRoas ? baseline3.roas : baseline3.efficiency
     const baselineEfficiency7 = useRoas ? baseline7.roas : baseline7.efficiency
-    const settings = sample.table.integration_settings || {}
+    const settings = tableSettings
     const lastChangeCandidates = [
       ...items.map((item) => item.record.data.updated_time),
       settings.last_campaign_updated_at,
@@ -431,6 +496,7 @@ export function buildPulseCampaignRows({
       table_id: sample.table.id,
       platform: sample.platform,
       goal: classification.goal,
+      delivery_status: deliveryStatus,
       classification_source: classification.source,
       outcome_kind: outcome.kind,
       status: status.status,

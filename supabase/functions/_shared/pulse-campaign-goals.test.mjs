@@ -87,6 +87,34 @@ test('CPL increase inside an approved target stays healthy and is not alert elig
   assert.match(row.status_reason, /בתוך היעד/)
 })
 
+test('paused campaigns with spend but no leads are not critical', () => {
+  const tables = [{
+    id: 't1',
+    client_id: 'c1',
+    integration_type: 'facebook_insights',
+    integration_settings: {},
+  }]
+  const records = []
+  for (let day = 11; day <= 17; day += 1) {
+    records.push({
+      table_id: 't1',
+      data: {
+        date: `2026-09-${day}`,
+        campaign_id: 'bad',
+        campaign_name: 'Old test',
+        campaign_type: 'lead',
+        effective_status: 'PAUSED',
+        spend: 80,
+        leads: 0,
+      },
+    })
+  }
+  const row = buildPulseCampaignRows({ records, tables, nowYmd: '2026-09-18' })[0]
+  assert.equal(row.delivery_status, 'paused')
+  assert.equal(row.status, 'healthy')
+  assert.match(row.status_reason, /מושהה/)
+})
+
 test('persistent target breach becomes an evidence-backed exception', () => {
   const tables = [{
     id: 't1',

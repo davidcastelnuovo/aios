@@ -76,6 +76,7 @@ import {
   pulseSpendColumnLabel,
   pulseStatusToOverall,
   rollupCampaignRowsByClientGoal,
+  type PulseCampaignAlertAck,
   type PulseCampaignTable,
   type PulseCrmRecord,
   type PulsePlatformDisplayRow,
@@ -362,6 +363,35 @@ export function CampaignPulseDashboard({
     }
     return map;
   }, [pulseOverrides]);
+
+  const { data: campaignAlertAcks = [] } = useQuery({
+    queryKey: ["pulse-dash-alert-acks", tenantId, clientIds.join(",")],
+    queryFn: async () => {
+      if (!tenantId || !clientIds.length) return [] as PulseCampaignAlertAck[];
+      const { data, error } = await supabase
+        .from("campaign_alerts")
+        .select("client_id, campaign_id, campaign_name, acknowledged_at, created_at, alert_type")
+        .in("client_id", clientIds)
+        .not("acknowledged_at", "is", null)
+        .order("acknowledged_at", { ascending: false });
+      if (error) throw error;
+      return (data ?? []) as PulseCampaignAlertAck[];
+    },
+    enabled: !!tenantId && clientIds.length > 0,
+    staleTime: 60_000,
+  });
+
+  const alertAcksByClient = useMemo(() => {
+    const map = new Map<string, PulseCampaignAlertAck[]>();
+    for (const row of campaignAlertAcks) {
+      const clientId = row.client_id;
+      if (!clientId) continue;
+      const list = map.get(clientId) || [];
+      list.push(row);
+      map.set(clientId, list);
+    }
+    return map;
+  }, [campaignAlertAcks]);
 
   const { data: pulseCampaignTables = [], refetch: refetchPulseTables } = useQuery({
     queryKey: ["pulse-dash-tables", tenantId, clientIds.join(",")],
@@ -1256,6 +1286,7 @@ export function CampaignPulseDashboard({
                     ? (row, value, kind) => saveCampaignTarget(row, value, kind)
                     : undefined
                 }
+                alertAcks={alertAcksByClient.get(rollup.client_id) ?? []}
               />
             );
           })}

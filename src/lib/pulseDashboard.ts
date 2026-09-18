@@ -194,8 +194,13 @@ export function pulseClientsNeedingRecordBuild(input: {
   const needsBuild: string[] = [];
   for (const clientId of clientsWithTables) {
     const snapshot = snapshotByClient.get(clientId);
-    if (snapshot && Array.isArray(snapshot.campaign_breakdown)) continue;
-    needsBuild.push(clientId);
+    if (!snapshot || !Array.isArray(snapshot.campaign_breakdown)) {
+      needsBuild.push(clientId);
+      continue;
+    }
+    if (snapshot.campaign_breakdown.some((row) => !row.delivery_status)) {
+      needsBuild.push(clientId);
+    }
   }
   return needsBuild;
 }
@@ -250,6 +255,35 @@ function worstPulseStatusFromList(statuses: PulseStatus[]): PulseStatus {
   );
 }
 
+type CampaignRowWithDelivery = PulseCampaignGoalRow & {
+  delivery_status?: string | null;
+};
+
+/** Rollup status reflects active campaigns only — paused/removed are good management. */
+export function rollupStatusFromCampaigns(campaigns: CampaignRowWithDelivery[]): {
+  status: PulseStatus;
+  status_reason: string;
+} {
+  const active = campaigns.filter((row) => row.delivery_status === "active");
+  const pool = active.length
+    ? active
+    : campaigns.filter((row) => row.delivery_status !== "paused" && row.delivery_status !== "removed");
+  if (!pool.length) {
+    return {
+      status: "healthy",
+      status_reason: active.length === 0 && campaigns.some((row) => row.delivery_status === "paused")
+        ? "כל הקמפיינים מושהים — אין הוצאה פעילה שדורשת טיפול"
+        : "אין קמפיינים פעילים בקטגוריה",
+    };
+  }
+  const status = worstPulseStatusFromList(pool.map((row) => row.status));
+  const statusReason =
+    pool.find((row) => row.status === status)?.status_reason ||
+    pool[0]?.status_reason ||
+    "";
+  return { status, status_reason: statusReason };
+}
+
 function rollupEfficiency(
   goal: CampaignGoal,
   spend: number,
@@ -294,11 +328,7 @@ export function rollupCampaignRowsByClientGoal(input: {
     const efficiency_kind =
       goal === "ecommerce" ? "roas" : goal === "engagement" ? "cost_per_result" : "cpl";
     const efficiency = rollupEfficiency(goal, spend_7d, outcomes_7d, revenue_7d);
-    const status = worstPulseStatusFromList(campaigns.map((row) => row.status));
-    const statusReason =
-      campaigns.find((row) => row.status === status)?.status_reason ||
-      campaigns[0]?.status_reason ||
-      "";
+    const { status, status_reason: statusReason } = rollupStatusFromCampaigns(campaigns);
     const flags = Array.from(new Set(campaigns.flatMap((row) =>
       row.status !== "healthy" && row.status_reason ? [row.status_reason] : [],
     )));
@@ -422,6 +452,46 @@ export function formatRollupEfficiency(row: Pick<
 export function formatRollupOutcomes(row: Pick<PulseClientGoalRollup, "goal" | "outcomes_7d">): string {
   if (row.outcomes_7d === null) return "—";
   return String(row.outcomes_7d);
+}
+
+export type PulseCampaignAlertAck = {
+  client_id?: string;
+  campaign_id: string;
+  campaign_name: string | null;
+  acknowledged_at: string | null;
+  created_at: string;
+  alert_type: string;
+};
+
+export function resolveCampaignOperatorTouch(
+  campaign: Pick<PulseCampaignGoalRow, "campaign_id" | "campaign_name" | "last_change_at" | "delivery_status">,
+  alerts: PulseCampaignAlertAck[],
+): { at: string | null; label: string } {
+  const matches = alerts.filter((alert) =>
+    alert.campaign_id && campaign.campaign_id && alert.campaign_id === campaign.campaign_id,
+  );
+  const latestAck = matches
+    .filter((alert) => alert.acknowledged_at)
+    .sort((a, b) => String(b.acknowledged_at).localeCompare(String(a.acknowledged_at)))[0];
+  if (latestAck?.acknowledged_at) {
+    return { at: latestAck.acknowledged_at, label: "אושרה התראה" };
+  }
+  if (campaign.delivery_status === "paused" && campaign.last_change_at) {
+    return { at: campaign.last_change_at, label: "הושהה בפלטפורמה" };
+  }
+  if (campaign.last_change_at) {
+    return { at: campaign.last_change_at, label: "שינוי אחרון" };
+  }
+  return { at: null, label: "לא תועד" };
+}
+
+export function formatOperatorTouch(at: string | null): string {
+  if (!at) return "לא תועד";
+  return new Date(at).toLocaleString("he-IL", {
+    timeZone: "Asia/Jerusalem",
+    dateStyle: "short",
+    timeStyle: "short",
+  });
 }
 
 export type PulsePlatform = "meta" | "google";
