@@ -43,6 +43,7 @@ const alertTypeLabels: Record<string, string> = {
   cpl_spike: "CPL חורג",
   ad_disapproved: "מודעה לא מאושרת",
   campaign_stopped: "קמפיין הושהה",
+  account_disabled: "חשבון פרסום הושבת / הוגבל",
   budget_exhausted: "תקציב מוצה",
   low_delivery: "אספקה נמוכה",
 };

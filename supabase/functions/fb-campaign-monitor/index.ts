@@ -21,7 +21,7 @@ type AlertInput = {
 // KPI exceptions are owned by campaign-pulse-snapshot so they share its
 // target-aware filter, AI verification and campaign-level dedupe. This monitor
 // sends only platform-operational failures.
-const NOTIFY_TYPES = new Set(['campaign_stopped', 'ad_disapproved']);
+const NOTIFY_TYPES = new Set(['campaign_stopped', 'ad_disapproved', 'account_disabled']);
 
 async function resolveRecipients(supabase: any, tenant_id: string, client_id?: string | null) {
   const phones = new Map<string, string>(); // phone -> label
@@ -72,6 +72,7 @@ async function notifyWhatsapp(supabase: any, alert: AlertInput, alert_id: string
   const typeLabel: Record<string, string> = {
     campaign_stopped: 'הקמפיין הושהה / נדחה ע״י Meta',
     ad_disapproved: 'מודעה לא מאושרת',
+    account_disabled: 'חשבון הפרסום הושבת או הוגבל (ייתכן חיוב / אשראי)',
   };
   const message = `${emoji} התראת קמפיין\n` +
     `קמפיין: ${alert.campaign_name || alert.campaign_id}\n` +
@@ -116,7 +117,7 @@ async function upsertAlert(supabase: any, alert: AlertInput) {
   return data;
 }
 
-async function scanCampaign(supabase: any, tenant_id: string, token: string, acc: any, c: any, stats: any) {
+async function scanCampaign(supabase: any, tenant_id: string, acc: any, c: any, stats: any) {
   const isStopped = c.effective_status && !['ACTIVE', 'PAUSED', 'CAMPAIGN_PAUSED'].includes(c.effective_status);
   const hasIssues = c.issues_info && c.issues_info.length > 0;
 
@@ -136,29 +137,24 @@ async function scanCampaign(supabase: any, tenant_id: string, token: string, acc
     if (r) stats.alerts_created++;
   }
 
-  if (c.effective_status !== 'ACTIVE') return;
-
-  try {
-    const ins7J = await fetch(
-      `https://graph.facebook.com/v21.0/${c.id}/insights?fields=frequency,ctr&date_preset=last_7d&access_token=${token}`,
-    ).then(r => r.json());
-    const last7 = ins7J?.data?.[0];
-
-    // CPL/ROAS/cost-per-result anomalies are deliberately not evaluated here.
-    // The pulse pipeline compares complete 3d+7d windows with approved targets.
-    const freq = Number(last7?.frequency || 0);
-    if (freq > 3.5) {
-      const r = await upsertAlert(supabase, {
-        tenant_id, campaign_id: c.id, campaign_name: c.name, ad_account_id: acc.id,
-        alert_type: 'frequency_high', severity: 'info',
-        details: { frequency: freq },
-      });
-      if (r) stats.alerts_created++;
-    }
-  } catch (_) { /* skip */ }
+  // Deliberately no Insights request here: this is a cheap operational status
+  // probe. KPI/frequency checks belong to the twice-daily pulse pipeline.
 }
 
 async function scanAccount(supabase: any, tenant_id: string, token: string, acc: any, stats: any) {
+  if (Number(acc.account_status) !== 1) {
+    const r = await upsertAlert(supabase, {
+      tenant_id,
+      campaign_id: `account:${acc.id}`,
+      campaign_name: acc.name,
+      ad_account_id: acc.id,
+      alert_type: 'account_disabled',
+      severity: 'critical',
+      details: { provider: 'meta', account_status: acc.account_status },
+    });
+    if (r) stats.alerts_created++;
+  }
+
   const fields = 'id,name,status,effective_status,daily_budget,issues_info';
   const [campJson, adsJ] = await Promise.all([
     fetch(`https://graph.facebook.com/v21.0/${acc.id}/campaigns?fields=${fields}&limit=200&access_token=${token}`).then(r => r.json()),
@@ -171,7 +167,7 @@ async function scanAccount(supabase: any, tenant_id: string, token: string, acc:
   // Parallel per-campaign in chunks to limit concurrency
   const chunkSize = 8;
   for (let i = 0; i < campaigns.length; i += chunkSize) {
-    await Promise.all(campaigns.slice(i, i + chunkSize).map((c: any) => scanCampaign(supabase, tenant_id, token, acc, c, stats)));
+    await Promise.all(campaigns.slice(i, i + chunkSize).map((c: any) => scanCampaign(supabase, tenant_id, acc, c, stats)));
   }
 
   for (const ad of adsJ?.data || []) {
