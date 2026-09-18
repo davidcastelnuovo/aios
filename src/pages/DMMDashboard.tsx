@@ -458,21 +458,29 @@ export function CampaignPulseDashboard({
 
   const campaignGoalRows = useMemo(() => {
     const fromSnapshots = collectCampaignBreakdownFromSnapshots(pulseRows);
-    const coveredClients = new Set(
-      pulseRows
-        .filter((row) => Array.isArray(row.campaign_breakdown))
-        .map((row) => row.client_id),
-    );
+    const rebuildClientIds = new Set(clientsNeedingRecordBuild);
+    if (!rebuildClientIds.size) return fromSnapshots;
     if (!fallbackTableIds.length || !pulseCampaignRecords.length) {
-      return fromSnapshots;
+      // Hide stale snapshot rows until live rebuild finishes (old criteria → wrong red).
+      return fromSnapshots.filter((row) => !rebuildClientIds.has(row.client_id));
     }
-    const fallbackRows = buildPulseCampaignRows({
+    const rebuiltRows = buildPulseCampaignRows({
       records: pulseCampaignRecords.filter((record) => fallbackTableIds.includes(record.table_id)),
       tables: pulseCampaignTables.filter((table) => fallbackTableIds.includes(table.id)),
       nowYmd: jerusalemYmd(),
-    }).filter((row) => !coveredClients.has(row.client_id));
-    return [...fromSnapshots, ...fallbackRows];
-  }, [pulseRows, pulseCampaignRecords, pulseCampaignTables, fallbackTableIds]);
+    });
+    const rebuiltClientIds = new Set(rebuiltRows.map((row) => row.client_id));
+    return [
+      ...fromSnapshots.filter((row) => !rebuiltClientIds.has(row.client_id)),
+      ...rebuiltRows,
+    ];
+  }, [
+    pulseRows,
+    pulseCampaignRecords,
+    pulseCampaignTables,
+    fallbackTableIds,
+    clientsNeedingRecordBuild,
+  ]);
 
   const refetchCampaignData = () => {
     refetchPulseTables();
