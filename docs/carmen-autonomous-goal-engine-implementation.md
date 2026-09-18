@@ -17,7 +17,8 @@ Both can coexist on the same `goals` row (`execution_mode` + `autonomous_mode`).
 
 | Phase | Scope | Status |
 | --- | --- | --- |
-| **1 — Core Goal Engine** | DB, Goal Contract, worker loop, scheduler, persistence | ✅ This PR |
+| **1 — Core Goal Engine** | DB, Goal Contract, worker loop, scheduler, persistence | ✅ Done |
+| **1b — Unify with Execution Mode** | Single `createUnifiedGoal`, extended GoalsPanel | ✅ This PR |
 | **2 — Cursor Execution** | Technical Job protocol, callback/status, evidence from PR/CI | Planned |
 | **3 — Model Router** | Profiles, provider adapters, failover metrics | Partial (`_shared/model-router.ts` stub) |
 | **4 — Verifier** | Criteria engine + completion gate | Partial (gate in engine; HTTP/SQL checks Phase 4) |
@@ -34,7 +35,7 @@ Both can coexist on the same `goals` row (`execution_mode` + `autonomous_mode`).
 | Model router | `supabase/functions/_shared/model-router.ts` |
 | Worker (cron) | `supabase/functions/autonomous-goal-worker/index.ts` |
 | API | `supabase/functions/goal-execution-center/index.ts` (`autonomous_*` actions) |
-| Carmen tools | `run-ai-agent` — `create_autonomous_goal`, `get_autonomous_goal_status` |
+| Carmen tools | `create_execution_goal` (`autonomous: true`), `get_execution_goal_report` / `get_autonomous_goal_status` |
 
 ## Worker schedule
 

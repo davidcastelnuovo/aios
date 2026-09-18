@@ -1,7 +1,12 @@
-/** Client API for Goal Execution Mode in Command Center. */
+/** Client API for Goal Execution Mode + Autonomous Goal Engine in Command Center. */
 
 export type ExecutionGoalStatus =
   | "active" | "in_progress" | "blocked" | "completed" | "cancelled" | "paused";
+
+export type EngineStatus =
+  | "PLANNING" | "EXECUTING" | "VERIFYING" | "REPLANNING" | "BLOCKED" | "COMPLETED";
+
+export type CriterionStatus = "PASS" | "FAIL" | "UNKNOWN" | "NOT_TESTED";
 
 export type ExecutionGoal = {
   id: string;
@@ -15,8 +20,29 @@ export type ExecutionGoal = {
   completion_criteria?: string | null;
   progress_percent?: number | null;
   execution_mode: boolean;
+  autonomous_mode?: boolean;
+  engine_status?: EngineStatus | null;
+  objective?: string | null;
+  iteration_count?: number | null;
+  next_run_at?: string | null;
   created_at: string;
   updated_at: string;
+};
+
+export type GoalCriterion = {
+  id: string;
+  criterion_key: string;
+  description: string;
+  required: boolean;
+  status: CriterionStatus;
+};
+
+export type AutonomousEngineSnapshot = {
+  goal: ExecutionGoal;
+  criteria: GoalCriterion[];
+  completion_gate: { complete: boolean; pending: GoalCriterion[]; failed: GoalCriterion[] };
+  recent_iterations: Array<{ iteration_number: number; phase: string; status: string; summary?: string | null }>;
+  blockers: Array<{ title: string }>;
 };
 
 const FN = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/goal-execution-center`;
@@ -65,6 +91,14 @@ export async function goalExecutionAction(
   return json;
 }
 
+export async function runGoalIteration(token: string, tenantId: string, goalId: string) {
+  return goalExecutionAction(token, {
+    action: "run_iteration",
+    tenant_id: tenantId,
+    goal_id: goalId,
+  });
+}
+
 export const GOAL_STATUS_LABELS: Record<ExecutionGoalStatus, string> = {
   active: "פעיל",
   in_progress: "בעבודה",
@@ -72,6 +106,22 @@ export const GOAL_STATUS_LABELS: Record<ExecutionGoalStatus, string> = {
   completed: "הושלם",
   cancelled: "בוטל",
   paused: "מושהה",
+};
+
+export const ENGINE_STATUS_LABELS: Record<EngineStatus, string> = {
+  PLANNING: "תכנון",
+  EXECUTING: "מבצע",
+  VERIFYING: "מאמת",
+  REPLANNING: "תכנון מחדש",
+  BLOCKED: "חסום",
+  COMPLETED: "הושלם",
+};
+
+export const CRITERION_STATUS_LABELS: Record<CriterionStatus, string> = {
+  PASS: "עבר",
+  FAIL: "נכשל",
+  UNKNOWN: "לא ידוע",
+  NOT_TESTED: "לא נבדק",
 };
 
 export const GOAL_PRIORITY_LABELS: Record<string, string> = {

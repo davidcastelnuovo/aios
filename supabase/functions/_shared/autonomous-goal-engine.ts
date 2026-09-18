@@ -3,7 +3,7 @@
  * Goal Contract, persisted loop, Completion Gate, stuck detection.
  */
 
-import { logGoalEvent } from "./goal-execution.ts";
+import { createUnifiedGoal, logGoalEvent } from "./goal-execution.ts";
 import { modelRouterJSON, type ModelProfile } from "./model-router.ts";
 
 export const ENGINE_STATUSES = [
@@ -165,6 +165,53 @@ export function detectStuckPatterns(
   };
 }
 
+export async function seedSuccessCriteria(
+  supabase: SupabaseLike,
+  args: {
+    tenantId: string;
+    goalId: string;
+    title: string;
+    completionCriteria?: string | null;
+    successCriteria?: SuccessCriterionInput[];
+  },
+): Promise<GoalCriterionRow[]> {
+  const criteriaRows: GoalCriterionRow[] = [];
+  let criteria: SuccessCriterionInput[] = args.successCriteria?.length
+    ? args.successCriteria
+    : [];
+
+  if (!criteria.length && args.completionCriteria?.trim()) {
+    criteria = args.completionCriteria
+      .split(/\n+/)
+      .map((line) => line.replace(/^[-•*]\s*/, "").trim())
+      .filter(Boolean)
+      .map((description) => ({ description, required: true }));
+  }
+  if (!criteria.length) {
+    criteria = [{ description: `היעד "${args.title}" הושלם במלואו עם הוכחה`, required: true }];
+  }
+
+  for (const [i, c] of criteria.entries()) {
+    const key = c.key || slugifyKey(c.description, i);
+    const { data: row, error: cErr } = await supabase.from("goal_success_criteria").insert({
+      tenant_id: args.tenantId,
+      goal_id: args.goalId,
+      criterion_key: key,
+      description: c.description,
+      required: c.required ?? true,
+      verification_type: c.verification_type ?? "manual",
+      verification_config: c.verification_config ?? {},
+      evidence_required: c.evidence_required ?? "הוכחה ברורה שהקריטריון מתקיים",
+      status: "NOT_TESTED",
+      sort_order: i,
+    }).select("*").single();
+    if (cErr) throw cErr;
+    criteriaRows.push(row);
+  }
+  return criteriaRows;
+}
+
+/** @deprecated Prefer createUnifiedGoal({ autonomous: true }) from goal-execution.ts */
 export async function createAutonomousGoal(
   supabase: SupabaseLike,
   args: {
@@ -179,62 +226,25 @@ export async function createAutonomousGoal(
     agentId?: string | null;
     actorUserId?: string | null;
     priority?: string;
+    completionCriteria?: string;
   },
 ): Promise<{ goal: AutonomousGoalRow; criteria: GoalCriterionRow[] }> {
-  const now = new Date().toISOString();
-  const { data: goal, error } = await supabase.from("goals").insert({
-    tenant_id: args.tenantId,
-    title: args.title.trim(),
-    description: args.description ?? null,
-    objective: args.objective?.trim() || args.title.trim(),
-    status: "in_progress",
-    owner_type: "agent",
-    owner_id: "carmen",
-    execution_mode: true,
-    autonomous_mode: true,
-    engine_status: "PLANNING",
-    constraints: args.constraints ?? {},
-    scope: args.scope ?? {},
-    risk_level: args.riskLevel ?? "READ",
-    agent_id: args.agentId ?? null,
-    priority: args.priority ?? "normal",
-    next_run_at: now,
-    plan: [],
-  }).select("*").single();
-  if (error) throw error;
-
-  const criteriaRows: GoalCriterionRow[] = [];
-  const criteria = args.successCriteria?.length
-    ? args.successCriteria
-    : [{ description: `היעד "${args.title}" הושלם במלואו עם הוכחה`, required: true }];
-
-  for (const [i, c] of criteria.entries()) {
-    const key = c.key || slugifyKey(c.description, i);
-    const { data: row, error: cErr } = await supabase.from("goal_success_criteria").insert({
-      tenant_id: args.tenantId,
-      goal_id: goal.id,
-      criterion_key: key,
-      description: c.description,
-      required: c.required ?? true,
-      verification_type: c.verification_type ?? "manual",
-      verification_config: c.verification_config ?? {},
-      evidence_required: c.evidence_required ?? "הוכחה ברורה שהקריטריון מתקיים",
-      status: "NOT_TESTED",
-      sort_order: i,
-    }).select("*").single();
-    if (cErr) throw cErr;
-    criteriaRows.push(row);
-  }
-
-  await logGoalEvent(supabase, {
-    goalId: goal.id,
+  const { goal, criteria } = await createUnifiedGoal(supabase, {
     tenantId: args.tenantId,
-    eventType: "autonomous_goal_created",
+    title: args.title,
+    objective: args.objective,
+    description: args.description,
+    constraints: args.constraints,
+    scope: args.scope,
+    riskLevel: args.riskLevel,
+    successCriteria: args.successCriteria,
+    completionCriteria: args.completionCriteria,
+    agentId: args.agentId,
     actorUserId: args.actorUserId,
-    detail: { engine_status: "PLANNING", criteria_count: criteriaRows.length },
+    priority: args.priority,
+    autonomous: true,
   });
-
-  return { goal, criteria: criteriaRows };
+  return { goal: goal as AutonomousGoalRow, criteria: (criteria || []) as GoalCriterionRow[] };
 }
 
 export async function loadGoalState(

@@ -4,14 +4,13 @@ import { requireAuth } from "../_shared/security.ts";
 import {
   addGoalBlocker,
   addGoalMilestone,
-  createExecutionGoal,
+  createUnifiedGoal,
   findDuplicateGoals,
   getGoalExecutionReport,
   linkTaskToGoal,
   logGoalEvent,
 } from "../_shared/goal-execution.ts";
 import {
-  createAutonomousGoal,
   getAutonomousGoalStatus,
   runGoalIteration,
 } from "../_shared/autonomous-goal-engine.ts";
@@ -68,11 +67,12 @@ serve(async (req) => {
       return json({ duplicates: duplicates.map((d) => ({ id: d.goal.id, title: d.goal.title, status: d.goal.status, score: d.score })) });
     }
 
-    if (action === "create") {
+    if (action === "create" || action === "autonomous_create") {
       const title = String(body.title || "").trim();
       if (!title) throw new Error("title required");
+      const autonomous = action === "autonomous_create" || !!body.autonomous;
       const duplicates = await findDuplicateGoals(supabase, tenantId, title);
-      const goal = await createExecutionGoal(supabase, {
+      const { goal, criteria } = await createUnifiedGoal(supabase, {
         tenantId,
         title,
         description: body.description,
@@ -82,8 +82,15 @@ serve(async (req) => {
         nextAction: body.next_action,
         ownerUserId: userId,
         actorUserId: userId,
+        autonomous,
+        objective: body.objective,
+        constraints: body.constraints,
+        scope: body.scope,
+        riskLevel: body.risk_level,
+        successCriteria: body.success_criteria,
+        agentId: body.agent_id,
       });
-      if (body.milestones && Array.isArray(body.milestones)) {
+      if (!autonomous && body.milestones && Array.isArray(body.milestones)) {
         for (const [i, m] of body.milestones.entries()) {
           if (m?.title) {
             await addGoalMilestone(supabase, {
@@ -93,7 +100,7 @@ serve(async (req) => {
           }
         }
       }
-      return json({ goal, possible_duplicates: duplicates.slice(0, 5) });
+      return json({ goal, criteria, possible_duplicates: duplicates.slice(0, 5) });
     }
 
     if (action === "update") {
@@ -158,34 +165,14 @@ serve(async (req) => {
       return json({ report });
     }
 
-    if (action === "autonomous_create") {
-      const title = String(body.title || "").trim();
-      if (!title) return json({ error: "title required" }, 400);
-      const result = await createAutonomousGoal(supabase, {
-        tenantId,
-        title,
-        objective: body.objective,
-        description: body.description,
-        constraints: body.constraints,
-        scope: body.scope,
-        riskLevel: body.risk_level,
-        successCriteria: body.success_criteria,
-        agentId: body.agent_id,
-        actorUserId: userId,
-        priority: body.priority,
-      });
-      return json(result);
-    }
-
     if (action === "autonomous_status") {
       const id = String(body.id || body.goal_id || "");
       if (!id) return json({ error: "id required" }, 400);
-      const status = await getAutonomousGoalStatus(supabase, tenantId, id);
-      if (!status) return json({ error: "goal not found" }, 404);
-      return json({ status });
+      const report = await getGoalExecutionReport(supabase, tenantId, id);
+      return json(report);
     }
 
-    if (action === "autonomous_run_iteration") {
+    if (action === "autonomous_run_iteration" || action === "run_iteration") {
       const id = String(body.id || body.goal_id || "");
       if (!id) return json({ error: "id required" }, 400);
       const holder = userId ? `user:${userId}` : "api";
