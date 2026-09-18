@@ -95,8 +95,11 @@ export async function goalExecutionAction(
     headers: await authHeader(token),
     body: JSON.stringify(payload),
   });
-  const json = await res.json();
-  if (!res.ok) throw new Error(json.error || "action failed");
+  const json = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    const detail = json?.error || json?.message || json?.details || `HTTP ${res.status}`;
+    throw new Error(String(detail));
+  }
   return json;
 }
 

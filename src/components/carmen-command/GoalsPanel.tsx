@@ -54,21 +54,53 @@ export function GoalsPanel({ tenantId }: { tenantId: string | null }) {
     try {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) throw new Error("לא מחובר");
-      const result = await goalExecutionAction(session.access_token, {
-        action: "create",
-        tenant_id: tenantId,
-        title: newTitle.trim(),
-        execution_mode: true,
-        autonomous,
-      }) as { goal: ExecutionGoal; possible_duplicates?: unknown[] };
-      if (result.possible_duplicates?.length) {
+      const schemaHint = (msg: string) =>
+        /does not exist|unknown column|autonomous_mode|goal_success_criteria|schema cache/i.test(msg);
+
+      let result: {
+        goal: ExecutionGoal;
+        possible_duplicates?: unknown[];
+        autonomous_deferred?: boolean;
+        notice?: string;
+      };
+
+      try {
+        result = await goalExecutionAction(session.access_token, {
+          action: "create",
+          tenant_id: tenantId,
+          title: newTitle.trim(),
+          execution_mode: true,
+          autonomous,
+        }) as typeof result;
+      } catch (firstErr: unknown) {
+        const msg = firstErr instanceof Error ? firstErr.message : String(firstErr);
+        if (!autonomous || !schemaHint(msg)) throw firstErr;
+        result = await goalExecutionAction(session.access_token, {
+          action: "create",
+          tenant_id: tenantId,
+          title: newTitle.trim(),
+          execution_mode: true,
+          autonomous: false,
+        }) as typeof result;
+        result.autonomous_deferred = true;
+        result.notice = "היעד נוצר במצב ידני — מנוע אוטונומי יופעל אחרי merge ל-develop.";
+      }
+
+      if (result.autonomous_deferred || result.notice) {
+        toast({
+          title: "יעד נוצר (מצב ידני)",
+          description: result.notice || "מנוע אוטונומי יופעל אחרי עדכון Staging.",
+        });
+      } else if (result.possible_duplicates?.length) {
         toast({ title: "נוצר — ייתכן שיש יעד דומה", description: "בדקי כפילויות לפני פתיחת משימות נוספות." });
+      } else {
+        toast({ title: autonomous ? "יעד אוטונומי נוצר" : "יעד נוצר" });
       }
       setNewTitle("");
       setSelectedId(result.goal.id);
       await qc.invalidateQueries({ queryKey: ["execution-goals", tenantId] });
     } catch (e: unknown) {
-      toast({ title: "שגיאה", description: e instanceof Error ? e.message : String(e), variant: "destructive" });
+      toast({ title: "שגיאה ביצירת יעד", description: e instanceof Error ? e.message : String(e), variant: "destructive" });
     } finally {
       setBusy(false);
     }

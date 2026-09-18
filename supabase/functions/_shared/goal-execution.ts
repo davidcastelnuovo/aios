@@ -107,13 +107,26 @@ export async function findDuplicateGoals(
     .sort((a, b) => b.score - a.score);
 }
 
-/** Single entry point for Command Center goals — manual execution or autonomous engine. */
-export async function createUnifiedGoal(
-  supabase: { from: (t: string) => any },
+export function isAutonomousSchemaError(error: unknown): boolean {
+  const row = error as { message?: string; code?: string };
+  const msg = String(row?.message || error || "").toLowerCase();
+  const code = String(row?.code || "");
+  return (
+    code === "42703" ||
+    code === "42P01" ||
+    code === "PGRST204" ||
+    msg.includes("does not exist") ||
+    msg.includes("unknown column") ||
+    msg.includes("autonomous_mode") ||
+    msg.includes("goal_success_criteria")
+  );
+}
+
+function buildExecutionGoalRow(
   args: UnifiedGoalCreateArgs,
-): Promise<{ goal: ExecutionGoalRow; criteria?: unknown[] }> {
-  const now = new Date().toISOString();
-  const autonomous = !!args.autonomous;
+  autonomous: boolean,
+  now: string,
+): Record<string, unknown> {
   const row: Record<string, unknown> = {
     tenant_id: args.tenantId,
     title: args.title.trim(),
@@ -127,44 +140,94 @@ export async function createUnifiedGoal(
     owner_id: autonomous ? "carmen" : null,
     status: autonomous ? "in_progress" : "active",
     execution_mode: true,
-    autonomous_mode: autonomous,
     progress_percent: 0,
   };
-  if (autonomous) {
-    Object.assign(row, {
-      objective: args.objective?.trim() || args.title.trim(),
-      engine_status: "PLANNING",
-      constraints: args.constraints ?? {},
-      scope: args.scope ?? {},
-      risk_level: args.riskLevel ?? "READ",
-      agent_id: args.agentId ?? null,
-      next_run_at: now,
-      plan: [],
-    });
-  }
-  const { data, error } = await supabase.from("goals").insert(row).select("*").single();
-  if (error) throw error;
+  if (!autonomous) return row;
+  return {
+    ...row,
+    autonomous_mode: true,
+    objective: args.objective?.trim() || args.title.trim(),
+    engine_status: "PLANNING",
+    constraints: args.constraints ?? {},
+    scope: args.scope ?? {},
+    risk_level: args.riskLevel ?? "READ",
+    agent_id: args.agentId ?? null,
+    next_run_at: now,
+    plan: [],
+  };
+}
 
-  let criteriaRows: unknown[] = [];
-  if (autonomous) {
-    const { seedSuccessCriteria } = await import("./autonomous-goal-engine.ts");
-    criteriaRows = await seedSuccessCriteria(supabase, {
-      tenantId: args.tenantId,
-      goalId: data.id,
-      title: args.title,
-      completionCriteria: args.completionCriteria,
-      successCriteria: args.successCriteria,
-    });
+/** Single entry point for Command Center goals — manual execution or autonomous engine. */
+export async function createUnifiedGoal(
+  supabase: { from: (t: string) => any },
+  args: UnifiedGoalCreateArgs,
+): Promise<{
+  goal: ExecutionGoalRow;
+  criteria?: unknown[];
+  autonomous_deferred?: boolean;
+  notice?: string;
+}> {
+  const now = new Date().toISOString();
+  const wantsAutonomous = !!args.autonomous;
+
+  if (wantsAutonomous) {
+    const { data, error } = await supabase.from("goals")
+      .insert(buildExecutionGoalRow(args, true, now))
+      .select("*")
+      .single();
+
+    if (!error) {
+      let criteriaRows: unknown[] = [];
+      try {
+        const { seedSuccessCriteria } = await import("./autonomous-goal-engine.ts");
+        criteriaRows = await seedSuccessCriteria(supabase, {
+          tenantId: args.tenantId,
+          goalId: data.id,
+          title: args.title,
+          completionCriteria: args.completionCriteria,
+          successCriteria: args.successCriteria,
+        });
+      } catch (criteriaError) {
+        if (!isAutonomousSchemaError(criteriaError)) throw criteriaError;
+        await supabase.from("goals").delete().eq("id", data.id);
+        return await createUnifiedGoal(supabase, { ...args, autonomous: false });
+      }
+
+      await logGoalEvent(supabase, {
+        goalId: data.id,
+        tenantId: args.tenantId,
+        eventType: "autonomous_goal_created",
+        actorUserId: args.actorUserId,
+        detail: { engine_status: "PLANNING", criteria_count: criteriaRows.length },
+      });
+      return { goal: data as ExecutionGoalRow, criteria: criteriaRows };
+    }
+
+    if (!isAutonomousSchemaError(error)) throw error;
   }
+
+  const { data, error } = await supabase.from("goals")
+    .insert(buildExecutionGoalRow(args, false, now))
+    .select("*")
+    .single();
+  if (error) throw error;
 
   await logGoalEvent(supabase, {
     goalId: data.id,
     tenantId: args.tenantId,
-    eventType: autonomous ? "autonomous_goal_created" : "created",
+    eventType: "created",
     actorUserId: args.actorUserId,
-    detail: autonomous ? { engine_status: "PLANNING", criteria_count: criteriaRows.length } : {},
+    detail: wantsAutonomous ? { autonomous_requested: true, autonomous_deferred: true } : {},
   });
-  return { goal: data as ExecutionGoalRow, criteria: criteriaRows };
+
+  return {
+    goal: data as ExecutionGoalRow,
+    criteria: [],
+    autonomous_deferred: wantsAutonomous,
+    notice: wantsAutonomous
+      ? "היעד נוצר במצב ידני — מנוע אוטונומי יופעל אחרי עדכון Staging (מיגרציה)."
+      : undefined,
+  };
 }
 
 export async function createExecutionGoal(

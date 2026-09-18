@@ -72,7 +72,7 @@ serve(async (req) => {
       if (!title) throw new Error("title required");
       const autonomous = action === "autonomous_create" || !!body.autonomous;
       const duplicates = await findDuplicateGoals(supabase, tenantId, title);
-      const { goal, criteria } = await createUnifiedGoal(supabase, {
+      const created = await createUnifiedGoal(supabase, {
         tenantId,
         title,
         description: body.description,
@@ -90,6 +90,7 @@ serve(async (req) => {
         successCriteria: body.success_criteria,
         agentId: body.agent_id,
       });
+      const { goal, criteria, autonomous_deferred, notice } = created;
       if (!autonomous && body.milestones && Array.isArray(body.milestones)) {
         for (const [i, m] of body.milestones.entries()) {
           if (m?.title) {
@@ -100,7 +101,13 @@ serve(async (req) => {
           }
         }
       }
-      return json({ goal, criteria, possible_duplicates: duplicates.slice(0, 5) });
+      return json({
+        goal,
+        criteria,
+        possible_duplicates: duplicates.slice(0, 5),
+        autonomous_deferred,
+        notice,
+      });
     }
 
     if (action === "update") {
