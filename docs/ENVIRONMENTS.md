@@ -129,7 +129,7 @@ Branch protection on `main` / `develop` is a GitHub settings change; the freshne
 
 1. Branch from `develop`. Hotfixes David asked for on Production may branch from `main`.
 2. Implement on the feature branch. Never commit to `main` directly.
-3. Open a **draft** PR **to `develop`**, following `AGENTS.md` and `docs/agents/releases.md`. Send the Vercel Preview URL and in-app path.
+3. Open a PR **to `develop`**, following `AGENTS.md` and `docs/agents/releases.md`. Send the Vercel Preview URL and in-app path.
 4. After merge to `develop`, verify on Staging (`after-lead-git-develop` or `staging.aios.co.il`).
 5. Merge **`develop` → `main`** only after `מאשר לפרודקשן` (Production deploy + `deploy-edge-function.yml`).
 6. Main pushes automatically run `sync-develop-from-main`. A release PR must contain the current main revision and the exact Staging changes approved for release; review its file diff before merge.
@@ -161,9 +161,4 @@ Lazy snapshot renderers keep full report/export code out of the client-card entr
 
 Workflow files define automation triggers; this document defines the environment model and operational constraints. Confirm external service state separately before claiming a deployment or data sync is healthy.
 
-- September 9, 2026 (`2f3461d1`): restored automatic `main → develop` sync, superseding the August 31 manual-only hotfix flow.
-- September 10, 2026 (`0b755c32`): the sync explicitly invokes Staging Edge deployment and frontend CI for its resulting SHA; manual dispatch remains available.
-- September 15–16 changes refined data reconciliation and WhatsApp connection isolation; keep the synchronization and containment rules above.
 - Check `.github/workflows/sync-develop-from-main.yml`, `deploy-staging-edge-functions.yml`, `deploy-edge-function.yml`, and `sync-staging-data.yml` for current triggers and path filters.
-
-The original rollout checklist and PR-specific impact statements are historical (see git history), not current status. Do not infer missing infrastructure or completed deployment work from that old plan.
