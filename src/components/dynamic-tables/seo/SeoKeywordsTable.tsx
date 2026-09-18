@@ -22,6 +22,7 @@ import {
   Filter,
   Plus,
   EyeOff,
+  Layers,
 } from "lucide-react";
 import { Tabs, TabsContent } from "@/components/ui/tabs";
 import { ResponsiveTabsList, type ResponsiveTabItem } from "@/components/ui/responsive-tabs-list";
@@ -32,6 +33,7 @@ import {
   normalizeKeywordPhrase,
 } from "@/lib/seoKeywordRelevance";
 import { useSeoKeywordRelevance } from "@/hooks/useSeoKeywordRelevance";
+import { clusterKeywords, type KeywordCluster } from "@/lib/seoKeywordClusters";
 import { toast } from "sonner";
 
 const HEBREW_REGEX = /[\u0590-\u05FF]/;
@@ -57,7 +59,7 @@ interface SeoKeywordsTableProps {
   show3Month?: boolean;
   showYearly?: boolean;
   /** Default tab. Top 20 is the primary SEO landing view (legacy value name kept for compatibility). */
-  defaultTab?: "tracked" | "top10" | "3month" | "yearly" | "monthly" | "all";
+  defaultTab?: "tracked" | "top10" | "3month" | "yearly" | "monthly" | "all" | "clusters";
   /** Persistence key for relevance overrides (usually clientId UUID). */
   relevancePersistKey?: string;
   /** Server-provided overrides (public share links). */
@@ -242,6 +244,7 @@ function KeywordTable({
   onMarkRelevant,
   onMarkIrrelevant,
   showIrrelevantAction,
+  hideSearch,
 }: {
   keywords: any[];
   title: string;
@@ -254,6 +257,7 @@ function KeywordTable({
   onMarkRelevant?: (keyword: string) => void;
   onMarkIrrelevant?: (keyword: string) => void;
   showIrrelevantAction?: boolean;
+  hideSearch?: boolean;
 }) {
   const [search, setSearch] = useState("");
   const filtered = useMemo(() => {
@@ -270,13 +274,15 @@ function KeywordTable({
           {title}
         </div>
         <div className="flex items-center gap-2 w-full sm:w-auto min-w-0">
-          <input
-            type="text"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="חיפוש ביטוי..."
-            className="h-8 w-full min-w-0 sm:w-48 rounded-md border border-input bg-background px-2 text-xs outline-none focus:ring-2 focus:ring-ring"
-          />
+          {!hideSearch && (
+            <input
+              type="text"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="חיפוש ביטוי..."
+              className="h-8 w-full min-w-0 sm:w-48 rounded-md border border-input bg-background px-2 text-xs outline-none focus:ring-2 focus:ring-ring"
+            />
+          )}
           <Badge variant="outline" className="text-xs">
             {filtered.length}
             {search.trim() ? ` / ${keywords.length}` : ""} ביטויים
@@ -340,6 +346,123 @@ function KeywordTable({
               })}
             </tbody>
           </table>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function KeywordClustersPanel({
+  clusters,
+  show3Month,
+  showYearly,
+  showPrevMonth,
+  showGsc,
+  dimmedSet,
+  onMarkRelevant,
+  onMarkIrrelevant,
+  showIrrelevantAction,
+}: {
+  clusters: KeywordCluster<any>[];
+  show3Month?: boolean;
+  showYearly?: boolean;
+  showPrevMonth?: boolean;
+  showGsc?: boolean;
+  dimmedSet?: Set<string>;
+  onMarkRelevant?: (keyword: string) => void;
+  onMarkIrrelevant?: (keyword: string) => void;
+  showIrrelevantAction?: boolean;
+}) {
+  const [search, setSearch] = useState("");
+  const [openKey, setOpenKey] = useState<string | null>(null);
+  const filtered = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    if (!q) return clusters;
+    return clusters.filter((cluster) => {
+      if (cluster.label.toLowerCase().includes(q) || cluster.key.toLowerCase().includes(q)) return true;
+      return cluster.keywords.some((kw) => String(kw.keyword || "").toLowerCase().includes(q));
+    });
+  }, [clusters, search]);
+
+  useEffect(() => {
+    if (filtered.length === 1) setOpenKey(filtered[0].key);
+  }, [filtered]);
+
+  return (
+    <div dir="rtl">
+      <div className="flex items-center justify-between gap-3 px-3 py-2 bg-muted/30 border-b flex-wrap">
+        <div className="flex items-center gap-2 text-sm font-medium">
+          <Layers className="h-4 w-4 text-primary" />
+          אשכולות מילים
+        </div>
+        <div className="flex items-center gap-2 w-full sm:w-auto min-w-0">
+          <input
+            type="text"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="שאלו מילה — ארגנטינה, צ׳ילה, טרק..."
+            className="h-8 w-full min-w-0 sm:w-64 rounded-md border border-input bg-background px-2 text-xs outline-none focus:ring-2 focus:ring-ring"
+          />
+          <Badge variant="outline" className="text-xs">
+            {filtered.length}
+            {search.trim() ? ` / ${clusters.length}` : ""} אשכולות
+          </Badge>
+        </div>
+      </div>
+      {filtered.length === 0 ? (
+        <div className="px-3 py-8 text-center text-sm text-muted-foreground">
+          {search.trim() ? "לא נמצא אשכול למילה הזו" : "אין מספיק ביטויים לחלוקה לאשכולות"}
+        </div>
+      ) : (
+        <div className="divide-y">
+          {filtered.map((cluster) => {
+            const open = openKey === cluster.key;
+            return (
+              <div key={cluster.key}>
+                <button
+                  type="button"
+                  className="flex w-full items-center justify-between gap-3 px-3 py-3 text-right hover:bg-muted/30"
+                  onClick={() => setOpenKey(open ? null : cluster.key)}
+                >
+                  <div className="min-w-0">
+                    <div className="font-medium">{cluster.label}</div>
+                    <div className="mt-1 flex flex-wrap items-center gap-1.5 text-[11px] text-muted-foreground">
+                      <Badge variant="outline" className="text-[10px] h-5">
+                        {cluster.keywords.length} ביטויים
+                      </Badge>
+                      <Badge variant="outline" className="text-[10px] h-5">
+                        ממוצע מיקום {cluster.avgPosition ?? "—"}
+                      </Badge>
+                      {cluster.bestPosition != null && (
+                        <Badge variant="outline" className="text-[10px] h-5">
+                          הטוב ביותר {cluster.bestPosition}
+                        </Badge>
+                      )}
+                      <span>קצר {cluster.shortTail}</span>
+                      <span>ארוך {cluster.longTail}</span>
+                    </div>
+                  </div>
+                  <span className="text-xs text-muted-foreground">{open ? "הסתר" : "הצג"}</span>
+                </button>
+                {open && (
+                  <KeywordTable
+                    keywords={cluster.keywords}
+                    title={`${cluster.label} — כל המיקומים`}
+                    icon={<Layers className="h-4 w-4 text-primary" />}
+                    show3Month={show3Month}
+                    showYearly={showYearly}
+                    showPrevMonth={showPrevMonth}
+                    showGsc={showGsc}
+                    dimmedSet={dimmedSet}
+                    onMarkRelevant={onMarkRelevant}
+                    onMarkIrrelevant={onMarkIrrelevant}
+                    showIrrelevantAction={showIrrelevantAction}
+                    hideSearch
+                  />
+                )}
+              </div>
+            );
+          })}
         </div>
       )}
     </div>
@@ -579,6 +702,11 @@ export function SeoKeywordsTable({
     if (resolvedDefaultTab !== "top10") setActiveTab(resolvedDefaultTab);
   }, [activeTab, resolvedDefaultTab]);
 
+  const by3MonthChange = sortByPosition(allKeywords.filter(k => k.position != null && k.position_3month != null));
+  const byYearlyChange = sortByPosition(allKeywords.filter(k => k.position != null && k.position_yearly != null));
+  const byMonthlyChange = sortByPosition(allKeywords.filter(k => k.position != null && k.position_prev_month != null));
+  const keywordClusters = useMemo(() => clusterKeywords(allKeywords), [allKeywords]);
+
   const keywordTabItems = useMemo((): ResponsiveTabItem[] => [
     { value: "top10", label: `🏆 Top 20 מקודמים (${top20.length})` },
     { value: "tracked", label: `🎯 ביטויים במעקב (${trackedFiltered.length})` },
@@ -586,7 +714,8 @@ export function SeoKeywordsTable({
     { value: "3month", label: "📈 שינוי 3 חודשים" },
     { value: "yearly", label: "📅 שינוי שנתי" },
     { value: "monthly", label: "📅 שינוי חודשי" },
-  ], [top20.length, trackedFiltered.length, allKeywords.length]);
+    { value: "clusters", label: `🧩 אשכולות (${keywordClusters.filter((c) => c.key !== "אחר").length})` },
+  ], [top20.length, trackedFiltered.length, allKeywords.length, keywordClusters]);
   const allDimmed = useMemo(() => {
     if (applyRelevanceFilter) return new Set<string>();
     // Manual marks are already removed from lists; dim only auto-filtered leftovers.
@@ -596,10 +725,6 @@ export function SeoKeywordsTable({
     }
     return dimmed;
   }, [applyRelevanceFilter, irrelevantSet, forceIrrelevantSet]);
-
-  const by3MonthChange = sortByPosition(allKeywords.filter(k => k.position != null && k.position_3month != null));
-  const byYearlyChange = sortByPosition(allKeywords.filter(k => k.position != null && k.position_yearly != null));
-  const byMonthlyChange = sortByPosition(allKeywords.filter(k => k.position != null && k.position_prev_month != null));
 
   const formatNumber = (num: number) => new Intl.NumberFormat('he-IL').format(num);
 
@@ -832,6 +957,18 @@ export function SeoKeywordsTable({
               keywords={byMonthlyChange}
               title="כל הביטויים — שינוי חודשי"
               icon={<Calendar className="h-4 w-4 text-primary" />}
+              showPrevMonth
+              showGsc={hasGscData}
+              dimmedSet={allDimmed}
+              {...markProps}
+            />
+          </TabsContent>
+
+          <TabsContent value="clusters" className="mt-0">
+            <KeywordClustersPanel
+              clusters={keywordClusters}
+              show3Month={show3Month}
+              showYearly={showYearly}
               showPrevMonth
               showGsc={hasGscData}
               dimmedSet={allDimmed}
