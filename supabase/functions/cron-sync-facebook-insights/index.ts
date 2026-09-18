@@ -12,6 +12,12 @@ import {
   fetchLastMetaCampaignActivity,
   latestCampaignUpdatedTime,
 } from '../_shared/fbInsights.ts';
+import {
+  replacedRecordsFilter,
+  resolveAdsSyncWindow,
+  resolvePruneStart,
+  toDateString,
+} from '../_shared/report-sync-window.ts';
 
 
 const corsHeaders = {
@@ -180,8 +186,16 @@ Deno.serve(async (req) => {
             since = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 30);
             until = today;
             break;
+          case 'last_60_days':
+            since = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 60);
+            until = today;
+            break;
           case 'last_90_days':
             since = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 90);
+            until = today;
+            break;
+          case 'last_120_days':
+            since = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 120);
             until = today;
             break;
           case 'last_180_days':
@@ -197,8 +211,12 @@ Deno.serve(async (req) => {
             until = today;
         }
 
-        const sinceStr = since.toISOString().split('T')[0];
-        const untilStr = until.toISOString().split('T')[0];
+        const syncWindow = resolveAdsSyncWindow(
+          { startDate: toDateString(since), endDate: toDateString(until) },
+          toDateString(now),
+        );
+        const sinceStr = syncWindow.startDate;
+        const untilStr = syncWindow.endDate;
 
 
         // First, fetch campaign statuses to detect real blocks
@@ -291,14 +309,15 @@ Deno.serve(async (req) => {
           await supabase.from('crm_fields').insert(fieldsToInsert);
         }
 
-        // Delete old records and insert new ones (table_id only — see sync-facebook-insights).
-        await supabase
-          .from('crm_records')
-          .delete()
-          .eq('table_id', table.id);
-
-        // Bulk insert new records (one round-trip per chunk instead of one per row)
         if (insights.length > 0) {
+          const { error: deleteError } = await supabase
+            .from('crm_records')
+            .delete()
+            .eq('table_id', table.id)
+            .or(replacedRecordsFilter(resolvePruneStart(syncWindow, insights.map((row) => row.date))));
+          if (deleteError) throw deleteError;
+
+          // Bulk insert new records (one round-trip per chunk instead of one per row)
           const recordRows = insights.map((insight) => ({
             table_id: table.id,
             tenant_id: table.tenant_id,
