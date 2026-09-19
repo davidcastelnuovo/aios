@@ -4,6 +4,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route, useLocation } from "react-router-dom";
 import { useSessionRefresh } from "@/hooks/useSessionRefresh";
+import { useAuthSessionSync } from "@/hooks/useAuthSessionSync";
 import { AgencyProvider } from "./contexts/AgencyContext";
 import { CommandCenterSidecarProvider } from "./contexts/CommandCenterSidecarContext";
 import { TenantProvider } from "./contexts/TenantContext";
@@ -52,6 +53,7 @@ function PageLoader() {
 }
 
 function SessionRefreshInitializer() {
+  useAuthSessionSync();
   useSessionRefresh();
   return null;
 }
