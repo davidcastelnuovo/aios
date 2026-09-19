@@ -38,6 +38,8 @@ import {
   isDevEscalationTool,
   isDevEscalationToolAllowed,
   isBugfixEscalationSkill,
+  NATIVE_DEV_TASK_TOOLS,
+  resolveDevTaskActorUserId,
 } from '../_shared/dev-escalation-auth.ts'
 import {
   buildApprovalConfirmPromptRule,
@@ -514,6 +516,7 @@ const PRIORITY_TOOLS = new Set([
   'list_campaigners', 'list_sales_people',
   'get_openai_billing_status',
   'connect_client_meta_ad_account',
+  ...NATIVE_DEV_TASK_TOOLS,
 ])
 
 function capToolsForTarget(target: LLMTarget, tools: any[]): any[] {
@@ -4662,23 +4665,37 @@ async function executeTool(name: string, args: Record<string, any>, supabase: an
         requested_by: args.requested_by,
       }
       if (!brief.title) throw new Error('title required')
+      const devActorId = actorUserId || await resolveDevTaskActorUserId(supabase, {
+        tenantId,
+        userId: actorUserId,
+        campaignerId: callerCampaignerId || null,
+        phone: callerPhone || null,
+        devEscalationTier,
+      })
       const duplicates = await findDuplicateDevTasks(supabase, tenantId, brief.title)
       const task = await createDevTask(supabase, {
         tenantId,
         brief,
         priority: args.priority,
         assignedAgent: args.assigned_agent || 'cursor',
-        requestedByUserId: actorUserId,
+        requestedByUserId: devActorId,
         sourceMessage: args.source_message,
         dedupOf: args.dedup_of || null,
-        actorUserId,
+        actorUserId: devActorId,
         goalId: args.goal_id || null,
       })
       return { task, possible_duplicates: duplicates.slice(0, 5) }
     }
     case 'approve_dev_task': {
-      if (!actorUserId) throw new Error('user auth required')
-      const task = await approveDevTask(supabase, tenantId, String(args.dev_task_id), actorUserId)
+      const approverId = actorUserId || await resolveDevTaskActorUserId(supabase, {
+        tenantId,
+        userId: actorUserId,
+        campaignerId: callerCampaignerId || null,
+        phone: callerPhone || null,
+        devEscalationTier,
+      })
+      if (!approverId) throw new Error('user auth required')
+      const task = await approveDevTask(supabase, tenantId, String(args.dev_task_id), approverId)
       return { task }
     }
     case 'dispatch_dev_task': {
@@ -7329,6 +7346,15 @@ async function handleRunAgent(bodyJson: any, surface: Surface, emit: Emit): Prom
     // Hard rule for both V1 and V2: only allowlisted requesters may escalate
     // system/dev/config/code fixes to Cursor/Claude/Manus/GitHub agent.
     systemPrompt += buildDevEscalationPromptRule(devEscalationTier)
+
+    if (isCarmen && surface === 'whatsapp' && canEscalateDevFixes) {
+      systemPrompt +=
+        '\n\n📱 === משימות פיתוח מ-WhatsApp (מורשה) ===\n' +
+        'כשמבקשים "תעבירי לפיתוח" / "שלחי לקרסר" / תיקון מערכת:\n' +
+        '1) find_dev_task_duplicates → 2) create_dev_task (brief מובנה) → 3) אם הבקשה מפורשת ("שלחי"/"תעבירי") — approve_dev_task + dispatch_dev_task מיד.\n' +
+        '4) דווחי bc- session URL. אם dispatch נכשל — attach_dev_task_session או mcp_Cursor__request_dev_task.\n' +
+        'אל תבקשי אישור נוסף כשהמשתמש כבר אמר לשלוח.'
+    }
 
     // Voice capability (both prompt versions): answer from 🎤 / explicit failure markers.
     if (isCarmen && (surface === 'whatsapp' || surface === 'internal_chat' || surface === 'aios')) {

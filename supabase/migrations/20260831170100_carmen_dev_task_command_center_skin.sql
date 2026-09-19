@@ -1,6 +1,6 @@
 -- Carmen skin: Dev Task Command Center workflow (dedup → brief → approve → dispatch)
 INSERT INTO public.ai_skills (
-  tenant_id, scope, is_active, created_by_agent, slug, name, description, system_prompt, triggers
+  tenant_id, scope, is_active, created_by_agent, slug, name, description, system_prompt, allowed_tools, triggers
 )
 VALUES (
   '2dcdaac6-41bf-42cc-86bf-9a0b4b2e6019',
@@ -21,6 +21,16 @@ VALUES (
 7. No concurrency limits — multiple tasks may run in parallel. Manage by priority, status, dedup, and links only.
 8. Target develop/staging first; main is production only after David approves merge.$$,
   ARRAY[
+    'find_dev_task_duplicates',
+    'create_dev_task',
+    'approve_dev_task',
+    'dispatch_dev_task',
+    'list_dev_tasks',
+    'update_dev_task',
+    'attach_dev_task_session',
+    'mcp_Cursor__request_dev_task'
+  ]::text[],
+  ARRAY[
     'תעבירי לפיתוח',
     'שלחי לפיתוח',
     'משימת פיתוח',
@@ -36,5 +46,6 @@ DO UPDATE SET
   name = EXCLUDED.name,
   description = EXCLUDED.description,
   system_prompt = EXCLUDED.system_prompt,
+  allowed_tools = EXCLUDED.allowed_tools,
   triggers = EXCLUDED.triggers,
   updated_at = now();
