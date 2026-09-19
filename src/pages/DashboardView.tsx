@@ -313,6 +313,10 @@ export default function DashboardView() {
 
   const displayAllRecords = allRecords ?? [];
   const recordsInitialLoad = recordsPending && tables.length > 0;
+  // `enabled: !!dashboard?.client_id` keeps this query pending without fetching,
+  // so "אין טבלאות" must wait for the list itself, not just for the records.
+  // Organization dashboards have no client — there the query never runs.
+  const tablesResolving = !!dashboard?.client_id && tablesPending;
 
   // Weekly comparison is independent of the dashboard's active date preset: it needs
   // every available campaign day (up to one year) to render the stacked week tables.
@@ -1475,7 +1479,7 @@ export default function DashboardView() {
               <span>לא הצלחנו לטעון את נתוני הדוח. אפשר לנסות שוב.</span>
               <Button variant="outline" onClick={() => refetchRecords()}>נסה שוב</Button>
             </CardContent></Card>
-          ) : recordsInitialLoad ? (
+          ) : recordsInitialLoad || tablesResolving ? (
             <CarmenLoadingScreen variant="card" messages={["כרמן מושכת את נתוני הדוח…", "מסכמת לפי טווח התאריכים…"]} />
           ) : tables.length === 0 ? (
             <Card className="p-12 text-center">

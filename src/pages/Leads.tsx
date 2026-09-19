@@ -1031,7 +1031,7 @@ export default function Leads() {
   });
 
   // Kanban view: use RPC that fetches leads per stage
-  const { data: kanbanStageData, isLoading: isKanbanLoading, refetch: refetchKanban, isFetching: isKanbanFetching } = useQuery({
+  const { data: kanbanStageData, isLoading: isKanbanLoading, isPending: isKanbanPending, refetch: refetchKanban, isFetching: isKanbanFetching } = useQuery({
     queryKey: ["leads-kanban", tenantId, selectedAgency, searchQuery, filterSalesPersonIds, filterStage, filterResponseStatus, filterTagIds, filterFollowUpToday, startDate?.toISOString(), endDate?.toISOString(), PIPELINE_STAGES.map(s => s.id).join(','), isViewingAs, viewAsSalesPersonId, leadsPerStageLimit],
     queryFn: async () => {
       if (!tenantId) return null;
@@ -1215,7 +1215,7 @@ export default function Leads() {
   // so the effect was removed to prevent the visible "page reload" flicker.
   
   // Table view: use regular paginated query
-  const { data: tableLeads, isLoading: isTableLoading, refetch: refetchTable, isFetching: isTableFetching } = useQuery({
+  const { data: tableLeads, isLoading: isTableLoading, isPending: isTablePending, refetch: refetchTable, isFetching: isTableFetching } = useQuery({
     queryKey: ["leads-table", tenantId, selectedAgency, effectivePage, effectiveLimit, searchQuery, filterSalesPersonIds, filterStage, filterResponseStatus, filterTagIds, filterFollowUpToday, startDate?.toISOString(), endDate?.toISOString(), isViewingAs, viewAsSalesPersonId, isOwner],
     queryFn: async () => {
       if (!tenantId) return [] as any[];
@@ -1391,6 +1391,7 @@ export default function Leads() {
   
   // Combine loading/fetching states
   const isLoading = isKanbanView ? isKanbanLoading : isTableLoading;
+  const isPending = isKanbanView ? isKanbanPending : isTablePending;
   const isFetching = isKanbanView ? isKanbanFetching : isTableFetching;
   const refetch = isKanbanView ? refetchKanban : refetchTable;
   
@@ -1420,7 +1421,8 @@ export default function Leads() {
 
   // The lists default to [] while the query runs — gate the empty state on that.
   const hasLeadSource = isKanbanView ? !!kanbanStageData : !!tableLeads;
-  const leadsResolving = !hasLeadSource && isQueryResolving(isLoading, isLoading, isFetching);
+  const leadsResolving =
+    !hasLeadSource && !!tenantId && isQueryResolving(isPending, isLoading, isFetching);
 
   // Calculate total leads count for Kanban view from RPC data
   const kanbanTotalLeadsCount = useMemo(() => {

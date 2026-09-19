@@ -36,6 +36,8 @@ import {
 import { CarmenLoadingScreen } from "@/components/shared/CarmenLoadingScreen";
 import { CarmenRouteProgress } from "@/components/shared/CarmenRouteProgress";
 import { useCarmenContentFade } from "@/hooks/useCarmenContentFade";
+import { useRouteLoadingGate } from "@/hooks/useRouteLoadingGate";
+import { cn } from "@/lib/utils";
 
 function RouteContentLoader() {
   return <CarmenLoadingScreen />;
@@ -51,6 +53,7 @@ export function AppLayout() {
   const { currentTenantId, setCurrentTenantId, currentTenant } = useTenant();
   const commandCenterAccess = useCommandCenterAccess();
   const contentFadeRef = useCarmenContentFade<HTMLDivElement>();
+  const routeLoading = useRouteLoadingGate();
   const sidecar = useCommandCenterSidecar();
 
   // Fetch available tenants for the user
@@ -270,13 +273,19 @@ export function AppLayout() {
                 </DropdownMenu>
               </div>
             </header>
-            <main className="flex min-h-0 flex-1 flex-col overflow-hidden">
+            <main className="relative flex min-h-0 flex-1 flex-col overflow-hidden">
+              <CarmenRouteProgress />
               <CommandCenterSidecarShell>
+                {/* Kept mounted while the gate holds — hiding the page is what
+                    lets its queries run without painting an empty state. */}
                 <div
                   ref={contentFadeRef}
-                  className="flex h-full min-h-0 flex-1 flex-col overflow-y-auto"
+                  aria-hidden={routeLoading || undefined}
+                  className={cn(
+                    "flex h-full min-h-0 flex-1 flex-col overflow-y-auto",
+                    routeLoading && "pointer-events-none opacity-0",
+                  )}
                 >
-                  <CarmenRouteProgress />
                   <RoutedModulePermissionGate>
                     <Suspense fallback={<RouteContentLoader />}>
                       <Outlet />
@@ -284,6 +293,11 @@ export function AppLayout() {
                   </RoutedModulePermissionGate>
                 </div>
               </CommandCenterSidecarShell>
+              {routeLoading && (
+                <div className="absolute inset-0 z-30 flex items-start justify-center overflow-hidden bg-background">
+                  <CarmenLoadingScreen />
+                </div>
+              )}
             </main>
           </div>
 
