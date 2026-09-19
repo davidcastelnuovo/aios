@@ -26,7 +26,6 @@ import { WeeklyCampaignComparison } from "@/components/reports/WeeklyCampaignCom
 import {
   getAddToCartFromData,
   getAdsPurchasesFromData,
-  getExplicitLeadFieldsFromData,
   getLeadsFromData,
   getPurchasesFromData,
   getRevenueFromData,
@@ -522,7 +521,6 @@ export default function SharedDashboard({
           platforms[source].revenue += getRevenueFromData(d);
           platforms[source].addToCart += getAddToCartFromData(d);
           platforms[source].addToCartTracked ||= hasAddToCartMetric(d);
-          platforms[source].leads += getExplicitLeadFieldsFromData(d);
         } else {
           const leads = getLeadsFromData(d);
           platforms[source].leads += leads;
@@ -1142,7 +1140,7 @@ export default function SharedDashboard({
                       </CardContent>
                     </Card>
                   )}
-                  {showAdsCards && totalSummary.leads > 0 && (
+                  {showAdsCards && facebookMixedMode && totalSummary.leads > 0 && (
                     <Card className="h-full bg-gradient-to-br from-cyan-50 to-cyan-100 dark:from-cyan-950 dark:to-cyan-900">
                       <CardContent className="p-6 flex flex-col items-center justify-center h-full text-center">
                         <p className="text-sm text-muted-foreground">לידים</p>
@@ -1150,7 +1148,7 @@ export default function SharedDashboard({
                       </CardContent>
                     </Card>
                   )}
-                  {showAdsCards && totalSummary.leads > 0 && (
+                  {showAdsCards && facebookMixedMode && totalSummary.leads > 0 && (
                     <Card className="h-full bg-gradient-to-br from-teal-50 to-teal-100 dark:from-teal-950 dark:to-teal-900">
                       <CardContent className="p-6 flex flex-col items-center justify-center h-full text-center">
                         <p className="text-sm text-muted-foreground">עלות לליד (CPL)</p>
