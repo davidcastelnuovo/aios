@@ -5,6 +5,7 @@ import {
   classifyPulseCampaignGoal,
   integrationTypeToGoal,
   isEcommerceReportTable,
+  dedupePulseCampaignRows,
   resolveCampaignDeliveryStatus,
   type PulseCampaignGoalRow,
 } from "@/lib/pulseCampaignGoals";
@@ -312,7 +313,7 @@ export function rehydrateCampaignBreakdownRows(
     if (!prev || hint.date > prev.date) hintByKey.set(key, hint);
   }
 
-  return rows.map((row) => {
+  return dedupePulseCampaignRows(rows.map((row) => {
     const settings = settingsByTable.get(row.table_id) || {};
     const hint = row.campaign_id ? hintByKey.get(`${row.table_id}:${row.campaign_id}`) : undefined;
     const delivery_status = row.delivery_status && row.delivery_status !== "unknown"
@@ -339,7 +340,7 @@ export function rehydrateCampaignBreakdownRows(
       };
     }
     return applyFreshCampaignGoalClassification(next, table);
-  });
+  }));
 }
 
 export function pulseMetaTablesNeedingDeliveryHints(

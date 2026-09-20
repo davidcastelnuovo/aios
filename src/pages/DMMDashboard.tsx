@@ -33,10 +33,16 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Card, CardContent } from "@/components/ui/card";
-import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { ChevronDown, Facebook, Filter, LayoutGrid, Link2, RefreshCw, Search } from "lucide-react";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { AlertTriangle, ChevronDown, Facebook, Filter, LayoutGrid, Link2, RefreshCw, Search, Table2 } from "lucide-react";
 import { isFacebookIntegration, type AgencyPlatformFilter } from "@/lib/agencyCampaignData";
 import { PulseClientRawCard } from "@/components/pulse/PulseClientRawCard";
+import { PulseAttentionTable } from "@/components/pulse/PulseAttentionTable";
+import {
+  buildPlatformTargetPatch,
+  buildPulseAttentionRows,
+  type PulseAttentionClientContext,
+} from "@/lib/pulseAttentionMatrix";
 import { CarmenLoadingScreen } from "@/components/shared/CarmenLoadingScreen";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
@@ -88,12 +94,14 @@ export function CampaignPulseDashboard({
   const [searchParams, setSearchParams] = useSearchParams();
 
   const [search, setSearch] = useState("");
+  const [dashboardTab, setDashboardTab] = useState<"data" | "attention">("data");
   const [filterService, setFilterService] = useState<"all" | "ppc_google" | "ppc_meta" | "seo" | "campaign">("campaign");
   const [filterCampaigner, setFilterCampaigner] = useState("all");
   const [platformFilter, setPlatformFilter] = useState<AgencyPlatformFilter>("all");
   const [period, setPeriod] = useState<PulsePeriod>("last_7_days");
   const [callLogTarget, setCallLogTarget] = useState<PulseClientCallTarget | null>(null);
   const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false);
+  const [savingTargetTableId, setSavingTargetTableId] = useState<string | null>(null);
   const periodBounds = useMemo(() => getPulsePeriodBounds(period), [period]);
   const campaignTrendBounds = useMemo(() => pulseTrendWindows(jerusalemYmd()), []);
   const effectiveAgencyId = fixedAgencyId || (selectedAgency !== "all" ? selectedAgency : null);
@@ -176,7 +184,7 @@ export function CampaignPulseDashboard({
       let query = supabase
         .from("clients")
         .select(`
-          id, name, status, agency_id, is_seo_client, services,
+          id, name, status, agency_id, is_seo_client, services, mood_status,
           agencies ( name ),
           client_team (
             campaigner_id,
@@ -266,7 +274,10 @@ export function CampaignPulseDashboard({
     staleTime: 30_000,
   });
 
-  const { data: pulseCampaignTables = [] } = useQuery({
+  const {
+    data: pulseCampaignTables = [],
+    refetch: refetchPulseTables,
+  } = useQuery({
     queryKey: ["pulse-dash-tables", tenantId, clientIds.join(",")],
     queryFn: async () => {
       if (!tenantId || !clientIds.length) return [] as PulseCampaignTable[];
@@ -416,11 +427,18 @@ export function CampaignPulseDashboard({
   }, [pulseRows]);
 
   const clientMetaById = useMemo(() => {
-    const map = new Map<string, { name: string; campaignerName: string; agencyName: string; services: string[] }>();
+    const map = new Map<string, {
+      name: string;
+      campaignerName: string;
+      agencyName: string;
+      services: string[];
+      moodStatus: string | null;
+    }>();
     for (const c of filteredByRole as Array<{
       id: string;
       name: string;
       services?: string[];
+      mood_status?: string | null;
       client_team?: Array<{ campaigners?: { full_name?: string } }>;
       agencies?: { name?: string };
     }>) {
@@ -430,10 +448,47 @@ export function CampaignPulseDashboard({
         campaignerName: c.client_team?.[0]?.campaigners?.full_name ?? "—",
         agencyName: c.agencies?.name ?? "—",
         services,
+        moodStatus: c.mood_status ?? null,
       });
     }
     return map;
   }, [filteredByRole]);
+
+  const { data: communicationLogs = [] } = useQuery({
+    queryKey: ["pulse-dash-comm-logs", tenantId, clientIds.join(",")],
+    queryFn: async () => {
+      if (!tenantId || !clientIds.length) return [];
+      const { data, error } = await supabase
+        .from("communication_logs")
+        .select("client_id, status, created_at")
+        .in("client_id", clientIds)
+        .order("created_at", { ascending: false })
+        .limit(500);
+      if (error) throw error;
+      return data ?? [];
+    },
+    enabled: !!tenantId && clientIds.length > 0,
+    staleTime: 60_000,
+  });
+
+  const { data: recentClientUpdates = [] } = useQuery({
+    queryKey: ["pulse-dash-client-updates", tenantId, clientIds.join(",")],
+    queryFn: async () => {
+      if (!tenantId || !clientIds.length) return [];
+      const since = new Date(Date.now() - 30 * 86_400_000).toISOString();
+      const { data, error } = await supabase
+        .from("client_updates")
+        .select("client_id, update_type, content, created_at")
+        .in("client_id", clientIds)
+        .gte("created_at", since)
+        .order("created_at", { ascending: false })
+        .limit(300);
+      if (error) throw error;
+      return data ?? [];
+    },
+    enabled: !!tenantId && clientIds.length > 0,
+    staleTime: 60_000,
+  });
 
   const spendingCampaignRows = useMemo(
     () => filterPulseCampaignRowsWithSpend(campaignGoalRows),
@@ -517,6 +572,94 @@ export function CampaignPulseDashboard({
     [visibleCampaignRows],
   );
 
+  const attentionClientContexts = useMemo(() => {
+    const logsByClient = new Map<string, Array<{ status: string; created_at: string }>>();
+    for (const log of communicationLogs as Array<{ client_id: string; status: string; created_at: string }>) {
+      const list = logsByClient.get(log.client_id) ?? [];
+      list.push({ status: log.status, created_at: log.created_at });
+      logsByClient.set(log.client_id, list);
+    }
+    const updatesByClient = new Map<string, Array<{ update_type: string | null; content: string }>>();
+    for (const update of recentClientUpdates as Array<{ client_id: string; update_type: string | null; content: string }>) {
+      const list = updatesByClient.get(update.client_id) ?? [];
+      list.push({ update_type: update.update_type, content: update.content ?? "" });
+      updatesByClient.set(update.client_id, list);
+    }
+
+    const contexts: PulseAttentionClientContext[] = [];
+    for (const [clientId, meta] of clientMetaById) {
+      const pulse = pulseByClient.get(clientId);
+      const logs = logsByClient.get(clientId) ?? [];
+      const latestLog = logs[0];
+      const daysSinceLastCommunication = latestLog
+        ? Math.floor((Date.now() - new Date(latestLog.created_at).getTime()) / 86_400_000)
+        : null;
+      const recentStatus = latestLog?.status as PulseAttentionClientContext["recentCommunicationStatus"];
+      const updates = updatesByClient.get(clientId) ?? [];
+      const hasRecentComplaintUpdate = updates.some((row) => {
+        const text = `${row.update_type ?? ""} ${row.content}`.toLowerCase();
+        return /complaint|תלונה|לא מרוצ|כועס|עצבן|בעיה חמורה/.test(text);
+      });
+
+      contexts.push({
+        clientId,
+        clientName: meta.name,
+        campaignerName: meta.campaignerName,
+        moodStatus: meta.moodStatus,
+        lastClientCallAt: pulse?.last_client_call_at ?? null,
+        daysSinceLastCommunication,
+        recentCommunicationStatus: recentStatus ?? null,
+        hasRecentComplaintUpdate,
+      });
+    }
+    return contexts;
+  }, [clientMetaById, communicationLogs, recentClientUpdates, pulseByClient]);
+
+  const attentionRows = useMemo(
+    () => buildPulseAttentionRows({
+      campaignRows: visibleCampaignRows,
+      tables: pulseCampaignTables,
+      clients: attentionClientContexts,
+    }),
+    [visibleCampaignRows, pulseCampaignTables, attentionClientContexts],
+  );
+
+  const tableSettingsById = useMemo(() => {
+    const map = new Map<string, Record<string, unknown>>();
+    for (const table of pulseCampaignTables) {
+      map.set(table.id, (table.integration_settings ?? {}) as Record<string, unknown>);
+    }
+    return map;
+  }, [pulseCampaignTables]);
+
+  async function savePlatformTarget(input: {
+    tableId: string;
+    goal: PulseCampaignGoal;
+    value: number | null;
+    existingSettings: Record<string, unknown>;
+  }) {
+    setSavingTargetTableId(input.tableId);
+    try {
+      const nextSettings = buildPlatformTargetPatch(
+        input.existingSettings,
+        input.goal,
+        input.value,
+      );
+      const { error } = await supabase
+        .from("crm_tables")
+        .update({ integration_settings: nextSettings as any })
+        .eq("id", input.tableId);
+      if (error) throw error;
+      toast.success("יעד הפלטפורמה נשמר");
+      await refetchPulseTables();
+      refetchPulseRecords();
+    } catch (error: any) {
+      toast.error(error?.message ?? "שמירת היעד נכשלה");
+    } finally {
+      setSavingTargetTableId(null);
+    }
+  }
+
   const availablePlatforms = useMemo(() => {
     const types = new Set((campaignData?.tables ?? []).map((table) => table.integration_type));
     return {
@@ -529,7 +672,8 @@ export function CampaignPulseDashboard({
     clientCount: clientRawViews.length,
     campaignCount: visibleCampaignRows.length,
     unclassifiedCount: unclassifiedCampaignRows.length,
-  }), [clientRawViews.length, visibleCampaignRows.length, unclassifiedCampaignRows.length]);
+    attentionCount: attentionRows.length,
+  }), [clientRawViews.length, visibleCampaignRows.length, unclassifiedCampaignRows.length, attentionRows.length]);
 
   const freshness = useMemo(() => {
     const times = pulseRows.map((r) => r.calculated_at).filter(Boolean) as string[];
@@ -618,6 +762,9 @@ export function CampaignPulseDashboard({
             {pulseRefining ? " · כרמן מכינה את הנתונים…" : ""}
             {listSummary.unclassifiedCount > 0
               ? ` · ${listSummary.unclassifiedCount} קמפיינים טעונים סיווג`
+              : ""}
+            {listSummary.attentionCount > 0
+              ? ` · ${listSummary.attentionCount} שורות לתשומת לב`
               : ""}
           </p>
         </div>
@@ -786,75 +933,113 @@ export function CampaignPulseDashboard({
         )}
       </div>
 
-      {(availablePlatforms.hasFacebook || availablePlatforms.hasGoogleAds) ? (
-        <Tabs
-          value={platformFilter}
-          onValueChange={(value) => setPlatformFilter(value as AgencyPlatformFilter)}
-          dir="rtl"
-        >
-          <TabsList className="h-auto w-full flex-wrap justify-start gap-1 sm:w-auto">
-            <TabsTrigger value="all" className="gap-2">
-              <LayoutGrid className="h-4 w-4" />
-              כל הפלטפורמות
-            </TabsTrigger>
-            {availablePlatforms.hasFacebook && (
-              <TabsTrigger value="facebook" className="gap-2">
-                <Facebook className="h-4 w-4 text-blue-600" />
-                Facebook
-              </TabsTrigger>
-            )}
-            {availablePlatforms.hasGoogleAds && (
-              <TabsTrigger value="google_ads" className="gap-2">
-                <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" aria-hidden>
-                  <path d="M3.654 14.916l6.26-10.857c.68-1.18 2.184-1.59 3.361-.916l.004.003c1.178.68 1.586 2.184.909 3.361l-6.26 10.857c-.68 1.18-2.184 1.59-3.361.916l-.004-.003c-1.178-.68-1.586-2.184-.909-3.361z" fill="#FBBC04" />
-                  <path d="M14.088 14.916l6.26-10.857c.68-1.18.27-2.684-.909-3.361l-.004-.003c-1.177-.674-2.681-.264-3.361.916l-6.26 10.857c-.68 1.18-.27 2.684.909 3.361l.004.003c1.177.674 2.681.264 3.361-.916z" fill="#4285F4" />
-                  <circle cx="6" cy="18" r="3.5" fill="#34A853" />
-                </svg>
-                Google Ads
-              </TabsTrigger>
-            )}
-          </TabsList>
-        </Tabs>
-      ) : null}
+      <Tabs
+        value={dashboardTab}
+        onValueChange={(value) => setDashboardTab(value as "data" | "attention")}
+        dir="rtl"
+        className="space-y-3"
+      >
+        <TabsList className="h-auto w-full flex-wrap justify-start gap-1 sm:w-auto">
+          <TabsTrigger value="data" className="gap-2">
+            <Table2 className="h-4 w-4" />
+            נתונים
+          </TabsTrigger>
+          <TabsTrigger value="attention" className="gap-2">
+            <AlertTriangle className="h-4 w-4" />
+            תשומת לב
+            {listSummary.attentionCount > 0 ? (
+              <Badge variant="secondary" className="mr-1 text-[10px] px-1.5 py-0">
+                {listSummary.attentionCount}
+              </Badge>
+            ) : null}
+          </TabsTrigger>
+        </TabsList>
 
-      {unclassifiedCampaignRows.length > 0 ? (
-        <div className="rounded-md border p-3 text-sm text-muted-foreground">
-          <strong className="text-foreground">{unclassifiedCampaignRows.length} קמפיינים טעונים סיווג</strong>
-          {" "}— מוצגים תחת «טעון סיווג» בתוך כרטיס הלקוח.
-        </div>
-      ) : null}
+        <TabsContent value="data" className="space-y-3 mt-0">
+          {(availablePlatforms.hasFacebook || availablePlatforms.hasGoogleAds) ? (
+            <Tabs
+              value={platformFilter}
+              onValueChange={(value) => setPlatformFilter(value as AgencyPlatformFilter)}
+              dir="rtl"
+            >
+              <TabsList className="h-auto w-full flex-wrap justify-start gap-1 sm:w-auto">
+                <TabsTrigger value="all" className="gap-2">
+                  <LayoutGrid className="h-4 w-4" />
+                  כל הפלטפורמות
+                </TabsTrigger>
+                {availablePlatforms.hasFacebook && (
+                  <TabsTrigger value="facebook" className="gap-2">
+                    <Facebook className="h-4 w-4 text-blue-600" />
+                    Facebook
+                  </TabsTrigger>
+                )}
+                {availablePlatforms.hasGoogleAds && (
+                  <TabsTrigger value="google_ads" className="gap-2">
+                    <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" aria-hidden>
+                      <path d="M3.654 14.916l6.26-10.857c.68-1.18 2.184-1.59 3.361-.916l.004.003c1.178.68 1.586 2.184.909 3.361l-6.26 10.857c-.68 1.18-2.184 1.59-3.361.916l-.004-.003c-1.178-.68-1.586-2.184-.909-3.361z" fill="#FBBC04" />
+                      <path d="M14.088 14.916l6.26-10.857c.68-1.18.27-2.684-.909-3.361l-.004-.003c-1.177-.674-2.681-.264-3.361.916l-6.26 10.857c-.68 1.18-.27 2.684.909 3.361l.004.003c1.177.674 2.681.264 3.361-.916z" fill="#4285F4" />
+                      <circle cx="6" cy="18" r="3.5" fill="#34A853" />
+                    </svg>
+                    Google Ads
+                  </TabsTrigger>
+                )}
+              </TabsList>
+            </Tabs>
+          ) : null}
 
-      <div className="space-y-4 min-w-0">
-        {clientRawViews.length === 0 ? (
-          <Card>
-            <CardContent className="py-10 text-center text-muted-foreground text-sm">
-              אין לקוחות עם נתוני קמפיין בטווח ובסינון שנבחרו
-            </CardContent>
-          </Card>
-        ) : (
-          clientRawViews.map((view) => (
-            <PulseClientRawCard
-              key={view.clientId}
-              clientName={view.meta.name}
-              campaignerName={view.meta.campaignerName}
-              agencyName={view.meta.agencyName}
-              period={period}
-              pulse={view.pulse}
-              campaignsByGoal={view.campaignsByGoal}
-              lastCampaignTouchAt={view.lastCampaignTouchAt}
-              onOpenClient={() => openClientCard(view.clientId)}
-              onCallLog={() => {
-                if (!view.pulse) return;
-                setCallLogTarget({
-                  clientId: view.clientId,
-                  clientName: view.meta.name,
-                  pulse: view.pulse,
-                });
-              }}
-            />
-          ))
-        )}
-      </div>
+          {unclassifiedCampaignRows.length > 0 ? (
+            <div className="rounded-md border p-3 text-sm text-muted-foreground">
+              <strong className="text-foreground">{unclassifiedCampaignRows.length} קמפיינים טעונים סיווג</strong>
+              {" "}— מוצגים תחת «טעון סיווג» בתוך כרטיס הלקוח.
+            </div>
+          ) : null}
+
+          <div className="space-y-4 min-w-0">
+            {clientRawViews.length === 0 ? (
+              <Card>
+                <CardContent className="py-10 text-center text-muted-foreground text-sm">
+                  אין לקוחות עם נתוני קמפיין בטווח ובסינון שנבחרו
+                </CardContent>
+              </Card>
+            ) : (
+              clientRawViews.map((view) => (
+                <PulseClientRawCard
+                  key={view.clientId}
+                  clientName={view.meta.name}
+                  campaignerName={view.meta.campaignerName}
+                  agencyName={view.meta.agencyName}
+                  period={period}
+                  pulse={view.pulse}
+                  campaignsByGoal={view.campaignsByGoal}
+                  lastCampaignTouchAt={view.lastCampaignTouchAt}
+                  onOpenClient={() => openClientCard(view.clientId)}
+                  onCallLog={() => {
+                    if (!view.pulse) return;
+                    setCallLogTarget({
+                      clientId: view.clientId,
+                      clientName: view.meta.name,
+                      pulse: view.pulse,
+                    });
+                  }}
+                />
+              ))
+            )}
+          </div>
+        </TabsContent>
+
+        <TabsContent value="attention" className="space-y-3 mt-0">
+          <p className="text-sm text-muted-foreground">
+            שורה לכל לקוח × פלטפורמה — רק כשיש נושא רגיש. יעד מאושר → אחרת מגמת 7 ימים → אחרת בסיס 30 יום.
+          </p>
+          <PulseAttentionTable
+            rows={attentionRows}
+            onOpenClient={openClientCard}
+            onSaveTarget={savePlatformTarget}
+            tableSettingsById={tableSettingsById}
+            savingTableId={savingTargetTableId}
+          />
+        </TabsContent>
+      </Tabs>
 
       <PulseClientCallDialog
         open={!!callLogTarget}
