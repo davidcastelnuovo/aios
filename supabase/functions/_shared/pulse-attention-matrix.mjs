@@ -37,10 +37,19 @@ function goalFromRows(rows) {
       bestSpend = spend
     }
   }
-  return rows.find((row) => row.goal !== 'unknown')?.goal ?? best
+  if (bestSpend >= 0) return best
+  return rows.find((row) => row.goal !== 'unknown')?.goal ?? 'leads'
+}
+
+function rowsForGoal(rows, goal) {
+  return rows.filter((row) => row.goal === goal)
 }
 
 function aggregatePlatformMetrics(rows) {
+  const primaryGoal = goalFromRows(rows)
+  const goalRows = rowsForGoal(rows, primaryGoal)
+  const scopedRows = goalRows.length ? goalRows : rows
+
   let spend7d = 0
   let outcomes7d = 0
   let hasOutcomes = false
@@ -51,7 +60,7 @@ function aggregatePlatformMetrics(rows) {
   let baselineWeight = 0
   let lastChangeAt = null
 
-  for (const row of rows) {
+  for (const row of scopedRows) {
     spend7d += row.spend_7d ?? 0
     if (row.outcomes_7d !== null && row.outcomes_7d !== undefined) {
       outcomes7d += row.outcomes_7d
@@ -72,7 +81,6 @@ function aggregatePlatformMetrics(rows) {
     }
   }
 
-  const primaryGoal = goalFromRows(rows)
   const useRoas = primaryGoal === 'ecommerce'
   const efficiency7d = useRoas
     ? spend7d > 0 ? revenue7d / spend7d : null
@@ -186,12 +194,17 @@ function evaluateSatisfactionIssue(moodStatus) {
   return { level: 'watch', label }
 }
 
-function pickPrimaryTable(tables, platform) {
+function pickPrimaryTable(tables, platform, goal) {
   const matches = tables.filter((table) => {
     if (platform === 'google') return table.integration_type === 'google_ads'
     return table.integration_type === 'facebook_insights' || table.integration_type === 'facebook_ecommerce'
   })
-  return matches[0] ?? null
+  if (!matches.length) return null
+  if (platform === 'google') return matches[0]
+  if (goal === 'ecommerce') {
+    return matches.find((table) => table.integration_type === 'facebook_ecommerce') ?? matches[0]
+  }
+  return matches.find((table) => table.integration_type === 'facebook_insights') ?? matches[0]
 }
 
 function rowHasIssue(issues) {
@@ -225,7 +238,7 @@ export function buildPulseAttentionRows({ campaignRows = [], tables = [], client
     const metrics = aggregatePlatformMetrics(rows)
     if (metrics.spend7d <= 0) continue
 
-    const primaryTable = pickPrimaryTable(tablesByClient.get(clientId) ?? [], platform)
+    const primaryTable = pickPrimaryTable(tablesByClient.get(clientId) ?? [], platform, metrics.primaryGoal)
     const settings = primaryTable?.integration_settings || {}
     const target = resolvePlatformTarget(settings, metrics.primaryGoal, metrics.baselineEfficiency7d)
     const efficiencyIssue = evaluateEfficiencyIssue({
