@@ -27,6 +27,98 @@ test('evaluateEfficiencyIssue flags approved target breach', () => {
   assert.equal(issue?.level, 'alert')
 })
 
+test('leads-only google table reclassifies mis-tagged ecommerce rows to CPL', () => {
+  const rows = buildPulseAttentionRows({
+    campaignRows: [{
+      client_id: 'client-2',
+      table_id: 'ga-leads',
+      platform: 'google',
+      goal: 'ecommerce',
+      campaign_name: 'בר תרגומים leads',
+      spend_7d: 500,
+      outcomes_7d: 20,
+      revenue_7d: 0,
+      efficiency_7d: 0.04,
+      baseline_efficiency_7d: 0.05,
+      trend_7d_pct: 12,
+      last_change_at: '2026-09-18T10:00:00Z',
+    }],
+    tables: [{
+      id: 'ga-leads',
+      client_id: 'client-2',
+      integration_type: 'google_ads',
+      integration_settings: { target_cpl: 35 },
+    }],
+    clients: [{
+      clientId: 'client-2',
+      clientName: 'בר תרגומים',
+      campaignerName: 'דוד',
+      moodStatus: 'happy',
+      lastClientCallAt: '2026-09-18T10:00:00Z',
+      daysSinceLastCommunication: 3,
+      recentCommunicationStatus: null,
+      hasRecentComplaintUpdate: false,
+    }],
+  })
+
+  assert.equal(rows.length, 0, 'healthy CPL client should not appear only because of false ROAS')
+})
+
+test('platform attention uses leads CPL when leads spend dominates mixed goals', () => {
+  const rows = buildPulseAttentionRows({
+    campaignRows: [
+      {
+        client_id: 'client-1',
+        platform: 'meta',
+        goal: 'ecommerce',
+        campaign_name: 'misclassified shop',
+        spend_7d: 50,
+        outcomes_7d: 2,
+        revenue_7d: 200,
+        efficiency_7d: 4,
+        baseline_efficiency_7d: 3.5,
+        trend_7d_pct: 10,
+        last_change_at: '2026-09-18T10:00:00Z',
+      },
+      {
+        client_id: 'client-1',
+        platform: 'meta',
+        goal: 'leads',
+        campaign_name: 'main leads',
+        spend_7d: 900,
+        outcomes_7d: 30,
+        revenue_7d: 0,
+        efficiency_7d: 30,
+        baseline_efficiency_7d: 25,
+        trend_7d_pct: 18,
+        last_change_at: '2026-09-17T10:00:00Z',
+      },
+    ],
+    tables: [{
+      id: 'table-leads',
+      client_id: 'client-1',
+      integration_type: 'facebook_insights',
+      integration_settings: { target_roas: 4, target_cpl: 40 },
+    }],
+    clients: [{
+      clientId: 'client-1',
+      clientName: 'דורון אקו',
+      campaignerName: 'דוד',
+      moodStatus: 'wavering',
+      lastClientCallAt: '2026-09-18T10:00:00Z',
+      daysSinceLastCommunication: 5,
+      recentCommunicationStatus: null,
+      hasRecentComplaintUpdate: false,
+    }],
+  })
+
+  assert.equal(rows.length, 1)
+  assert.equal(rows[0].primaryGoal, 'leads')
+  assert.equal(rows[0].target?.kind, 'cpl')
+  assert.equal(rows[0].target?.value, 40)
+  assert.equal(rows[0].currentEfficiency, 30)
+})
+
 test('buildPulseAttentionRows includes only rows with issues', () => {
   const rows = buildPulseAttentionRows({
     campaignRows: [{
