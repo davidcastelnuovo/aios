@@ -163,15 +163,17 @@ async function drawTextOnPage(
   const textWidth = font.widthOfTextAtSize(prepared, preferredSize);
   const fontSize = textWidth > boxWidth ? preferredSize * boxWidth / textWidth : preferredSize;
   if (/[\u0590-\u05FF]/.test(text)) {
-    const image = await pdfDoc.embedPng(await renderSignatureFieldPng(text, boxWidth, boxHeight, fontSize));
+    const image = await pdfDoc.embedPng(await renderSignatureFieldPng(text, boxWidth, boxHeight, fontSize, "right"));
     page.drawImage(image, { x, y: pageHeight - (position.y / 100) * pageHeight - boxHeight, width: boxWidth, height: boxHeight });
     return;
   }
+  const drawnWidth = font.widthOfTextAtSize(prepared, fontSize);
+  const textX = x + Math.max(0, boxWidth - drawnWidth);
   try {
-    page.drawText(prepared, { x, y, size: fontSize, font, color: rgb(0, 0, 0) });
+    page.drawText(prepared, { x: textX, y, size: fontSize, font, color: rgb(0, 0, 0) });
   } catch {
     page.drawText(prepared.replace(/[^\x20-\x7E]/g, '?') || '?', {
-      x,
+      x: textX,
       y,
       size: fontSize,
       font,
