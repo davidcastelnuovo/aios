@@ -960,8 +960,9 @@ export function TaskDetailDialog({
                 variant="notes"
                 rows={4}
                 fillHeight
-                notesTitle="הערות ועדכונים"
-                placeholder="הערות קבועות למשימה..."
+                notesLayout="updates-first"
+                notesTitle="עדכונים"
+                placeholder="הערות קבועות (לעיתים רחוקות)..."
                 notesWrapperClassName="h-full min-h-0"
                 notesFooter={
                   <>
@@ -989,7 +990,7 @@ export function TaskDetailDialog({
                         <Send className="h-4 w-4" />
                       </Button>
                     </div>
-                    <div className="flex-1 min-h-[72px] overflow-y-auto space-y-2 [scrollbar-width:thin]">
+                    <div className="flex-1 min-h-[120px] overflow-y-auto space-y-2 [scrollbar-width:thin]">
                     {updates?.length === 0 && (
                       <p className="text-xs text-muted-foreground text-center py-1">אין עדכונים עדיין</p>
                     )}
