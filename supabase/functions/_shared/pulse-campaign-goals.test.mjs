@@ -117,6 +117,42 @@ test('classifies campaign objective and never defaults an unknown campaign to le
   )
 })
 
+test('Meta lead campaigns with LINK_CLICKS optimization classify as leads not engagement', () => {
+  assert.equal(
+    classifyPulseCampaignGoal({
+      campaign_type: 'lead',
+      campaign_objective: 'OUTCOME_LEADS',
+      optimization_goal: 'LINK_CLICKS',
+      link_clicks: 120,
+      clicks: 120,
+      result_kind: 'link_clicks',
+    }).goal,
+    'leads',
+  )
+  assert.equal(
+    classifyPulseCampaignGoal({
+      campaign_name: 'דורון אקו | לידים',
+      optimization_goal: 'LINK_CLICKS',
+      link_clicks: 45,
+      result_kind: 'link_clicks',
+    }).goal,
+    'leads',
+  )
+  assert.equal(
+    classifyPulseCampaignGoal({
+      campaign_type: 'traffic',
+      optimization_goal: 'LINK_CLICKS',
+      link_clicks: 45,
+      result_kind: 'link_clicks',
+    }).goal,
+    'engagement',
+  )
+  assert.deepEqual(
+    pulseCampaignOutcome({ link_clicks: 45, leads: 3 }, 'leads'),
+    { value: 3, field: 'leads', kind: 'leads' },
+  )
+})
+
 test('WhatsApp / messaging lead campaigns classify as leads not engagement', () => {
   assert.equal(
     classifyPulseCampaignGoal({
@@ -131,7 +167,7 @@ test('WhatsApp / messaging lead campaigns classify as leads not engagement', () 
   assert.equal(classifyPulseCampaignGoal({ result_kind: 'conversations' }).goal, 'leads')
   assert.equal(classifyPulseCampaignGoal({ result_kind: 'messages' }).goal, 'leads')
   assert.equal(classifyPulseCampaignGoal({ optimization_goal: 'THRUPLAY' }).goal, 'engagement')
-  assert.equal(
+  assert.deepEqual(
     pulseCampaignOutcome({ conversations: 4, spend: 100 }, 'leads'),
     { value: 4, field: 'conversations', kind: 'leads' },
   )
