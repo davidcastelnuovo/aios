@@ -962,7 +962,7 @@ export function TaskDetailDialog({
                 fillHeight
                 notesLayout="updates-first"
                 notesTitle="עדכונים"
-                placeholder="הערות קבועות (לעיתים רחוקות)..."
+                placeholder="כאן שמים הערות קבועות — לדוגמה: אין לפנות ללקוח ישירות, רק דרך איש הקשר..."
                 notesWrapperClassName="h-full min-h-0"
                 notesFooter={
                   <>
