@@ -1,5 +1,7 @@
 import { useState, useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
+import { supabase } from "@/integrations/supabase/client";
+import { resolveAppHomePath } from "@/lib/appHomePath";
 import { Button } from "@/components/ui/button";
 import OptionsSelector from "@/components/OptionsSelector";
 import AnimatedJoinButton from "@/components/AnimatedJoinButton";
@@ -71,6 +73,34 @@ const Landing = () => {
   const [waitlistDialogOpen, setWaitlistDialogOpen] = useState(false);
   const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
   const [isAppInstalled, setIsAppInstalled] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const redirectIfSignedIn = async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.user || cancelled) return;
+      const homePath = await resolveAppHomePath(session.user.id);
+      if (homePath && !cancelled) {
+        navigate(homePath, { replace: true });
+      }
+    };
+
+    void redirectIfSignedIn();
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (session?.user) {
+        void resolveAppHomePath(session.user.id).then((homePath) => {
+          if (homePath && !cancelled) navigate(homePath, { replace: true });
+        });
+      }
+    });
+
+    return () => {
+      cancelled = true;
+      subscription.unsubscribe();
+    };
+  }, [navigate]);
 
   useEffect(() => {
     const handler = (e: Event) => {
