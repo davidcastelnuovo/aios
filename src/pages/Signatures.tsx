@@ -19,7 +19,8 @@ import { Plus, FileText, Upload, Send, Eye, Trash2, CheckCircle, Clock, XCircle,
 import { format } from "date-fns";
 import SignatureFieldPlacer, { getRecipientColor, type SignaturePosition } from "@/components/signatures/SignatureFieldPlacer";
 import { SignatureLinkShareButtons } from "@/components/signatures/SignatureLinkShareButtons";
-import { type DocumentField, parseDocumentFields } from "@/components/signatures/signatureFieldTypes";
+import { type DocumentField, parseDocumentFields, getFieldPlacerLabel } from "@/components/signatures/signatureFieldTypes";
+import { isFieldRequired } from "@/lib/signatureFieldGuide";
 import SignatureContactPicker from "@/components/signatures/SignatureContactPicker";
 import { buildFieldPrefill, type SignatureContactDetails } from "@/components/signatures/signatureContactUtils";
 import { sanitizeFileName } from "@/lib/sanitizeFileName";
@@ -1025,7 +1026,10 @@ export default function Signatures() {
                   <CardContent>
                     <div className="flex flex-wrap gap-2">
                       {parseDocumentFields(selectedDoc.document_fields).map((f) => (
-                        <Badge key={f.id} variant="outline">{f.label}</Badge>
+                        <Badge key={f.id} variant="outline">
+                          {f.label || getFieldPlacerLabel(f.type)}
+                          {isFieldRequired(f) ? " · חובה" : " · לא חובה"}
+                        </Badge>
                       ))}
                     </div>
                   </CardContent>

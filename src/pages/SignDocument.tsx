@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useMemo } from "react";
+import { useState, useRef, useEffect, useMemo, useCallback } from "react";
 import { useParams } from "react-router-dom";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
@@ -9,7 +9,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { toast } from "sonner";
-import { CheckCircle, XCircle, FileText, Eraser } from "lucide-react";
+import { CheckCircle, XCircle, FileText, Eraser, ChevronLeft } from "lucide-react";
 import { type DocumentField, parseDocumentFields, getFieldLabel, getFieldFontSizePx,
   isSignatureFieldType, isStampSignatureType } from "@/components/signatures/signatureFieldTypes";
 import type { SignaturePosition } from "@/components/signatures/SignatureFieldPlacer";
@@ -18,6 +18,12 @@ import { SignaturePageNavigation } from "@/components/signatures/SignaturePageNa
 import { SignatureCanvas } from "@/components/signatures/SignatureCanvas";
 import { detectMediaKind } from "@/components/signatures/signatureDocumentMedia";
 import { getSignatureStamp, applySignatureStamp } from "@/lib/signatureStamp";
+import {
+  fieldFillLabel,
+  isFieldRequired,
+  missingRequiredForSubmit,
+  nextFieldToFill,
+} from "@/lib/signatureFieldGuide";
 
 interface SigningRecipient {
   id: string;
@@ -63,7 +69,11 @@ export default function SignDocument() {
   const [draftSignature, setDraftSignature] = useState("");
   const [draftCompanyName, setDraftCompanyName] = useState("");
   const [draftCompanyId, setDraftCompanyId] = useState("");
+  const [guideFieldId, setGuideFieldId] = useState<string | null>(null);
+  const [guideStarted, setGuideStarted] = useState(false);
+  const [showMissing, setShowMissing] = useState(false);
   const initializedToken = useRef<string | null>(null);
+  const guidedToken = useRef<string | null>(null);
   const documentTop = useRef<HTMLDivElement>(null);
 
   const { data, isLoading, isError, error } = useQuery({
@@ -93,46 +103,107 @@ export default function SignDocument() {
   const activeField = myFields.find((field) => field.id === activeSignatureId);
   const editingStamp = isStampSignatureType(activeField?.type);
 
-  useEffect(() => {
-    if (!recipient || initializedToken.current === token) return;
-    initializedToken.current = token ?? null;
-    setFieldValues(recipient.field_values ?? {});
-    setOutcome(null);
-    setActiveSignatureId(null);
-    setCurrentPage(1);
-  }, [recipient, token]);
-
-  const openSignature = (id: string) => {
-    setDraftSignature(fieldValues[id] || "");
-    setDraftCompanyName(stamp.name);
-    setDraftCompanyId(stamp.companyId);
-    setActiveSignatureId(id);
-  };
-
-  const saveSignature = () => {
-    if (!activeSignatureId || !draftSignature) return;
-    if (editingStamp && (!draftCompanyName.trim() || !draftCompanyId.trim())) return;
-    setFieldValues((values) => {
-      const next = editingStamp ? applySignatureStamp(myFields, values, draftCompanyName, draftCompanyId) : { ...values };
-      next[activeSignatureId] = draftSignature;
-      return next;
-    });
-    setActiveSignatureId(null);
-  };
+  const missingRequired = useMemo(
+    () => missingRequiredForSubmit(myFields, fieldValues, stamp),
+    [myFields, fieldValues, stamp],
+  );
+  const nextFill = nextFieldToFill(myFields, fieldValues, guideStarted ? guideFieldId : null);
 
   const goToPage = (page: number) => {
     setCurrentPage(Math.max(1, Math.min(numPages, page)));
     documentTop.current?.scrollIntoView({ behavior: "smooth", block: "start" });
   };
 
+  const scrollToField = useCallback((fieldId: string) => {
+    let attempts = 0;
+    const tick = () => {
+      const el = document.querySelector<HTMLElement>(`[data-sig-fill="${fieldId}"]`);
+      if (el) {
+        el.scrollIntoView({ behavior: "smooth", block: "center" });
+        const focusable = el.matches("input, textarea, button")
+          ? el
+          : el.querySelector<HTMLElement>("input, textarea");
+        focusable?.focus({ preventScroll: true });
+        return;
+      }
+      if (attempts++ < 24) window.setTimeout(tick, 50);
+    };
+    tick();
+  }, []);
+
+  const openSignature = (id: string) => {
+    setDraftSignature(fieldValues[id] || "");
+    setDraftCompanyName(stamp.name);
+    setDraftCompanyId(stamp.companyId);
+    setActiveSignatureId(id);
+    setGuideFieldId(id);
+    setGuideStarted(true);
+  };
+
+  const goToField = useCallback((field: DocumentField) => {
+    const page = field.position.page ?? 1;
+    setGuideFieldId(field.id);
+    setGuideStarted(true);
+    setCurrentPage(page);
+    if (isSignatureFieldType(field.type)) {
+      setDraftSignature(fieldValues[field.id] || "");
+      setDraftCompanyName(stamp.name);
+      setDraftCompanyId(stamp.companyId);
+      setActiveSignatureId(field.id);
+    } else {
+      setActiveSignatureId(null);
+    }
+    window.setTimeout(() => scrollToField(field.id), 60);
+  }, [fieldValues, scrollToField, stamp.companyId, stamp.name]);
+
+  const goToNextFill = () => {
+    const next = nextFieldToFill(myFields, fieldValues, guideFieldId);
+    if (next) goToField(next);
+  };
+
+  useEffect(() => {
+    if (!recipient || initializedToken.current === token) return;
+    initializedToken.current = token ?? null;
+    guidedToken.current = null;
+    setFieldValues(recipient.field_values ?? {});
+    setOutcome(null);
+    setActiveSignatureId(null);
+    setShowMissing(false);
+    setGuideStarted(false);
+    setCurrentPage(1);
+  }, [recipient, token]);
+
+  useEffect(() => {
+    if (!recipient || !myFields.length || guidedToken.current === token) return;
+    const first = nextFieldToFill(myFields, fieldValues);
+    guidedToken.current = token ?? null;
+    if (!first) return;
+    setGuideFieldId(first.id);
+    setCurrentPage(first.position.page ?? 1);
+    window.setTimeout(() => scrollToField(first.id), 120);
+  }, [recipient, token, myFields, fieldValues, scrollToField]);
+
+  const saveSignature = () => {
+    if (!activeSignatureId || !draftSignature) return;
+    if (editingStamp && (!draftCompanyName.trim() || !draftCompanyId.trim())) return;
+    const savedId = activeSignatureId;
+    const nextValues = editingStamp
+      ? applySignatureStamp(myFields, fieldValues, draftCompanyName, draftCompanyId)
+      : { ...fieldValues };
+    nextValues[savedId] = draftSignature;
+    setFieldValues(nextValues);
+    setActiveSignatureId(null);
+    const next = nextFieldToFill(myFields, nextValues, savedId);
+    if (next) goToField(next);
+    else setGuideFieldId(null);
+  };
+
   const primarySignature = signatureFields.map((field) => fieldValues[field.id]).find(Boolean) || fieldValues[LEGACY_SIGNATURE] || "";
-  const canSubmit = !!primarySignature && myFields.filter((field) => field.required)
-    .every((field) => !!fieldValues[field.id]?.trim())
-    && (!signatureFields.some((field) => isStampSignatureType(field.type) && fieldValues[field.id]) || (!!stamp.name && !!stamp.companyId));
+  const fileBlocked = !!doc?.file_url && !docFileUrl;
 
   const signMutation = useMutation({
     mutationFn: async () => {
-      if (!canSubmit) throw new Error("יש למלא את כל שדות החובה ולחתום");
+      if (missingRequired.length || !primarySignature) throw new Error("יש למלא את כל שדות החובה ולחתום");
       const response = await supabase.functions.invoke("submit-signature", {
         body: { token, signatureData: primarySignature, fieldValues, action: "sign" },
       });
@@ -152,6 +223,16 @@ export default function SignDocument() {
     onError: (failure: Error) => toast.error(failure.message),
   });
   const busy = signMutation.isPending || declineMutation.isPending;
+  const trySign = () => {
+    if (fileBlocked) return;
+    if (missingRequired.length) {
+      setShowMissing(true);
+      goToField(missingRequired[0]);
+      toast.error("יש למלא את השדות החסרים — לחץ על שדה כדי לעבור אליו");
+      return;
+    }
+    signMutation.mutate();
+  };
 
   const terminal = outcome || (recipient?.status === "signed" ? "signed" : recipient?.status === "declined" ? "declined" : null);
   const unavailable = doc && !["pending", "partially_signed"].includes(doc.status);
@@ -170,8 +251,10 @@ export default function SignDocument() {
   }
 
   const renderSignature = (id: string, position: SignaturePosition, withStamp = false, label = "חתימה") => (
-    <button key={id} type="button" aria-label={`פתח ${label}`} onClick={() => openSignature(id)}
-      className="absolute border border-primary rounded bg-white/80 overflow-hidden z-10 focus-visible:ring-2 focus-visible:ring-primary"
+    <button key={id} type="button" data-sig-fill={id} aria-label={`פתח ${label}`} onClick={() => openSignature(id)}
+      className={`absolute border border-primary rounded bg-white/80 overflow-hidden z-10 focus-visible:ring-2 focus-visible:ring-primary ${
+        guideFieldId === id ? "ring-2 ring-primary ring-offset-2 shadow-md" : ""
+      }`}
       style={{ left: `${position.x}%`, top: `${position.y}%`, width: `${position.width}%`, height: `${position.height}%` }}>
       {withStamp && stamp.name && (
         <div className="absolute inset-0 grid content-center text-gray-500 opacity-70 px-1 leading-tight" aria-hidden="true">
@@ -188,17 +271,51 @@ export default function SignDocument() {
     if (isSignatureFieldType(field.type)) return renderSignature(field.id, field.position, isStampSignatureType(field.type), getFieldLabel(field.type));
     const style = { left: `${field.position.x}%`, top: `${field.position.y}%`, width: `${field.position.width}%`, height: `${field.position.height}%` };
     const fontSize = getFieldFontSizePx(field.position, docContainerHeight);
+    const advance = () => {
+      const next = nextFieldToFill(myFields, fieldValues, field.id);
+      if (next) goToField(next);
+    };
     const props = {
       value: fieldValues[field.id] ?? "",
-      onChange: (event: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => setFieldValues((values) => ({ ...values, [field.id]: event.target.value })),
-      placeholder: field.label,
+      onChange: (event: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+        const value = event.target.value;
+        setFieldValues((values) => ({ ...values, [field.id]: value }));
+        setGuideFieldId(field.id);
+        setGuideStarted(true);
+        if (field.type === "date" && value) {
+          window.setTimeout(() => {
+            const next = nextFieldToFill(myFields, { ...fieldValues, [field.id]: value }, field.id);
+            if (next) goToField(next);
+          }, 0);
+        }
+      },
+      onFocus: () => {
+        setGuideFieldId(field.id);
+        setGuideStarted(true);
+      },
+      onKeyDown: (event: React.KeyboardEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+        if (event.key !== "Enter") return;
+        if (field.type === "address" && !event.metaKey && !event.ctrlKey) return;
+        event.preventDefault();
+        advance();
+      },
+      placeholder: `${field.label || getFieldLabel(field.type)}${isFieldRequired(field) ? " *" : ""}`,
       "aria-label": field.label || getFieldLabel(field.type),
-      required: field.required,
+      required: isFieldRequired(field),
       className: "w-full h-full min-h-0 rounded-sm resize-none bg-white/95 border-primary px-1 py-0 leading-tight",
       style: { fontSize },
       dir: field.type === "phone" || field.type === "id_number" ? "ltr" : "rtl",
     };
-    return <div key={field.id} className="absolute" style={style}>{field.type === "address" ? <Textarea {...props} /> : <Input {...props} type={field.type === "phone" ? "tel" : field.type === "date" ? "date" : "text"} />}</div>;
+    return (
+      <div
+        key={field.id}
+        data-sig-fill={field.id}
+        className={`absolute ${guideFieldId === field.id ? "z-20 ring-2 ring-primary ring-offset-1 rounded-sm" : ""}`}
+        style={style}
+      >
+        {field.type === "address" ? <Textarea {...props} /> : <Input {...props} type={field.type === "phone" ? "tel" : field.type === "date" ? "date" : "text"} />}
+      </div>
+    );
   };
 
   return (
@@ -224,11 +341,27 @@ export default function SignDocument() {
             {(!doc?.file_url || (!hasSignatureFields && !signaturePosition)) && (
               <div className="space-y-3 mt-4">
                 {!doc?.file_url && myFields.filter((field) => !isSignatureFieldType(field.type)).map((field) => (
-                  <div key={field.id}><Label htmlFor={field.id}>{field.label || getFieldLabel(field.type)}</Label>
-                    <Input id={field.id} value={fieldValues[field.id] || ""} onChange={(event) => setFieldValues((values) => ({ ...values, [field.id]: event.target.value }))} /></div>
+                  <div key={field.id} data-sig-fill={field.id}>
+                    <Label htmlFor={field.id}>
+                      {field.label || getFieldLabel(field.type)}
+                      {isFieldRequired(field) ? " *" : ""}
+                    </Label>
+                    <Input
+                      id={field.id}
+                      value={fieldValues[field.id] || ""}
+                      onFocus={() => setGuideFieldId(field.id)}
+                      onChange={(event) => setFieldValues((values) => ({ ...values, [field.id]: event.target.value }))}
+                      onKeyDown={(event) => {
+                        if (event.key !== "Enter") return;
+                        event.preventDefault();
+                        const next = nextFieldToFill(myFields, fieldValues, field.id);
+                        if (next) goToField(next);
+                      }}
+                    />
+                  </div>
                 ))}
                 {(hasSignatureFields ? signatureFields.map((field) => field.id) : [LEGACY_SIGNATURE]).map((id) => (
-                  <Button key={id} type="button" variant="outline" onClick={() => openSignature(id)}>
+                  <Button key={id} type="button" data-sig-fill={id} variant="outline" onClick={() => openSignature(id)}>
                     {fieldValues[id] ? "ערוך חתימה" : "פתח חתימה"}
                   </Button>
                 ))}
@@ -236,11 +369,48 @@ export default function SignDocument() {
             )}
           </CardContent>
         </Card>
-        <div className="flex gap-3 justify-center">
-          <Button variant="destructive" onClick={() => declineMutation.mutate()} disabled={busy}><XCircle className="h-4 w-4 ml-2" />סירוב</Button>
-          <Button onClick={() => signMutation.mutate()} disabled={!canSubmit || busy || (!!doc?.file_url && !docFileUrl)} className="min-w-32">
-            <CheckCircle className="h-4 w-4 ml-2" />{signMutation.isPending ? "חותם..." : "חתום"}
-          </Button>
+        <div className="sticky bottom-3 z-30 rounded-xl border bg-background/95 shadow-lg backdrop-blur-sm p-3 space-y-3">
+          {showMissing && missingRequired.length > 0 && (
+            <div className="space-y-2">
+              <p className="text-sm font-medium text-destructive">
+                חסרים {missingRequired.length} שדות — לחץ כדי לעבור אליהם
+              </p>
+              <div className="flex flex-wrap gap-1.5">
+                {missingRequired.map((field) => (
+                  <Button
+                    key={field.id}
+                    type="button"
+                    size="sm"
+                    variant={guideFieldId === field.id ? "default" : "outline"}
+                    className="h-8"
+                    onClick={() => goToField(field)}
+                  >
+                    {fieldFillLabel(field)}
+                    <span className="text-xs opacity-70">ע{field.position.page ?? 1}</span>
+                  </Button>
+                ))}
+              </div>
+            </div>
+          )}
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <Button type="button" variant="outline" onClick={goToNextFill} disabled={!nextFill}>
+              <ChevronLeft className="h-4 w-4" />
+              {nextFill
+                ? `קח אותי למילוי הבא · ${fieldFillLabel(nextFill)}`
+                : "כל השדות מולאו"}
+            </Button>
+            <span className="text-xs text-muted-foreground">
+              {myFields.filter((field) => fieldValues[field.id]?.trim()).length}/{myFields.length || 0} שדות
+            </span>
+          </div>
+          <div className="flex gap-3 justify-center">
+            <Button variant="destructive" onClick={() => declineMutation.mutate()} disabled={busy}>
+              <XCircle className="h-4 w-4 ml-2" />סירוב
+            </Button>
+            <Button onClick={trySign} disabled={busy || fileBlocked} className="min-w-32">
+              <CheckCircle className="h-4 w-4 ml-2" />{signMutation.isPending ? "חותם..." : "חתום"}
+            </Button>
+          </div>
         </div>
         <Dialog open={activeSignatureId !== null} onOpenChange={(open) => { if (!open) setActiveSignatureId(null); }}>
           <DialogContent dir="rtl" className="max-w-lg max-h-[90dvh] overflow-y-auto">
