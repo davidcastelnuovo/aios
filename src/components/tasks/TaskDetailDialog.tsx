@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef, useCallback } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import {
@@ -149,6 +149,19 @@ export function TaskDetailDialog({
   const [viewLeadOpen, setViewLeadOpen] = useState(false);
   const [googleCalendarEventId, setGoogleCalendarEventId] = useState<string | null>(null);
   const [creatorName, setCreatorName] = useState("");
+  const titleFieldRef = useRef<HTMLTextAreaElement>(null);
+
+  const syncTitleFieldHeight = useCallback(() => {
+    const field = titleFieldRef.current;
+    if (!field) return;
+    field.style.height = "auto";
+    field.style.height = `${field.scrollHeight}px`;
+  }, []);
+
+  useEffect(() => {
+    if (!isActive) return;
+    syncTitleFieldHeight();
+  }, [title, isActive, isMobile, syncTitleFieldHeight]);
 
   // Fetch full lead data for viewing
   const { data: fullLeadData } = useQuery({
@@ -650,26 +663,47 @@ export function TaskDetailDialog({
 
   const body = (
     <div className={cn("flex flex-col h-full min-h-0 overflow-hidden", isPanel && "bg-muted/20")} dir="rtl">
-      <div className="shrink-0 border-b bg-card px-4 pt-3">
+      <div
+        className={cn(
+          "shrink-0 border-b bg-card",
+          isMobile && !isPanel ? "px-3 pt-11 pb-1" : "px-4 pt-3",
+        )}
+      >
         {!isPanel && (
           <DialogHeader className="mb-2">
             <DialogTitle className="sr-only">פרטי משימה</DialogTitle>
           </DialogHeader>
         )}
-        <div className={cn("flex items-center gap-2 pb-3", !isPanel && "pl-10")}>
-          <Input
+        <div
+          className={cn(
+            "flex gap-2 pb-3 min-w-0",
+            isMobile ? "flex-col items-stretch" : "items-center",
+            !isPanel && !isMobile && "pl-10",
+          )}
+        >
+          <Textarea
+            ref={titleFieldRef}
             value={title}
             onChange={(e) => setTitle(e.target.value)}
             placeholder="כותרת המשימה"
-            className="h-10 flex-1 border-0 bg-transparent px-0 text-base font-bold shadow-none focus-visible:ring-0"
+            rows={isMobile ? 2 : 1}
+            dir="rtl"
+            className={cn(
+              "min-w-0 w-full resize-none overflow-hidden border-0 bg-transparent px-0 font-bold shadow-none focus-visible:ring-0",
+              "whitespace-pre-wrap break-words leading-snug text-right",
+              isMobile ? "text-[15px] min-h-[3rem] max-h-40 py-1.5" : "text-base min-h-10 max-h-28 py-2",
+            )}
           />
           {creatorName && (
             <span
-              className="inline-flex items-center gap-1 rounded-full border bg-muted/40 px-2 py-0.5 text-[11px] text-muted-foreground shrink-0 max-w-[14rem]"
+              className={cn(
+                "inline-flex items-center gap-1 rounded-full border bg-muted/40 px-2 py-0.5 text-[11px] text-muted-foreground",
+                isMobile ? "self-start max-w-full" : "shrink-0 max-w-[14rem]",
+              )}
               title={`המשימה ניתנה על ידי ${creatorName}`}
             >
-              <UserRound className="h-3 w-3" />
-              <span className="truncate">ניתנה על ידי {creatorName}</span>
+              <UserRound className="h-3 w-3 shrink-0" />
+              <span className={cn(isMobile ? "break-words" : "truncate")}>ניתנה על ידי {creatorName}</span>
             </span>
           )}
         </div>
