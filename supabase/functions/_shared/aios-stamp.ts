@@ -3,6 +3,8 @@
  * Renders Hebrew via SVG + resvg (HarfBuzz), not pdf-lib text drawing.
  */
 import { initWasm, Resvg } from 'npm:@resvg/resvg-wasm@2.6.2';
+import { signatureFieldTextLayout } from './signature-field-text.ts';
+export { signatureFieldTextLayout } from './signature-field-text.ts';
 
 const UI_FONT_URL =
   'https://cdn.jsdelivr.net/npm/dejavu-fonts-ttf@2.37.3/ttf/DejaVuSans.ttf';
@@ -55,11 +57,16 @@ function rtlText(text: string): string {
 }
 
 export async function renderSignatureFieldPng(
-  text: string, width: number, height: number, fontSize: number,
+  text: string,
+  width: number,
+  height: number,
+  fontSize: number,
+  align: "right" | "left" = "right",
 ): Promise<Uint8Array> {
   await ensureGraphicsRuntime();
+  const layout = signatureFieldTextLayout(width, height, align);
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}">
-    <text x="0" y="${height * 0.7}" font-family="DejaVu Sans" font-size="${fontSize}" fill="#000">${rtlText(text)}</text>
+    <text x="${layout.x}" y="${layout.y}" text-anchor="${layout.textAnchor}" direction="${layout.direction}" font-family="DejaVu Sans" font-size="${fontSize}" fill="#000">${rtlText(text)}</text>
   </svg>`;
   return renderSvgToPng(svg, Math.max(1, Math.ceil(width * 3)));
 }
