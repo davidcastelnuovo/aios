@@ -46,9 +46,13 @@ export function campaignDeliveryStatusLabel(status) {
   return 'לא ידוע'
 }
 
-const LEAD_TERMS = ['LEAD', 'CONTACT', 'SUBMIT_APPLICATION', 'QUALIFIED_LEAD']
+const LEAD_TERMS = [
+  'LEAD', 'CONTACT', 'SUBMIT_APPLICATION', 'QUALIFIED_LEAD',
+  'MESSAGE', 'MESSAGES', 'CONVERSATION', 'CONVERSATIONS', 'MESSAGING',
+  'WHATSAPP', 'MESSENGER', 'REPLY', 'CLICK_TO_MESSAGE', 'ON_AD',
+]
 const ENGAGEMENT_TERMS = [
-  'ENGAGEMENT', 'TRAFFIC', 'VIDEO_VIEW', 'THRUPLAY', 'MESSAGE', 'CONVERSATION',
+  'ENGAGEMENT', 'TRAFFIC', 'VIDEO_VIEW', 'THRUPLAY',
   'REACH', 'AWARENESS', 'LINK_CLICK', 'LANDING_PAGE_VIEW',
 ]
 const ECOMMERCE_TERMS = ['ECOMMERCE', 'PURCHASE', 'SALES', 'CONVERSION_VALUE', 'ROAS']
@@ -69,7 +73,7 @@ const META_OBJECTIVE_GOAL = [
   ['leads', ['OUTCOME_LEADS', 'LEAD_GENERATION']],
   ['engagement', [
     'OUTCOME_TRAFFIC', 'OUTCOME_ENGAGEMENT', 'OUTCOME_AWARENESS',
-    'LINK_CLICKS', 'MESSAGES', 'REACH', 'VIDEO_VIEWS',
+    'LINK_CLICKS', 'REACH', 'VIDEO_VIEWS',
   ]],
 ]
 
@@ -87,7 +91,8 @@ function goalFromResultKind(resultKind) {
   if (!kind) return null
   if (kind === 'purchases') return 'ecommerce'
   if (kind === 'leads') return 'leads'
-  if (['video_views', 'conversations', 'engagements', 'link_clicks', 'landing_page_views', 'results'].includes(kind)) {
+  if (['conversations', 'messages', 'messaging_conversations'].includes(kind)) return 'leads'
+  if (['video_views', 'engagements', 'link_clicks', 'landing_page_views', 'results'].includes(kind)) {
     return 'engagement'
   }
   return null
@@ -100,10 +105,11 @@ function goalFromSyncedRowMetrics(data = {}) {
   if (purchases > 0 || purchaseValue > 0) return 'ecommerce'
 
   const leads = Number(data.leads ?? data.form_leads ?? data.conversions ?? 0) || 0
-  const conversations = Number(data.conversations ?? data.messages ?? 0) || 0
+  const messagingLeads = Number(data.conversations ?? data.messages ?? data.messaging_conversations ?? 0) || 0
   const videoViews = Number(data.video_views ?? data.thruplays ?? 0) || 0
-  if (conversations > 0 || videoViews > 0) return 'engagement'
-  if (leads > 0) return 'leads'
+  const linkClicks = Number(data.link_clicks ?? data.clicks ?? 0) || 0
+  if (messagingLeads > 0 || leads > 0) return 'leads'
+  if (videoViews > 0 || linkClicks > 0) return 'engagement'
 
   return null
 }
@@ -112,8 +118,8 @@ function goalFromCampaignName(name) {
   const raw = String(name || '').trim()
   if (!raw) return null
   if (/מכירות|sales|purchase|רכיש/i.test(raw)) return 'ecommerce'
-  if (/מעורבות|סרטון|video|thruplay|ווטסאפ|whatsapp|message|שיח/i.test(raw)) return 'engagement'
-  if (/ליד|lead/i.test(raw)) return 'leads'
+  if (/ליד|lead|ווטסאפ|whatsapp|הודע|message|שיח|conversation/i.test(raw)) return 'leads'
+  if (/מעורבות|סרטון|video|thruplay|traffic|טראפיק|צפיות|view/i.test(raw)) return 'engagement'
   return null
 }
 
@@ -192,9 +198,26 @@ function classificationContext(context = {}) {
   }
 }
 
+function goalFromMessagingLeadSignals(data = {}) {
+  const optimization = String(data.optimization_goal || '').trim().toUpperCase()
+  if (optimization) {
+    const engagementOnly = ['THRUPLAY', 'VIDEO_VIEW', 'IMPRESSION', 'REACH', 'LINK_CLICK', 'LANDING_PAGE', 'POST_ENGAGEMENT']
+    const leadMessaging = ['CONVERSATION', 'MESSAGING', 'WHATSAPP', 'MESSAGE', 'MESSENGER', 'REPLY', 'CLICK_TO_MESSAGE', 'LEAD', 'QUALIFIED', 'FORM', 'ON_AD']
+    if (includesTerm([optimization], leadMessaging) && !includesTerm([optimization], engagementOnly)) {
+      return 'leads'
+    }
+  }
+  const nameGoal = goalFromCampaignName(data.campaign_name)
+  if (nameGoal === 'leads') return 'leads'
+  return null
+}
+
 /** Classify by campaign objective first; fall back to report type only when unknown. */
 export function classifyPulseCampaignGoal(data = {}, context = {}) {
   const ctx = classificationContext(context)
+
+  const messagingLeadGoal = goalFromMessagingLeadSignals(data)
+  if (messagingLeadGoal) return { goal: messagingLeadGoal, source: 'platform_goal' }
 
   const objectiveGoal = goalFromListedObjective(data.campaign_objective || data.objective)
   if (objectiveGoal) return { goal: objectiveGoal, source: 'platform_goal' }
@@ -287,6 +310,7 @@ export function pulseCampaignOutcome(data = {}, goal = 'unknown') {
     // Prefer platform conversions/leads; only use verified_leads when > 0.
     const result = firstPositivePresent(data, [
       'leads', 'conversions', 'form_leads', 'website_leads', 'all_conversions',
+      'conversations', 'messages', 'messaging_conversations', 'messaging_conversation_started',
     ])
     if (result.field) return { ...result, kind: 'leads' }
     const verified = firstPositivePresent(data, ['verified_leads'])
