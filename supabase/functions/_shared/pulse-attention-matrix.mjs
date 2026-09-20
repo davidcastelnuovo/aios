@@ -1,3 +1,9 @@
+import {
+  integrationTypeToGoal,
+  isEcommerceReportTable,
+  tableReportGoal,
+} from './pulse-campaign-goals.mjs'
+
 const MOOD_STATUS_LABELS = {
   happy: '😊 מבסוט / תקין',
   wavering: '😐 מתנדנד / רגיש',
@@ -23,7 +29,57 @@ function round(value, digits = 2) {
   return Math.round(value * factor) / factor
 }
 
-function goalFromRows(rows) {
+function platformTablesForClient(tables, clientId, platform) {
+  return tables.filter((table) => {
+    if (table.client_id !== clientId) return false
+    if (platform === 'google') return table.integration_type === 'google_ads'
+    return table.integration_type === 'facebook_insights' || table.integration_type === 'facebook_ecommerce'
+  })
+}
+
+function platformConfiguredGoal(tables, clientId, platform) {
+  const matches = platformTablesForClient(tables, clientId, platform)
+  const goals = new Set(
+    matches
+      .map((table) => tableReportGoal(table) || integrationTypeToGoal(table.integration_type, table))
+      .filter(Boolean),
+  )
+  if (goals.size === 1) return [...goals][0]
+  if (matches.length && !matches.some((table) => isEcommerceReportTable(table))) return 'leads'
+  return null
+}
+
+function rowConfirmsSalesObjective(row) {
+  const objective = String(row.campaign_objective || row.objective || '').trim().toUpperCase()
+  return objective.includes('OUTCOME_SALES')
+    || objective.includes('PRODUCT_CATALOG')
+    || objective.includes('PURCHASE')
+}
+
+function effectiveCampaignGoal(row, table) {
+  if (!table || row.goal !== 'ecommerce') return row.goal
+  if (isEcommerceReportTable(table)) return row.goal
+  if (rowConfirmsSalesObjective(row)) return 'ecommerce'
+  return 'leads'
+}
+
+function normalizeAttentionRows(rows, tableById) {
+  return rows.map((row) => {
+    const table = tableById.get(row.table_id)
+    const goal = effectiveCampaignGoal(row, table)
+    if (goal === row.goal) return row
+    const efficiency7d = goal === 'ecommerce'
+      ? (row.spend_7d > 0 && row.revenue_7d ? row.revenue_7d / row.spend_7d : row.efficiency_7d)
+      : (row.outcomes_7d > 0 && row.spend_7d ? row.spend_7d / row.outcomes_7d : row.efficiency_7d)
+    return {
+      ...row,
+      goal,
+      efficiency_7d: efficiency7d ?? row.efficiency_7d,
+    }
+  })
+}
+
+function goalFromRows(rows, configuredGoal = null) {
   const counts = new Map()
   for (const row of rows) {
     if (row.goal === 'unknown') continue
@@ -37,10 +93,22 @@ function goalFromRows(rows) {
       bestSpend = spend
     }
   }
-  return rows.find((row) => row.goal !== 'unknown')?.goal ?? best
+  if (configuredGoal === 'leads' && (counts.get('leads') ?? 0) > 0) return 'leads'
+  if (configuredGoal === 'leads' && best === 'ecommerce') return 'leads'
+  if (configuredGoal && configuredGoal !== 'unknown') return configuredGoal
+  if (bestSpend >= 0) return best
+  return rows.find((row) => row.goal !== 'unknown')?.goal ?? 'leads'
 }
 
-function aggregatePlatformMetrics(rows) {
+function rowsForGoal(rows, goal) {
+  return rows.filter((row) => row.goal === goal)
+}
+
+function aggregatePlatformMetrics(rows, configuredGoal = null) {
+  const primaryGoal = goalFromRows(rows, configuredGoal)
+  const goalRows = rowsForGoal(rows, primaryGoal)
+  const scopedRows = goalRows.length ? goalRows : rows
+
   let spend7d = 0
   let outcomes7d = 0
   let hasOutcomes = false
@@ -51,7 +119,7 @@ function aggregatePlatformMetrics(rows) {
   let baselineWeight = 0
   let lastChangeAt = null
 
-  for (const row of rows) {
+  for (const row of scopedRows) {
     spend7d += row.spend_7d ?? 0
     if (row.outcomes_7d !== null && row.outcomes_7d !== undefined) {
       outcomes7d += row.outcomes_7d
@@ -72,7 +140,6 @@ function aggregatePlatformMetrics(rows) {
     }
   }
 
-  const primaryGoal = goalFromRows(rows)
   const useRoas = primaryGoal === 'ecommerce'
   const efficiency7d = useRoas
     ? spend7d > 0 ? revenue7d / spend7d : null
@@ -186,12 +253,17 @@ function evaluateSatisfactionIssue(moodStatus) {
   return { level: 'watch', label }
 }
 
-function pickPrimaryTable(tables, platform) {
+function pickPrimaryTable(tables, platform, goal) {
   const matches = tables.filter((table) => {
     if (platform === 'google') return table.integration_type === 'google_ads'
     return table.integration_type === 'facebook_insights' || table.integration_type === 'facebook_ecommerce'
   })
-  return matches[0] ?? null
+  if (!matches.length) return null
+  if (platform === 'google') return matches[0]
+  if (goal === 'ecommerce') {
+    return matches.find((table) => table.integration_type === 'facebook_ecommerce') ?? matches[0]
+  }
+  return matches.find((table) => table.integration_type === 'facebook_insights') ?? matches[0]
 }
 
 function rowHasIssue(issues) {
@@ -200,6 +272,7 @@ function rowHasIssue(issues) {
 
 export function buildPulseAttentionRows({ campaignRows = [], tables = [], clients = [] }) {
   const clientMap = new Map(clients.map((client) => [client.clientId, client]))
+  const tableById = new Map(tables.map((table) => [table.id, table]))
   const tablesByClient = new Map()
   for (const table of tables) {
     const list = tablesByClient.get(table.client_id) ?? []
@@ -222,10 +295,12 @@ export function buildPulseAttentionRows({ campaignRows = [], tables = [], client
     const client = clientMap.get(clientId)
     if (!client) continue
 
-    const metrics = aggregatePlatformMetrics(rows)
+    const configuredGoal = platformConfiguredGoal(tables, clientId, platform)
+    const normalizedRows = normalizeAttentionRows(rows, tableById)
+    const metrics = aggregatePlatformMetrics(normalizedRows, configuredGoal)
     if (metrics.spend7d <= 0) continue
 
-    const primaryTable = pickPrimaryTable(tablesByClient.get(clientId) ?? [], platform)
+    const primaryTable = pickPrimaryTable(tablesByClient.get(clientId) ?? [], platform, metrics.primaryGoal)
     const settings = primaryTable?.integration_settings || {}
     const target = resolvePlatformTarget(settings, metrics.primaryGoal, metrics.baselineEfficiency7d)
     const efficiencyIssue = evaluateEfficiencyIssue({
