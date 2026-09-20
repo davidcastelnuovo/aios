@@ -411,6 +411,35 @@ test('paused campaigns with spend but no leads are not critical', () => {
   assert.match(row.status_reason, /מושהה/)
 })
 
+test('pulse_platform_targets apply before campaign-specific overrides', () => {
+  const tables = [{
+    id: 't1',
+    client_id: 'c1',
+    integration_type: 'facebook_insights',
+    integration_settings: {
+      pulse_platform_targets: { leads: { cpl: 40 } },
+      pulse_targets: { default: { cpl: 80 } },
+    },
+  }]
+  const records = []
+  for (let day = 11; day <= 17; day += 1) {
+    records.push({
+      table_id: 't1',
+      data: {
+        date: `2026-09-${day}`,
+        campaign_id: 'lead',
+        campaign_name: 'Leads',
+        campaign_type: 'lead',
+        spend: 50,
+        leads: 1,
+      },
+    })
+  }
+  const row = buildPulseCampaignRows({ records, tables, nowYmd: '2026-09-18' })[0]
+  assert.equal(row.target_value, 40)
+  assert.equal(row.status, 'critical')
+})
+
 test('persistent target breach becomes an evidence-backed exception', () => {
   const tables = [{
     id: 't1',

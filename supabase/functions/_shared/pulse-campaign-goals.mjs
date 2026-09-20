@@ -381,8 +381,13 @@ function platformForIntegration(type) {
 function approvedTarget(settings = {}, data = {}, goal) {
   const campaignId = String(data.campaign_id || data.campaignId || '')
   const campaignName = String(data.campaign_name || data.campaignName || data.campaign || data.name || '')
+  const platformTargets = settings.pulse_platform_targets || {}
+  const platformMapped = platformTargets[goal] || platformTargets.default || {}
   const targets = settings.pulse_targets || settings.campaign_targets || {}
-  const mapped = targets[campaignId] || targets[campaignName] || targets.default || {}
+  const mapped = {
+    ...platformMapped,
+    ...(targets[campaignId] || targets[campaignName] || targets.default || {}),
+  }
   if (goal === 'ecommerce') {
     const roas = Number(mapped.roas ?? mapped.target_roas ?? settings.target_roas)
     if (Number.isFinite(roas) && roas > 0) return { value: roas, kind: 'roas', direction: 'minimum' }
