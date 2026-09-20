@@ -27,6 +27,43 @@ test('evaluateEfficiencyIssue flags approved target breach', () => {
   assert.equal(issue?.level, 'alert')
 })
 
+test('leads-only google table reclassifies mis-tagged ecommerce rows to CPL', () => {
+  const rows = buildPulseAttentionRows({
+    campaignRows: [{
+      client_id: 'client-2',
+      table_id: 'ga-leads',
+      platform: 'google',
+      goal: 'ecommerce',
+      campaign_name: 'בר תרגומים leads',
+      spend_7d: 500,
+      outcomes_7d: 20,
+      revenue_7d: 0,
+      efficiency_7d: 0.04,
+      baseline_efficiency_7d: 0.05,
+      trend_7d_pct: 12,
+      last_change_at: '2026-09-18T10:00:00Z',
+    }],
+    tables: [{
+      id: 'ga-leads',
+      client_id: 'client-2',
+      integration_type: 'google_ads',
+      integration_settings: { target_cpl: 35 },
+    }],
+    clients: [{
+      clientId: 'client-2',
+      clientName: 'בר תרגומים',
+      campaignerName: 'דוד',
+      moodStatus: 'happy',
+      lastClientCallAt: '2026-09-18T10:00:00Z',
+      daysSinceLastCommunication: 3,
+      recentCommunicationStatus: null,
+      hasRecentComplaintUpdate: false,
+    }],
+  })
+
+  assert.equal(rows.length, 0, 'healthy CPL client should not appear only because of false ROAS')
+})
+
 test('platform attention uses leads CPL when leads spend dominates mixed goals', () => {
   const rows = buildPulseAttentionRows({
     campaignRows: [
