@@ -194,7 +194,9 @@ export default function SignDocument() {
       placeholder: field.label,
       "aria-label": field.label || getFieldLabel(field.type),
       required: field.required,
-      className: "w-full h-full min-h-0 rounded-sm resize-none bg-white/95 border-primary px-1 py-0 leading-tight",
+      className: `w-full h-full min-h-0 rounded-sm resize-none bg-white/95 border-primary px-1 py-0 leading-tight ${
+        field.type === "phone" || field.type === "id_number" ? "text-left" : "text-right"
+      }`,
       style: { fontSize },
       dir: field.type === "phone" || field.type === "id_number" ? "ltr" : "rtl",
     };
