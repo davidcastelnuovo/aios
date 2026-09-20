@@ -117,6 +117,26 @@ test('classifies campaign objective and never defaults an unknown campaign to le
   )
 })
 
+test('WhatsApp / messaging lead campaigns classify as leads not engagement', () => {
+  assert.equal(
+    classifyPulseCampaignGoal({
+      campaign_name: 'הלם פארם | לידים ווטסאפ',
+      campaign_objective: 'OUTCOME_ENGAGEMENT',
+      optimization_goal: 'CONVERSATIONS',
+      conversations: 3,
+    }).goal,
+    'leads',
+  )
+  assert.equal(classifyPulseCampaignGoal({ optimization_goal: 'CONVERSATIONS' }).goal, 'leads')
+  assert.equal(classifyPulseCampaignGoal({ result_kind: 'conversations' }).goal, 'leads')
+  assert.equal(classifyPulseCampaignGoal({ result_kind: 'messages' }).goal, 'leads')
+  assert.equal(classifyPulseCampaignGoal({ optimization_goal: 'THRUPLAY' }).goal, 'engagement')
+  assert.equal(
+    pulseCampaignOutcome({ conversations: 4, spend: 100 }, 'leads'),
+    { value: 4, field: 'conversations', kind: 'leads' },
+  )
+})
+
 test('classifies from synced result_kind and Hebrew campaign names', () => {
   assert.equal(
     classifyPulseCampaignGoal({ result_kind: 'purchases' }).goal,
@@ -192,7 +212,7 @@ test('Avieli Tayg production-shaped Meta rows classify from objective not table 
   }
   const rows = buildPulseCampaignRows({ records, tables: [table], nowYmd: '2026-09-18' })
     .filter((row) => row.spend_7d > 0)
-  assert.deepEqual(rows.map((row) => row.goal).sort(), ['ecommerce', 'engagement', 'engagement', 'leads'])
+  assert.deepEqual(rows.map((row) => row.goal).sort(), ['ecommerce', 'engagement', 'leads', 'leads'])
 })
 
 test('Avieli Tayg-style mixed Meta account splits into leads, engagement, and ecommerce', () => {
@@ -255,7 +275,7 @@ test('Avieli Tayg-style mixed Meta account splits into leads, engagement, and ec
     }
   }
   const rows = buildPulseCampaignRows({ records, tables, nowYmd: '2026-09-18' })
-  assert.deepEqual(rows.map((row) => row.goal).sort(), ['ecommerce', 'ecommerce', 'engagement', 'engagement', 'leads'])
+  assert.deepEqual(rows.map((row) => row.goal).sort(), ['ecommerce', 'ecommerce', 'engagement', 'leads', 'leads'])
   const spending = rows.filter((row) => row.spend_7d > 0)
   assert.equal(spending.length, 4)
   assert.equal(spending.find((row) => row.campaign_id === 'off'), undefined)
