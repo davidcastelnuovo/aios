@@ -254,11 +254,18 @@ function applyFreshCampaignGoalClassification(
     tableClassificationContext(table),
   );
   if (classification.goal === "unknown" || classification.goal === row.goal) return row;
-  return {
+  const next: PulseCampaignGoalRow = {
     ...row,
     goal: classification.goal,
     classification_source: classification.source,
   };
+  if (
+    classification.goal === "leads"
+    && (row.outcome_kind === "link_clicks" || row.outcome_kind === "clicks" || row.outcome_kind === "landing_page_views")
+  ) {
+    next.outcome_kind = "leads";
+  }
+  return next;
 }
 
 /** Clients whose stored breakdown goal no longer matches objective/report rules. */

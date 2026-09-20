@@ -86,20 +86,21 @@ function goalFromListedObjective(objective) {
   return null
 }
 
-function goalFromResultKind(resultKind) {
+function goalFromResultKind(resultKind, data = {}, context = {}) {
   const kind = String(resultKind || '').trim().toLowerCase()
   if (!kind) return null
   if (kind === 'purchases') return 'ecommerce'
   if (kind === 'leads') return 'leads'
   if (['conversations', 'messages', 'messaging_conversations'].includes(kind)) return 'leads'
   if (['video_views', 'engagements', 'link_clicks', 'landing_page_views', 'results'].includes(kind)) {
+    if (hasExplicitLeadSignals(data, context)) return 'leads'
     return 'engagement'
   }
   return null
 }
 
 /** Legacy synced rows may lack objective/result_kind but still carry report metrics. */
-function goalFromSyncedRowMetrics(data = {}) {
+function goalFromSyncedRowMetrics(data = {}, context = {}) {
   const purchases = Number(data.purchases ?? data.purchase ?? 0) || 0
   const purchaseValue = Number(data.purchase_value ?? data.conversions_value ?? data.revenue ?? 0) || 0
   if (purchases > 0 || purchaseValue > 0) return 'ecommerce'
@@ -109,6 +110,7 @@ function goalFromSyncedRowMetrics(data = {}) {
   const videoViews = Number(data.video_views ?? data.thruplays ?? 0) || 0
   const linkClicks = Number(data.link_clicks ?? data.clicks ?? 0) || 0
   if (messagingLeads > 0 || leads > 0) return 'leads'
+  if (hasExplicitLeadSignals(data, context)) return 'leads'
   if (videoViews > 0 || linkClicks > 0) return 'engagement'
 
   return null
@@ -118,7 +120,7 @@ function goalFromCampaignName(name) {
   const raw = String(name || '').trim()
   if (!raw) return null
   if (/מכירות|sales|purchase|רכיש/i.test(raw)) return 'ecommerce'
-  if (/ליד|lead|ווטסאפ|whatsapp|הודע|message|שיח|conversation/i.test(raw)) return 'leads'
+  if (/ליד|lead|ווטסאפ|וואטסאפ|whatsapp|הודע|message|שיח|conversation/i.test(raw)) return 'leads'
   if (/מעורבות|סרטון|video|thruplay|traffic|טראפיק|צפיות|view/i.test(raw)) return 'engagement'
   return null
 }
@@ -212,6 +214,42 @@ function goalFromMessagingLeadSignals(data = {}) {
   return null
 }
 
+/** Lead intent from sync metadata — must win over LINK_CLICKS / link_clicks heuristics. */
+function goalFromExplicitLeadSignals(data = {}, context = {}) {
+  const reportDefault = tableReportDefaultGoal(classificationContext(context))
+  const objectiveGoal = goalFromListedObjective(data.campaign_objective || data.objective)
+
+  const campaignType = String(data.campaign_type || '').trim().toLowerCase()
+  const typeOnlyLeadHeuristic = campaignType === 'lead' && !objectiveGoal
+  if (campaignType === 'lead' && !(typeOnlyLeadHeuristic && reportDefault === 'ecommerce')) {
+    return 'leads'
+  }
+
+  const resultKind = String(data.result_kind || '').trim().toLowerCase()
+  if (resultKind === 'leads') return 'leads'
+
+  const manual = normalizedTerms(data.pulse_goal, data.campaign_goal)
+  if (includesTerm(manual, ['LEAD', 'LEADS', 'CPL'])) return 'leads'
+
+  const nameGoal = goalFromCampaignName(data.campaign_name)
+  if (nameGoal === 'leads') return 'leads'
+
+  const optimization = String(data.optimization_goal || '').trim().toUpperCase()
+  if (
+    optimization
+    && includesTerm([optimization], LEAD_TERMS)
+    && !includesTerm([optimization], ['LINK_CLICK', 'LANDING_PAGE', 'THRUPLAY', 'VIDEO_VIEW', 'REACH', 'TRAFFIC'])
+  ) {
+    return 'leads'
+  }
+
+  return null
+}
+
+function hasExplicitLeadSignals(data = {}, context = {}) {
+  return goalFromExplicitLeadSignals(data, context) === 'leads'
+}
+
 /** Classify by campaign objective first; fall back to report type only when unknown. */
 export function classifyPulseCampaignGoal(data = {}, context = {}) {
   const ctx = classificationContext(context)
@@ -222,13 +260,16 @@ export function classifyPulseCampaignGoal(data = {}, context = {}) {
   const objectiveGoal = goalFromListedObjective(data.campaign_objective || data.objective)
   if (objectiveGoal) return { goal: objectiveGoal, source: 'platform_goal' }
 
+  const explicitLeadGoal = goalFromExplicitLeadSignals(data, ctx)
+  if (explicitLeadGoal) return { goal: explicitLeadGoal, source: 'platform_goal' }
+
   const optimizationGoal = goalFromOptimizationGoal(data.optimization_goal)
   if (optimizationGoal) return { goal: optimizationGoal, source: 'platform_goal' }
 
-  const resultKindGoal = goalFromResultKind(data.result_kind)
+  const resultKindGoal = goalFromResultKind(data.result_kind, data, ctx)
   if (resultKindGoal) return { goal: resultKindGoal, source: 'platform_goal' }
 
-  const syncedMetricsGoal = goalFromSyncedRowMetrics(data)
+  const syncedMetricsGoal = goalFromSyncedRowMetrics(data, ctx)
   if (syncedMetricsGoal) return { goal: syncedMetricsGoal, source: 'platform_goal' }
 
   const platform = normalizedTerms(
@@ -440,9 +481,11 @@ function approvedTarget(settings = {}, data = {}, goal) {
   const platformTargets = settings.pulse_platform_targets || {}
   const platformMapped = platformTargets[goal] || platformTargets.default || {}
   const targets = settings.pulse_targets || settings.campaign_targets || {}
+  const campaignMapped = targets[campaignId] || targets[campaignName] || {}
   const mapped = {
+    ...(targets.default || {}),
     ...platformMapped,
-    ...(targets[campaignId] || targets[campaignName] || targets.default || {}),
+    ...campaignMapped,
   }
   if (goal === 'ecommerce') {
     const roas = Number(mapped.roas ?? mapped.target_roas ?? settings.target_roas)
