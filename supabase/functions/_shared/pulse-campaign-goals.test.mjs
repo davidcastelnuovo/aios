@@ -156,6 +156,16 @@ test('Meta lead campaigns with LINK_CLICKS optimization classify as leads not en
 test('WhatsApp / messaging lead campaigns classify as leads not engagement', () => {
   assert.equal(
     classifyPulseCampaignGoal({
+      campaign_name: 'מעורבות | 18.8 - וואטסאפ',
+      campaign_objective: 'OUTCOME_ENGAGEMENT',
+      optimization_goal: 'LINK_CLICKS',
+      link_clicks: 394,
+      result_kind: 'link_clicks',
+    }).goal,
+    'leads',
+  )
+  assert.equal(
+    classifyPulseCampaignGoal({
       campaign_name: 'הלם פארם | לידים ווטסאפ',
       campaign_objective: 'OUTCOME_ENGAGEMENT',
       optimization_goal: 'CONVERSATIONS',

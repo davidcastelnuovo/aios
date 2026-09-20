@@ -56,13 +56,45 @@ test('messaging objective is synced as engagement with an exact conversation out
     { c1: 'CONVERSATIONS' },
   )
 
-  assert.equal(row.campaign_type, 'traffic')
+  assert.equal(row.campaign_type, 'lead')
   assert.equal(row.optimization_goal, 'CONVERSATIONS')
   assert.equal(row.result_kind, 'conversations')
   assert.equal(row.results, 8)
   assert.equal(row.conversations, 8)
   assert.equal(row.reach, 800)
   assert.equal(row.frequency, 1.25)
+})
+
+test('WhatsApp engagement campaign syncs as lead not traffic', () => {
+  const row = buildInsightRecord(
+    {
+      date_start: '2026-09-17',
+      campaign_id: 'wa',
+      campaign_name: 'מעורבות | 18.8 - וואטסאפ',
+      spend: '250',
+      impressions: '8950',
+      inline_link_clicks: '394',
+      clicks: '394',
+      actions: [
+        { action_type: 'link_click', value: '394' },
+        { action_type: 'onsite_conversion.messaging_conversation_started_7d', value: '12' },
+      ],
+    },
+    {
+      wa: {
+        id: 'wa',
+        name: 'מעורבות | 18.8 - וואטסאפ',
+        objective: 'OUTCOME_ENGAGEMENT',
+        effective_status: 'ACTIVE',
+        configured_status: 'ACTIVE',
+      },
+    },
+    {},
+    { wa: 'LINK_CLICKS' },
+  )
+
+  assert.equal(row.campaign_type, 'lead')
+  assert.equal(row.conversations, 12)
 })
 
 test('sales objective stores purchase results for pulse classification', () => {

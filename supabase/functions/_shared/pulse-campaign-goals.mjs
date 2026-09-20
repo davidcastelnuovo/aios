@@ -120,7 +120,7 @@ function goalFromCampaignName(name) {
   const raw = String(name || '').trim()
   if (!raw) return null
   if (/מכירות|sales|purchase|רכיש/i.test(raw)) return 'ecommerce'
-  if (/ליד|lead|ווטסאפ|whatsapp|הודע|message|שיח|conversation/i.test(raw)) return 'leads'
+  if (/ליד|lead|ווטסאפ|וואטסאפ|whatsapp|הודע|message|שיח|conversation/i.test(raw)) return 'leads'
   if (/מעורבות|סרטון|video|thruplay|traffic|טראפיק|צפיות|view/i.test(raw)) return 'engagement'
   return null
 }

@@ -60,7 +60,7 @@ import { MaskyooSiblingCard } from "@/components/dynamic-tables/MaskyooSiblingCa
 import { CURRENCY_OPTIONS, getCurrencySymbol, normalizeCurrencyCode, type CurrencyCode } from "@/lib/currency";
 import { resolveAnalyticsReportMode } from "@/lib/analyticsReportMode";
 import { LinkTableToClientDialog } from "@/components/dynamic-tables/LinkTableToClientDialog";
-import { getLeadsFromData } from "@/lib/adsMetrics";
+import { effectiveFacebookCampaignType, getLeadsFromData } from "@/lib/adsMetrics";
 import { isSeoReportSource } from "@/lib/seoReports";
 import { ManualROICard } from "@/components/dynamic-tables/ManualROICard";
 import { WooAttributionSection } from "@/components/dynamic-tables/WooAttributionSection";
@@ -2563,7 +2563,7 @@ export default function DynamicTableView({ embedTableSlug, embedMode, summaryOnl
               };
             }
 
-            const rowType = String(record.data?.campaign_type || '').toLowerCase();
+            const rowType = effectiveFacebookCampaignType(record.data || {});
             if (rowType === 'ecommerce' || rowType === 'lead' || rowType === 'traffic') {
               acc[groupKey].campaign_type = rowType as 'lead' | 'ecommerce' | 'traffic';
             }

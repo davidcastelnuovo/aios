@@ -477,15 +477,24 @@ export function buildInsightRecord(
     LEAD_ACTION_TYPES.some((type) => actionTypeSet.has(type)) ||
     Array.from(actionTypeSet).some((type) => String(type).startsWith('offsite_conversion.custom') || String(type).startsWith('offsite_conversion.fb_pixel_custom'));
 
+  const campaignName = String(insight.campaign_name || '');
+  const isMessagingLeadCampaign =
+    isMessagingObjective ||
+    hasMessagingSignal ||
+    conversations > 0 ||
+    optimizationUpper.includes('MESSAGE') ||
+    optimizationUpper.includes('CONVERSATION') ||
+    /whatsapp|ווטסאפ|וואטסאפ|מסנג|messenger|click.?to.?message/i.test(campaignName);
+
   // PRIORITY: Campaign objective is the source of truth. Traffic campaigns get
   // their own type so they're not shown as lead campaigns with "0 leads".
   const campaignType: 'lead' | 'ecommerce' | 'traffic' | 'other' =
-    isTrafficObjective
+    isTrafficObjective && !isMessagingLeadCampaign
       ? 'traffic'
       : isLeadObjective
         ? 'lead'
-        : isMessagingObjective
-          ? 'traffic'
+        : isMessagingLeadCampaign
+          ? 'lead'
           : isEcommerceObjective
             ? 'ecommerce'
             : hasStrongEcommerceSignal && !(hasLeadSignal && purchases === 0 && purchaseValue === 0)
