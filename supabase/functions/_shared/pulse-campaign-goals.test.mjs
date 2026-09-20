@@ -462,3 +462,24 @@ test('afternoon partial today is shown separately and does not inflate the 7-day
   assert.equal(row.last_change_at, '2026-09-18T10:45:00.000Z')
   assert.equal(row.last_sync_at, '2026-09-18T11:00:00.000Z')
 })
+
+test('Google Ads verified_leads=0 must not mask metrics.conversions in pulse', () => {
+  assert.deepEqual(
+    pulseCampaignOutcome({ verified_leads: 0, conversions: 7 }, 'leads'),
+    { value: 7, field: 'conversions', kind: 'leads' },
+  )
+
+  const tables = [{
+    id: 'ga1',
+    client_id: 'c1',
+    integration_type: 'google_ads',
+    integration_settings: {},
+  }]
+  const records = [
+    { table_id: 'ga1', data: { date: '2026-09-17', entity_level: 'campaign', campaign_id: 'g1', campaign_name: 'Lead campaign', cost: 44, conversions: 7, verified_leads: 0 } },
+    { table_id: 'ga1', data: { date: '2026-09-18', entity_level: 'campaign', campaign_id: 'g1', campaign_name: 'Lead campaign', cost: 15, conversions: 2, verified_leads: 0 } },
+  ]
+  const row = buildPulseCampaignRows({ records, tables, nowYmd: '2026-09-20' })[0]
+  assert.equal(row.outcomes_7d, 9)
+  assert.equal(row.spend_7d, 59)
+})

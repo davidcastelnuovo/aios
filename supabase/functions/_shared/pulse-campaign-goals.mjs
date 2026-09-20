@@ -266,16 +266,32 @@ function firstPresent(data, fields) {
   return { value: null, field: null }
 }
 
+/** Outcome fields where 0 means “empty”, not a real result (e.g. WP verified_leads placeholder). */
+function firstPositivePresent(data, fields) {
+  for (const field of fields) {
+    if (data[field] !== null && data[field] !== undefined && data[field] !== '') {
+      const value = Number(data[field])
+      if (Number.isFinite(value) && value > 0) return { value, field }
+    }
+  }
+  return { value: null, field: null }
+}
+
 export function pulseCampaignOutcome(data = {}, goal = 'unknown') {
   if (goal === 'ecommerce') {
     const result = firstPresent(data, ['purchases', 'purchase', 'transactions'])
     return { ...result, kind: result.field ? 'purchases' : null }
   }
   if (goal === 'leads') {
-    const result = firstPresent(data, [
-      'leads', 'verified_leads', 'form_leads', 'website_leads', 'conversions',
+    // Google Ads sync may stamp verified_leads=0 on every row after WP enrichment.
+    // Prefer platform conversions/leads; only use verified_leads when > 0.
+    const result = firstPositivePresent(data, [
+      'leads', 'conversions', 'form_leads', 'website_leads', 'all_conversions',
     ])
-    return { ...result, kind: result.field ? 'leads' : null }
+    if (result.field) return { ...result, kind: 'leads' }
+    const verified = firstPositivePresent(data, ['verified_leads'])
+    if (verified.field) return { ...verified, kind: 'leads' }
+    return { value: null, field: null, kind: null }
   }
   if (goal === 'engagement') {
     const candidates = [
