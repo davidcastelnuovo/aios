@@ -5,6 +5,7 @@ import {
   classifyPulseCampaignGoal as classifyGoal,
   classificationDataFromStoredRow as classificationDataFromRow,
   campaignDeliveryStatusLabel as deliveryStatusLabel,
+  dedupePulseCampaignRows as dedupeRows,
   integrationTypeToGoal as tableIntegrationGoal,
   isEcommerceReportTable as isEcommerceTable,
   pulseCampaignOutcome as campaignOutcome,
@@ -66,6 +67,10 @@ export type PulseCampaignGoalRow = {
   partial_today_excluded: boolean;
   today_partial_included: boolean;
 };
+
+export const dedupePulseCampaignRows = dedupeRows as (
+  rows: PulseCampaignGoalRow[],
+) => PulseCampaignGoalRow[];
 
 export const buildPulseCampaignRows = buildRows as (input: {
   records: Array<{ table_id: string; data?: Record<string, unknown> | null }>;

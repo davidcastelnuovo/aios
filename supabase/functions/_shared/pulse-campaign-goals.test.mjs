@@ -335,6 +335,26 @@ test('uses complete days for trends and still fetches today as a partial window'
   })
 })
 
+test('merges duplicate Meta tables when the same campaign name uses different ids', () => {
+  const tables = [
+    { id: 'meta-main', client_id: 'c1', integration_type: 'facebook_insights', integration_settings: {} },
+    { id: 'meta-copy', client_id: 'c1', integration_type: 'facebook_insights', integration_settings: {} },
+  ]
+  const dates = ['2026-09-11', '2026-09-12', '2026-09-13', '2026-09-14', '2026-09-15', '2026-09-16', '2026-09-17']
+  const records = []
+  for (const date of dates) {
+    records.push(
+      { table_id: 'meta-main', data: { date, campaign_id: '111', campaign_name: 'לידים חדש משוכפל', campaign_type: 'lead', spend: 20, leads: 1 } },
+      { table_id: 'meta-copy', data: { date, campaign_id: '222', campaign_name: 'לידים חדש משוכפל', campaign_type: 'lead', spend: 20, leads: 1 } },
+    )
+  }
+  const rows = buildPulseCampaignRows({ records, tables, nowYmd: '2026-09-18' })
+  assert.equal(rows.length, 1)
+  assert.equal(rows[0].campaign_name, 'לידים חדש משוכפל')
+  assert.equal(rows[0].spend_7d, 140)
+  assert.equal(rows[0].outcomes_7d, 7)
+})
+
 test('splits a mixed client into three categories without double counting duplicate Meta tables', () => {
   const tables = [
     { id: 'meta-main', client_id: 'c1', integration_type: 'facebook_insights', integration_settings: {} },

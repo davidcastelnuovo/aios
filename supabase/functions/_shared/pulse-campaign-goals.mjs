@@ -362,14 +362,46 @@ function recordScore(record, table) {
   return score
 }
 
+function normalizeCampaignName(name) {
+  return String(name || 'ללא שם').replace(/\s+/g, ' ').trim().toLowerCase()
+}
+
 function campaignIdentity(data, platform) {
   const id = data.campaign_id || data.campaignId
   const name = data.campaign_name || data.campaignName || data.campaign || data.name
+  const normalizedName = normalizeCampaignName(name)
   return {
     id: id ? String(id) : null,
     name: name ? String(name) : 'ללא שם',
-    key: `${platform}:${id ? `id:${id}` : `name:${name || 'unknown'}`}`,
+    normalizedName,
+    key: `${platform}:${id ? `id:${id}` : `name:${normalizedName || 'unknown'}`}`,
   }
+}
+
+/** One logical campaign per client/platform/goal/name — duplicate Meta tables often reuse the name with a different id. */
+function canonicalCampaignMergeKey(clientId, platform, goal, identity) {
+  return `${clientId}:${platform}:${goal}:name:${identity.normalizedName || normalizeCampaignName(identity.name)}`
+}
+
+function preferPulseCampaignRow(prev, row) {
+  if (!prev) return row
+  if (row.campaign_id && !prev.campaign_id) return row
+  if (prev.campaign_id && !row.campaign_id) return prev
+  if ((row.spend_7d || 0) > (prev.spend_7d || 0)) return row
+  if ((row.spend_7d || 0) < (prev.spend_7d || 0)) return prev
+  return row.campaign_id ? row : prev
+}
+
+export function dedupePulseCampaignRows(rows = []) {
+  const byMergeKey = new Map()
+  for (const row of rows) {
+    const mergeKey = canonicalCampaignMergeKey(row.client_id, row.platform, row.goal, {
+      normalizedName: normalizeCampaignName(row.campaign_name),
+      name: row.campaign_name,
+    })
+    byMergeKey.set(mergeKey, preferPulseCampaignRow(byMergeKey.get(mergeKey), row))
+  }
+  return Array.from(byMergeKey.values())
 }
 
 function platformForIntegration(type) {
@@ -609,16 +641,26 @@ export function buildPulseCampaignRows({
     const platform = platformForIntegration(table.integration_type)
     if (platform === 'unknown') continue
     const identity = campaignIdentity(data, platform)
-    const key = `${identity.key}:${data.date}`
-    const previous = deduped.get(key)
+    const classification = classifyPulseCampaignGoal(data, {
+      integration_type: table.integration_type,
+      integration_settings: table.integration_settings || {},
+      category: table.category,
+    })
+    const mergeKey = `${canonicalCampaignMergeKey(table.client_id, platform, classification.goal, identity)}:${data.date}`
+    const previous = deduped.get(mergeKey)
     if (!previous || recordScore(record, table) > recordScore(previous.record, previous.table)) {
-      deduped.set(key, { record, table, identity, platform })
+      deduped.set(mergeKey, { record, table, identity, platform })
     }
   }
 
   const campaigns = new Map()
   for (const item of deduped.values()) {
-    const key = item.identity.key
+    const classification = classifyPulseCampaignGoal(item.record.data, {
+      integration_type: item.table.integration_type,
+      integration_settings: item.table.integration_settings || {},
+      category: item.table.category,
+    })
+    const key = canonicalCampaignMergeKey(item.table.client_id, item.platform, classification.goal, item.identity)
     const list = campaigns.get(key) || []
     list.push(item)
     campaigns.set(key, list)
@@ -671,8 +713,9 @@ export function buildPulseCampaignRows({
       settings.last_meta_activity?.at,
     ].filter(Boolean).map(String).sort()
 
+    const mergeKey = canonicalCampaignMergeKey(sample.table.client_id, sample.platform, classification.goal, sample.identity)
     rows.push({
-      campaign_key: sample.identity.key,
+      campaign_key: mergeKey,
       campaign_id: sample.identity.id,
       campaign_name: sample.identity.name,
       client_id: sample.table.client_id,
@@ -718,7 +761,7 @@ export function buildPulseCampaignRows({
     })
   }
 
-  return rows.sort((a, b) =>
+  return dedupePulseCampaignRows(rows).sort((a, b) =>
     String(a.client_id).localeCompare(String(b.client_id))
     || String(a.campaign_name).localeCompare(String(b.campaign_name), 'he')
   )
