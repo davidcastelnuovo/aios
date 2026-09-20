@@ -36,7 +36,7 @@ export function SignatureDocumentFieldEditor({
       <div className="flex flex-wrap items-center justify-between gap-3 p-4 border-b border-border bg-background">
         <div>
           <h2 className="text-lg font-bold text-foreground">עריכת שדות — {title}</h2>
-          <p className="text-sm text-muted-foreground">הוסף, הסר, הזז והגדל שדות על המסמך</p>
+          <p className="text-sm text-muted-foreground">הוסף, הסר, הזז והגדל שדות, וסמן שדה כחובה או לא חובה</p>
         </div>
         <div className="flex gap-2">
           <Button variant="outline" onClick={onClose} disabled={saving}>

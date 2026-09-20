@@ -1,6 +1,8 @@
 import { useState, useRef, useCallback, useEffect, useMemo } from "react";
 import { Button } from "@/components/ui/button";
+import { Switch } from "@/components/ui/switch";
 import { Minus, Plus, X, Crosshair } from "lucide-react";
+import { isFieldRequired } from "@/lib/signatureFieldGuide";
 import {
   type DocumentField,
   type SignatureFieldType,
@@ -188,6 +190,14 @@ export default function SignatureFieldPlacer({
     };
   };
 
+  const toggleRequired = (fieldId: string) => {
+    onFieldsChange(
+      fieldsRef.current.map((f) =>
+        f.id === fieldId ? { ...f, required: !isFieldRequired(f) } : f,
+      ),
+    );
+  };
+
   const nudgeFieldSize = (fieldId: string, delta: number) => {
     onFieldsChange(
       fieldsRef.current.map((f) => {
@@ -307,6 +317,8 @@ export default function SignatureFieldPlacer({
     pageTopRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
   };
 
+  const selectedField = fields.find((f) => f.id === selectedFieldId);
+
   return (
     <div className={`flex flex-col gap-3 ${fullScreen ? "min-h-full" : ""}`}>
       <div className="flex flex-wrap items-center gap-2 p-3 rounded-lg border bg-muted/40 shrink-0">
@@ -393,7 +405,10 @@ export default function SignatureFieldPlacer({
                     style={{ backgroundColor: getRecipientColorForField(f.recipient_index) }}
                   />
                   <span>{f.label || getFieldPlacerLabel(f.type)}</span>
-                  <span className="text-muted-foreground">ע{f.position.page ?? 1}</span>
+                  <span className="text-muted-foreground">
+                    ע{f.position.page ?? 1}
+                    {isFieldRequired(f) ? " · חובה" : ""}
+                  </span>
                   <X
                     className="h-3 w-3 text-destructive hover:opacity-80"
                     onClick={(e) => {
@@ -404,7 +419,7 @@ export default function SignatureFieldPlacer({
                 </button>
               ))}
               {selectedFieldId && (
-                <div className="flex items-center gap-1 mr-auto">
+                <div className="flex items-center gap-2 mr-auto">
                   <span className="text-xs text-muted-foreground">גודל:</span>
                   <Button
                     type="button"
@@ -426,6 +441,13 @@ export default function SignatureFieldPlacer({
                   >
                     <Plus className="h-3.5 w-3.5" />
                   </Button>
+                  <label className="flex items-center gap-1.5 text-xs mr-2 cursor-pointer">
+                    <Switch
+                      checked={isFieldRequired(selectedField ?? { required: false })}
+                      onCheckedChange={() => toggleRequired(selectedFieldId)}
+                    />
+                    <span>{isFieldRequired(selectedField ?? { required: false }) ? "שדה חובה" : "לא חובה"}</span>
+                  </label>
                 </div>
               )}
             </div>
@@ -482,6 +504,7 @@ export default function SignatureFieldPlacer({
                   >
                     {isSignatureFieldType(f.type) ? "✍ " : ""}
                     {getFieldPlacerLabel(f.type)}
+                    {isFieldRequired(f) ? " *" : ""}
                   </span>
 
                   {showResize && (
