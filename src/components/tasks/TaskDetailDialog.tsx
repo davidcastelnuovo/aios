@@ -710,8 +710,14 @@ export function TaskDetailDialog({
       </div>
 
       <div className={cn("flex-1 min-h-0 overflow-y-auto overflow-x-hidden [scrollbar-width:thin] bg-muted/20 space-y-3", isMobile ? "p-2.5" : "p-4")}>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 items-start">
-            <section className={cn(FRAME, "space-y-0 p-2.5 md:col-start-1")}>
+            <div
+              className={cn(
+                "grid grid-cols-1 md:grid-cols-2 gap-3 items-stretch",
+                isPanel && "md:min-h-[min(58vh,520px)]",
+              )}
+            >
+            <div className="md:col-start-1 flex flex-col gap-3 min-h-0">
+            <section className={cn(FRAME, "space-y-0 p-2.5 shrink-0")}>
               <div className="flex items-center gap-1.5 text-xs font-medium mb-1 pb-1.5">
                 <Link2 className="h-3.5 w-3.5 text-muted-foreground" />
                 שיוך
@@ -939,8 +945,12 @@ export function TaskDetailDialog({
               )}
             </section>
 
-            <div className="flex flex-col gap-3 md:col-start-2">
-              <div className="flex flex-col flex-1 min-h-[240px] md:min-h-[min(50vh,420px)]">
+              {task?.id && tenantId && (
+                <TaskChecklistSection taskId={task.id} tenantId={tenantId} className="shrink-0" />
+              )}
+            </div>
+
+            <div className="md:col-start-2 flex flex-col min-h-[280px] h-full">
               <NotesWithAttachments
                 value={notes}
                 onChange={setNotes}
@@ -952,9 +962,10 @@ export function TaskDetailDialog({
                 fillHeight
                 notesTitle="הערות ועדכונים"
                 placeholder="הערות קבועות למשימה..."
+                notesWrapperClassName="h-full min-h-0"
                 notesFooter={
                   <>
-                    <div className="flex gap-2">
+                    <div className="flex gap-2 shrink-0">
                       <Textarea
                         value={newUpdate}
                         onChange={(e) => setNewUpdate(e.target.value)}
@@ -978,7 +989,7 @@ export function TaskDetailDialog({
                         <Send className="h-4 w-4" />
                       </Button>
                     </div>
-                    <div className="max-h-[220px] overflow-y-auto space-y-2 [scrollbar-width:thin]">
+                    <div className="flex-1 min-h-[72px] overflow-y-auto space-y-2 [scrollbar-width:thin]">
                     {updates?.length === 0 && (
                       <p className="text-xs text-muted-foreground text-center py-1">אין עדכונים עדיין</p>
                     )}
@@ -1025,11 +1036,6 @@ export function TaskDetailDialog({
                   </>
                 }
               />
-              </div>
-
-              {task?.id && tenantId && (
-                <TaskChecklistSection taskId={task.id} tenantId={tenantId} className="shrink-0" />
-              )}
             </div>
             </div>
 

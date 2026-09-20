@@ -247,7 +247,7 @@ export function NotesWithAttachments({
     <div
       className={cn(
         "rounded-xl border border-border/60 bg-card p-3 flex flex-col shadow-sm text-right",
-        fillHeight ? "flex-1 min-h-[200px]" : "min-h-[180px] h-full",
+        fillHeight ? "flex-1 h-full min-h-[200px]" : "min-h-[180px] h-full",
         notesWrapperClassName,
       )}
     >
@@ -263,7 +263,16 @@ export function NotesWithAttachments({
         rows={rows}
         className="flex-1 min-h-[72px] border-0 bg-transparent focus-visible:ring-0 resize-none p-0"
       />
-      {notesFooter ? <div className="mt-3 pt-3 border-t space-y-2">{notesFooter}</div> : null}
+      {notesFooter ? (
+        <div
+          className={cn(
+            "mt-3 pt-3 border-t space-y-2",
+            fillHeight && "flex flex-col flex-1 min-h-0",
+          )}
+        >
+          {notesFooter}
+        </div>
+      ) : null}
     </div>
   );
 
