@@ -58,6 +58,7 @@ on:
       - 'supabase/ops/apply_goal_execution_and_autonomous_engine_production.sql'
       - 'supabase/ops/apply_pulse_campaign_breakdown_production.sql'
       - 'supabase/ops/apply_recurring_human_tasks_production.sql'
+      - 'supabase/ops/apply_fix_duplicate_task_reminder_notifications_production.sql'
 
 jobs:
   apply:
