@@ -115,6 +115,8 @@ const MAX_EXECUTION_TIME_MS = 240_000 // 240s, leave 60s buffer before 300s wall
 
 import { requireAuth } from "../_shared/security.ts";
 import { sendCarmenReplyViaActionStep, findCarmenSessionAutomation } from "../_shared/carmen.ts";
+import { extractCampaignShutdownJob } from "../_shared/client-campaign-shutdown.ts";
+import { runClientCampaignShutdownJob } from "../_shared/client-campaign-shutdown-runner.ts";
 
 
 Deno.serve(async (req) => {
@@ -264,6 +266,71 @@ Deno.serve(async (req) => {
       }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       })
+    }
+
+    // Deterministic client campaign verify/shutdown (e.g. daily 20:30 Binat job).
+    const shutdownJob = extractCampaignShutdownJob(task)
+    if (shutdownJob) {
+      try {
+        const outcome = await runClientCampaignShutdownJob(supabase, {
+          tenantId: task.tenant_id,
+          job: shutdownJob,
+          supabaseUrl: SUPABASE_URL,
+          serviceRoleKey: SUPABASE_SERVICE_ROLE_KEY,
+        })
+        if (shutdownJob.notify_david !== false) {
+          await supabase.rpc('claude_notify_david', {
+            p_message: outcome.report,
+            p_tenant: task.tenant_id,
+          }).then(() => {}, (e: any) => console.error('[run-agent-task] shutdown notify failed:', e?.message))
+        }
+        const completedAt = new Date().toISOString()
+        await supabase.from('agent_tasks').update({
+          status: 'completed',
+          completed_at: completedAt,
+          result: {
+            ...checkpoint,
+            campaign_shutdown_job: shutdownJob,
+            campaign_shutdown_result: outcome,
+            final_output: outcome.report,
+            completed: true,
+            run_count: runCount,
+            notify_david_sent: shutdownJob.notify_david !== false,
+          },
+        }).eq('id', task_id)
+        await maybeAdvanceLane(supabase, task)
+        return new Response(JSON.stringify({ success: true, deterministic: 'campaign_shutdown', report: outcome.report }), {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        })
+      } catch (e: any) {
+        const errMsg = e?.message || String(e)
+        console.error('[run-agent-task] campaign_shutdown failed:', errMsg)
+        if (runCount < 3) {
+          await supabase.from('agent_tasks').update({
+            status: 'pending',
+            last_run: null,
+            result: { ...checkpoint, last_error: errMsg, run_count: runCount, campaign_shutdown_job: shutdownJob },
+          }).eq('id', task_id)
+          return new Response(JSON.stringify({ success: false, error: errMsg, retrying: true }), {
+            status: 502,
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          })
+        }
+        await supabase.from('agent_tasks').update({
+          status: 'failed',
+          completed_at: new Date().toISOString(),
+          result: { ...checkpoint, error: errMsg, campaign_shutdown_job: shutdownJob },
+        }).eq('id', task_id)
+        await supabase.rpc('claude_notify_david', {
+          p_message: `❌ כיבוי קמפיינים מתוזמן נכשל: ${errMsg}`,
+          p_tenant: task.tenant_id,
+        }).then(() => {}, () => {})
+        await maybeAdvanceLane(supabase, task)
+        return new Response(JSON.stringify({ success: false, error: errMsg }), {
+          status: 500,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        })
+      }
     }
 
     // Find the agent

@@ -199,7 +199,7 @@ export function AppLayout() {
               <div className="flex items-center gap-1.5 sm:gap-2 md:gap-4 flex-shrink-0">
                 <HeaderModuleShortcuts />
                 {agencies && agencies.length > 0 && (
-                  <div className="flex items-center gap-1 sm:gap-2 min-w-0 max-w-[42vw] sm:max-w-none">
+                  <div className="hidden md:flex items-center gap-1 sm:gap-2 min-w-0 max-w-[42vw] sm:max-w-none">
                     <span className="text-sm text-muted-foreground hidden lg:inline shrink-0">סוכנות:</span>
                     <Select value={selectedAgency} onValueChange={setSelectedAgency}>
                       <SelectTrigger className="h-9 w-[min(42vw,10rem)] sm:w-[160px] md:w-[220px] bg-background border-2 px-2">

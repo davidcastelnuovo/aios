@@ -1895,6 +1895,8 @@ async function executeTool(name: string, args: Record<string, any>, supabase: an
       const descStr = String(args.description || '')
       const looksLikeReminder = skillsArr.includes('reminder')
         || /תזכור|reminder|להזכיר|תזכר/i.test(titleStr + ' ' + descStr)
+      const { buildCampaignShutdownJobFromBrief } = await import('../_shared/client-campaign-shutdown.ts')
+      const shutdownJob = buildCampaignShutdownJobFromBrief(titleStr, descStr)
       let finalDescription = descStr || null
       if (looksLikeReminder && callerPhone) {
         const reminderText = descStr || titleStr
@@ -1919,14 +1921,24 @@ async function executeTool(name: string, args: Record<string, any>, supabase: an
         // run-agent-task consumes this metadata deterministically at execution
         // time, so a group reminder is sent back to the group rather than
         // asking the model to infer a recipient (or create another reminder).
-        result: looksLikeReminder && waNotify
-          ? {
+        result: (() => {
+          if (looksLikeReminder && waNotify) {
+            return {
               notify: waNotify,
-              reminder_delivery: {
-                message: descStr || titleStr,
+              reminder_delivery: { message: descStr || titleStr },
+            }
+          }
+          if (shutdownJob) {
+            return {
+              campaign_shutdown_job: {
+                ...shutdownJob,
+                scope: shutdownJob.scope ?? { mode: 'all_client_campaigns' },
+                notify_david: shutdownJob.notify_david !== false,
               },
             }
-          : null,
+          }
+          return null
+        })(),
       }
       const { data, error } = await supabase.from('agent_tasks').insert(taskData).select('id, title, status, schedule_type, scheduled_at').single()
       if (error) throw error
