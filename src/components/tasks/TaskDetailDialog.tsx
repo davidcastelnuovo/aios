@@ -42,6 +42,10 @@ import {
   formatLocalDate,
   type RecurrenceFrequency,
 } from "@/lib/taskRecurrence";
+import {
+  formatTaskCollaboratorInsertError,
+  resolveTaskCollaboratorTenantId,
+} from "@/lib/taskCollaborators";
 
 const DURATION_OPTIONS = [30, 60, 90, 120, 150, 180] as const;
 const FRAME = "rounded-xl border border-border/60 bg-card shadow-sm text-right";
@@ -440,10 +444,14 @@ export function TaskDetailDialog({
   // Add collaborator mutation
   const addCollaborator = useMutation({
     mutationFn: async (campaignerId: string) => {
+      const collabTenantId = resolveTaskCollaboratorTenantId(task!.tenant_id, tenantId);
+      if (!collabTenantId) {
+        throw new Error("חסר מזהה ארגון למשימה");
+      }
       const { error } = await supabase.from("task_collaborators").insert({
         task_id: task!.id,
         campaigner_id: campaignerId,
-        tenant_id: tenantId,
+        tenant_id: collabTenantId,
         added_by: user?.id,
       });
       if (error) throw error;
@@ -461,8 +469,8 @@ export function TaskDetailDialog({
       setSelectedCollaborator("");
       toast.success("איש צוות נוסף למשימה");
     },
-    onError: () => {
-      toast.error("שגיאה בהוספת איש צוות");
+    onError: (error: Error) => {
+      toast.error(formatTaskCollaboratorInsertError(error.message || "שגיאה בהוספת איש צוות"));
     },
   });
 
@@ -612,9 +620,10 @@ export function TaskDetailDialog({
     return null;
   }
 
+  const primaryAssigneeId = assignedCampaignerId || task.campaigner_id || "";
   const availableCollaborators = campaigners?.filter(
     (c) =>
-      c.id !== assignedCampaignerId &&
+      c.id !== primaryAssigneeId &&
       !collaborators?.some((col) => col.campaigner_id === c.id)
   );
 
