@@ -1,4 +1,4 @@
--- Campaign pulse WhatsApp delivery: once per week — Sunday 07:30 Asia/Jerusalem.
+-- Campaign pulse WhatsApp delivery: once per week — Sunday 09:00 Asia/Jerusalem.
 -- Snapshot refresh from sync crons stays deliver:false; only the Sunday cron sends WA.
 
 CREATE OR REPLACE FUNCTION public.claim_campaign_pulse_delivery(p_tenant_id uuid)
@@ -17,12 +17,12 @@ BEGIN
     RETURN false;
   END IF;
 
-  -- Delivery window: Sunday 07:30 ±10 minutes (cron jitter).
-  IF local_now::time < time '07:20' OR local_now::time >= time '07:40' THEN
+  -- Delivery window: Sunday 09:00 ±10 minutes (cron jitter).
+  IF local_now::time < time '08:50' OR local_now::time >= time '09:40' THEN
     RETURN false;
   END IF;
 
-  current_slot := date_trunc('day', local_now) + interval '7 hours 30 minutes';
+  current_slot := date_trunc('day', local_now) + interval '9 hours';
 
   UPDATE public.tenant_heartbeat_settings
   SET campaign_pulse_last_sent_at = now()
@@ -40,7 +40,7 @@ $$;
 REVOKE ALL ON FUNCTION public.claim_campaign_pulse_delivery(uuid) FROM PUBLIC, anon, authenticated;
 GRANT EXECUTE ON FUNCTION public.claim_campaign_pulse_delivery(uuid) TO service_role;
 
--- Sunday 07:30 Israel (04:30 UTC during IDT; claim window tolerates ±10 min).
+-- Sunday 09:00 Israel (06:00 UTC during IDT; claim window tolerates ±10 min).
 DO $pulse_crons$
 DECLARE
   worker_secret text;
@@ -69,16 +69,15 @@ BEGIN
       'campaign-pulse-morning-0700',
       'campaign-pulse-afternoon-1600',
       'campaign-pulse-sunday-0700',
-      'campaign-pulse-sunday-0900',
-      'campaign-pulse-sunday-0730'
+      'campaign-pulse-sunday-0900'
     )
   LOOP
     PERFORM cron.unschedule(existing_job);
   END LOOP;
 
   PERFORM cron.schedule(
-    'campaign-pulse-sunday-0730',
-    '30 4 * * 0',
+    'campaign-pulse-sunday-0900',
+    '0 6 * * 0',
     format(
       $cron$
       SELECT net.http_post(
