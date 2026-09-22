@@ -1,6 +1,6 @@
 # Campaign Operations Control Layer (COCL)
 
-> **Status:** Design / specification (Phase 0). Target: Staging (`develop`) first.  
+> **Status:** Phase 0 design + Phase 2c Client 360 + **Phase 1a** (schema, `operation-control-center`, CC «ריצות COCL», dev dispatch → run) on feature branch / PR #711. Target: Staging (`develop`) first.  
 > **Author:** Cursor Cloud Agent (dev task `a8507dc8-d63c-4a7b-8d27-795833ab786e`)  
 > **Date:** 2026-09-22  
 > **Related:** `docs/orchestration-studio-plan.md`, `docs/carmen-reliability-plan.md`, `docs/goal-execution-mode.md`, `docs/carmen-command-center.md`

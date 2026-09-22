@@ -109,6 +109,9 @@ verify_jwt = true
 [functions.client-operations-center]
 verify_jwt = true
 
+[functions.operation-control-center]
+verify_jwt = true
+
 [functions.openai-billing-status]
 verify_jwt = true
 

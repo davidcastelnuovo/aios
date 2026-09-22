@@ -82,6 +82,10 @@ import {
   syncWeeklyUpdateFromGreenGroup,
 } from '../_shared/client-green-group-monitor.ts'
 import {
+  getOperationRunDetail,
+  listOperationRuns,
+} from '../_shared/operation-control.ts'
+import {
   addGoalBlocker,
   addGoalMilestone,
   createUnifiedGoal,
@@ -688,6 +692,8 @@ const ALL_TOOLS = [
   { name: 'create_commitment_followup', description: 'כשהובטחה פעולה בקבוצה ולא זוהה ביצוע — יוצר משימת tasks פתוחה + client_update מעקב. לא שולח לקבוצה.', parameters: { type: 'object', properties: { client_id: { type: 'string' }, message_at: { type: 'string', description: 'message_at מה-unfulfilled_staff_commitments' }, task_title: { type: 'string' } }, required: ['client_id', 'message_at'] } },
   { name: 'list_client_operation_recommendations', description: 'רשימת המלצות תפעול פתוחות (Client 360).', parameters: { type: 'object', properties: { client_id: { type: 'string' }, severity: { type: 'string', enum: ['info', 'warning', 'critical'] }, limit: { type: 'integer' } } } },
   { name: 'update_client_operation_recommendation', description: 'עדכון סטטוס המלצה: accepted / dismissed / resolved.', parameters: { type: 'object', properties: { recommendation_id: { type: 'string' }, status: { type: 'string', enum: ['accepted', 'dismissed', 'resolved'] } }, required: ['recommendation_id', 'status'] } },
+  { name: 'list_operation_runs', description: 'COCL: ריצות תפעול (PEVR) — מה רץ, חריגות, dispatch ל-Cursor. exception_only=true מסנן needs_attention.', parameters: { type: 'object', properties: { since_hours: { type: 'integer', description: 'ברירת מחדל 168 (שבוע)' }, exception_only: { type: 'boolean' }, operation_type: { type: 'string', description: 'dev_dispatch / pulse_check / …' }, limit: { type: 'integer' } } } },
+  { name: 'get_operation_run', description: 'COCL: פירוט ריצה — אירועים, אימות, דוחות, קישור dev_task / session.', parameters: { type: 'object', properties: { run_id: { type: 'string' } }, required: ['run_id'] } },
   { name: 'add_client_update', description: 'הוספת עדכון ללקוח', parameters: { type: 'object', properties: { client_id: { type: 'string' }, content: { type: 'string' } }, required: ['client_id', 'content'] } },
   // MESSAGES
   { name: 'send_message', description: 'שליחת הודעת WhatsApp ללקוח או ליד', parameters: { type: 'object', properties: { contact_type: { type: 'string', enum: ['lead', 'client'] }, contact_id: { type: 'string' }, message_text: { type: 'string' } }, required: ['contact_type', 'contact_id', 'message_text'] } },
@@ -2297,6 +2303,58 @@ async function executeTool(name: string, args: Record<string, any>, supabase: an
         .single()
       if (error) throw error
       return { recommendation: data }
+    }
+    case 'list_operation_runs': {
+      const sinceHours = Number(args.since_hours) || 168
+      const sinceIso = new Date(Date.now() - sinceHours * 3600_000).toISOString()
+      try {
+        const runs = await listOperationRuns(supabase, {
+          tenantId,
+          limit: args.limit,
+          exceptionOnly: !!args.exception_only,
+          sinceIso,
+          operationType: args.operation_type,
+        })
+        const needsAttention = runs.filter(
+          (r: { rollup_status?: string }) => r.rollup_status === 'needs_attention',
+        ).length
+        return {
+          count: runs.length,
+          needs_attention: needsAttention,
+          runs: runs.map((r: Record<string, unknown>) => ({
+            id: r.id,
+            title: r.title,
+            status: r.status,
+            rollup_status: r.rollup_status,
+            summary: r.summary,
+            planned_at: r.planned_at,
+            operation_type: (r.operation_plans as { operation_type?: string } | null)?.operation_type,
+            dev_task_id: r.dev_task_id,
+            session_url: (r.metadata as { session_url?: string } | null)?.session_url,
+          })),
+        }
+      } catch (e: unknown) {
+        const msg = e instanceof Error ? e.message : String(e)
+        if (/operation_runs/.test(msg)) {
+          return { count: 0, runs: [], note: 'schema_pending — COCL migration 20260922240000' }
+        }
+        throw e
+      }
+    }
+    case 'get_operation_run': {
+      const runId = String(args.run_id || '')
+      if (!runId) return { error: 'run_id required' }
+      try {
+        const detail = await getOperationRunDetail(supabase, tenantId, runId)
+        if (!detail) return { error: 'not_found' }
+        return detail
+      } catch (e: unknown) {
+        const msg = e instanceof Error ? e.message : String(e)
+        if (/operation_runs/.test(msg)) {
+          return { error: 'schema_pending' }
+        }
+        throw e
+      }
     }
     case 'add_client_update': {
       await assertCallerCanAccessClient(supabase, args.client_id, callerScope)
