@@ -64,6 +64,8 @@ src/components/carmen-command/
 
 ## משימות פיתוח (Dev Task Command Center)
 
+כפתור **תפעול** בכותרת פותח מצב `client_ops` — המלצות תפעול לקוח (דופק, Green API, משימות), סריקת לקוחות, משיכת עדכון שבועי לכרטיס, מעקב התחייבויות. API: `client-operations-center`.
+
 כפתור **פיתוח** בכותרת פותח מצב `dev_tasks` — רשימת משימות פיתוח מובנות ל-Cursor/Grok/Manus.
 
 - **טבלאות:** `dev_tasks` + `dev_task_events` (מיגרציה `20260831170000`).
