@@ -7601,7 +7601,7 @@ CREATE TRIGGER update_task_updates_updated_at BEFORE UPDATE ON public.task_updat
 CREATE TRIGGER carmen_kb_tasks_outbox AFTER INSERT OR DELETE OR UPDATE ON public.tasks FOR EACH ROW EXECUTE FUNCTION carmen_outbox_enqueue('task');
 CREATE TRIGGER set_task_tenant_id_before_insert BEFORE INSERT ON public.tasks FOR EACH ROW EXECUTE FUNCTION set_task_tenant_id();
 CREATE TRIGGER set_task_tenant_id_before_update BEFORE UPDATE ON public.tasks FOR EACH ROW WHEN ((new.tenant_id IS NULL)) EXECUTE FUNCTION set_task_tenant_id();
-CREATE TRIGGER trg_notify_task_assigned AFTER INSERT OR UPDATE OF campaigner_id ON public.tasks FOR EACH ROW EXECUTE FUNCTION notify_task_assigned();
+-- Legacy trg_notify_task_assigned removed: use trg_notify_task_notification_worker (see migration 20260728143000, 20260922160000).
 CREATE TRIGGER trg_set_task_tenant_id BEFORE INSERT OR UPDATE OF client_id, agency_id ON public.tasks FOR EACH ROW EXECUTE FUNCTION set_task_tenant_id();
 CREATE TRIGGER update_tasks_updated_at BEFORE UPDATE ON public.tasks FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 CREATE TRIGGER update_telephony_settings_updated_at BEFORE UPDATE ON public.telephony_settings FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();

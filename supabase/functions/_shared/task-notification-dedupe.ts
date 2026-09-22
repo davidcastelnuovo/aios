@@ -1,3 +1,4 @@
+/** Idempotency for Carmen task WhatsApp — one row per task + type + recipient. */
 export function taskNotificationRecipientKey(input: {
   notifyCampaignerId?: string | null
   campaignerId?: string | null
