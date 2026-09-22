@@ -2994,7 +2994,8 @@ export default function DynamicTableView({ embedTableSlug, embedMode, summaryOnl
               && totals.conversions >= 3
               && totals.conversions_value > 0
               && avgValuePerConv < 20;
-            const allValueHigher = totals.all_conversions_value > totals.conversions_value * 2
+            const allValueHigher = isEcommerce
+              && totals.all_conversions_value > totals.conversions_value * 2
               && totals.all_conversions_value - totals.conversions_value > 50;
             const gaCurrency = getCurrencySymbol(table.integration_settings?.currency);
 
@@ -3040,7 +3041,7 @@ export default function DynamicTableView({ embedTableSlug, embedMode, summaryOnl
                       <th className="p-2 text-center font-medium">חשיפות</th>
                       <th className="p-2 text-center font-medium">קליקים</th>
                       <th className="p-2 text-center font-medium">
-                        {useGoogleWooOverlay ? 'המרות (GA)' : 'המרות'}
+                        {useGoogleWooOverlay ? 'המרות (GA)' : isEcommerce ? 'המרות' : 'לידים'}
                       </th>
                       {hasVerifiedData && (
                         <th className="p-2 text-center font-medium" title="לידים בפועל באתר (Elementor) — לפי שיוך טופס/עמוד לקמפיין">לידים באתר</th>
@@ -3054,7 +3055,7 @@ export default function DynamicTableView({ embedTableSlug, embedMode, summaryOnl
                           <th className="p-2 text-center font-medium">ROAS</th>
                         </>
                       ) : (
-                        <th className="p-2 text-center font-medium">עלות להמרה</th>
+                        <th className="p-2 text-center font-medium">עלות לליד</th>
                       )}
                     </tr>
                   </thead>
