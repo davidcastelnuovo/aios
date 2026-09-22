@@ -104,6 +104,13 @@ async function claimAndSend(
 
   try {
     const result = await invokeNotification(task, triggerType)
+    if (!result.delivered) {
+      await supabase
+        .from('tasks')
+        .update({ [marker]: null })
+        .eq('id', task.id)
+        .eq(marker, claimedAt)
+    }
     return {
       task_id: task.id,
       trigger_type: triggerType,
@@ -210,8 +217,11 @@ async function processTask(supabase: ReturnType<typeof createClient>, task: Task
     && task.status !== 'done'
     && !task.assignment_notification_sent_at
   ) {
-    results.push(await claimAndSend(supabase, task, 'assignment_notification_sent_at', 'task_assigned'))
-    task.assignment_notification_sent_at = new Date().toISOString()
+    const assignmentResult = await claimAndSend(supabase, task, 'assignment_notification_sent_at', 'task_assigned')
+    results.push(assignmentResult)
+    if ('sent' in assignmentResult && assignmentResult.sent) {
+      task.assignment_notification_sent_at = new Date().toISOString()
+    }
   }
 
   if (
@@ -236,8 +246,11 @@ async function processTask(supabase: ReturnType<typeof createClient>, task: Task
     && Date.parse(task.high_priority_reminder_sent_at) <= oneMinuteAgo
     && !task.high_priority_creator_notified_at
   ) {
-    results.push(await claimAndSend(supabase, task, 'high_priority_creator_notified_at', 'task_high_priority_reminder_sent'))
-    task.high_priority_creator_notified_at = new Date().toISOString()
+    const receiptResult = await claimAndSend(supabase, task, 'high_priority_creator_notified_at', 'task_high_priority_reminder_sent')
+    results.push(receiptResult)
+    if ('sent' in receiptResult && receiptResult.sent) {
+      task.high_priority_creator_notified_at = new Date().toISOString()
+    }
   }
 
   if (
@@ -247,8 +260,11 @@ async function processTask(supabase: ReturnType<typeof createClient>, task: Task
     && task.status === 'done'
     && !task.completion_creator_notified_at
   ) {
-    results.push(await claimAndSend(supabase, task, 'completion_creator_notified_at', 'task_completed'))
-    task.completion_creator_notified_at = new Date().toISOString()
+    const completionResult = await claimAndSend(supabase, task, 'completion_creator_notified_at', 'task_completed')
+    results.push(completionResult)
+    if ('sent' in completionResult && completionResult.sent) {
+      task.completion_creator_notified_at = new Date().toISOString()
+    }
   }
 
   if (
@@ -275,8 +291,11 @@ async function processTask(supabase: ReturnType<typeof createClient>, task: Task
     && Date.parse(task.overdue_notified_at) <= oneMinuteAgo
     && !task.overdue_creator_notified_at
   ) {
-    results.push(await claimAndSend(supabase, task, 'overdue_creator_notified_at', 'task_overdue_sent'))
-    task.overdue_creator_notified_at = new Date().toISOString()
+    const overdueReceiptResult = await claimAndSend(supabase, task, 'overdue_creator_notified_at', 'task_overdue_sent')
+    results.push(overdueReceiptResult)
+    if ('sent' in overdueReceiptResult && overdueReceiptResult.sent) {
+      task.overdue_creator_notified_at = new Date().toISOString()
+    }
   }
 
   if (
@@ -286,8 +305,11 @@ async function processTask(supabase: ReturnType<typeof createClient>, task: Task
     && Date.parse(task.self_reminder_at) <= Date.now()
     && !task.self_reminder_sent_at
   ) {
-    results.push(await claimAndSend(supabase, task, 'self_reminder_sent_at', 'task_self_reminder'))
-    task.self_reminder_sent_at = new Date().toISOString()
+    const selfReminderResult = await claimAndSend(supabase, task, 'self_reminder_sent_at', 'task_self_reminder')
+    results.push(selfReminderResult)
+    if ('sent' in selfReminderResult && selfReminderResult.sent) {
+      task.self_reminder_sent_at = new Date().toISOString()
+    }
   }
 
   return results
