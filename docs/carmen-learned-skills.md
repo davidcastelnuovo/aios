@@ -35,7 +35,7 @@ logged.
 ### 2026-09-22 — שכבת בקרת תפעול קמפיינים (COCL / PEVR)
 - **Skin slug:** `carmen_operations_control_layer` (tenant: `2dcdaac6-41bf-42cc-86bf-9a0b4b2e6019`)
 - **What Carmen can now do:** Track operational work as Planned → Executed → Verified → Reported; use scope contracts and exception-first WhatsApp reporting; align with COCL spec for scheduled campaign checks and dev dispatch reconciliation.
-- **How:** Skin triggers + `docs/campaign-operations-control-layer.md`. Until Phase 1 API: `list_dev_tasks`, `get_latest_campaign_pulse`, `get_execution_goal_report`, `list_my_agent_tasks`; `dispatch_dev_task` fields `userStatus` / `delivered` / `reconciled`.
+- **How:** Skin triggers + `docs/campaign-operations-control-layer.md`. **Client 360 (Phase 2c):** `get_client_operations_package`, `list_client_operation_recommendations`, `update_client_operation_recommendation`. Mutating Meta — approval queue only.
 - **Origin:** Carmen → Cursor DEV TASK — design campaign operations control layer (`a8507dc8-d63c-4a7b-8d27-795833ab786e`).
 
 ### 2026-09-22 — אימות משלוח dev task ל-Cursor אחרי שגיאת dispatch

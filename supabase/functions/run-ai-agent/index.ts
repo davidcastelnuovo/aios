@@ -75,6 +75,7 @@ import {
   findDuplicateDevTasks,
   logDevTaskEvent,
 } from '../_shared/dev-tasks.ts'
+import { buildClientOperationsPackage } from '../_shared/client-operations.ts'
 import {
   addGoalBlocker,
   addGoalMilestone,
@@ -676,6 +677,9 @@ const ALL_TOOLS = [
   // CLIENTS
   { name: 'list_clients', description: 'רשימת/חיפוש לקוחות. אפשר לסנן לפי סטטוס, קמפיינר, סוכנות (agency_id/agency_name — חובה לסנן כשהמשתמש שואל על "לקוחות בסוכנות X"), או name_search. הערה: כשהקורא הוא קמפיינר (WhatsApp), ברירת המחדל היא הצגת לקוחות שמשוייכים אליו בלבד בסטטוס active/onboarding — אלא אם סופק campaigner_name/agency_name אחר במפורש. החיפוש case-insensitive. אל תאמר "לא נמצא" לפני שניסית name_search.', parameters: { type: 'object', properties: { status: { type: 'string', description: 'active / onboarding / inactive. ברירת מחדל עבור קמפיינר WhatsApp: active+onboarding בלבד.' }, limit: { type: 'integer' }, name_search: { type: 'string', description: 'חיפוש חלקי בשם הלקוח או איש הקשר (case-insensitive). נסה גם תעתיק אנגלי לעברית ולהפך.' }, campaigner_id: { type: 'string', description: 'סינון ללקוחות המשוייכים לקמפיינר זה (דרך client_team)' }, campaigner_name: { type: 'string', description: 'סינון לפי שם קמפיינר (חיפוש חופשי בשם המלא)' }, agency_id: { type: 'string', description: 'סינון ללקוחות בסוכנות זו בלבד' }, agency_name: { type: 'string', description: 'סינון לפי שם סוכנות (חיפוש חלקי, case-insensitive). חובה להשתמש כשהמשתמש מציין סוכנות בשם.' }, all_scopes: { type: 'boolean', description: 'דרוס את הסקופ האוטומטי של הקמפיינר והחזר את כל הלקוחות בארגון (לשימוש רק אם המשתמש ביקש זאת מפורשות).' } } } },
   { name: 'get_client_info', description: 'מידע על לקוח', parameters: { type: 'object', properties: { client_id: { type: 'string' } }, required: ['client_id'] } },
+  { name: 'get_client_operations_package', description: 'תמונת תפעול 360° ללקוח: דופק, התראות פתוחות, עדכוני כרטיס, משימות, הודעות קבוצה (Manus, לפי carmen_client_group_access), והמלצות יזומות. refresh_recommendations=true (ברירת מחדל) מריץ כללי סריקה ללא LLM. פעולות מקדמיות (Meta/WA) — רק דרך אישור.', parameters: { type: 'object', properties: { client_id: { type: 'string' }, refresh_recommendations: { type: 'boolean', description: 'ברירת מחדל true — לעדכן המלצות open' } }, required: ['client_id'] } },
+  { name: 'list_client_operation_recommendations', description: 'רשימת המלצות תפעול פתוחות (Client 360).', parameters: { type: 'object', properties: { client_id: { type: 'string' }, severity: { type: 'string', enum: ['info', 'warning', 'critical'] }, limit: { type: 'integer' } } } },
+  { name: 'update_client_operation_recommendation', description: 'עדכון סטטוס המלצה: accepted / dismissed / resolved.', parameters: { type: 'object', properties: { recommendation_id: { type: 'string' }, status: { type: 'string', enum: ['accepted', 'dismissed', 'resolved'] } }, required: ['recommendation_id', 'status'] } },
   { name: 'add_client_update', description: 'הוספת עדכון ללקוח', parameters: { type: 'object', properties: { client_id: { type: 'string' }, content: { type: 'string' } }, required: ['client_id', 'content'] } },
   // MESSAGES
   { name: 'send_message', description: 'שליחת הודעת WhatsApp ללקוח או ליד', parameters: { type: 'object', properties: { contact_type: { type: 'string', enum: ['lead', 'client'] }, contact_id: { type: 'string' }, message_text: { type: 'string' } }, required: ['contact_type', 'contact_id', 'message_text'] } },
@@ -2181,6 +2185,79 @@ async function executeTool(name: string, args: Record<string, any>, supabase: an
         }
       }
       return data
+    }
+    case 'get_client_operations_package': {
+      await assertCallerCanAccessClient(supabase, args.client_id, callerScope)
+      try {
+        return await buildClientOperationsPackage(supabase, {
+          tenantId,
+          clientId: String(args.client_id),
+          accessibleTenantIds,
+          refreshRecommendations: args.refresh_recommendations !== false,
+        })
+      } catch (e: unknown) {
+        const msg = e instanceof Error ? e.message : String(e)
+        if (/client_operation_recommendations/.test(msg)) {
+          return {
+            error: 'schema_pending',
+            note: 'הטבלה client_operation_recommendations עדיין לא ב-Staging — הריצו מיגרציה 20260922200000.',
+            client_id: args.client_id,
+          }
+        }
+        throw e
+      }
+    }
+    case 'list_client_operation_recommendations': {
+      let q = supabase
+        .from('client_operation_recommendations')
+        .select('*')
+        .eq('tenant_id', tenantId)
+        .eq('status', 'open')
+        .order('updated_at', { ascending: false })
+      if (args.client_id) {
+        await assertCallerCanAccessClient(supabase, args.client_id, callerScope)
+        q = q.eq('client_id', args.client_id)
+      }
+      if (args.severity) q = q.eq('severity', args.severity)
+      const limit = Math.min(Number(args.limit) || 30, 80)
+      const { data, error } = await q.limit(limit)
+      if (error) {
+        if (/client_operation_recommendations/.test(error.message)) {
+          return { count: 0, recommendations: [], note: 'schema_pending' }
+        }
+        throw error
+      }
+      return { count: data?.length || 0, recommendations: data || [] }
+    }
+    case 'update_client_operation_recommendation': {
+      const id = String(args.recommendation_id || '')
+      const status = String(args.status || '')
+      const { data: row, error: fetchErr } = await supabase
+        .from('client_operation_recommendations')
+        .select('id, client_id, tenant_id')
+        .eq('id', id)
+        .eq('tenant_id', tenantId)
+        .maybeSingle()
+      if (fetchErr) throw fetchErr
+      if (!row) return { error: 'not_found' }
+      await assertCallerCanAccessClient(supabase, row.client_id, callerScope)
+      const patch: Record<string, unknown> = {
+        status,
+        updated_at: new Date().toISOString(),
+      }
+      if (status === 'resolved' || status === 'dismissed') {
+        patch.resolved_at = new Date().toISOString()
+        patch.resolved_by = userId
+      }
+      const { data, error } = await supabase
+        .from('client_operation_recommendations')
+        .update(patch)
+        .eq('id', id)
+        .eq('tenant_id', tenantId)
+        .select('*')
+        .single()
+      if (error) throw error
+      return { recommendation: data }
     }
     case 'add_client_update': {
       await assertCallerCanAccessClient(supabase, args.client_id, callerScope)
