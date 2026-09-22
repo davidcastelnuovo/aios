@@ -26,6 +26,8 @@ Today these concerns are split across `agent_tasks`, `trigger-automation` / flow
 
 COCL does **not** replace Orchestration Studio (long-term DAG unification). It is a **thin control plane** that wraps existing executors with explicit **plans**, **runs**, **verification**, and **reporting** records.
 
+**North star (product):** Carmen sees a **full client picture** — group WhatsApp (Manus), client-card updates, pulse/campaign results — and **proactively** surfaces “something needs doing” (contact client, pause campaigns, optimize, escalate). She **logs** every step and **requests approval** before promotional/mutating actions. COCL is the **Execute → Verify → Report → Audit** spine under that intelligence layer (§22).
+
 ---
 
 ## 2. Goals and non-goals
@@ -514,6 +516,83 @@ Each phase: feature branch → PR to `develop` → Vercel Preview → David veri
 | `agent_tasks` update/cancel APIs (capability audit) | 2a |
 | Orchestration single scheduler | 3 |
 | Production `pulse_alert_rules` completeness | ops (see reliability plan) |
+
+---
+
+## 22. Client 360 + proactive operations (product alignment)
+
+### 22.1 What David wants
+
+For each client, Carmen should **synthesize** (not guess):
+
+| Signal | Source (today / planned) |
+|--------|---------------------------|
+| Campaign KPIs, trends, critical alerts | `campaign_pulse_snapshots`, `campaign_alerts`, `get_latest_campaign_pulse` |
+| Client-card timeline (calls, weekly updates, notes) | Client updates / CRM sync (`resolveClientUpdateType`, pulse call rules) |
+| Group + private WhatsApp relevant to the client | **Manus WA only** — groups where Carmen is a member; map client↔group via `carmen_client_group_access` (never full Green API CRM roster) |
+| Tasks, goals, open approvals | `tasks`, `goals`, `agent_approval_queue` |
+| What already ran / failed | COCL `operation_runs` (Phase 1+) |
+
+Then **proactively** (on schedule or trigger): detect gaps — e.g. weak ROAS + no call in 14 days + angry message in group → recommend **contact client**; end-of-day rule → **verify shutdown**; disapproved ad → **notify + fix path**. Carmen proposes; **she does not mutate ads or send client-facing messages** without approval where policy requires it.
+
+### 22.2 Two-layer architecture
+
+```mermaid
+flowchart TB
+  subgraph intel [Client Operations Intelligence — build Phase 2c+]
+    PKG[get_client_operations_package]
+    SCAN[proactive_client_scan cron]
+    REC[recommendations queue]
+  end
+  subgraph cocl [COCL — this spec]
+    RUN[operation_runs PEVR]
+    APR[approval gate]
+    EXEC[executors: Meta tools, WA notify, agent_task]
+  end
+  PKG --> SCAN
+  SCAN --> REC
+  REC -->|human or policy approve| APR
+  APR --> EXEC
+  EXEC --> RUN
+```
+
+- **Intelligence:** cheap, mostly **non-LLM** rules on fresh facts (aligned with `carmen-reliability-plan.md`); LLM only for ambiguous “what to say to client” drafts **after** a recommendation exists.
+- **COCL:** every approved action becomes a **run** with scope, verification, and report — so “כרמן אמרה שכיבתה” always matches DB + Meta truth.
+
+### 22.3 Proactive playbook examples (configurable per tenant)
+
+| Trigger | Suggested action | Mutating? | Approval |
+|---------|------------------|-----------|----------|
+| Pulse critical: stopped campaign | WhatsApp to campaigner + David | No | Auto notify |
+| Scheduled 20:30 client shutdown | Pause campaigns in scope | Yes | Pre-approved plan or daily confirm |
+| CPL above target 7d + no client call | “Call client” task + draft WA to David | No / draft only | Notify |
+| Group @כרמן or client escalation phrase | Reply in thread | Maybe | Per `carmen_access_policies` |
+| Optimization request from David | `analyze_campaign_performance` scoped | No* | Explicit request only |
+
+\*Analysis is read-only but costly — not auto-fired on every pulse tick.
+
+### 22.4 Carmen tools (incremental)
+
+| Tool | Phase | Role |
+|------|-------|------|
+| `get_client_operations_package(client_id)` | 2c | Single JSON: pulse row, last calls/updates, open alerts, recent Manus group snippets (permission-filtered), open COCL exceptions |
+| `list_client_recommendations` | 2c | Proactive queue with status `open` / `accepted` / `dismissed` |
+| `propose_client_action` | 2c | Creates recommendation + optional `agent_approval_queue` row for mutate/send |
+| Existing `execute_pending_approval` / Meta fb_* | Now | Execute after David approves |
+| `record_action_episode` | Now | Memory after real execution |
+
+### 22.5 UI
+
+- **Client card:** tab **«כרמן / תפעול»** — timeline merging card updates + COCL runs + recommendations.
+- **Command Center:** client filter on **תפעול** panel; proactive banner “3 clients need attention”.
+
+### 22.6 Phased add-on (after COCL 2b)
+
+| Phase | Deliverable |
+|-------|-------------|
+| **2c** | `get_client_operations_package` + recommendation table + rule-based scan (no auto Meta mutate) |
+| **2d** | Group message ingestion into package (Manus); link to client |
+| **3** | CC client tab + approval UX from recommendations |
 
 ---
 
