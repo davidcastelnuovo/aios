@@ -3666,8 +3666,16 @@ async function executeTool(name: string, args: Record<string, any>, supabase: an
     }
     case 'manage_task_collaborators': {
       if (args.action === 'add') {
+        const { data: taskRow, error: taskErr } = await supabase
+          .from('tasks')
+          .select('tenant_id')
+          .eq('id', args.task_id)
+          .in('tenant_id', accessibleTenantIds)
+          .maybeSingle()
+        if (taskErr) throw taskErr
+        if (!taskRow?.tenant_id) throw new Error('משימה לא נמצאה')
         const { data, error } = await supabase.from('task_collaborators').insert({
-          task_id: args.task_id, campaigner_id: args.campaigner_id, tenant_id: tenantId,
+          task_id: args.task_id, campaigner_id: args.campaigner_id, tenant_id: taskRow.tenant_id,
         }).select('id').single()
         if (error) throw error
         void fireTaskPeerNotification({
