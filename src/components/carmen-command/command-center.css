@@ -1258,6 +1258,8 @@ html:has(.cc-root) body {
 
 @media (max-width: 1023px) {
   .cc-talkbar-row {
+    width: 100%;
+    min-width: 0;
     padding: 0.5rem 0.6rem calc(0.5rem + env(safe-area-inset-bottom));
   }
 }
