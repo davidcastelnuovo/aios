@@ -14,6 +14,7 @@ import {
   isDevEscalationTool,
   isDevEscalationToolAllowed,
   normalizePhoneSuffix,
+  resolveDevTaskActorUserId,
 } from "./dev-escalation-auth.mjs";
 
 const DAVID_CAMPAIGNER = AUTHORIZED_DEV_REQUESTERS.campaigner_ids[0];
@@ -86,6 +87,17 @@ test("isDevEscalationSkill matches escalation skins", () => {
   assert.equal(isDevEscalationSkill("grok_escalation"), true);
   assert.equal(isDevEscalationSkill("facebook-campaign-analysis"), false);
   assert.equal(isBugfixEscalationSkill("bugfix_escalation_to_cursor"), true);
+});
+
+test("resolveDevTaskActorUserId falls back to allowlisted user on WhatsApp phone", async () => {
+  const id = await resolveDevTaskActorUserId(null, {
+    tenantId: null,
+    userId: null,
+    campaignerId: null,
+    phone: "972507677613",
+    devEscalationTier: "full",
+  });
+  assert.equal(id, DAVID_USER);
 });
 
 test("prompt rules differ by tier", () => {

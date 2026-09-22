@@ -29,7 +29,7 @@ export const BUGFIX_DEV_REQUESTERS = Object.freeze({
 export const AUTHORIZED_DEV_REQUESTERS = FULL_DEV_REQUESTERS;
 
 /** Native Carmen tools for Dev Task Command Center workflow. */
-const NATIVE_DEV_TASK_TOOLS = new Set([
+export const NATIVE_DEV_TASK_TOOLS = Object.freeze([
   "find_dev_task_duplicates",
   "create_dev_task",
   "approve_dev_task",
@@ -38,6 +38,8 @@ const NATIVE_DEV_TASK_TOOLS = new Set([
   "update_dev_task",
   "attach_dev_task_session",
 ]);
+
+const NATIVE_DEV_TASK_TOOL_SET = new Set(NATIVE_DEV_TASK_TOOLS);
 
 export const DEV_ESCALATION_REFUSAL_HE =
   "רק דיוויד (או אנה לתיקוני באגים מוגדרים) יכולים לבקש תיקוני מערכת דרכי. " +
@@ -90,7 +92,7 @@ export function isDevEscalationToolAllowed(toolName, tier) {
   const n = String(toolName);
   if (tier === "full") return isDevEscalationTool(n);
   // bugfix: Cursor DEV task workflow + legacy request_dev_task only.
-  if (NATIVE_DEV_TASK_TOOLS.has(n)) return true;
+  if (NATIVE_DEV_TASK_TOOL_SET.has(n)) return true;
   return n === "mcp_Cursor__request_dev_task" || n === "request_dev_task";
 }
 
@@ -102,7 +104,7 @@ export function isDevEscalationTool(toolName) {
     return true;
   }
   if (n === "delegate_to_github_agent") return true;
-  if (NATIVE_DEV_TASK_TOOLS.has(n)) return true;
+  if (NATIVE_DEV_TASK_TOOL_SET.has(n)) return true;
   // Defensive: unprefixed remote names if ever executed without mcp_ prefix.
   if (/^(request_dev_task|ask_cursor|ask_claude|ask_manus|ask_grok)$/i.test(n)) return true;
   return false;
@@ -135,6 +137,59 @@ export function isBugfixEscalationSkill(slug) {
 /**
  * @param {'full'|'bugfix'|null} tier
  */
+/**
+ * WhatsApp turns often lack a logged-in user_id. Resolve an approver UUID for
+ * dev_tasks when the caller is on the dev-escalation allowlist (David / Ana).
+ * @returns {Promise<string|null>}
+ */
+export async function resolveDevTaskActorUserId(
+  supabase,
+  { tenantId, userId, campaignerId, phone, devEscalationTier },
+) {
+  const uuidRe = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+  if (userId && uuidRe.test(String(userId))) return String(userId);
+
+  if (campaignerId) {
+    const { data: prof } = await supabase
+      .from("profiles")
+      .select("id")
+      .eq("campaigner_id", campaignerId)
+      .maybeSingle();
+    if (prof?.id) return prof.id;
+  }
+
+  const tier = devEscalationTier ?? getDevEscalationTier({ userId, campaignerId, phone });
+  if (!tier) return null;
+
+  const digits = normalizePhoneSuffix(phone);
+  if (tenantId && digits) {
+    const tail = digits.slice(-9);
+    const { data: camps } = await supabase
+      .from("campaigners")
+      .select("id, phone")
+      .eq("tenant_id", tenantId)
+      .eq("active", true);
+    const camp = (camps || []).find((c) => normalizePhoneSuffix(c.phone) === tail);
+    if (camp?.id) {
+      const { data: prof } = await supabase
+        .from("profiles")
+        .select("id")
+        .eq("campaigner_id", camp.id)
+        .maybeSingle();
+      if (prof?.id) return prof.id;
+    }
+  }
+
+  const identity = { userId, campaignerId, phone };
+  if (tier === "full" && matchesAllowlist(identity, FULL_DEV_REQUESTERS)) {
+    return FULL_DEV_REQUESTERS.user_ids[0] ?? null;
+  }
+  if (tier === "bugfix" && matchesAllowlist(identity, BUGFIX_DEV_REQUESTERS)) {
+    return BUGFIX_DEV_REQUESTERS.user_ids[0] ?? null;
+  }
+  return null;
+}
+
 export function buildDevEscalationPromptRule(tier) {
   if (tier === "full") {
     return (

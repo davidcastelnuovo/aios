@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { AlertTriangle, CalendarDays, CheckCircle2, CircleDot, Clock, LayoutList, MessageSquare, Search, UserRound } from "lucide-react";
+import { AlertTriangle, CalendarDays, CheckCircle2, CircleDot, Clock, LayoutList, MessageSquare, Repeat, Search, UserRound } from "lucide-react";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -13,6 +13,7 @@ import { isTaskOverdue } from "@/lib/taskDeadline";
 import { embedCount } from "@/lib/embedCount";
 import { filterTasksForChatSearch, sortTasksForChatList } from "@/lib/taskBoardQuery";
 import type { OpenClosedFilter } from "@/lib/taskFilters";
+import { describeRecurrence } from "@/lib/taskRecurrence";
 
 function formatDueShort(value: string): string | null {
   const parsed = new Date(value);
@@ -53,6 +54,9 @@ export type ChatTask = {
   creator_name?: string | null;
   google_calendar_event_id?: string | null;
   duration_minutes?: number | null;
+  recurrence_frequency?: "daily" | "weekly" | "monthly" | null;
+  recurrence_weekday?: number | null;
+  recurrence_monthday?: number | null;
   clients?: { name: string; agency_id?: string | null } | null;
   leads?: { company_name?: string | null; contact_name?: string | null } | null;
   campaigners?: { full_name: string } | null;
@@ -134,6 +138,8 @@ interface TasksChatViewProps {
   defaultCampaignerId?: string | null;
   openClosedFilter?: OpenClosedFilter;
   onOpenClosedFilterChange?: (value: OpenClosedFilter) => void;
+  showAllRecurring?: boolean;
+  onShowAllRecurringChange?: (value: boolean) => void;
   listSearch?: string;
   onListSearchChange?: (value: string) => void;
   hideListSearch?: boolean;
@@ -153,6 +159,8 @@ export function TasksChatView({
   defaultCampaignerId,
   openClosedFilter = "open",
   onOpenClosedFilterChange,
+  showAllRecurring = false,
+  onShowAllRecurringChange,
   listSearch: listSearchProp,
   onListSearchChange,
   hideListSearch = false,
@@ -257,6 +265,22 @@ export function TasksChatView({
                 );
               })}
             </div>
+            {onShowAllRecurringChange && (
+              <button
+                type="button"
+                onClick={() => onShowAllRecurringChange(!showAllRecurring)}
+                className={cn(
+                  "w-full h-7 rounded-md text-[11px] font-semibold transition-colors inline-flex items-center justify-center gap-1 px-2",
+                  showAllRecurring
+                    ? "bg-violet-100 text-violet-900 border border-violet-300"
+                    : "text-muted-foreground hover:bg-muted/60 border border-transparent",
+                )}
+                title="הצג משימות חוזרות גם לפני מועד הביצוע"
+              >
+                <Repeat className="h-3 w-3 shrink-0" />
+                משימות חוזרות
+              </button>
+            )}
             {onAddTask && (
               <QuickTaskInput
                 onAddTask={onAddTask}
@@ -318,6 +342,17 @@ export function TasksChatView({
                           <Badge variant="outline" className={cn("text-[10px] h-4 px-1.5", priorityClass(task.priority))}>
                             דחיפות {task.priority}
                           </Badge>
+                          {task.recurrence_frequency && (
+                            <Badge variant="outline" className="text-[10px] h-4 gap-0.5 px-1.5 border-violet-300 text-violet-700">
+                              <Repeat className="h-2.5 w-2.5" />
+                              {describeRecurrence({
+                                frequency: task.recurrence_frequency,
+                                weekday: task.recurrence_weekday,
+                                monthday: task.recurrence_monthday,
+                                time: task.due_time,
+                              }) || "חוזרת"}
+                            </Badge>
+                          )}
                           {(task.clients?.name || task.leads?.company_name || task.leads?.contact_name) && (
                             <span className="text-[11px] text-muted-foreground truncate max-w-[120px]">
                               {task.clients?.name || task.leads?.company_name || task.leads?.contact_name}

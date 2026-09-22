@@ -1,4 +1,5 @@
 import { reportRecordsQuery } from "@/lib/reportRecords";
+import { WeeklyCampaignComparison } from "@/components/reports/WeeklyCampaignComparison";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -6,7 +7,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Skeleton } from "@/components/ui/skeleton";
+import { CarmenLoadingScreen } from "@/components/shared/CarmenLoadingScreen";
 import { Tabs } from "@/components/ui/tabs";
 import { ResponsiveTabsList, type ResponsiveTabItem } from "@/components/ui/responsive-tabs-list";
 import {
@@ -36,7 +37,6 @@ import { WooCommerceDashboard } from "@/components/dynamic-tables/WooCommerceDas
 import {
   getAddToCartFromData,
   getAdsPurchasesFromData,
-  getExplicitLeadFieldsFromData,
   getLeadsFromData,
   getPurchasesFromData,
   getRevenueFromData,
@@ -53,9 +53,10 @@ import {
 } from "@/lib/adsMetrics";
 import { reportQueryOptions, getReportLastSyncAt, refetchOnMountIfEmpty } from "@/lib/reportQueryOptions";
 import { ReportDataFreshness } from "@/components/reports/ReportDataFreshness";
-import { formatCurrency as formatCurrencyAmount, formatUnitCost as formatUnitCostAmount, resolveDashboardCurrency } from "@/lib/currency";
+import { formatCurrency as formatCurrencyAmount, formatUnitCost as formatUnitCostAmount, getCurrencySymbol, resolveDashboardCurrency } from "@/lib/currency";
 import { resolveAnalyticsReportMode } from "@/lib/analyticsReportMode";
-import { COMBINED_DASHBOARD_DATE_FILTERS } from "@/lib/dashboardDateFilters";
+import { COMBINED_DASHBOARD_DATE_FILTERS, getDashboardDateRange } from "@/lib/dashboardDateFilters";
+import { formatReportDate, getReportCoverageGap } from "@/lib/reportCoverage";
 import { fetchWooDashboardSummary, getWooDashboardDateRangeIso, invalidateWooDashboardQueries } from "@/lib/wooDashboardQueries";
 import { shouldUseGoogleWooAttributionOverlay, summarizeGoogleAttributedWooOrders } from "@/lib/wooAttribution";
 import { shouldIncludeInAdsDashboardAggregate } from "@/lib/adsEntityLevel";
@@ -74,7 +75,7 @@ const PLATFORM_CONFIG: Record<string, { name: string; color: string; bgColor: st
 };
 
 type CampaignType = 'leads' | 'ecommerce';
-type PlatformFilter = 'all' | 'facebook' | 'google_ads' | 'google_analytics' | 'seo' | 'woocommerce';
+type PlatformFilter = 'all' | 'weekly' | 'facebook' | 'google_ads' | 'google_analytics' | 'seo' | 'woocommerce';
 
 const getCampaignType = (integrationType?: string | null, integrationSettings?: any): CampaignType => {
   if (integrationType === 'facebook_ecommerce') return 'ecommerce';
@@ -313,6 +314,27 @@ export default function DashboardView() {
   const displayAllRecords = allRecords ?? [];
   const recordsInitialLoad = recordsPending && tables.length > 0;
 
+  // Weekly comparison is independent of the dashboard's active date preset: it needs
+  // every available campaign day (up to one year) to render the stacked week tables.
+  const { data: weeklyRecords = [], isPending: weeklyRecordsPending } = useQuery<any[]>({
+    queryKey: ['crm-records-dashboard-weekly', tables.map((t: any) => t.id).join(',')],
+    queryFn: async () => {
+      const adsTables = tables.filter((table: any) => isAdsPlatform(table.integration_type));
+      const results = await Promise.all(adsTables.map(async (table: any) => {
+        const records = await queryClient.fetchQuery({
+          ...reportRecordsQuery(supabase, table.id, 'last_365_days'),
+        });
+        return records.map((record: any) => ({
+          ...record,
+          _source: table.integration_type,
+        }));
+      }));
+      return results.flat();
+    },
+    enabled: platformFilter === 'weekly' && tables.some((t: any) => isAdsPlatform(t.integration_type)),
+    ...reportQueryOptions<any[]>(),
+  });
+
   // Check if client has SEO (Ahrefs) reports — do NOT filter by UI tenant.
   // Shared-agency clients (DMM-MC) store ahrefs_reports on the home tenant;
   // RLS + client_id is enough, and a UI-tenant filter hid the SEO tab from MC.
@@ -404,6 +426,13 @@ export default function DashboardView() {
 
   const platformTabItems = useMemo((): ResponsiveTabItem[] => {
     const items: ResponsiveTabItem[] = [{ value: "all", label: "📊 הכל" }];
+    if (availablePlatforms.includes("facebook") || availablePlatforms.includes("google_ads")) {
+      items.push({
+        value: "weekly",
+        label: "השוואה שבועית",
+        iconNode: <CalendarIcon className="h-4 w-4 text-violet-600" />,
+      });
+    }
     if (availablePlatforms.includes("facebook")) {
       items.push({
         value: "facebook",
@@ -462,6 +491,17 @@ export default function DashboardView() {
       return true;
     });
   }, [displayAllRecords, platformFilter]);
+
+  // Ads history is only as deep as the last sync wrote, so a long preset can quietly
+  // return the same totals as a short one. Name the first day that actually has data.
+  const adsCoverageGap = useMemo(() => {
+    const adsDates = displayAllRecords
+      .filter((r: any) => isAdsPlatform(r._source || ''))
+      .map((r: any) => r.data?.date);
+    if (adsDates.length === 0) return null;
+    const { startDate } = getDashboardDateRange(dateFilter, new Date(), customFromStr, customToStr);
+    return getReportCoverageGap(startDate, adsDates);
+  }, [displayAllRecords, dateFilter, customFromStr, customToStr]);
 
   // All analytics records (unfiltered by report_type) for GoogleAnalyticsDashboard component
   const allAnalyticsRecords = useMemo(() => {
@@ -581,7 +621,6 @@ export default function DashboardView() {
           platforms[source].revenue += getRevenueFromData(data);
           platforms[source].addToCart += getAddToCartFromData(data);
           platforms[source].addToCartTracked ||= hasAddToCartMetric(data);
-          platforms[source].leads += getExplicitLeadFieldsFromData(data);
         } else {
           const leads = getLeadsFromData(data);
           platforms[source].leads += leads;
@@ -1120,17 +1159,19 @@ export default function DashboardView() {
     };
     try {
       // Compute date range for analytics-style syncs (GA / GSC).
-      // ALWAYS sync at least the last 90 days (regardless of display filter)
+      // ALWAYS sync at least the last 120 days (regardless of display filter)
       // so switching the dashboard to a short window doesn't wipe history.
       const computeRange = () => {
         const now = new Date();
         const end = new Date(now);
-        const MIN_SYNC_DAYS = 90;
+        const MIN_SYNC_DAYS = 120;
         const start = new Date(now);
         let days = MIN_SYNC_DAYS;
         switch (dateFilter) {
+          case 'last_60_days': days = Math.max(60, MIN_SYNC_DAYS); break;
           case 'last_70_days': days = Math.max(70, MIN_SYNC_DAYS); break;
           case 'last_90_days': days = Math.max(90, MIN_SYNC_DAYS); break;
+          case 'last_120_days': days = MIN_SYNC_DAYS; break;
           case 'last_180_days': days = 180; break;
           case 'last_365_days': days = 365; break;
           // All shorter ranges still pull MIN_SYNC_DAYS to preserve history.
@@ -1210,11 +1251,8 @@ export default function DashboardView() {
 
   if (dashboardLoading) {
     return (
-      <div className="container mx-auto max-w-full overflow-x-hidden py-4 px-3 sm:py-8 sm:px-4 space-y-6">
-        <Skeleton className="h-8 w-64" />
-        <div className="grid gap-4 md:grid-cols-4">
-          {[1, 2, 3, 4].map(i => <Skeleton key={i} className="h-32" />)}
-        </div>
+      <div className="container mx-auto max-w-full overflow-x-hidden py-4 px-3 sm:py-8 sm:px-4">
+        <CarmenLoadingScreen messages={["כרמן מרכיבה את הדשבורד…", "מושכת את נתוני הפלטפורמות…"]} />
       </div>
     );
   }
@@ -1362,6 +1400,12 @@ export default function DashboardView() {
         </div>
       </div>
 
+      {adsCoverageGap && platformFilter !== 'weekly' && (
+        <p className="text-xs text-muted-foreground">
+          נתוני הפרסום הזמינים מתחילים ב-{formatReportDate(adsCoverageGap.earliestAvailable)}, כך שהסכומים מוצגים מהתאריך הזה ואילך ולא מתחילת הטווח שנבחר.
+        </p>
+      )}
+
       {/* Agency / Organization Dashboard Content */}
       {isAgencyDashboard ? (
         <AgencyDashboardContent
@@ -1400,7 +1444,18 @@ export default function DashboardView() {
             </Tabs>
           )}
 
-          {platformFilter === 'woocommerce' ? (
+          {platformFilter === 'weekly' ? (
+            <WeeklyCampaignComparison
+              records={weeklyRecords}
+              currency={getCurrencySymbol(dashboardCurrency)}
+              isLoading={weeklyRecordsPending}
+              sourceModes={{
+                facebook_insights: campaignTypeByPlatform.facebook_insights,
+                facebook_ecommerce: campaignTypeByPlatform.facebook_ecommerce,
+                google_ads: campaignTypeByPlatform.google_ads,
+              }}
+            />
+          ) : platformFilter === 'woocommerce' ? (
             /* WooCommerce tab — client_id only (site may live on agency home tenant) */
             dashboard?.client_id ? (
               <WooCommerceDashboard clientId={dashboard.client_id} tenantId={currentTenantId || ''} dateFilter={dateFilter} customFrom={customFromStr} customTo={customToStr} />
@@ -1421,9 +1476,7 @@ export default function DashboardView() {
               <Button variant="outline" onClick={() => refetchRecords()}>נסה שוב</Button>
             </CardContent></Card>
           ) : recordsInitialLoad ? (
-            <div className="grid gap-4 md:grid-cols-4">
-              {[1, 2, 3, 4].map(i => <Skeleton key={i} className="h-32" />)}
-            </div>
+            <CarmenLoadingScreen variant="card" messages={["כרמן מושכת את נתוני הדוח…", "מסכמת לפי טווח התאריכים…"]} />
           ) : tables.length === 0 ? (
             <Card className="p-12 text-center">
               <h3 className="text-lg font-semibold mb-2">אין טבלאות משויכות ללקוח זה</h3>
@@ -1474,7 +1527,7 @@ export default function DashboardView() {
                       </Card>
                     )}
 
-                    {showAdsCards && totalSummary.leads > 0 && (
+                    {showAdsCards && facebookMixedMode && totalSummary.leads > 0 && (
                       <Card className="h-full bg-gradient-to-br from-cyan-50 to-cyan-100 dark:from-cyan-950 dark:to-cyan-900">
                         <CardContent className="p-6 flex flex-col items-center justify-center h-full text-center">
                           <p className="text-sm text-muted-foreground">לידים</p>
@@ -1483,7 +1536,7 @@ export default function DashboardView() {
                       </Card>
                     )}
 
-                    {showAdsCards && totalSummary.leads > 0 && (
+                    {showAdsCards && facebookMixedMode && totalSummary.leads > 0 && (
                       <Card className="h-full bg-gradient-to-br from-teal-50 to-teal-100 dark:from-teal-950 dark:to-teal-900">
                         <CardContent className="p-6 flex flex-col items-center justify-center h-full text-center">
                           <p className="text-sm text-muted-foreground">עלות לליד (CPL)</p>

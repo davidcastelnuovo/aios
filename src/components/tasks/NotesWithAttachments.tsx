@@ -29,6 +29,12 @@ interface Props {
   notesTitle?: string;
   notesFooter?: ReactNode;
   thumbSize?: "sm" | "lg";
+  /** Extra classes on the notes card wrapper (variant=notes). */
+  notesWrapperClassName?: string;
+  /** When true, notes card grows to fill flex parent instead of a fixed min-height. */
+  fillHeight?: boolean;
+  /** updates-first: feed + composer on top; compact fixed notes at bottom */
+  notesLayout?: "notes-first" | "updates-first";
 }
 
 const MAX = 10 * 1024 * 1024;
@@ -61,6 +67,9 @@ export function NotesWithAttachments({
   notesTitle = "הערות",
   notesFooter,
   thumbSize = "sm",
+  notesWrapperClassName,
+  fillHeight = false,
+  notesLayout = "notes-first",
 }: Props) {
   const { tenantId } = useCurrentTenant();
   const [uploading, setUploading] = useState(false);
@@ -237,21 +246,59 @@ export function NotesWithAttachments({
     </div>
   );
 
+  const notesField = (
+    <Textarea
+      value={value}
+      onChange={(e) => onChange(e.target.value)}
+      onPaste={handlePaste}
+      placeholder={placeholder}
+      rows={notesLayout === "updates-first" ? 2 : rows}
+      className={cn(
+        "border-0 bg-transparent focus-visible:ring-0 resize-none p-0",
+        notesLayout === "updates-first"
+          ? "min-h-[52px] max-h-24 text-xs"
+          : "flex-1 min-h-[72px]",
+      )}
+    />
+  );
+
   const notesCube = (
-    <div className="rounded-xl border border-border/60 bg-card p-3 flex flex-col min-h-[180px] h-full shadow-sm text-right">
-      <div className="flex items-center gap-1.5 text-sm font-medium mb-2">
+    <div
+      className={cn(
+        "rounded-xl border border-border/60 bg-card p-3 flex flex-col shadow-sm text-right",
+        fillHeight ? "flex-1 h-full min-h-[200px]" : "min-h-[180px] h-full",
+        notesWrapperClassName,
+      )}
+    >
+      <div className="flex items-center gap-1.5 text-sm font-medium mb-2 shrink-0">
         <MessageSquare className="h-4 w-4 text-muted-foreground" />
         {notesTitle}
       </div>
-      <Textarea
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        onPaste={handlePaste}
-        placeholder={placeholder}
-        rows={rows}
-        className="flex-1 min-h-[72px] border-0 bg-transparent focus-visible:ring-0 resize-none p-0"
-      />
-      {notesFooter ? <div className="mt-3 pt-3 border-t space-y-2">{notesFooter}</div> : null}
+      {notesLayout === "updates-first" ? (
+        <>
+          {notesFooter ? (
+            <div className="flex flex-col flex-1 min-h-0 space-y-2 pb-3">{notesFooter}</div>
+          ) : null}
+          <div className="shrink-0 pt-3 border-t space-y-1">
+            <p className="text-[11px] text-muted-foreground">הערות קבועות</p>
+            {notesField}
+          </div>
+        </>
+      ) : (
+        <>
+          {notesField}
+          {notesFooter ? (
+            <div
+              className={cn(
+                "mt-3 pt-3 border-t space-y-2",
+                fillHeight && "flex flex-col flex-1 min-h-0",
+              )}
+            >
+              {notesFooter}
+            </div>
+          ) : null}
+        </>
+      )}
     </div>
   );
 

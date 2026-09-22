@@ -4,6 +4,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route, useLocation } from "react-router-dom";
 import { useSessionRefresh } from "@/hooks/useSessionRefresh";
+import { useAuthSessionSync } from "@/hooks/useAuthSessionSync";
 import { AgencyProvider } from "./contexts/AgencyContext";
 import { CommandCenterSidecarProvider } from "./contexts/CommandCenterSidecarContext";
 import { TenantProvider } from "./contexts/TenantContext";
@@ -13,7 +14,7 @@ import { AIOSProvider } from "./contexts/AIOSContext";
 import { Suspense } from "react";
 import { lazyWithRetry as lazy } from "@/lib/lazyWithRetry";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
-import { Skeleton } from "@/components/ui/skeleton";
+import { CarmenLoadingScreen } from "@/components/shared/CarmenLoadingScreen";
 import { tenantRoutes } from "@/routes/tenantRoutes";
 import { StagingBanner } from "@/components/StagingBanner";
 import { setupReportQueryCachePersistence } from "@/lib/reportQueryCache";
@@ -48,20 +49,11 @@ const queryClient = new QueryClient({
 setupReportQueryCachePersistence(queryClient);
 
 function PageLoader() {
-  return (
-    <div className="flex flex-col gap-4 p-8">
-      <Skeleton className="h-8 w-48" />
-      <Skeleton className="h-4 w-96" />
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3 mt-4">
-        <Skeleton className="h-32" />
-        <Skeleton className="h-32" />
-        <Skeleton className="h-32" />
-      </div>
-    </div>
-  );
+  return <CarmenLoadingScreen />;
 }
 
 function SessionRefreshInitializer() {
+  useAuthSessionSync();
   useSessionRefresh();
   return null;
 }

@@ -7,10 +7,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { Building2 } from "lucide-react";
-import { resolveTenantSlug } from "@/hooks/useResolveTenant";
+import { resolveAppHomePath } from "@/lib/appHomePath";
 import { isNonProduction, resolveFrontendAppEnv } from "@/lib/appEnv";
-
-const buildTenantPath = (slug: string, path: string) => `/t/${slug}/${path}`;
 
 const AUTH_REDIRECT = `${window.location.origin}/auth`;
 
@@ -53,9 +51,9 @@ export default function Auth() {
         await processPendingInvitation(accessToken);
       }
 
-      const slug = await resolveTenantSlug(userId, 5);
-      if (slug) {
-        navigate(buildTenantPath(slug, "tasks"), { replace: true });
+      const homePath = await resolveAppHomePath(userId);
+      if (homePath) {
+        navigate(homePath, { replace: true });
         return true;
       }
 

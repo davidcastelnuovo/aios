@@ -6,6 +6,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
+import { CarmenLoadingScreen } from "@/components/shared/CarmenLoadingScreen";
 import { ArrowRight, Plus, Trash2, Send, Pencil, Check, X, MoreVertical, Calendar as CalendarIcon, RefreshCw, Facebook, Settings, Link, BarChart3, Search, TrendingUp, Bell, SearchIcon, Sparkles, Info, Copy, Loader2, AlertCircle, Play, ShoppingCart } from "lucide-react";
 import { AIAnalysisDialog } from "@/components/dynamic-tables/AIAnalysisDialog";
 import { format, subDays } from "date-fns";
@@ -59,7 +60,7 @@ import { MaskyooSiblingCard } from "@/components/dynamic-tables/MaskyooSiblingCa
 import { CURRENCY_OPTIONS, getCurrencySymbol, normalizeCurrencyCode, type CurrencyCode } from "@/lib/currency";
 import { resolveAnalyticsReportMode } from "@/lib/analyticsReportMode";
 import { LinkTableToClientDialog } from "@/components/dynamic-tables/LinkTableToClientDialog";
-import { getLeadsFromData } from "@/lib/adsMetrics";
+import { effectiveFacebookCampaignType, getLeadsFromData } from "@/lib/adsMetrics";
 import { isSeoReportSource } from "@/lib/seoReports";
 import { ManualROICard } from "@/components/dynamic-tables/ManualROICard";
 import { WooAttributionSection } from "@/components/dynamic-tables/WooAttributionSection";
@@ -69,6 +70,7 @@ import { shouldUseGoogleWooAttributionOverlay } from "@/lib/wooAttribution";
 import { reportQueryOptions, getReportLastSyncAt } from "@/lib/reportQueryOptions";
 import { ReportDataFreshness } from "@/components/reports/ReportDataFreshness";
 import { AdsEntityLevelTabs } from "@/components/reports/AdsEntityLevelTabs";
+import { WeeklyCampaignComparison } from "@/components/reports/WeeklyCampaignComparison";
 import {
   ADS_ENTITY_LEVEL_LABELS,
   ADS_ENTITY_SEARCH_PLACEHOLDERS,
@@ -158,6 +160,7 @@ export default function DynamicTableView({ embedTableSlug, embedMode, summaryOnl
   const [showLinkClientDialog, setShowLinkClientDialog] = useState(false);
   const [campaignSearch, setCampaignSearch] = useState("");
   const [adsEntityLevel, setAdsEntityLevel] = useState<AdsEntityLevel>("campaign");
+  const [adsReportView, setAdsReportView] = useState<"summary" | "weekly">("summary");
   const [isCloning, setIsCloning] = useState(false);
   const cellInputRef = useRef<HTMLInputElement>(null);
 
@@ -176,11 +179,14 @@ export default function DynamicTableView({ embedTableSlug, embedMode, summaryOnl
     { value: "last_7_days", label: "7 ימים אחרונים" },
     { value: "last_14_days", label: "14 יום" },
     { value: "last_30_days", label: "30 יום" },
-    { value: "this_month", label: "החודש" },
-    { value: "last_month", label: "חודש שעבר" },
-    { value: "last_90_days", label: "3 חודשים" },
+    { value: "last_60_days", label: "60 יום" },
+    { value: "last_70_days", label: "70 יום" },
+    { value: "last_90_days", label: "90 יום" },
+    { value: "last_120_days", label: "120 יום" },
     { value: "last_180_days", label: "6 חודשים" },
     { value: "last_365_days", label: "שנה" },
+    { value: "this_month", label: "החודש" },
+    { value: "last_month", label: "חודש שעבר" },
     { value: "custom", label: "תאריכים מותאמים..." },
   ];
 
@@ -198,14 +204,14 @@ export default function DynamicTableView({ embedTableSlug, embedMode, summaryOnl
   const isDateRangeReadyForSync = dateFilter !== 'custom' || (!!customDateRange.from && !!customDateRange.to);
 
   const getMainFilterSyncRange = () => {
-    // Sync ALWAYS ends today and ALWAYS pulls at least the last 90 days,
+    // Sync ALWAYS ends today and ALWAYS pulls at least the last 120 days,
     // regardless of the display filter. This prevents the sync from wiping
     // historical data when the user is viewing a short window like "7 days".
     // The view layer continues to filter the visible window separately.
     // For longer display windows we still extend the sync range accordingly.
     const today = new Date();
     const endDate = format(today, 'yyyy-MM-dd');
-    const MIN_SYNC_DAYS = 90;
+    const MIN_SYNC_DAYS = 120;
 
     const rangeFromDays = (days: number) => ({
       startDate: format(subDays(today, Math.max(days, MIN_SYNC_DAYS)), 'yyyy-MM-dd'),
@@ -222,9 +228,11 @@ export default function DynamicTableView({ embedTableSlug, embedMode, summaryOnl
       case 'last_7_days':
       case 'last_14_days':
       case 'last_30_days':
+      case 'last_60_days':
       case 'this_month':
       case 'last_month':
       case 'last_90_days':
+      case 'last_120_days':
         return rangeFromDays(MIN_SYNC_DAYS);
       case 'last_180_days':
         return rangeFromDays(180);
@@ -379,6 +387,12 @@ export default function DynamicTableView({ embedTableSlug, embedMode, summaryOnl
     table?.integration_type === 'facebook_insights'
     || table?.integration_type === 'facebook_ecommerce'
     || table?.integration_type === 'google_ads';
+
+  const { data: weeklyRecords = [], isPending: weeklyRecordsPending } = useQuery({
+    ...reportRecordsQuery(supabase, table?.id || '', 'last_365_days'),
+    enabled: !!table?.id && isAdsReportTable && adsReportView === 'weekly',
+    ...reportQueryOptions<CrmRecord[]>(),
+  });
 
   const entityLevelRecords = useMemo(() => {
     if (!isAdsReportTable) return displayRecords;
@@ -1552,8 +1566,7 @@ export default function DynamicTableView({ embedTableSlug, embedMode, summaryOnl
   if (resolvingTables) {
     return (
       <div className="container mx-auto py-8 px-4">
-        <Skeleton className="h-8 w-48 mb-4" />
-        <Skeleton className="h-64 w-full" />
+        <CarmenLoadingScreen messages={["כרמן פותחת את הטבלה…", "טוענת את השדות והנתונים…"]} />
       </div>
     );
   }
@@ -2482,6 +2495,30 @@ export default function DynamicTableView({ embedTableSlug, embedMode, summaryOnl
         />
       )}
 
+      {isAdsReportTable && (
+        <Tabs value={adsReportView} onValueChange={(value) => setAdsReportView(value as "summary" | "weekly")} className="mb-4">
+          <TabsList dir="rtl">
+            <TabsTrigger value="summary">הדוח</TabsTrigger>
+            <TabsTrigger value="weekly">השוואה שבועית</TabsTrigger>
+          </TabsList>
+        </Tabs>
+      )}
+
+      {isAdsReportTable && adsReportView === "weekly" && (
+        <WeeklyCampaignComparison
+          records={weeklyRecords}
+          defaultSource={table?.integration_type as "facebook_insights" | "facebook_ecommerce" | "google_ads"}
+          currency={getCurrencySymbol(table?.integration_settings?.currency)}
+          isLoading={weeklyRecordsPending}
+          sourceModes={{
+            facebook_insights: table?.integration_settings?.campaign_type === "leads" ? "leads" : undefined,
+            facebook_ecommerce: "ecommerce",
+            google_ads: table?.integration_settings?.campaign_type === "ecommerce" ? "ecommerce" : "leads",
+          }}
+        />
+      )}
+
+      {(!isAdsReportTable || adsReportView === "summary") && (
       <div ref={summaryTablesRef}>
       {(hasAnyFacebook || hasGoogleAds) && displayRecords.length > 0 && (
         <div className="mb-3">
@@ -2526,7 +2563,7 @@ export default function DynamicTableView({ embedTableSlug, embedMode, summaryOnl
               };
             }
 
-            const rowType = String(record.data?.campaign_type || '').toLowerCase();
+            const rowType = effectiveFacebookCampaignType(record.data || {});
             if (rowType === 'ecommerce' || rowType === 'lead' || rowType === 'traffic') {
               acc[groupKey].campaign_type = rowType as 'lead' | 'ecommerce' | 'traffic';
             }
@@ -2957,7 +2994,8 @@ export default function DynamicTableView({ embedTableSlug, embedMode, summaryOnl
               && totals.conversions >= 3
               && totals.conversions_value > 0
               && avgValuePerConv < 20;
-            const allValueHigher = totals.all_conversions_value > totals.conversions_value * 2
+            const allValueHigher = isEcommerce
+              && totals.all_conversions_value > totals.conversions_value * 2
               && totals.all_conversions_value - totals.conversions_value > 50;
             const gaCurrency = getCurrencySymbol(table.integration_settings?.currency);
 
@@ -3003,7 +3041,7 @@ export default function DynamicTableView({ embedTableSlug, embedMode, summaryOnl
                       <th className="p-2 text-center font-medium">חשיפות</th>
                       <th className="p-2 text-center font-medium">קליקים</th>
                       <th className="p-2 text-center font-medium">
-                        {useGoogleWooOverlay ? 'המרות (GA)' : 'המרות'}
+                        {useGoogleWooOverlay ? 'המרות (GA)' : isEcommerce ? 'המרות' : 'לידים'}
                       </th>
                       {hasVerifiedData && (
                         <th className="p-2 text-center font-medium" title="לידים בפועל באתר (Elementor) — לפי שיוך טופס/עמוד לקמפיין">לידים באתר</th>
@@ -3017,7 +3055,7 @@ export default function DynamicTableView({ embedTableSlug, embedMode, summaryOnl
                           <th className="p-2 text-center font-medium">ROAS</th>
                         </>
                       ) : (
-                        <th className="p-2 text-center font-medium">עלות להמרה</th>
+                        <th className="p-2 text-center font-medium">עלות לליד</th>
                       )}
                     </tr>
                   </thead>
@@ -3160,9 +3198,10 @@ export default function DynamicTableView({ embedTableSlug, embedMode, summaryOnl
         />
       )}
       </div>
+      )}
 
-      {!summaryOnly && (hasAhrefs && isSeoReportSource(table?.integration_settings?.data_source) ? null : isLoading ? (
-        <Skeleton className="h-96 w-full" />
+      {(!isAdsReportTable || adsReportView === "summary") && !summaryOnly && (hasAhrefs && isSeoReportSource(table?.integration_settings?.data_source) ? null : isLoading ? (
+        <CarmenLoadingScreen variant="card" messages={["כרמן מושכת את נתוני הטבלה…", "מחשבת את התקופה הנבחרת…"]} />
       ) : (
         <div className="border rounded-lg overflow-hidden bg-background shadow-sm">
           <div className="overflow-auto">
@@ -3360,11 +3399,16 @@ export default function DynamicTableView({ embedTableSlug, embedMode, summaryOnl
                 </div>
               ))}
 
-              {/* Empty state */}
+              {/* Empty state — never before the refetch for this period settles */}
               {(!filteredRecords || filteredRecords.length === 0) && (
                 <div className="flex items-center justify-center p-12 text-center">
                   <div>
-                    {campaignSearch ? (
+                    {recordsFetching ? (
+                      <CarmenLoadingScreen
+                        variant="inline"
+                        messages={["כרמן מרעננת את הנתונים…"]}
+                      />
+                    ) : campaignSearch ? (
                       <p className="text-muted-foreground mb-3">לא נמצאו קמפיינים תואמים</p>
                     ) : table?.integration_type ? (
                       <>

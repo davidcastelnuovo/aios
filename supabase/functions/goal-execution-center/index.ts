@@ -4,12 +4,16 @@ import { requireAuth } from "../_shared/security.ts";
 import {
   addGoalBlocker,
   addGoalMilestone,
-  createExecutionGoal,
+  createUnifiedGoal,
   findDuplicateGoals,
   getGoalExecutionReport,
   linkTaskToGoal,
   logGoalEvent,
 } from "../_shared/goal-execution.ts";
+import {
+  getAutonomousGoalStatus,
+  runGoalIteration,
+} from "../_shared/autonomous-goal-engine.ts";
 
 const cors = {
   "Access-Control-Allow-Origin": "*",
@@ -22,8 +26,8 @@ serve(async (req) => {
 
   try {
     const auth = await requireAuth(req);
-    if (!auth.ok) {
-      return json({ error: auth.error }, auth.status);
+    if (!auth) {
+      return json({ error: "Unauthorized" }, 401);
     }
 
     const body = await req.json().catch(() => ({}));
@@ -63,11 +67,12 @@ serve(async (req) => {
       return json({ duplicates: duplicates.map((d) => ({ id: d.goal.id, title: d.goal.title, status: d.goal.status, score: d.score })) });
     }
 
-    if (action === "create") {
+    if (action === "create" || action === "autonomous_create") {
       const title = String(body.title || "").trim();
       if (!title) throw new Error("title required");
+      const autonomous = action === "autonomous_create" || !!body.autonomous;
       const duplicates = await findDuplicateGoals(supabase, tenantId, title);
-      const goal = await createExecutionGoal(supabase, {
+      const created = await createUnifiedGoal(supabase, {
         tenantId,
         title,
         description: body.description,
@@ -77,8 +82,16 @@ serve(async (req) => {
         nextAction: body.next_action,
         ownerUserId: userId,
         actorUserId: userId,
+        autonomous,
+        objective: body.objective || body.description,
+        constraints: body.constraints,
+        scope: body.scope,
+        riskLevel: body.risk_level,
+        successCriteria: body.success_criteria,
+        agentId: body.agent_id,
       });
-      if (body.milestones && Array.isArray(body.milestones)) {
+      const { goal, criteria, autonomous_deferred, notice } = created;
+      if (!autonomous && body.milestones && Array.isArray(body.milestones)) {
         for (const [i, m] of body.milestones.entries()) {
           if (m?.title) {
             await addGoalMilestone(supabase, {
@@ -88,7 +101,26 @@ serve(async (req) => {
           }
         }
       }
-      return json({ goal, possible_duplicates: duplicates.slice(0, 5) });
+
+      let kick: { status?: string; summary?: string; error?: string } | undefined;
+      if (autonomous && goal.autonomous_mode && !autonomous_deferred) {
+        try {
+          const holder = userId ? `user:${userId}` : "create";
+          const outcome = await runGoalIteration(supabase, tenantId, goal.id, holder);
+          kick = { status: outcome.status, summary: outcome.summary };
+        } catch (kickErr: unknown) {
+          kick = { error: kickErr instanceof Error ? kickErr.message : String(kickErr) };
+        }
+      }
+
+      return json({
+        goal,
+        criteria,
+        possible_duplicates: duplicates.slice(0, 5),
+        autonomous_deferred,
+        notice,
+        kick,
+      });
     }
 
     if (action === "update") {
@@ -151,6 +183,68 @@ serve(async (req) => {
     if (action === "report") {
       const report = await getGoalExecutionReport(supabase, tenantId, String(body.id), Number(body.since_hours) || 24);
       return json({ report });
+    }
+
+    if (action === "autonomous_status") {
+      const id = String(body.id || body.goal_id || "");
+      if (!id) return json({ error: "id required" }, 400);
+      const report = await getGoalExecutionReport(supabase, tenantId, id);
+      return json(report);
+    }
+
+    if (action === "manual_guidance") {
+      const goalId = String(body.goal_id || body.id || "");
+      const guidance = String(body.guidance || body.message || "").trim();
+      if (!goalId || !guidance) return json({ error: "goal_id and guidance required" }, 400);
+
+      const { data: goal } = await supabase.from("goals").select("*")
+        .eq("id", goalId).eq("tenant_id", tenantId).eq("autonomous_mode", true).maybeSingle();
+      if (!goal) return json({ error: "autonomous goal not found" }, 404);
+
+      await logGoalEvent(supabase, {
+        goalId,
+        tenantId,
+        eventType: "manual_guidance",
+        actorUserId: userId,
+        detail: { guidance: guidance.slice(0, 2000) },
+      });
+
+      const { loadGoalState, buildContextPackage } = await import("../_shared/autonomous-goal-engine.ts");
+      const { queueBrainRequest } = await import("../_shared/goal-cursor-brain.ts");
+      const { buildManualGuidanceBrainPrompt } = await import("../_shared/goal-brain-apply.ts");
+
+      const state = await loadGoalState(supabase, tenantId, goalId);
+      const ctx = state ? buildContextPackage(state) : { goal_id: goalId };
+      const queued = await queueBrainRequest(supabase, {
+        tenantId,
+        goalId,
+        requestType: "manual_guidance",
+        prompt: buildManualGuidanceBrainPrompt({ guidance, ctx }),
+      });
+
+      const reasonMessages: Record<string, string> = {
+        no_cursor_direct_session: "לא נמצא Cursor Direct לטננט — חבר בפרופיל / MCP לפני הנחיה.",
+        inflight: "כבר יש הנחיה בתהליך ליעד הזה — המתן לתשובה.",
+        cursor_busy: "Cursor Direct עסוק — נסה שוב בעוד דקה.",
+      };
+
+      return json({
+        ok: true,
+        dispatched: queued.dispatched,
+        awaiting: queued.awaiting,
+        request_id: queued.requestId,
+        reason: queued.reason,
+        message: queued.reason ? reasonMessages[queued.reason] || queued.reason : undefined,
+      });
+    }
+
+    if (action === "autonomous_run_iteration" || action === "run_iteration") {
+      const id = String(body.id || body.goal_id || "");
+      if (!id) return json({ error: "id required" }, 400);
+      const holder = userId ? `user:${userId}` : "api";
+      const outcome = await runGoalIteration(supabase, tenantId, id, holder);
+      const status = await getAutonomousGoalStatus(supabase, tenantId, id);
+      return json({ outcome, status });
     }
 
     return json({ error: `unknown action: ${action}` }, 400);

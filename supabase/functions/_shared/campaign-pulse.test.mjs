@@ -4,6 +4,7 @@ import test from "node:test";
 import {
   buildHealthWhatsAppDigest,
   buildPulseDashboardAbsoluteUrl,
+  buildPulseCategoryDigestLines,
   buildPulseWhatsAppDigest,
   classifyCampaignPulseStatus,
   clientAdAccountIds,
@@ -525,4 +526,58 @@ test("isPulseDeliveryExcludedPhone is tenant-scoped (none blocked by default)", 
   assert.equal(isPulseDeliveryExcludedPhone("972507677613", "marketingcaptain"), false);
   assert.equal(isPulseDeliveryExcludedPhone("972558833168", "dmm"), false);
   assert.equal(isPulseDeliveryExcludedPhone("972507677613"), false);
+});
+
+test("category digest lines summarize the three campaign goals", () => {
+  const lines = buildPulseCategoryDigestLines([
+    {
+      client_name: "לקוח א",
+      campaign_breakdown: [
+        { goal: "leads", status: "critical", alert_eligible: true, campaign_name: "לידים חורף", status_reason: "CPL ₪180 מול יעד ₪120 שבוע רצוף" },
+        { goal: "leads", status: "healthy", campaign_name: "לידים קיץ" },
+        { goal: "engagement", status: "warning", campaign_name: "מודעות שיחה" },
+        { goal: "ecommerce", status: "healthy", campaign_name: "חנות" },
+        { goal: "unknown", status: "no_data", campaign_name: "בלי סיווג" },
+      ],
+    },
+  ]);
+
+  assert.match(lines.join("\n"), /לידים: 🔴 1 · 🟡 0 · 🟢 1 \(2 קמפיינים\)/);
+  assert.match(lines.join("\n"), /אינגייג׳מנט: 🔴 0 · 🟡 1 · 🟢 0 \(קמפיין אחד\)/);
+  assert.match(lines.join("\n"), /איקומרס: 🔴 0 · 🟡 0 · 🟢 1/);
+  assert.match(lines.join("\n"), /טעונים סיווג: 1/);
+  assert.match(lines.join("\n"), /לקוח א — לידים חורף: CPL ₪180/);
+});
+
+test("category digest stays empty for legacy snapshots without breakdown", () => {
+  assert.deepEqual(buildPulseCategoryDigestLines([{ client_name: "לקוח", campaign_breakdown: null }]), []);
+});
+
+test("whatsapp digest appends category block and keeps the dashboard link last", () => {
+  const digest = buildPulseWhatsAppDigest(
+    [
+      {
+        client_id: "c1",
+        client_name: "לקוח א",
+        status: "critical",
+        campaign_goal_mode: "leads",
+        campaign_breakdown: [
+          { goal: "leads", status: "critical", alert_eligible: true, campaign_name: "לידים חורף", status_reason: "הוצאה בלי תוצאות" },
+        ],
+      },
+      {
+        client_id: "c2",
+        client_name: "לקוח ב",
+        status: "healthy",
+        campaign_goal_mode: "ecommerce",
+        campaign_breakdown: [{ goal: "ecommerce", status: "healthy", campaign_name: "חנות" }],
+      },
+    ],
+    "https://aios.co.il/t/dmm/dmm-dashboard",
+  );
+
+  assert.match(digest, /לפי קטגוריה:/);
+  assert.match(digest, /חריגות מאומתות:/);
+  assert.doesNotMatch(digest, /\|/);
+  assert.ok(digest.trim().endsWith("https://aios.co.il/t/dmm/dmm-dashboard"));
 });

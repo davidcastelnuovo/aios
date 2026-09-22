@@ -32,6 +32,24 @@ logged.
 ## Log
 
 <!-- New entries go below this line, newest first. -->
+### 2026-09-22 — סימון משימת פיתוח כבוצעה כש-Cursor מחזיר תשובה לכרמן
+- **Skin slug:** n/a (`agent-channel/ingest` + `complete_dev_task`)
+- **What Carmen can now do:** כש-Cursor/Claude מסיים ו-`reply_to_aios_session` מגיע לשיחת Command Center — משימת `dev_tasks` הפעילה (לפי `source_conversation_id` / `dev_task_id`) עוברת ל-`done` ו-PR נשמר אם בטקסט.
+- **How:** `create_dev_task` שומר `source_conversation_id`; `completeDevTaskFromAgentReply` ב-ingest; אופציונלי `mcp_Cursor__complete_dev_task`.
+- **Origin:** David — משימה מכרמן צריכה להתעדכן שבוצעה בסיום.
+
+### 2026-09-22 — אימות משלוח dev task ל-Cursor אחרי שגיאת dispatch
+- **Skin slug:** n/a (שינוי ב-`dispatch_dev_task` / `dev-tasks.ts`)
+- **What Carmen can now do:** אחרי `dispatch_dev_task`, אם `delivered=true` — לדווח שנשלח ל-Cursor (כולל `sessionUrl`) גם כשיש `dispatchToolError` / `reconciled`. רק אם `verificationFailed=true` — לדווח כשלון ולציין את שגיאת הכלי.
+- **How:** `dispatch_dev_task` → שדות `delivered`, `userStatus`, `reconciled`; reconcile מ-`cursor_dispatches` / `cursor_task_sessions` לפי `dev_task_id` בקונטקסט.
+- **Origin:** Carmen → Cursor DEV TASK — false failure when Cursor actually received the task after MCP timeout.
+
+### 2026-09-22 — כיבוי/בדיקת קמפיינים מתוזמנת ללקוח (scope רחב + דיווח לדוד)
+- **Skin slug:** `carmen_client_campaign_shutdown` (tenant: `2dcdaac6-41bf-42cc-86bf-9a0b4b2e6019`)
+- **What Carmen can now do:** Schedule evening verify/shutdown for a client (e.g. Binat at 20:30) over **all** Meta campaigns — including names like `DMM_CHALLANGE | 22.9`, not webinar-only — and push a Hebrew completion summary to David on WhatsApp.
+- **How:** `create_agent_task` stores `result.campaign_shutdown_job`; `run-agent-task` runs `_shared/client-campaign-shutdown-runner.ts` (live Meta list + optional pause) and calls `claude_notify_david`. Staging backfill: `supabase/ops/apply_binat_campaign_shutdown_job_staging.sql`.
+- **Origin:** Carmen → Cursor DEV TASK — 20:30 Binat shutdown missed non-webinar campaign and did not notify David.
+
 ### 2026-09-10 — מודול הרשאות שיחה (Agent → 📱 הרשאות WhatsApp)
 - **Skin slug:** `carmen_conversation_access_admin` (tenant: `2dcdaac6-41bf-42cc-86bf-9a0b4b2e6019`)
 - **What Carmen can now do:** מנהל מגדיר ב-Agent Hub טאב **הרשאות שיחה**: טלפונים לפרטי, קבוצות, לקוח↔קבוצה, dev tier (full/bugfix). Runtime קורא `carmen_access_policies` + `carmen_whatsapp_identities` + `carmen_client_group_access`.

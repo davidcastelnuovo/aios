@@ -130,7 +130,11 @@ function DevTaskCard({
             {task.base_branch} / {task.environment} · עודכן {new Date(task.updated_at).toLocaleString("he-IL")}
           </p>
           {task.dispatch_error && (
-            <p className="mt-1 text-[var(--cc-warn)]">שגיאת שליחה (ניתן לקשר סשן): {task.dispatch_error.slice(0, 120)}</p>
+            <p className="mt-1 text-[var(--cc-warn)]">
+              {task.cursor_session_id
+                ? `אזהרת דיווח (נשלח): ${task.dispatch_error.slice(0, 120)}`
+                : `שגיאת שליחה (ניתן לקשר סשן): ${task.dispatch_error.slice(0, 120)}`}
+            </p>
           )}
         </div>
         {busy && <Loader2 className="h-4 w-4 shrink-0 animate-spin text-[var(--cc-accent)]" />}

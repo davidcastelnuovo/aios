@@ -1,4 +1,16 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.75.0';
+import {
+  campaignStateMap,
+  evaluateGoogleOperationalIssues,
+  type OperationalCampaignState,
+} from '../_shared/campaign-operational-health.ts';
+import { fireIntegrationAlert } from '../_shared/fireIntegrationAlert.ts';
+import {
+  replacedRecordsFilter,
+  resolveAdsSyncWindow,
+  resolvePruneStart,
+  toDateString,
+} from '../_shared/report-sync-window.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -110,7 +122,7 @@ Deno.serve(async (req) => {
       user = authedUser;
     }
 
-    const { table_id } = await req.json();
+    const { table_id, operational_only = false } = await req.json();
     
     if (!table_id) {
       return new Response(JSON.stringify({ error: 'table_id required' }), {
@@ -365,15 +377,27 @@ Deno.serve(async (req) => {
       case 'last_30_days':
         startDate = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 30);
         break;
+      case 'last_60_days':
+        startDate = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 60);
+        break;
       case 'last_90_days':
         startDate = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 90);
+        break;
+      case 'last_120_days':
+        startDate = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 120);
         break;
       default:
         startDate = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 30);
     }
 
-    const startIso = startDate.toISOString().split('T')[0];
-    const endIso = endDate.toISOString().split('T')[0];
+    // `date_range` is the table's display default; reports can look back further than
+    // that, so always pull (and keep) at least the deepest report window.
+    const syncWindow = resolveAdsSyncWindow(
+      { startDate: toDateString(startDate), endDate: toDateString(endDate) },
+      toDateString(now),
+    );
+    const startIso = syncWindow.startDate;
+    const endIso = syncWindow.endDate;
 
     const detectGAError = (data: any): any | null => {
       if (!data) return null;
@@ -501,6 +525,82 @@ Deno.serve(async (req) => {
     // Use manager_id (MCC) as login-customer-id if available, otherwise use customerId
     let loginCustomerId = settings.manager_id || customerId;
 
+    if (operational_only) {
+      const statusQuery = `
+        SELECT
+          campaign.id,
+          campaign.name,
+          campaign.status,
+          campaign.primary_status,
+          campaign.primary_status_reasons
+        FROM campaign
+        WHERE campaign.status != 'REMOVED'
+      `;
+      const batches = await runGaqlSearch(statusQuery);
+      const campaigns: OperationalCampaignState[] = batches.flatMap((batch: any) =>
+        (batch.results || []).map((result: any) => ({
+          id: String(result.campaign?.id || ''),
+          name: String(result.campaign?.name || result.campaign?.id || ''),
+          status: String(result.campaign?.status || ''),
+          primary_status: result.campaign?.primaryStatus || null,
+          primary_status_reasons: result.campaign?.primaryStatusReasons || [],
+        })).filter((campaign: OperationalCampaignState) => campaign.id),
+      );
+      const previous =
+        settings.operational_campaign_states && typeof settings.operational_campaign_states === 'object'
+          ? settings.operational_campaign_states
+          : null;
+      const issues = evaluateGoogleOperationalIssues(previous, campaigns);
+      const checkedAt = new Date().toISOString();
+      await patchIntegrationSettings(supabaseAdmin, table_id, {
+        operational_campaign_states: campaignStateMap(campaigns),
+        operational_status_checked_at: checkedAt,
+      }, settings);
+
+      for (const issue of issues) {
+        const { data: existing } = await supabaseAdmin
+          .from('campaign_alerts')
+          .select('id')
+          .eq('tenant_id', tableTenantId)
+          .eq('campaign_id', issue.campaign_id)
+          .eq('alert_type', issue.alert_type)
+          .is('resolved_at', null)
+          .gte('created_at', new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString())
+          .limit(1)
+          .maybeSingle();
+        if (existing) continue;
+        await supabaseAdmin.from('campaign_alerts').insert({
+          tenant_id: tableTenantId,
+          client_id: table.client_id || null,
+          campaign_id: issue.campaign_id,
+          campaign_name: issue.campaign_name,
+          ad_account_id: String(customerId),
+          alert_type: issue.alert_type,
+          severity: issue.severity,
+          details: issue.details,
+        });
+        await fireIntegrationAlert({
+          tenant_id: tableTenantId,
+          provider: 'google_ads',
+          alert_type: 'blocked',
+          account_id: String(customerId),
+          account_name: issue.campaign_name,
+          client_id: table.client_id || null,
+          reason: (issue.details.primary_status_reasons as string[] | undefined)?.join(', ')
+            || String(issue.details.primary_status || issue.details.status || 'campaign_not_serving'),
+          throttleHours: 2,
+        });
+      }
+
+      return new Response(JSON.stringify({
+        success: true,
+        operational_only: true,
+        campaigns_scanned: campaigns.length,
+        alerts_created: issues.length,
+        checked_at: checkedAt,
+      }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+    }
+
     let searchResponse = await adsFetch(
       `https://googleads.googleapis.com/v23/customers/${customerId}/googleAds:searchStream`,
       {
@@ -517,7 +617,7 @@ Deno.serve(async (req) => {
     const _rawText = await searchResponse.text();
     let searchData: any = null;
     try { searchData = JSON.parse(_rawText); } catch { searchData = null; }
-    console.log(`[sync-google-ads] table=${table_id} customer=${customerId} login=${loginCustomerId} status=${searchResponse.status} dateRange=${startDate.toISOString().split('T')[0]}..${endDate.toISOString().split('T')[0]}`);
+    console.log(`[sync-google-ads] table=${table_id} customer=${customerId} login=${loginCustomerId} status=${searchResponse.status} dateRange=${startIso}..${endIso}`);
     console.log(`[sync-google-ads] response preview:`, _rawText.slice(0, 800));
     // DIAG: persist exactly what Google returned on the first call so failures are debuggable from the DB.
     // Records HTTP status, whether the developer-token secret is present (boolean only, never the value),
@@ -756,7 +856,7 @@ Deno.serve(async (req) => {
         if (site) {
           verifiedSiteUrl = site.site_url;
           // Compute days from date range to limit submission scan
-          const daysDiff = Math.max(1, Math.ceil((endDate.getTime() - startDate.getTime()) / 86400000) + 1);
+          const daysDiff = Math.max(1, Math.round((Date.parse(endIso) - Date.parse(startIso)) / 86400000) + 1);
 
           const { data: subData, error: subErr } = await supabaseAdmin.functions.invoke(
             'fetch-elementor-submissions',
@@ -956,13 +1056,19 @@ Deno.serve(async (req) => {
       }
     }
 
-    // Delete existing records and insert new ones (admin client to bypass RLS).
+    // Replace only the days this run re-fetched (admin client to bypass RLS); rows older
+    // than the sync window are history a longer report window still needs. A run that came
+    // back empty is far more likely to be a Google Ads hiccup than an account with no
+    // delivery at all, so it leaves the stored rows alone instead of blanking the report.
     // table_id only — orphan rows from a previous tenant_id must not survive sync.
-    const { error: delErr } = await supabaseAdmin
-      .from('crm_records')
-      .delete()
-      .eq('table_id', table_id);
-    if (delErr) console.error('[sync-google-ads] delete error:', delErr.message);
+    if (records.length > 0) {
+      const { error: delErr } = await supabaseAdmin
+        .from('crm_records')
+        .delete()
+        .eq('table_id', table_id)
+        .or(replacedRecordsFilter(resolvePruneStart(syncWindow, records.map((r) => r.date))));
+      if (delErr) console.error('[sync-google-ads] delete error:', delErr.message);
+    }
 
     // Insert new records (batched)
     let inserted = 0;

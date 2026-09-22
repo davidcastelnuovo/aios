@@ -2,13 +2,22 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.75.0';
 import { fireIntegrationAlert } from '../_shared/fireIntegrationAlert.ts';
 import {
   buildAllLevelInsightRecords,
+  buildCampaignOptimizationGoalMap,
   buildResultLeadTypeMap,
   type CampaignStatus,
   type InsightRecord,
   FB_INSIGHTS_FIELD_KEYS,
   FB_INSIGHTS_FIELD_NAMES,
   FB_INSIGHTS_FIELD_TYPES,
+  fetchLastMetaCampaignActivity,
+  latestCampaignUpdatedTime,
 } from '../_shared/fbInsights.ts';
+import {
+  replacedRecordsFilter,
+  resolveAdsSyncWindow,
+  resolvePruneStart,
+  toDateString,
+} from '../_shared/report-sync-window.ts';
 
 
 const corsHeaders = {
@@ -177,8 +186,16 @@ Deno.serve(async (req) => {
             since = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 30);
             until = today;
             break;
+          case 'last_60_days':
+            since = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 60);
+            until = today;
+            break;
           case 'last_90_days':
             since = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 90);
+            until = today;
+            break;
+          case 'last_120_days':
+            since = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 120);
             until = today;
             break;
           case 'last_180_days':
@@ -194,8 +211,12 @@ Deno.serve(async (req) => {
             until = today;
         }
 
-        const sinceStr = since.toISOString().split('T')[0];
-        const untilStr = until.toISOString().split('T')[0];
+        const syncWindow = resolveAdsSyncWindow(
+          { startDate: toDateString(since), endDate: toDateString(until) },
+          toDateString(now),
+        );
+        const sinceStr = syncWindow.startDate;
+        const untilStr = syncWindow.endDate;
 
 
         // First, fetch campaign statuses to detect real blocks
@@ -235,6 +256,7 @@ Deno.serve(async (req) => {
         const campaignObjectives: Record<string, string | null | undefined> = {};
         for (const c of Object.values(campaignStatuses)) campaignObjectives[c.id] = c.objective;
         const resultLeadTypes = buildResultLeadTypeMap(adsets, campaignObjectives);
+        const optimizationGoals = buildCampaignOptimizationGoalMap(adsets);
 
         // Also fetch ad account status
         const accountUrl = `https://graph.facebook.com/v21.0/${adAccountId}?fields=account_status,disable_reason,name&access_token=${accessToken}`;
@@ -263,6 +285,7 @@ Deno.serve(async (req) => {
           accessToken,
           campaignStatuses,
           resultLeadTypes,
+          optimizationGoals,
         );
         const campaignInsights = insights.filter((row) => (row.entity_level || 'campaign') === 'campaign');
         console.log(`[cron-sync-facebook-insights] ${table.name}: synced ${insights.length} rows`, levelCounts);
@@ -286,14 +309,15 @@ Deno.serve(async (req) => {
           await supabase.from('crm_fields').insert(fieldsToInsert);
         }
 
-        // Delete old records and insert new ones (table_id only — see sync-facebook-insights).
-        await supabase
-          .from('crm_records')
-          .delete()
-          .eq('table_id', table.id);
-
-        // Bulk insert new records (one round-trip per chunk instead of one per row)
         if (insights.length > 0) {
+          const { error: deleteError } = await supabase
+            .from('crm_records')
+            .delete()
+            .eq('table_id', table.id)
+            .or(replacedRecordsFilter(resolvePruneStart(syncWindow, insights.map((row) => row.date))));
+          if (deleteError) throw deleteError;
+
+          // Bulk insert new records (one round-trip per chunk instead of one per row)
           const recordRows = insights.map((insight) => ({
             table_id: table.id,
             tenant_id: table.tenant_id,
@@ -308,6 +332,9 @@ Deno.serve(async (req) => {
           }
         }
 
+        const lastCampaignUpdatedAt = latestCampaignUpdatedTime(campaignStatuses);
+        const lastMetaActivity = await fetchLastMetaCampaignActivity(accessToken, adAccountId);
+
         // Update last_sync_at and account status
         await supabase
           .from('crm_tables')
@@ -315,6 +342,9 @@ Deno.serve(async (req) => {
             integration_settings: {
               ...settings,
               last_sync_at: new Date().toISOString(),
+              last_insights_until: untilStr,
+              last_campaign_updated_at: lastCampaignUpdatedAt,
+              last_meta_activity: lastMetaActivity,
               account_status: accountStatus,
               account_disable_reason: accountDisableReason,
             }

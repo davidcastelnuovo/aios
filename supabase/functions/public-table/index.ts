@@ -78,10 +78,14 @@ function getDateRange(
       return { startDate: fmt(subDays(today, 14)), endDate: fmt(subDays(today, 1)) };
     case "last_30_days":
       return { startDate: fmt(subDays(today, 30)), endDate: fmt(subDays(today, 1)) };
+    case "last_60_days":
+      return { startDate: fmt(subDays(today, 60)), endDate: fmt(subDays(today, 1)) };
     case "last_70_days":
       return { startDate: fmt(subDays(today, 70)), endDate: fmt(subDays(today, 1)) };
     case "last_90_days":
       return { startDate: fmt(subDays(today, 90)), endDate: fmt(subDays(today, 1)) };
+    case "last_120_days":
+      return { startDate: fmt(subDays(today, 120)), endDate: fmt(subDays(today, 1)) };
     case "last_180_days":
       return { startDate: fmt(subDays(today, 180)), endDate: fmt(subDays(today, 1)) };
     case "last_365_days":
@@ -236,6 +240,22 @@ async function writeSeoShareCache(
 ) {
   writeSeoShareCacheLocal(cacheKey, body);
   await writeSeoShareCacheToDb(supabase, cacheKey, body, SEO_SHARE_CACHE_TTL_MS);
+}
+
+/**
+ * Display preferences (which tabs a client sees) live in `integration_settings`
+ * and must not wait out the share cache, so a cached payload gets the current
+ * settings before it goes out.
+ */
+function withLiveTableSettings(cachedBody: string, table: any): string {
+  try {
+    const payload = JSON.parse(cachedBody);
+    if (!payload?.table) return cachedBody;
+    payload.table.integration_settings = table?.integration_settings ?? payload.table.integration_settings;
+    return JSON.stringify(payload);
+  } catch {
+    return cachedBody;
+  }
 }
 
 function withTimeout<T>(promise: Promise<T>, ms: number, fallback: T): Promise<T> {
@@ -456,7 +476,7 @@ Deno.serve(async (req) => {
         : shareToken;
       const cachedSeoBody = await readSeoShareCache(supabase, cacheKey);
       if (cachedSeoBody) {
-        return new Response(cachedSeoBody, {
+        return new Response(withLiveTableSettings(cachedSeoBody, table), {
           headers: {
             ...corsHeaders,
             "Content-Type": "application/json",

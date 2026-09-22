@@ -9,14 +9,19 @@ pdfjs.GlobalWorkerOptions.workerSrc = new URL(
 
 /** PDF.js needs CMaps + standard fonts for Hebrew / embedded Identity-H fonts. */
 export function pdfDocumentInit(source: { url: string; withCredentials?: boolean }) {
-  const base = import.meta.env.DEV
-    ? `https://cdn.jsdelivr.net/npm/pdfjs-dist@${pdfjs.version}`
-    : `${import.meta.env.BASE_URL}`.replace(/\/?$/, "/");
+  const base = (
+    import.meta.env.DEV
+      ? `https://cdn.jsdelivr.net/npm/pdfjs-dist@${pdfjs.version}`
+      : `${import.meta.env.BASE_URL}`
+  ).replace(/\/+$/, "");
   return {
     ...source,
     cMapUrl: `${base}/cmaps/`,
     cMapPacked: true,
     standardFontDataUrl: `${base}/standard_fonts/`,
+    // Injecting the document fonts as @font-face drops and mis-advances glyphs in
+    // Hebrew documents; painting glyph outlines keeps the preview identical to the file.
+    disableFontFace: true,
   };
 }
 

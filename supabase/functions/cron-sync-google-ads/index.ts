@@ -133,11 +133,12 @@ Deno.serve(async (req) => {
 
   try {
     const body = await req.json().catch(() => ({}));
-    const { backfill_from, backfill_to, table_ids, batch_offset } = body as {
+    const { backfill_from, backfill_to, table_ids, batch_offset, operational_only } = body as {
       backfill_from?: string;
       backfill_to?: string;
       table_ids?: string[];
       batch_offset?: number;
+      operational_only?: boolean;
     };
     const offset = Number(batch_offset) || 0;
 
@@ -201,7 +202,7 @@ Deno.serve(async (req) => {
             'Authorization': `Bearer ${supabaseServiceKey}`,
             'x-internal-cron': 'true',
           },
-          body: JSON.stringify({ table_id: table.id }),
+          body: JSON.stringify({ table_id: table.id, operational_only: operational_only === true }),
         });
         const txt = await res.text();
         if (res.ok) return { ok: true, rateLimited: false };
@@ -248,6 +249,7 @@ Deno.serve(async (req) => {
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${supabaseServiceKey}` },
         body: JSON.stringify({
           batch_offset: offset + BATCH_SIZE,
+          ...(operational_only ? { operational_only: true } : {}),
           ...(isBackfill ? { backfill_from, backfill_to } : {}),
           ...(table_ids ? { table_ids } : {}),
         }),
@@ -257,8 +259,13 @@ Deno.serve(async (req) => {
     // ---- Make.com path (legacy) + zero-spend anomaly detection ----
     // These are per-tenant and independent of the direct sync, so run them once
     // on the first invocation only (not on each chained batch).
-    if (offset !== 0) {
+    if (offset !== 0 || operational_only) {
       if (!hasMore && !table_ids && !isBackfill) {
+        if (operational_only) {
+          return new Response(JSON.stringify({ success: true, operational_only: true, batch_offset: offset, results }), {
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        }
         const pulseResponse = await fetch(`${supabaseUrl}/functions/v1/campaign-pulse-snapshot`, {
           method: 'POST',
           headers: {

@@ -52,6 +52,19 @@ import {
   syncLocalTasksForAgencyFilter,
   filterTasksByBoardTenantScope,
 } from "@/lib/taskBoardAgency";
+import {
+  collectTaskAssigneeIds,
+  shouldFanOutRecurringTasks,
+} from "@/lib/recurringTaskAssignees";
+import {
+  isRecurringBoardTask,
+  recurringTaskBelongsInBacklog,
+  shouldShowRecurringTaskOnBoard,
+} from "@/lib/recurringTaskBoardFilter";
+import {
+  computeFirstOccurrenceDate,
+  type RecurrenceFrequency,
+} from "@/lib/taskRecurrence";
 import { fetchActiveCampaigners } from "@/lib/taskCampaigners";
 import { buildMineQueueOrFilter, fetchMineTaskIdentity } from "@/lib/mineTaskIdentity";
 import {
@@ -96,6 +109,12 @@ interface Task {
   target_date?: string | null;
   duration_minutes?: number;
   google_calendar_event_id?: string | null;
+  recurrence_frequency?: "daily" | "weekly" | "monthly" | null;
+  recurrence_interval?: number;
+  recurrence_weekday?: number | null;
+  recurrence_monthday?: number | null;
+  recurrence_series_id?: string | null;
+  recurrence_previous_task_id?: string | null;
   clients?: { name: string; agency_id?: string | null } | null;
   leads?: { company_name?: string | null; contact_name?: string | null } | null;
   task_updates?: { id: string }[];
@@ -561,6 +580,40 @@ export function WeeklyTaskBoard() {
         collabSet.has(task.id) ? { ...task, collaborator_for_me: true } : task
       ));
 
+      if (filters.showAllRecurring) {
+        let recurringQuery = supabase
+          .from("tasks")
+          .select(TASK_BOARD_SELECT)
+          .or(buildTasksBoardScopeOrFilter(boardScope))
+          .not("recurrence_frequency", "is", null)
+          .neq("status", "done");
+        recurringQuery = applyBoardFilters(recurringQuery);
+        if (isMineQueueFilter(effectiveCampaignerFilter)) {
+          const mine = mineIdentity!;
+          const mode = effectiveCampaignerFilter === "mine_assigned" ? "mine_assigned" : "mine";
+          const queueOr = buildMineQueueOrFilter(mine, mode);
+          if (queueOr) {
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            recurringQuery = (recurringQuery as any).or(queueOr);
+          }
+        } else if (effectiveCampaignerFilter === "none") {
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          recurringQuery = (recurringQuery as any).is("campaigner_id", null);
+        } else if (effectiveCampaignerFilter !== "all") {
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          recurringQuery = (recurringQuery as any).eq("campaigner_id", effectiveCampaignerFilter);
+        }
+        const { data: recurringExtra, error: recurringError } = await recurringQuery;
+        if (recurringError) throw recurringError;
+        taskRows = taskRows.concat((recurringExtra || []) as FullTask[]);
+        const seenRecurring = new Set<string>();
+        taskRows = taskRows.filter((task) => {
+          if (seenRecurring.has(task.id)) return false;
+          seenRecurring.add(task.id);
+          return true;
+        });
+      }
+
       const creatorIds = Array.from(new Set(
         taskRows.map((task) => task.created_by).filter((id): id is string => Boolean(id))
       ));
@@ -615,6 +668,12 @@ export function WeeklyTaskBoard() {
       if (isViewingAs && boardUserId) {
         filtered = filterTasksForBoardUserPreview(filtered, boardUserId, mineIdentity ?? null);
       }
+      filtered = filtered.filter((task) =>
+        shouldShowRecurringTaskOnBoard(task, {
+          showAllRecurring: filters.showAllRecurring,
+          asOf: startOfDay(new Date()),
+        }),
+      );
       return filtered;
     },
     [
@@ -623,6 +682,7 @@ export function WeeklyTaskBoard() {
       filters.relatedKind,
       filters.relatedId,
       filters.period,
+      filters.showAllRecurring,
       viewMode,
       tenantId,
       crossTenantAgencyIds,
@@ -721,6 +781,10 @@ export function WeeklyTaskBoard() {
       campaignerId,
       selfReminderAt,
       targetDate,
+      recurrenceFrequency,
+      recurrenceWeekday,
+      recurrenceMonthday,
+      collaboratorIds,
     }: {
       title: string;
       date: Date | null;
@@ -729,6 +793,10 @@ export function WeeklyTaskBoard() {
       campaignerId?: string | null;
       selfReminderAt?: string | null;
       targetDate?: string | null;
+      recurrenceFrequency?: "daily" | "weekly" | "monthly" | null;
+      recurrenceWeekday?: number | null;
+      recurrenceMonthday?: number | null;
+      collaboratorIds?: string[];
     }) => {
       if (!tenantId) throw new Error("TENANT_NOT_READY");
       // A task attached to a client must carry that client's agency, otherwise
@@ -763,25 +831,81 @@ export function WeeklyTaskBoard() {
         sales_person_id: assignedCampaignerId ? null : assignedSalesPersonId,
         client_id: clientId ?? null,
       };
+      // Only send recurrence columns when configured — avoids insert failures
+      // before the recurring-tasks migration has been applied.
+      if (recurrenceFrequency) {
+        insertData.recurrence_frequency = recurrenceFrequency;
+        insertData.recurrence_interval = 1;
+        insertData.recurrence_weekday =
+          recurrenceFrequency === "weekly" ? recurrenceWeekday ?? null : null;
+        insertData.recurrence_monthday =
+          recurrenceFrequency === "monthly" ? recurrenceMonthday ?? null : null;
+      }
       if (selfReminderAt) {
         insertData.self_reminder_at = selfReminderAt;
       }
       if (targetDate) {
         insertData.target_date = targetDate;
       }
-      if (validDate) {
-        insertData.due_date = format(validDate, "yyyy-MM-dd");
-        // Only save time if we have a valid date
+      let taskDueDate = validDate;
+      if (!taskDueDate && recurrenceFrequency) {
+        const first = computeFirstOccurrenceDate({
+          frequency: recurrenceFrequency as RecurrenceFrequency,
+          weekday: recurrenceWeekday,
+          monthday: recurrenceMonthday,
+        });
+        taskDueDate = first;
+      }
+      if (taskDueDate) {
+        insertData.due_date = format(taskDueDate, "yyyy-MM-dd");
         if (time) {
           insertData.due_time = time + ":00";
         }
       }
       // Note: time without date is not saved to prevent orphaned times
-      const { data: newTask, error } = await supabase.from("tasks").insert(insertData).select().single();
-      if (error) throw error;
+      const assigneeIds = collectTaskAssigneeIds(assignedCampaignerId, collaboratorIds);
+      const fanOut = shouldFanOutRecurringTasks(recurrenceFrequency, assigneeIds);
+
+      let newTask: { id: string } | null = null;
+      if (fanOut) {
+        const payloads = assigneeIds.map((campaignerId) => ({
+          ...insertData,
+          campaigner_id: campaignerId,
+          sales_person_id: null,
+        }));
+        const { data: createdTasks, error } = await supabase
+          .from("tasks")
+          .insert(payloads)
+          .select("id");
+        if (error) throw error;
+        newTask = createdTasks?.[0] ?? null;
+      } else {
+        const { data: created, error } = await supabase
+          .from("tasks")
+          .insert(insertData)
+          .select()
+          .single();
+        if (error) throw error;
+        newTask = created;
+
+        const uniqueCollaborators = Array.from(
+          new Set((collaboratorIds || []).filter((id) => id && id !== assignedCampaignerId)),
+        );
+        if (uniqueCollaborators.length > 0) {
+          const { error: collabError } = await supabase.from("task_collaborators").insert(
+            uniqueCollaborators.map((campaignerCollaboratorId) => ({
+              task_id: newTask!.id,
+              campaigner_id: campaignerCollaboratorId,
+              tenant_id: tenantId,
+              added_by: boardUserId,
+            })),
+          );
+          if (collabError) throw collabError;
+        }
+      }
 
       // אם יש תאריך ושעה - יצור גם אירוע ביומן גוגל ושמור את ה-eventId
-      if (validDate && time) {
+      if (!fanOut && validDate && time && newTask) {
         try {
           const startDateTime = new Date(`${format(validDate, "yyyy-MM-dd")}T${time}:00`);
           const endDateTime = new Date(startDateTime.getTime() + 30 * 60000); // 30 דקות
@@ -809,22 +933,35 @@ export function WeeklyTaskBoard() {
         }
       }
       
-      return newTask;
+      return fanOut ? { fanOutCount: assigneeIds.length, newTask } : newTask;
     },
-    onSuccess: (newTask) => {
+    onSuccess: (result) => {
+      const fanOutCount =
+        result && typeof result === "object" && "fanOutCount" in result
+          ? (result as { fanOutCount: number }).fanOutCount
+          : null;
+      const newTask =
+        result && typeof result === "object" && "newTask" in result
+          ? (result as { newTask: typeof result }).newTask
+          : result;
+
       // Optimistic add so the user sees it immediately even if filters are restrictive
-      setLocalTasks(prev => {
-        if (!newTask) return prev;
-        return prev.some(t => t.id === (newTask as any).id) ? prev : [newTask as any, ...prev];
-      });
+      if (newTask && typeof newTask === "object" && "id" in newTask) {
+        setLocalTasks((prev) => {
+          if (!newTask) return prev;
+          return prev.some((t) => t.id === (newTask as any).id) ? prev : [newTask as any, ...prev];
+        });
+      }
 
       queryClient.invalidateQueries({ queryKey: ["tasks", tenantId] });
       queryClient.invalidateQueries({ queryKey: ["calendar-events-weekly", tenantId] });
-      toast.success("משימה נוספה");
+      toast.success(
+        fanOutCount ? `נוצרו ${fanOutCount} משימות חוזרות — אחת לכל איש צוות` : "משימה נוספה",
+      );
     },
     onError: (error) => {
       console.error("[addTask] failed", error);
-      const msg = (error as any)?.message;
+      const msg = (error as any)?.message as string | undefined;
       if (msg === "TENANT_NOT_READY") {
         toast.error("המערכת עדיין נטענת, נסי שוב בעוד רגע");
         return;
@@ -833,7 +970,11 @@ export function WeeklyTaskBoard() {
         toast.error("לא נמצאה סוכנות בארגון – אי אפשר להוסיף משימה");
         return;
       }
-      toast.error("שגיאה בהוספת משימה");
+      if (msg && /recurrence_/i.test(msg)) {
+        toast.error("עמודות משימה חוזרת עדיין לא זמינות בדאטהבייס — אפשר להוסיף משימה רגילה בינתיים");
+        return;
+      }
+      toast.error(msg ? `שגיאה בהוספת משימה: ${msg}` : "שגיאה בהוספת משימה");
     },
   });
 
@@ -876,6 +1017,10 @@ export function WeeklyTaskBoard() {
       campaignerId: payload.campaignerId,
       selfReminderAt: payload.selfReminderAt,
       targetDate: payload.targetDate,
+      recurrenceFrequency: payload.recurrenceFrequency,
+      recurrenceWeekday: payload.recurrenceWeekday,
+      recurrenceMonthday: payload.recurrenceMonthday,
+      collaboratorIds: payload.collaboratorIds,
     });
   };
 
@@ -1357,9 +1502,13 @@ export function WeeklyTaskBoard() {
   // Split tasks: backlog (overdue + unscheduled + untimed) vs scheduled in range
   const today = startOfDay(new Date());
   
-  // Backlog includes: overdue, no due_date, or has due_date but no due_time
+  // Backlog includes: overdue, no due_date, or has due_date but no due_time.
+  // Recurring tasks only appear here on their due day (not all week).
   const backlogTasks = tasks.filter((t) => {
     if (t.status === "done") return false;
+    if (isRecurringBoardTask(t)) {
+      return recurringTaskBelongsInBacklog(t, today, filters.showAllRecurring);
+    }
     if (isTaskOverdue(t, today)) return true;
     if (t.due_date === null) return true;
     if (!t.due_time) return true;
@@ -1368,6 +1517,9 @@ export function WeeklyTaskBoard() {
 
   // Current range tasks: only those with both due_date AND due_time in range
   const currentRangeTasks = tasks.filter((t) => {
+    if (!shouldShowRecurringTaskOnBoard(t, { showAllRecurring: filters.showAllRecurring, asOf: today })) {
+      return false;
+    }
     if (t.due_date === null) return false;
     if (!t.due_time) return false; // No time = goes to backlog
     const dueDate = new Date(t.due_date);
@@ -1379,6 +1531,14 @@ export function WeeklyTaskBoard() {
   const dailyTasks = tasks.filter((t) => {
     if (!t.due_date) return false;
     if (t.status === "done") return false;
+    if (
+      !shouldShowRecurringTaskOnBoard(t, {
+        showAllRecurring: filters.showAllRecurring,
+        asOf: startOfDay(currentDate),
+      })
+    ) {
+      return false;
+    }
     const dueDate = new Date(t.due_date);
     const isToday = format(dueDate, "yyyy-MM-dd") === format(currentDate, "yyyy-MM-dd");
     // For daily view, include all tasks for that day regardless of time
@@ -1391,6 +1551,7 @@ export function WeeklyTaskBoard() {
     filters.association !== "all",
     filters.period !== "all",
     filters.relatedKind !== "all",
+    filters.showAllRecurring,
   ].filter(Boolean).length;
 
   const openFiltersDialog = (includeToolbar: boolean) => {
@@ -1686,6 +1847,10 @@ export function WeeklyTaskBoard() {
               openClosedFilter={filters.openClosed}
               onOpenClosedFilterChange={(openClosed) =>
                 setFilters((prev) => ({ ...prev, openClosed }))
+              }
+              showAllRecurring={filters.showAllRecurring}
+              onShowAllRecurringChange={(showAllRecurring) =>
+                setFilters((prev) => ({ ...prev, showAllRecurring }))
               }
               listSearch={chatListSearch}
               onListSearchChange={setChatListSearch}

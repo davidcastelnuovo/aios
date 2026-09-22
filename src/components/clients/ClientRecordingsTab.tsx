@@ -328,6 +328,10 @@ export function ClientRecordingsTab({ clientId, tenantId }: ClientRecordingsTabP
           open={!!transcriptRecording}
           onOpenChange={(open) => !open && setTranscriptRecording(null)}
           recording={transcriptRecording}
+          tenantId={tenantId ?? undefined}
+          recordingIds={transcriptRecording._ids}
+          onSummarized={(summaryMd) =>
+            setTranscriptRecording((prev) => prev ? { ...prev, summary_md: summaryMd } : prev)}
         />
       )}
 

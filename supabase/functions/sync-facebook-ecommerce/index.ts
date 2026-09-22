@@ -1,38 +1,26 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.75.0';
+import {
+  buildAllLevelInsightRecords,
+  buildCampaignOptimizationGoalMap,
+  buildResultLeadTypeMap,
+  type CampaignStatus,
+  FB_INSIGHTS_FIELD_KEYS,
+  FB_INSIGHTS_FIELD_NAMES,
+  FB_INSIGHTS_FIELD_TYPES,
+  latestCampaignUpdatedTime,
+} from '../_shared/fbInsights.ts';
+import {
+  replacedRecordsFilter,
+  resolveAdsSyncWindow,
+  resolvePruneStart,
+  toDateString,
+} from '../_shared/report-sync-window.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
   'Access-Control-Allow-Methods': 'POST, OPTIONS',
 };
-
-interface EcommerceRecord {
-  date: string;
-  campaign_id: string;
-  campaign_name: string;
-  impressions: number;
-  clicks: number;
-  spend: number;
-  purchases: number;
-  purchase_value: number;
-  add_to_cart: number;
-  add_to_cart_value: number;
-  initiate_checkout: number;
-  initiate_checkout_value: number;
-  roas: number;
-  cpm: number;
-  ctr: number;
-  cost_per_purchase: number;
-  effective_status?: string;
-  configured_status?: string;
-}
-
-interface CampaignStatus {
-  id: string;
-  name: string;
-  effective_status: string;
-  configured_status: string;
-}
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
@@ -99,7 +87,10 @@ Deno.serve(async (req) => {
     }
 
     const settings = table.integration_settings || {};
-    const adAccountId = settings.ad_account_id;
+    const rawAdAccountId = settings.ad_account_id;
+    const adAccountId = rawAdAccountId && !String(rawAdAccountId).startsWith('act_')
+      ? `act_${rawAdAccountId}`
+      : rawAdAccountId;
     const dateRange = settings.date_range || 'last_30_days';
 
     if (!adAccountId) {
@@ -211,22 +202,33 @@ Deno.serve(async (req) => {
       case 'last_30_days':
         since = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 30);
         break;
+      case 'last_60_days':
+        since = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 60);
+        break;
       case 'last_90_days':
         since = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 90);
+        break;
+      case 'last_120_days':
+        since = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 120);
         break;
       default:
         since = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 30);
     }
 
-    const sinceStr = since.toISOString().split('T')[0];
-    const untilStr = until.toISOString().split('T')[0];
+    // `date_range` is the table's display default; reports can look back further than
+    // that, so always pull (and keep) at least the deepest report window.
+    const syncWindow = resolveAdsSyncWindow(
+      { startDate: toDateString(since), endDate: toDateString(until) },
+      toDateString(now),
+    );
+    const sinceStr = syncWindow.startDate;
+    const untilStr = syncWindow.endDate;
 
 
-    // Fetch campaign statuses
-    const campaignsUrl = `https://graph.facebook.com/v21.0/${adAccountId}/campaigns?fields=id,name,effective_status,configured_status&limit=500&access_token=${accessToken}`;
+    const campaignsUrl = `https://graph.facebook.com/v21.0/${adAccountId}/campaigns?fields=id,name,effective_status,configured_status,objective,updated_time&limit=500&access_token=${accessToken}`;
     const campaignsResponse = await fetch(campaignsUrl);
     const campaignsData = await campaignsResponse.json();
-    
+
     const campaignStatuses: Record<string, CampaignStatus> = {};
     if (campaignsData.data) {
       for (const campaign of campaignsData.data) {
@@ -235,137 +237,43 @@ Deno.serve(async (req) => {
           name: campaign.name,
           effective_status: campaign.effective_status,
           configured_status: campaign.configured_status,
+          objective: campaign.objective || null,
+          updated_time: campaign.updated_time || null,
         };
       }
     }
 
-    // Fetch insights with actions and action_values for ecommerce data.
-    // IMPORTANT: action_attribution_windows=['7d_click'] aligns with the default attribution
-    // setting in Facebook Ads Manager UI for most accounts (post-iOS14). This avoids inflated
-    // conversion counts that we'd get with the wider 7d_click+1d_view window.
-    const insightsUrl = `https://graph.facebook.com/v21.0/${adAccountId}/insights?level=campaign&fields=campaign_id,campaign_name,impressions,clicks,cpm,ctr,actions,action_values,spend&time_range={"since":"${sinceStr}","until":"${untilStr}"}&time_increment=1&action_attribution_windows=["7d_click"]&limit=500&access_token=${accessToken}`;
-    
-    console.log('Facebook insights URL (no token):', insightsUrl.replace(accessToken, 'REDACTED'));
-    const response = await fetch(insightsUrl);
-    const data = await response.json();
-    
-    // Log raw actions for first campaign for debugging — full breakdown of all action_types
-    if (data.data?.[0]) {
-      console.log('Sample raw insight (FULL):', JSON.stringify({
-        campaign: data.data[0].campaign_name,
-        date: data.data[0].date_start,
-        spend: data.data[0].spend,
-        all_actions: data.data[0].actions,
-        all_action_values: data.data[0].action_values,
-      }, null, 2));
+    const adsets: Array<{ campaign_id?: string; optimization_goal?: string; promoted_object?: unknown }> = [];
+    {
+      let next: string | null = `https://graph.facebook.com/v21.0/${adAccountId}/adsets?fields=campaign_id,optimization_goal,promoted_object&limit=500&access_token=${accessToken}`;
+      while (next) {
+        const r = await fetch(next);
+        const d: any = await r.json();
+        if (d.error) break;
+        if (Array.isArray(d.data)) adsets.push(...d.data);
+        next = d.paging?.next || null;
+      }
     }
+    const campaignObjectives: Record<string, string | null | undefined> = {};
+    for (const c of Object.values(campaignStatuses)) campaignObjectives[c.id] = c.objective;
+    const resultLeadTypes = buildResultLeadTypeMap(adsets, campaignObjectives);
+    const optimizationGoals = buildCampaignOptimizationGoalMap(adsets);
 
-    if (data.error) {
-      console.error('Facebook API error:', data.error);
-      return new Response(JSON.stringify({ 
-        error: 'Facebook API error',
-        details: data.error.message
-      }), {
-        status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-      });
-    }
+    const { records: insights, levelCounts } = await buildAllLevelInsightRecords(
+      adAccountId,
+      sinceStr,
+      untilStr,
+      accessToken,
+      campaignStatuses,
+      resultLeadTypes,
+      optimizationGoals,
+    );
+    console.log(`[sync-facebook-ecommerce] synced ${insights.length} rows`, levelCounts);
 
-    // Ecommerce action types — ORDERED BY PRIORITY (deduplicated FIRST, pixel-specific LAST).
-    // Facebook returns multiple action_types for the SAME conversion event:
-    //   - 'omni_purchase' = Aggregated, deduplicated cross-platform (this is what FB Ads Manager UI shows)
-    //   - 'purchase'      = Generic purchase event
-    //   - 'offsite_conversion.fb_pixel_purchase' = Raw pixel events (includes organic + cross-device, INFLATES counts)
-    // We pick the FIRST matching one. omni_purchase aligns with the "Purchases" column in Ads Manager.
-    const purchaseActionTypes = ['omni_purchase', 'purchase', 'offsite_conversion.fb_pixel_purchase'];
-    const addToCartActionTypes = ['omni_add_to_cart', 'add_to_cart', 'offsite_conversion.fb_pixel_add_to_cart'];
-    const initiateCheckoutActionTypes = ['omni_initiated_checkout', 'initiate_checkout', 'offsite_conversion.fb_pixel_initiate_checkout'];
+    const fieldKeys = FB_INSIGHTS_FIELD_KEYS;
+    const fieldNames = FB_INSIGHTS_FIELD_NAMES;
+    const fieldTypes = FB_INSIGHTS_FIELD_TYPES;
 
-    const insights: EcommerceRecord[] = (data.data || []).map((insight: any) => {
-      const actions = insight.actions ?? [];
-      const actionValues = insight.action_values ?? [];
-
-      // Pick the FIRST matching action type (by priority order) and return its value.
-      // Never sum across types — that double/triple-counts the same conversion.
-      const getActionCount = (actionTypes: string[]) => {
-        for (const type of actionTypes) {
-          const match = actions.find((a: any) => a.action_type === type);
-          if (match) return parseInt(match.value) || 0;
-        }
-        return 0;
-      };
-
-      const getActionValue = (actionTypes: string[]) => {
-        for (const type of actionTypes) {
-          const match = actionValues.find((a: any) => a.action_type === type);
-          if (match) return parseFloat(match.value) || 0;
-        }
-        return 0;
-      };
-
-      // Extract ecommerce metrics
-      const purchases = getActionCount(purchaseActionTypes);
-      const purchaseValue = getActionValue(purchaseActionTypes);
-      const addToCart = getActionCount(addToCartActionTypes);
-      const addToCartValue = getActionValue(addToCartActionTypes);
-      const initiateCheckout = getActionCount(initiateCheckoutActionTypes);
-      const initiateCheckoutValue = getActionValue(initiateCheckoutActionTypes);
-
-      const spend = parseFloat(insight.spend) || 0;
-      const impressions = parseInt(insight.impressions) || 0;
-      const clicks = parseInt(insight.clicks) || 0;
-
-      // Calculate ROAS (Return on Ad Spend)
-      const roas = spend > 0 ? purchaseValue / spend : 0;
-      
-      // Calculate cost per purchase
-      const costPerPurchase = purchases > 0 ? spend / purchases : 0;
-
-      // Get campaign status
-      const campaignStatus = campaignStatuses[insight.campaign_id];
-
-      return {
-        date: insight.date_start,
-        campaign_id: insight.campaign_id,
-        campaign_name: insight.campaign_name,
-        impressions,
-        clicks,
-        spend,
-        purchases,
-        purchase_value: purchaseValue,
-        add_to_cart: addToCart,
-        add_to_cart_value: addToCartValue,
-        initiate_checkout: initiateCheckout,
-        initiate_checkout_value: initiateCheckoutValue,
-        roas: Math.round(roas * 100) / 100, // Round to 2 decimals
-        cpm: parseFloat(insight.cpm) || 0,
-        ctr: parseFloat(insight.ctr) || 0,
-        cost_per_purchase: Math.round(costPerPurchase * 100) / 100,
-        effective_status: campaignStatus?.effective_status || null,
-        configured_status: campaignStatus?.configured_status || null,
-      };
-    });
-
-
-    // Define fields for Facebook Ecommerce table
-    const fieldKeys = [
-      'date', 'campaign_name', 'campaign_id', 'impressions', 'clicks', 'spend',
-      'purchases', 'purchase_value', 'add_to_cart', 'add_to_cart_value',
-      'initiate_checkout', 'initiate_checkout_value', 'roas', 'cost_per_purchase',
-      'cpm', 'ctr', 'effective_status', 'configured_status'
-    ];
-    const fieldNames = [
-      'תאריך', 'שם הקמפיין', 'מזהה קמפיין', 'חשיפות', 'קליקים', 'הוצאה',
-      'רכישות', 'ערך רכישות', 'הוספות לעגלה', 'ערך הוספות לעגלה',
-      'התחלות Checkout', 'ערך Checkout', 'ROAS', 'עלות לרכישה',
-      'CPM', 'CTR', 'סטטוס בפועל', 'סטטוס מוגדר'
-    ];
-    const fieldTypes = [
-      'date', 'text', 'text', 'number', 'number', 'number',
-      'number', 'number', 'number', 'number',
-      'number', 'number', 'number', 'number',
-      'number', 'number', 'text', 'text'
-    ];
-    
     // Create/update fields (use admin to bypass RLS for cross-tenant tables)
     for (let i = 0; i < fieldKeys.length; i++) {
       const { data: existingField } = await supabaseAdmin
@@ -387,13 +295,19 @@ Deno.serve(async (req) => {
       }
     }
 
-    // Delete existing records and insert new ones (admin client to bypass RLS).
+    // Replace only the days this run re-fetched (admin client to bypass RLS); rows older
+    // than the sync window are history a longer report window still needs. A run that came
+    // back empty is far more likely to be a Meta hiccup than an account with no delivery
+    // at all, so it leaves the stored rows alone instead of blanking the report.
     // table_id only — orphan rows from a previous tenant_id must not survive sync.
-    const { error: delErr } = await supabaseAdmin
-      .from('crm_records')
-      .delete()
-      .eq('table_id', table_id);
-    if (delErr) console.error('[sync-facebook-ecommerce] delete error:', delErr.message);
+    if (insights.length > 0) {
+      const { error: delErr } = await supabaseAdmin
+        .from('crm_records')
+        .delete()
+        .eq('table_id', table_id)
+        .or(replacedRecordsFilter(resolvePruneStart(syncWindow, insights.map((i) => i.date))));
+      if (delErr) console.error('[sync-facebook-ecommerce] delete error:', delErr.message);
+    }
 
     // Insert new records (batched)
     let inserted = 0;
@@ -424,6 +338,7 @@ Deno.serve(async (req) => {
       .eq('id', table_id)
       .maybeSingle();
     const currentSettings = (freshTable?.integration_settings || settings || {}) as Record<string, unknown>;
+    const lastCampaignUpdatedAt = latestCampaignUpdatedTime(campaignStatuses);
     await supabaseAdmin
       .from('crm_tables')
       .update({
@@ -431,6 +346,7 @@ Deno.serve(async (req) => {
         integration_settings: {
           ...currentSettings,
           last_sync_at: syncedAt,
+          last_campaign_updated_at: lastCampaignUpdatedAt,
         }
       })
       .eq('id', table_id);

@@ -8,6 +8,7 @@
 
 import { aiEmbed, aiEmbedBatch } from './ai.ts'
 import { hasPulseIntent } from './pulse-request.mjs'
+import { NATIVE_DEV_TASK_TOOLS } from './dev-escalation-auth.mjs'
 
 export function shouldUseTokenOptimize(agent: { metadata?: Record<string, unknown> | null }, isCarmen: boolean): boolean {
   if (!isCarmen) return false
@@ -187,6 +188,9 @@ export function applyToolForceIncludes(userText: string, picked: Set<string>, he
     promote(['send_whatsapp_to_staff', 'lookup_staff_whatsapp', 'send_message_to_campaigner',
       'list_campaigners', 'list_sales_people', 'search_entities'])
   }
+  if (/(תזכור|תזכיר|להזכיר|תזכרי|remind(?:er)?|הזכיר(?:י)?|משימה\s*מתוזמנת|תזמ(?:ן|ני)\s*(?:לי|ל)?)/i.test(userText)) {
+    promote(['create_agent_task', 'list_my_agent_tasks'])
+  }
   if (hasPulseIntent(userText)) {
     promote(['get_latest_campaign_pulse'])
   }
@@ -195,6 +199,13 @@ export function applyToolForceIncludes(userText: string, picked: Set<string>, he
   }
   if (/(cursor|קלוד|claude|גיט|github|גיטהאב|תקלה.*קוד|bug|באג)/i.test(userText)) {
     promote(['search_agent_tools'])
+  }
+  if (
+    /(תעבירי\s*לפיתוח|שלח(?:י)?\s*ל(?:פיתוח|קרסר|cursor)|משימ(?:ת|ה)\s*פיתוח|dev\s*task|request_dev|תיקון\s*מערכת|תק(?:ן|ני)\s*ב(?:קוד|מערכת)|פתח(?:י)?\s*משימ(?:ת|ה)\s*פיתוח|מרכז\s*משימות\s*פיתוח)/i.test(
+      userText,
+    )
+  ) {
+    promote([...NATIVE_DEV_TASK_TOOLS, 'search_agent_tools'])
   }
 }
 

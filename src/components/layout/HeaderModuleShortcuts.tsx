@@ -28,7 +28,7 @@ export function HeaderModuleShortcuts() {
     .filter((module): module is NonNullable<typeof module> => Boolean(module));
 
   return (
-    <div className="flex items-center gap-1">
+    <div className="hidden md:flex items-center gap-1">
       <div className="hidden xl:flex items-center gap-1">
         {selectedModules.map((module) => {
           const Icon = module.icon;

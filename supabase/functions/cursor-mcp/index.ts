@@ -89,6 +89,10 @@ const TOOLS = [
           type: "string",
           description: "Optional base branch (startingRef). Default: main.",
         },
+        goal_id: {
+          type: "string",
+          description: "Optional execution/autonomous goal id — reuses that goal's sticky Cursor agent (bc-…) instead of opening a new one.",
+        },
         context: {
           type: "string",
           description: "Optional extra context: error logs, file paths, links, constraints, acceptance criteria.",
@@ -246,6 +250,21 @@ const TOOLS = [
         summary: { type: "string", description: "Short completion note for the task log." },
       },
       required: ["task_id"],
+    },
+  },
+  {
+    name: "complete_dev_task",
+    description:
+      "Mark a Carmen dev_tasks row done after finishing work dispatched via dev_task_id in context. " +
+      "reply_to_aios_session also auto-completes when the answer is delivered; use this if you need an explicit done before or without the callback.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        dev_task_id: { type: "string", description: "UUID from dev_task_id in the task context." },
+        summary: { type: "string", description: "Optional completion note (PR link may be parsed)." },
+        pr_url: { type: "string", description: "Optional GitHub PR URL." },
+      },
+      required: ["dev_task_id"],
     },
   },
 ];
@@ -691,6 +710,7 @@ function teachingBlock(tenantId: string | null): string {
     `C) FIX-ON-FAIL: if this request says a capability previously taught to Carmen FAILED in practice, that is the priority — ` +
     `diagnose, fix the ai_skills skin and/or underlying code, verify, and report what changed so Carmen can retry.\n` +
     `D) HUMAN TASK QUEUE: if Context includes human_task_id, call MCP tool complete_human_task when done (before or after the PR).\n` +
+    `   DEV TASK CENTER: if Context includes dev_task_id, reply_to_aios_session marks the dev task done automatically; you may also call complete_dev_task with that id.\n` +
     `E) SAFETY (hard rules — see CLAUDE.md / AGENTS.md "Safety rules for autonomous fixes"): never widen anyone's access beyond their existing role/scope; ` +
     `no destructive or policy-widening SQL live (use a migration + PR); only safe scoped fixes autonomously. Log every autonomous prod change to ` +
     `public.claude_carmen_audit and report it. If a request would breach these, refuse and tell David.`
@@ -830,11 +850,44 @@ async function handleToolCall(
       teachingBlock(ctx.tenantId) +
       callbackBlock;
     const meta = await resolveDispatchMeta(ctx.tenantId, context, task, "request_dev_task");
-    const fired = await fireCursorAgent(text, {
-      name: meta.displayName,
-      startingRef: branch || undefined,
-      tenantId: ctx.tenantId,
-    });
+    const goalId = String(args?.goal_id ?? "").trim();
+    let fired: FireResult;
+    if (goalId && ctx.tenantId && sb) {
+      const { data: goalRow } = await sb.from("goals").select("id, title, objective, constraints")
+        .eq("id", goalId).eq("tenant_id", ctx.tenantId).maybeSingle();
+      if (goalRow) {
+        const { dispatchToGoalCursor } = await import("../_shared/goal-cursor-dispatch.ts");
+        const g = await dispatchToGoalCursor(sb, {
+          tenantId: ctx.tenantId,
+          goalId,
+          goalTitle: String(goalRow.title),
+          objective: goalRow.objective,
+          stepTitle: task,
+          stepDescription: context,
+          constraints: goalRow.constraints,
+          startingRef: branch || undefined,
+        });
+        fired = {
+          id: g.cursorAgentId,
+          url: g.sessionUrl,
+          reused: g.reused,
+          delivered: g.delivered,
+          parallel: g.parallel,
+        };
+      } else {
+        fired = await fireCursorAgent(text, {
+          name: meta.displayName,
+          startingRef: branch || undefined,
+          tenantId: ctx.tenantId,
+        });
+      }
+    } else {
+      fired = await fireCursorAgent(text, {
+        name: meta.displayName,
+        startingRef: branch || undefined,
+        tenantId: ctx.tenantId,
+      });
+    }
     await logDispatch({
       tenantId: ctx.tenantId,
       agentId: ctx.agentId,
@@ -894,6 +947,23 @@ async function handleToolCall(
     return result.advanced
       ? `✅ משימה ${taskId} הושלמה. המשימה הבאה בתור נשלחה ל-Cursor.`
       : `✅ משימה ${taskId} הושלמה.`;
+  }
+
+  if (name === "complete_dev_task") {
+    const devTaskId = String(args?.dev_task_id ?? "").trim();
+    if (!devTaskId) throw new Error("complete_dev_task requires dev_task_id.");
+    const tenantId = ctx.tenantId || Deno.env.get("CURSOR_DEFAULT_TENANT_ID") || "";
+    if (!tenantId) throw new Error("complete_dev_task requires a tenant context.");
+    const sb = sbClient();
+    if (!sb) throw new Error("Supabase not configured.");
+    const { completeDevTaskById } = await import("../_shared/dev-tasks.ts");
+    const task = await completeDevTaskById(sb, {
+      tenantId,
+      taskId: devTaskId,
+      summary: String(args?.summary ?? "").trim() || undefined,
+      prUrl: String(args?.pr_url ?? "").trim() || null,
+    });
+    return `✅ משימת פיתוח ${task.id} סומנה כבוצעה (${task.status}).`;
   }
 
   if (name === "ask_cursor") {

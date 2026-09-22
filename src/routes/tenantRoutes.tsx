@@ -1,4 +1,3 @@
-import { Suspense } from "react";
 import { Route, Navigate } from "react-router-dom";
 import { TenantAppShell } from "@/components/layout/TenantAppShell";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
@@ -92,12 +91,12 @@ export function tenantRoutes() {
       <Route path="/t/:tenantSlug/marketing/:clientId" element={<ProtectedRoute><MarketingDepartment /></ProtectedRoute>} />
       <Route path="/t/:tenantSlug/marketing/:clientId/:department" element={<ProtectedRoute><MarketingDepartment /></ProtectedRoute>} />
       <Route path="/t/:tenantSlug/command-center" element={<ProtectedRoute><CarmenCommandCenter /></ProtectedRoute>} />
-      <Route path="/t/:tenantSlug/unified-callback" element={<Suspense fallback={<div />}><UnifiedCallback /></Suspense>} />
+      <Route path="/t/:tenantSlug/unified-callback" element={<UnifiedCallback />} />
 
       <Route path="/t/:tenantSlug" element={<TenantAppShell />}>
         <Route index element={<Home />} />
         <Route path="home" element={<Home />} />
-        <Route path="dashboard" element={<Suspense fallback={<div />}><DashboardRouter /></Suspense>} />
+        <Route path="dashboard" element={<DashboardRouter />} />
         <Route path="agencies" element={<Agencies />} />
         <Route path="clients" element={<Clients />} />
         <Route path="campaigners" element={<Campaigners />} />
@@ -126,7 +125,7 @@ export function tenantRoutes() {
         <Route path="branding" element={<Branding />} />
         <Route path="accounting-integrations" element={<AccountingIntegrations />} />
         <Route path="accounting-settings" element={<AccountingSettings />} />
-        <Route path="ai-support" element={<Suspense fallback={<div />}><DashboardRouter /></Suspense>} />
+        <Route path="ai-support" element={<DashboardRouter />} />
         <Route path="menu-management" element={<MenuManagement />} />
         <Route path="fields-management" element={<FieldsManagement />} />
         <Route path="dynamic-tables" element={<DynamicTables />} />

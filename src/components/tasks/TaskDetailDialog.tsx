@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef, useCallback } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import {
@@ -20,7 +20,7 @@ import { Slider } from "@/components/ui/slider";
 import { toast } from "sonner";
 import { format } from "date-fns";
 import { he } from "date-fns/locale";
-import { CalendarIcon, Save, Trash2, UserPlus, UserRound, X, Send, Search, ListTodo, ExternalLink, Check, Bot, GitCommit, ArrowRightLeft, MessageCircle, Link2, Users, Building2, Megaphone, Bell } from "lucide-react";
+import { CalendarIcon, Save, Trash2, UserPlus, UserRound, X, Send, Search, ListTodo, ExternalLink, Check, Bot, GitCommit, ArrowRightLeft, MessageCircle, Link2, Users, Building2, Megaphone, Bell, Repeat } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useCurrentTenant } from "@/hooks/useCurrentTenant";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
@@ -28,6 +28,8 @@ import { useUserRole } from "@/hooks/useUserRole";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { useCrossTenantAgencyIds } from "@/hooks/useCrossTenantAgencyIds";
 import { TimeSlotPicker } from "./TimeSlotPicker";
+import { TaskRecurrenceFields, type TaskRecurrenceValue } from "./TaskRecurrenceFields";
+import { TaskChecklistSection } from "./TaskChecklistSection";
 import { EditLeadDialog } from "@/components/forms/EditLeadDialog";
 import { NotesWithAttachments, type TaskAttachment } from "./NotesWithAttachments";
 import { fetchActiveCampaigners } from "@/lib/taskCampaigners";
@@ -35,6 +37,15 @@ import { syncTaskCalendarEvent } from "@/lib/calendarApi";
 import { coerceHumanTaskStatus } from "@/lib/taskStatus";
 import { PRIORITY_BAR_LABELS, priorityBarColor } from "@/lib/taskPriority";
 import { notifyTaskCollaboratorAdded, notifyTaskUpdateAdded } from "@/lib/notifyTaskPeers";
+import {
+  computeFirstOccurrenceDate,
+  formatLocalDate,
+  type RecurrenceFrequency,
+} from "@/lib/taskRecurrence";
+import {
+  formatTaskCollaboratorInsertError,
+  resolveTaskCollaboratorTenantId,
+} from "@/lib/taskCollaborators";
 
 const DURATION_OPTIONS = [30, 60, 90, 120, 150, 180] as const;
 const FRAME = "rounded-xl border border-border/60 bg-card shadow-sm text-right";
@@ -78,6 +89,9 @@ interface Task {
   self_reminder_at?: string | null;
   google_calendar_event_id?: string | null;
   duration_minutes?: number | null;
+  recurrence_frequency?: RecurrenceFrequency | null;
+  recurrence_weekday?: number | null;
+  recurrence_monthday?: number | null;
 }
 
 interface TaskDetailDialogProps {
@@ -112,6 +126,12 @@ export function TaskDetailDialog({
   const [status, setStatus] = useState<"open" | "in_progress" | "done">("open");
   const [dueDate, setDueDate] = useState<Date | undefined>(undefined);
   const [targetDate, setTargetDate] = useState<Date | undefined>(undefined);
+  const [recurrence, setRecurrence] = useState<TaskRecurrenceValue>({
+    frequency: null,
+    weekday: null,
+    monthday: null,
+    time: null,
+  });
   const [clientId, setClientId] = useState("");
   const [leadId, setLeadId] = useState("");
   const [dueTime, setDueTime] = useState<string | null>(null);
@@ -133,6 +153,19 @@ export function TaskDetailDialog({
   const [viewLeadOpen, setViewLeadOpen] = useState(false);
   const [googleCalendarEventId, setGoogleCalendarEventId] = useState<string | null>(null);
   const [creatorName, setCreatorName] = useState("");
+  const titleFieldRef = useRef<HTMLTextAreaElement>(null);
+
+  const syncTitleFieldHeight = useCallback(() => {
+    const field = titleFieldRef.current;
+    if (!field) return;
+    field.style.height = "auto";
+    field.style.height = `${field.scrollHeight}px`;
+  }, []);
+
+  useEffect(() => {
+    if (!isActive) return;
+    syncTitleFieldHeight();
+  }, [title, isActive, isMobile, syncTitleFieldHeight]);
 
   // Fetch full lead data for viewing
   const { data: fullLeadData } = useQuery({
@@ -166,9 +199,15 @@ export function TaskDetailDialog({
         setStatus(coerceHumanTaskStatus(t.status));
         setDueDate(parseOptionalDate(t.due_date));
         setTargetDate(parseOptionalDate(t.target_date));
+        setDueTime(t.due_time ? (t.due_time as string).substring(0, 5) : null);
+        setRecurrence({
+          frequency: (t.recurrence_frequency as RecurrenceFrequency | null) || null,
+          weekday: t.recurrence_weekday ?? null,
+          monthday: t.recurrence_monthday ?? null,
+          time: t.due_time ? String(t.due_time).substring(0, 5) : null,
+        });
         setClientId(t.client_id || "");
         setLeadId(t.lead_id || "");
-        setDueTime(t.due_time ? (t.due_time as string).substring(0, 5) : null);
         const rawDuration = Number((t as { duration_minutes?: number }).duration_minutes) || 30;
         setDurationMinutes((DURATION_OPTIONS as readonly number[]).includes(rawDuration) ? rawDuration : 30);
         setAssignedCampaignerId(t.campaigner_id || "");
@@ -317,27 +356,53 @@ export function TaskDetailDialog({
       }
       const nextDueDate = isUsableDate(dueDate) ? format(dueDate, "yyyy-MM-dd") : null;
       const nextTargetDate = isUsableDate(targetDate) ? format(targetDate, "yyyy-MM-dd") : null;
-      const nextDueTime = dueTime ? dueTime + ":00" : null;
+      const effectiveDueTime = recurrence.frequency
+        ? (recurrence.time || dueTime)
+        : dueTime;
+      const nextDueTime = effectiveDueTime ? effectiveDueTime + ":00" : null;
+      const updatePayload: Record<string, unknown> = {
+        title,
+        notes,
+        priority,
+        status,
+        due_date: nextDueDate,
+        due_time: nextDueTime,
+        target_date: nextTargetDate,
+        duration_minutes: durationMinutes,
+        client_id: clientId || null,
+        lead_id: leadId || null,
+        campaigner_id: assignedCampaignerId || null,
+        self_reminder_at:
+          assignedCampaignerId === userCampaignerId && selfReminderEnabled && selfReminderAt
+            ? new Date(selfReminderAt).toISOString()
+            : null,
+        attachments: attachments as any,
+      };
+      if (recurrence.frequency) {
+        updatePayload.recurrence_frequency = recurrence.frequency;
+        updatePayload.recurrence_interval = 1;
+        updatePayload.recurrence_weekday =
+          recurrence.frequency === "weekly" ? recurrence.weekday : null;
+        updatePayload.recurrence_monthday =
+          recurrence.frequency === "monthly" ? recurrence.monthday : null;
+        if (!task?.recurrence_frequency) {
+          const first = computeFirstOccurrenceDate({
+            frequency: recurrence.frequency,
+            weekday: recurrence.weekday,
+            monthday: recurrence.monthday,
+            preferredDate: isUsableDate(dueDate) ? dueDate : null,
+          });
+          updatePayload.due_date = formatLocalDate(first);
+        }
+      } else if (task?.recurrence_frequency) {
+        updatePayload.recurrence_frequency = null;
+        updatePayload.recurrence_interval = 1;
+        updatePayload.recurrence_weekday = null;
+        updatePayload.recurrence_monthday = null;
+      }
       const { error } = await supabase
         .from("tasks")
-        .update({
-          title,
-          notes,
-          priority,
-          status,
-          due_date: nextDueDate,
-          due_time: nextDueTime,
-          target_date: nextTargetDate,
-          duration_minutes: durationMinutes,
-          client_id: clientId || null,
-          lead_id: leadId || null,
-          campaigner_id: assignedCampaignerId || null,
-          self_reminder_at:
-            assignedCampaignerId === userCampaignerId && selfReminderEnabled && selfReminderAt
-              ? new Date(selfReminderAt).toISOString()
-              : null,
-          attachments: attachments as any,
-        })
+        .update(updatePayload as any)
         .eq("id", task!.id);
       if (error) throw error;
 
@@ -379,10 +444,14 @@ export function TaskDetailDialog({
   // Add collaborator mutation
   const addCollaborator = useMutation({
     mutationFn: async (campaignerId: string) => {
+      const collabTenantId = resolveTaskCollaboratorTenantId(task!.tenant_id, tenantId);
+      if (!collabTenantId) {
+        throw new Error("חסר מזהה ארגון למשימה");
+      }
       const { error } = await supabase.from("task_collaborators").insert({
         task_id: task!.id,
         campaigner_id: campaignerId,
-        tenant_id: tenantId,
+        tenant_id: collabTenantId,
         added_by: user?.id,
       });
       if (error) throw error;
@@ -400,8 +469,8 @@ export function TaskDetailDialog({
       setSelectedCollaborator("");
       toast.success("איש צוות נוסף למשימה");
     },
-    onError: () => {
-      toast.error("שגיאה בהוספת איש צוות");
+    onError: (error: Error) => {
+      toast.error(formatTaskCollaboratorInsertError(error.message || "שגיאה בהוספת איש צוות"));
     },
   });
 
@@ -449,6 +518,69 @@ export function TaskDetailDialog({
     persistAssignedCampaigner.mutate(campaignerId);
   };
 
+  const persistRecurrence = useMutation({
+    mutationFn: async (next: TaskRecurrenceValue) => {
+      if (!task?.id) return;
+      const payload: Record<string, unknown> = {
+        recurrence_interval: 1,
+      };
+      if (next.frequency) {
+        payload.recurrence_frequency = next.frequency;
+        payload.recurrence_weekday = next.frequency === "weekly" ? next.weekday : null;
+        payload.recurrence_monthday = next.frequency === "monthly" ? next.monthday : null;
+        const effectiveTime = next.time || dueTime;
+        if (effectiveTime) {
+          payload.due_time = `${effectiveTime}:00`;
+        }
+        if (!task.recurrence_frequency) {
+          const first = computeFirstOccurrenceDate({
+            frequency: next.frequency,
+            weekday: next.weekday,
+            monthday: next.monthday,
+            preferredDate: isUsableDate(dueDate) ? dueDate : null,
+          });
+          payload.due_date = formatLocalDate(first);
+        }
+      } else {
+        payload.recurrence_frequency = null;
+        payload.recurrence_weekday = null;
+        payload.recurrence_monthday = null;
+      }
+      const { error } = await supabase.from("tasks").update(payload as any).eq("id", task.id);
+      if (error) throw error;
+    },
+    onSuccess: (_data, next) => {
+      queryClient.invalidateQueries({ queryKey: ["tasks", tenantId] });
+      if (next.frequency && !task?.recurrence_frequency) {
+        toast.success("המשימה הוגדרה כמשימה חוזרת");
+      } else if (!next.frequency && task?.recurrence_frequency) {
+        toast.success("חזרה קבועה בוטלה");
+      }
+    },
+    onError: (error: Error) => {
+      if (/recurrence_/i.test(error.message)) {
+        toast.error("עמודות משימה חוזרת עדיין לא זמינות בדאטהבייס");
+        return;
+      }
+      toast.error(`שגיאה בעדכון חזרה: ${error.message}`);
+    },
+  });
+
+  const handleRecurrenceChange = (next: TaskRecurrenceValue) => {
+    setRecurrence(next);
+    if (next.time) setDueTime(next.time);
+    if (!task?.recurrence_frequency && next.frequency) {
+      const first = computeFirstOccurrenceDate({
+        frequency: next.frequency,
+        weekday: next.weekday,
+        monthday: next.monthday,
+        preferredDate: isUsableDate(dueDate) ? dueDate : null,
+      });
+      setDueDate(first);
+    }
+    persistRecurrence.mutate(next);
+  };
+
   // Add update mutation
   const addUpdate = useMutation({
     mutationFn: async () => {
@@ -488,9 +620,10 @@ export function TaskDetailDialog({
     return null;
   }
 
+  const primaryAssigneeId = assignedCampaignerId || task.campaigner_id || "";
   const availableCollaborators = campaigners?.filter(
     (c) =>
-      c.id !== assignedCampaignerId &&
+      c.id !== primaryAssigneeId &&
       !collaborators?.some((col) => col.campaigner_id === c.id)
   );
 
@@ -539,34 +672,61 @@ export function TaskDetailDialog({
 
   const body = (
     <div className={cn("flex flex-col h-full min-h-0 overflow-hidden", isPanel && "bg-muted/20")} dir="rtl">
-      <div className="shrink-0 border-b bg-card px-4 pt-3">
+      <div
+        className={cn(
+          "shrink-0 border-b bg-card",
+          isMobile && !isPanel ? "px-3 pt-11 pb-1" : "px-4 pt-3",
+        )}
+      >
         {!isPanel && (
           <DialogHeader className="mb-2">
             <DialogTitle className="sr-only">פרטי משימה</DialogTitle>
           </DialogHeader>
         )}
-        <div className={cn("flex items-center gap-2 pb-3", !isPanel && "pl-10")}>
-          <Input
+        <div
+          className={cn(
+            "flex gap-2 pb-3 min-w-0",
+            isMobile ? "flex-col items-stretch" : "items-center",
+            !isPanel && !isMobile && "pl-10",
+          )}
+        >
+          <Textarea
+            ref={titleFieldRef}
             value={title}
             onChange={(e) => setTitle(e.target.value)}
             placeholder="כותרת המשימה"
-            className="h-10 flex-1 border-0 bg-transparent px-0 text-base font-bold shadow-none focus-visible:ring-0"
+            rows={isMobile ? 2 : 1}
+            dir="rtl"
+            className={cn(
+              "min-w-0 w-full resize-none overflow-hidden border-0 bg-transparent px-0 font-bold shadow-none focus-visible:ring-0",
+              "whitespace-pre-wrap break-words leading-snug text-right",
+              isMobile ? "text-[15px] min-h-[3rem] max-h-40 py-1.5" : "text-base min-h-10 max-h-28 py-2",
+            )}
           />
           {creatorName && (
             <span
-              className="inline-flex items-center gap-1 rounded-full border bg-muted/40 px-2 py-0.5 text-[11px] text-muted-foreground shrink-0 max-w-[14rem]"
+              className={cn(
+                "inline-flex items-center gap-1 rounded-full border bg-muted/40 px-2 py-0.5 text-[11px] text-muted-foreground",
+                isMobile ? "self-start max-w-full" : "shrink-0 max-w-[14rem]",
+              )}
               title={`המשימה ניתנה על ידי ${creatorName}`}
             >
-              <UserRound className="h-3 w-3" />
-              <span className="truncate">ניתנה על ידי {creatorName}</span>
+              <UserRound className="h-3 w-3 shrink-0" />
+              <span className={cn(isMobile ? "break-words" : "truncate")}>ניתנה על ידי {creatorName}</span>
             </span>
           )}
         </div>
       </div>
 
       <div className={cn("flex-1 min-h-0 overflow-y-auto overflow-x-hidden [scrollbar-width:thin] bg-muted/20 space-y-3", isMobile ? "p-2.5" : "p-4")}>
-            <div className="grid grid-cols-1 md:grid-cols-[minmax(220px,0.38fr)_minmax(0,1fr)] gap-3 items-start">
-            <section className={cn(FRAME, "space-y-0 p-2.5")}>
+            <div
+              className={cn(
+                "grid grid-cols-1 md:grid-cols-2 gap-3 items-stretch",
+                isPanel && "md:min-h-[min(58vh,520px)]",
+              )}
+            >
+            <div className="md:col-start-1 flex flex-col gap-3 min-h-0">
+            <section className={cn(FRAME, "space-y-0 p-2.5 shrink-0")}>
               <div className="flex items-center gap-1.5 text-xs font-medium mb-1 pb-1.5">
                 <Link2 className="h-3.5 w-3.5 text-muted-foreground" />
                 שיוך
@@ -758,6 +918,17 @@ export function TaskDetailDialog({
                   </Popover>
                 </div>
               </div>
+              <div className="py-1.5 border-t space-y-2">
+                <div className="flex items-center gap-1 text-[11px] text-muted-foreground">
+                  <Repeat className="h-3 w-3" />
+                  חזרה קבועה
+                </div>
+                <TaskRecurrenceFields
+                  compact
+                  value={recurrence}
+                  onChange={handleRecurrenceChange}
+                />
+              </div>
               {Boolean(userCampaignerId && assignedCampaignerId === userCampaignerId) && (
                 <div className="flex items-center gap-2 py-1.5 border-t">
                   <label className="flex cursor-pointer items-center gap-1.5 text-[11px] font-medium shrink-0">
@@ -783,87 +954,99 @@ export function TaskDetailDialog({
               )}
             </section>
 
-            <NotesWithAttachments
-              value={notes}
-              onChange={setNotes}
-              attachments={attachments}
-              onAttachmentsChange={setAttachments}
-              taskId={task?.id}
-              variant="notes"
-              rows={3}
-              notesTitle="הערות ועדכונים"
-              placeholder="הערות קבועות למשימה..."
-              notesFooter={
-                <>
-                  <div className="flex gap-2">
-                    <Textarea
-                      value={newUpdate}
-                      onChange={(e) => setNewUpdate(e.target.value)}
-                      placeholder="הוסף עדכון..."
-                      rows={2}
-                      className="flex-1 bg-transparent border-input min-h-[52px]"
-                      onKeyDown={(e) => {
-                        if (e.key === "Enter" && (e.metaKey || e.ctrlKey) && newUpdate.trim()) {
-                          e.preventDefault();
-                          addUpdate.mutate();
-                        }
-                      }}
-                    />
-                    <Button
-                      onClick={() => addUpdate.mutate()}
-                      disabled={!newUpdate.trim() || addUpdate.isPending}
-                      size="icon"
-                      className="self-end h-8 w-8"
-                      aria-label="שלח עדכון"
-                    >
-                      <Send className="h-4 w-4" />
-                    </Button>
-                  </div>
-                  {updates?.length === 0 && (
-                    <p className="text-xs text-muted-foreground text-center py-1">אין עדכונים עדיין</p>
-                  )}
-                  {updates?.map((update) => {
-                    const updateType = (update as { update_type?: string }).update_type || "comment";
-                    const createdAt = parseOptionalDate(update.created_at);
-                    const typeIcon =
-                      updateType === "agent_action" ? <Bot className="h-3.5 w-3.5 text-purple-500" /> :
-                      updateType === "status_change" ? <GitCommit className="h-3.5 w-3.5 text-blue-500" /> :
-                      updateType === "assignment" ? <ArrowRightLeft className="h-3.5 w-3.5 text-orange-500" /> :
-                      <MessageCircle className="h-3.5 w-3.5 text-muted-foreground" />;
-                    const typeLabel =
-                      updateType === "agent_action" ? "פעולת סוכן" :
-                      updateType === "status_change" ? "שינוי סטטוס" :
-                      updateType === "assignment" ? "שיוך" :
-                      "תגובה";
-                    return (
-                      <div
-                        key={update.id}
-                        className={cn(
-                          "p-2 rounded-lg border bg-card text-right",
-                          updateType === "agent_action" && "bg-purple-50/50 border-purple-200 dark:bg-purple-950/20 dark:border-purple-800",
-                        )}
+              {task?.id && tenantId && (
+                <TaskChecklistSection taskId={task.id} tenantId={tenantId} className="shrink-0" />
+              )}
+            </div>
+
+            <div className="md:col-start-2 flex flex-col min-h-[280px] h-full">
+              <NotesWithAttachments
+                value={notes}
+                onChange={setNotes}
+                attachments={attachments}
+                onAttachmentsChange={setAttachments}
+                taskId={task?.id}
+                variant="notes"
+                rows={4}
+                fillHeight
+                notesLayout="updates-first"
+                notesTitle="עדכונים"
+                placeholder="כאן שמים הערות קבועות — לדוגמה: אין לפנות ללקוח ישירות, רק דרך איש הקשר..."
+                notesWrapperClassName="h-full min-h-0"
+                notesFooter={
+                  <>
+                    <div className="flex gap-2 shrink-0">
+                      <Textarea
+                        value={newUpdate}
+                        onChange={(e) => setNewUpdate(e.target.value)}
+                        placeholder="הוסף עדכון..."
+                        rows={2}
+                        className="flex-1 bg-transparent border-input min-h-[52px]"
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter" && (e.metaKey || e.ctrlKey) && newUpdate.trim()) {
+                            e.preventDefault();
+                            addUpdate.mutate();
+                          }
+                        }}
+                      />
+                      <Button
+                        onClick={() => addUpdate.mutate()}
+                        disabled={!newUpdate.trim() || addUpdate.isPending}
+                        size="icon"
+                        className="self-end h-8 w-8"
+                        aria-label="שלח עדכון"
                       >
-                        <div className="flex items-center justify-between mb-0.5 gap-2">
-                          <div className="flex items-center gap-1.5 min-w-0">
-                            {typeIcon}
-                            <span className="text-xs font-medium truncate">
-                              {(update.profiles as { full_name?: string } | null)?.full_name || "משתמש"}
+                        <Send className="h-4 w-4" />
+                      </Button>
+                    </div>
+                    <div className="flex-1 min-h-[120px] overflow-y-auto space-y-2 [scrollbar-width:thin]">
+                    {updates?.length === 0 && (
+                      <p className="text-xs text-muted-foreground text-center py-1">אין עדכונים עדיין</p>
+                    )}
+                    {updates?.map((update) => {
+                      const updateType = (update as { update_type?: string }).update_type || "comment";
+                      const createdAt = parseOptionalDate(update.created_at);
+                      const typeIcon =
+                        updateType === "agent_action" ? <Bot className="h-3.5 w-3.5 text-purple-500" /> :
+                        updateType === "status_change" ? <GitCommit className="h-3.5 w-3.5 text-blue-500" /> :
+                        updateType === "assignment" ? <ArrowRightLeft className="h-3.5 w-3.5 text-orange-500" /> :
+                        <MessageCircle className="h-3.5 w-3.5 text-muted-foreground" />;
+                      const typeLabel =
+                        updateType === "agent_action" ? "פעולת סוכן" :
+                        updateType === "status_change" ? "שינוי סטטוס" :
+                        updateType === "assignment" ? "שיוך" :
+                        "תגובה";
+                      return (
+                        <div
+                          key={update.id}
+                          className={cn(
+                            "p-2 rounded-lg border bg-card text-right",
+                            updateType === "agent_action" && "bg-purple-50/50 border-purple-200 dark:bg-purple-950/20 dark:border-purple-800",
+                          )}
+                        >
+                          <div className="flex items-center justify-between mb-0.5 gap-2">
+                            <div className="flex items-center gap-1.5 min-w-0">
+                              {typeIcon}
+                              <span className="text-xs font-medium truncate">
+                                {(update.profiles as { full_name?: string } | null)?.full_name || "משתמש"}
+                              </span>
+                              <Badge variant="outline" className="text-[10px] h-4 px-1.5">
+                                {typeLabel}
+                              </Badge>
+                            </div>
+                            <span className="text-[10px] text-muted-foreground shrink-0">
+                              {createdAt ? format(createdAt, "dd/MM HH:mm", { locale: he }) : ""}
                             </span>
-                            <Badge variant="outline" className="text-[10px] h-4 px-1.5">
-                              {typeLabel}
-                            </Badge>
                           </div>
-                          <span className="text-[10px] text-muted-foreground shrink-0">
-                            {createdAt ? format(createdAt, "dd/MM HH:mm", { locale: he }) : ""}
-                          </span>
+                          <p className="text-xs whitespace-pre-wrap">{update.content}</p>
                         </div>
-                        <p className="text-xs whitespace-pre-wrap">{update.content}</p>
-                      </div>
-                    );
-                  })}
-                </>
-              }
-            />
+                      );
+                    })}
+                    </div>
+                  </>
+                }
+              />
+            </div>
             </div>
 
             <NotesWithAttachments

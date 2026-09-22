@@ -33,20 +33,12 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Skeleton } from "@/components/ui/skeleton";
+import { CarmenLoadingScreen } from "@/components/shared/CarmenLoadingScreen";
+import { CarmenRouteProgress } from "@/components/shared/CarmenRouteProgress";
+import { useCarmenContentFade } from "@/hooks/useCarmenContentFade";
 
 function RouteContentLoader() {
-  return (
-    <div className="flex flex-col gap-4 p-8">
-      <Skeleton className="h-8 w-48" />
-      <Skeleton className="h-4 w-96" />
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3 mt-4">
-        <Skeleton className="h-32" />
-        <Skeleton className="h-32" />
-        <Skeleton className="h-32" />
-      </div>
-    </div>
-  );
+  return <CarmenLoadingScreen />;
 }
 
 const CARMEN_ICON = "https://d2xsxph8kpxj0f.cloudfront.net/310419663030948028/XGJWpzb5zh76ZdoV37Q3K8/carmen-icon-CyF3DNNJ8Z9Uhfz7EpYJcQ.webp";
@@ -58,6 +50,7 @@ export function AppLayout() {
   const { userId } = useCurrentUser();
   const { currentTenantId, setCurrentTenantId, currentTenant } = useTenant();
   const commandCenterAccess = useCommandCenterAccess();
+  const contentFadeRef = useCarmenContentFade<HTMLDivElement>();
   const sidecar = useCommandCenterSidecar();
 
   // Fetch available tenants for the user
@@ -206,12 +199,12 @@ export function AppLayout() {
               <div className="flex items-center gap-1.5 sm:gap-2 md:gap-4 flex-shrink-0">
                 <HeaderModuleShortcuts />
                 {agencies && agencies.length > 0 && (
-                  <div className="hidden md:flex items-center gap-2">
-                    <span className="text-sm text-muted-foreground hidden lg:inline">סוכנות:</span>
+                  <div className="hidden md:flex items-center gap-1 sm:gap-2 min-w-0 max-w-[42vw] sm:max-w-none">
+                    <span className="text-sm text-muted-foreground hidden lg:inline shrink-0">סוכנות:</span>
                     <Select value={selectedAgency} onValueChange={setSelectedAgency}>
-                      <SelectTrigger className="w-[160px] md:w-[220px] bg-background border-2">
-                        <Building2 className="h-4 w-4 mr-2 flex-shrink-0" />
-                        <SelectValue placeholder="בחר סוכנות" />
+                      <SelectTrigger className="h-9 w-[min(42vw,10rem)] sm:w-[160px] md:w-[220px] bg-background border-2 px-2">
+                        <Building2 className="h-4 w-4 shrink-0" />
+                        <SelectValue placeholder="סוכנות" />
                       </SelectTrigger>
                       <SelectContent className="bg-background z-[100]">
                         {agencies.length > 1 && (
@@ -279,7 +272,11 @@ export function AppLayout() {
             </header>
             <main className="flex min-h-0 flex-1 flex-col overflow-hidden">
               <CommandCenterSidecarShell>
-                <div className="flex h-full min-h-0 flex-1 flex-col overflow-y-auto">
+                <div
+                  ref={contentFadeRef}
+                  className="flex h-full min-h-0 flex-1 flex-col overflow-y-auto"
+                >
+                  <CarmenRouteProgress />
                   <RoutedModulePermissionGate>
                     <Suspense fallback={<RouteContentLoader />}>
                       <Outlet />
