@@ -419,7 +419,7 @@ Deno.serve(async (req) => {
       }
     }
 
-    // Note: task_assigned automation is fired by DB trigger trg_notify_task_assigned
+    // Note: task_assigned Carmen WhatsApp is fired by trg_notify_task_notification_worker only.
     // on public.tasks (AFTER INSERT OR UPDATE OF campaigner_id). Do not invoke it
     // from here to avoid duplicate notifications.
 

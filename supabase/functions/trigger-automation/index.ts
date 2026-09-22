@@ -11,6 +11,11 @@ import {
 } from '../_shared/lead-alert-failure-notify.ts'
 import { withManyChatDestinationLock } from '../_shared/manychat-destination-lock.ts'
 import {
+  claimTaskNotificationDelivery,
+  releaseTaskNotificationDelivery,
+  taskNotificationRecipientKey,
+} from '../_shared/task-notification-dedupe.ts'
+import {
   formatTaskNotificationMessage,
   resolveTaskNotificationLinkTenantId,
   resolveTaskNotificationSenderTenantIds,
@@ -870,6 +875,28 @@ async function sendTaskNotificationFromTenantCarmen(supabase: any, requestBody: 
     }
   }
 
+  const deliveryRecipientKey = notifyCreator
+    ? `creator:${task.created_by || ''}`
+    : taskNotificationRecipientKey({
+      notifyCampaignerId: overrideCampaignerId,
+      campaignerId: campaigner?.id || task.campaigner_id,
+      salesPersonId: task.sales_person_id,
+    })
+  const deliveryClaim = await claimTaskNotificationDelivery(supabase, {
+    taskId: task.id,
+    notificationType,
+    recipientKey: deliveryRecipientKey,
+  })
+  if (deliveryClaim === 'duplicate') {
+    return {
+      handled: true,
+      sent: false,
+      reason: 'duplicate task notification suppressed',
+      task_id: task.id,
+      notification_type: notificationType,
+    }
+  }
+
   // Carmen sender = the recipient's own tenant line whenever that tenant runs an
   // active Carmen flow, with the client/task tenant as fallback. Routing purely by
   // the client tenant made a Marketing Captain teammate hear about his own task
@@ -899,6 +926,11 @@ async function sendTaskNotificationFromTenantCarmen(supabase: any, requestBody: 
   }
 
   if (!senderTenantId || !carmenStep || !integration) {
+    await releaseTaskNotificationDelivery(supabase, {
+      taskId: task.id,
+      notificationType,
+      recipientKey: deliveryRecipientKey,
+    })
     const reason = senderReasons.get(notificationTenantId)
       || [...senderReasons.values()].pop()
       || null
@@ -953,6 +985,13 @@ async function sendTaskNotificationFromTenantCarmen(supabase: any, requestBody: 
     isGroup: false,
     message,
   })
+  if (!sent) {
+    await releaseTaskNotificationDelivery(supabase, {
+      taskId: task.id,
+      notificationType,
+      recipientKey: deliveryRecipientKey,
+    })
+  }
 
   console.log('[task-notification-carmen]', {
     notification_type: notificationType,

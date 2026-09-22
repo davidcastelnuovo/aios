@@ -9,6 +9,7 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.75.0'
 import { resolveModelId } from '../_shared/models.ts'
 import { isCachedPulseRequest } from '../_shared/pulse-request.mjs'
 import { assertCallerCanAccessClient, assertCallerCanAccessEntityClient } from '../_shared/auth-helpers.ts'
+import { asUuidOrNull } from '../_shared/uuid.ts'
 import { summarizeAndStoreAgentMemory, recallAgentMemory, recallAgentMemoryFTS, saveAgentMemory } from '../_shared/agent-memory.ts'
 import { buildCarmenV2SystemPrompt, shouldUseV2Prompt } from '../_shared/carmen-prompt-v2.ts'
 import { loadMcpTools } from '../_shared/mcp-tools.ts'
@@ -3666,8 +3667,16 @@ async function executeTool(name: string, args: Record<string, any>, supabase: an
     }
     case 'manage_task_collaborators': {
       if (args.action === 'add') {
+        const { data: taskRow, error: taskErr } = await supabase
+          .from('tasks')
+          .select('tenant_id')
+          .eq('id', args.task_id)
+          .in('tenant_id', accessibleTenantIds)
+          .maybeSingle()
+        if (taskErr) throw taskErr
+        if (!taskRow?.tenant_id) throw new Error('משימה לא נמצאה')
         const { data, error } = await supabase.from('task_collaborators').insert({
-          task_id: args.task_id, campaigner_id: args.campaigner_id, tenant_id: tenantId,
+          task_id: args.task_id, campaigner_id: args.campaigner_id, tenant_id: taskRow.tenant_id,
         }).select('id').single()
         if (error) throw error
         void fireTaskPeerNotification({
