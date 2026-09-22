@@ -392,6 +392,37 @@ export function AppSidebar() {
           </SidebarGroupContent>
         </SidebarGroup>
 
+        {isMobile && agencies && agencies.length > 0 && (
+          <SidebarGroup>
+            {!isCollapsed && (
+              <SidebarGroupLabel className="text-xs font-semibold uppercase tracking-wide" dir="rtl">
+                ארגונים
+              </SidebarGroupLabel>
+            )}
+            <SidebarGroupContent>
+              <div className="px-2 pb-1" dir="rtl">
+                <p className="mb-1.5 text-xs font-medium text-muted-foreground">סוכנות</p>
+                <Select value={selectedAgency} onValueChange={setSelectedAgency}>
+                  <SelectTrigger className="w-full bg-background">
+                    <Building2 className="h-4 w-4 ml-2 flex-shrink-0" />
+                    <SelectValue placeholder="בחר סוכנות" />
+                  </SelectTrigger>
+                  <SelectContent className="bg-background z-[100]">
+                    {agencies.length > 1 && (
+                      <SelectItem value="all">כל הסוכנויות</SelectItem>
+                    )}
+                    {agencies.map((agency) => (
+                      <SelectItem key={agency.id} value={agency.id}>
+                        {agency.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </SidebarGroupContent>
+          </SidebarGroup>
+        )}
+
         {/* Active tab sections */}
         {activeMenuTab.sections.map(section => {
           const visibleItems = filterItems(section.items);
@@ -442,28 +473,6 @@ export function AppSidebar() {
         })}
 
       </SidebarContent>
-
-      {isMobile && agencies && agencies.length > 0 && (
-        <div className="p-3 border-t border-sidebar-border" dir="rtl">
-          <p className="mb-1.5 text-xs font-medium text-muted-foreground">סוכנות</p>
-          <Select value={selectedAgency} onValueChange={setSelectedAgency}>
-            <SelectTrigger className="w-full bg-background">
-              <Building2 className="h-4 w-4 ml-2 flex-shrink-0" />
-              <SelectValue placeholder="בחר סוכנות" />
-            </SelectTrigger>
-            <SelectContent className="bg-background z-[100]">
-              {agencies.length > 1 && (
-                <SelectItem value="all">כל הסוכנויות</SelectItem>
-              )}
-              {agencies.map((agency) => (
-                <SelectItem key={agency.id} value={agency.id}>
-                  {agency.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-      )}
 
       {/* Install PWA Button */}
       <InstallAppButton isCollapsed={isCollapsed} />
