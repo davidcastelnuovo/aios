@@ -10,6 +10,7 @@ import {
   setConversationStatus,
 } from "./store.ts";
 import { onParliamentCallback } from "./parliament.ts";
+import { completeDevTaskFromAgentReply } from "../dev-tasks.ts";
 
 async function resolveSession(
   sb: ReturnType<typeof serviceClient>,
@@ -64,6 +65,20 @@ export async function ingestChannelReply(payload: CallbackPayload): Promise<{ du
   if (duplicate) return { duplicate: true, message_id: row.id };
 
   if (eventType === "message") {
+    const codingOrigins = new Set<ChannelProvider>(["cursor", "claude", "codex", "grok"]);
+    if (codingOrigins.has(origin)) {
+      try {
+        await completeDevTaskFromAgentReply(sb, {
+          tenantId,
+          conversationId: payload.conversation_id,
+          content,
+          devTaskIdHint: (payload.metadata?.dev_task_id as string | undefined) ?? null,
+          actor: origin,
+        });
+      } catch (e) {
+        console.warn("[agent-channel] dev task completion:", (e as Error)?.message ?? e);
+      }
+    }
     const inParliament = !!session?.parliament_run_id || origin === "parliament";
     if (session) await completeSession(sb, session.id, "completed");
     if (inParliament) {
