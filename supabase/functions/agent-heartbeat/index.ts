@@ -47,10 +47,11 @@ Deno.serve(async (req) => {
       // 1. Find overdue tasks
       const { data: overdueTasks } = await supabase
         .from('tasks')
-        .select('id, title, status, due_date, due_time, assigned_agent, campaigner_id, campaigners(full_name, phone)')
+        .select('id, title, status, due_date, due_time, assigned_agent, campaigner_id, overdue_notified_at, campaigners(full_name, phone)')
         .eq('tenant_id', tenantId)
         .in('status', ['open', 'in_progress'])
         .lt('due_date', now.toISOString().split('T')[0])
+        .is('overdue_notified_at', null)
         .limit(50)
 
       tasksReviewed += overdueTasks?.length || 0
@@ -68,28 +69,27 @@ Deno.serve(async (req) => {
 
       tasksReviewed += staleTasks?.length || 0
 
-      // 3. Send WhatsApp reminders for overdue tasks
+      // 3. Overdue task reminders are owned by task-notification-worker (Carmen).
+      // Heartbeat only nudges the worker for tasks not yet marked overdue.
       if (allowedActions.includes('reminders') && overdueTasks && overdueTasks.length > 0) {
         for (const task of overdueTasks.slice(0, 5)) {
-          const campaigner = task.campaigners as any
-          if (campaigner?.phone) {
-            try {
-              await fetch(`${SUPABASE_URL}/functions/v1/send-green-api-message`, {
-                method: 'POST',
-                headers: {
-                  'Content-Type': 'application/json',
-                  'Authorization': `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
-                },
-                body: JSON.stringify({
-                  phone: campaigner.phone,
-                  message: `תזכורת: המשימה "${task.title}" באיחור. נא לטפל בהקדם.`,
-                  tenantId,
-                }),
-              })
-              actionsLog.push({ type: 'reminder_sent', task_id: task.id, task_title: task.title, to: campaigner.full_name })
-            } catch (e) {
-              actionsLog.push({ type: 'reminder_failed', task_id: task.id, error: e instanceof Error ? e.message : 'unknown' })
-            }
+          try {
+            const workerResponse = await fetch(`${SUPABASE_URL}/functions/v1/task-notification-worker`, {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
+              },
+              body: JSON.stringify({ task_id: task.id }),
+            })
+            actionsLog.push({
+              type: 'overdue_worker_nudged',
+              task_id: task.id,
+              task_title: task.title,
+              ok: workerResponse.ok,
+            })
+          } catch (e) {
+            actionsLog.push({ type: 'overdue_worker_failed', task_id: task.id, error: e instanceof Error ? e.message : 'unknown' })
           }
         }
       }

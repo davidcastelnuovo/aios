@@ -188,6 +188,9 @@ export function applyToolForceIncludes(userText: string, picked: Set<string>, he
     promote(['send_whatsapp_to_staff', 'lookup_staff_whatsapp', 'send_message_to_campaigner',
       'list_campaigners', 'list_sales_people', 'search_entities'])
   }
+  if (/(תזכור|תזכיר|להזכיר|תזכרי|remind(?:er)?|הזכיר(?:י)?|משימה\s*מתוזמנת|תזמ(?:ן|ני)\s*(?:לי|ל)?)/i.test(userText)) {
+    promote(['create_agent_task', 'list_my_agent_tasks'])
+  }
   if (hasPulseIntent(userText)) {
     promote(['get_latest_campaign_pulse'])
   }
