@@ -564,6 +564,8 @@ flowchart TB
 
 | Trigger | Suggested action | Mutating? | Approval |
 |---------|------------------|-----------|----------|
+| Staff promised action in Green group, no follow-up | `create_commitment_followup` → `tasks` + `client_updates` | No (internal CRM) | Auto |
+| Weekly update sent in Green group, missing on card | `sync_weekly_update_from_green_group` (dry_run then write) | No (card only) | Carmen / David |
 | Pulse critical: stopped campaign | WhatsApp to campaigner + David | No | Auto notify |
 | Scheduled 20:30 client shutdown | Pause campaigns in scope | Yes | Pre-approved plan or daily confirm |
 | CPL above target 7d + no client call | “Call client” task + draft WA to David | No / draft only | Notify |

@@ -76,7 +76,11 @@ import {
   logDevTaskEvent,
 } from '../_shared/dev-tasks.ts'
 import { buildClientOperationsPackage } from '../_shared/client-operations.ts'
-import { fetchClientGreenApiGroupCommunications } from '../_shared/client-green-group-monitor.ts'
+import {
+  createCommitmentFollowup,
+  fetchClientGreenApiGroupCommunications,
+  syncWeeklyUpdateFromGreenGroup,
+} from '../_shared/client-green-group-monitor.ts'
 import {
   addGoalBlocker,
   addGoalMilestone,
@@ -679,7 +683,9 @@ const ALL_TOOLS = [
   { name: 'list_clients', description: 'רשימת/חיפוש לקוחות. אפשר לסנן לפי סטטוס, קמפיינר, סוכנות (agency_id/agency_name — חובה לסנן כשהמשתמש שואל על "לקוחות בסוכנות X"), או name_search. הערה: כשהקורא הוא קמפיינר (WhatsApp), ברירת המחדל היא הצגת לקוחות שמשוייכים אליו בלבד בסטטוס active/onboarding — אלא אם סופק campaigner_name/agency_name אחר במפורש. החיפוש case-insensitive. אל תאמר "לא נמצא" לפני שניסית name_search.', parameters: { type: 'object', properties: { status: { type: 'string', description: 'active / onboarding / inactive. ברירת מחדל עבור קמפיינר WhatsApp: active+onboarding בלבד.' }, limit: { type: 'integer' }, name_search: { type: 'string', description: 'חיפוש חלקי בשם הלקוח או איש הקשר (case-insensitive). נסה גם תעתיק אנגלי לעברית ולהפך.' }, campaigner_id: { type: 'string', description: 'סינון ללקוחות המשוייכים לקמפיינר זה (דרך client_team)' }, campaigner_name: { type: 'string', description: 'סינון לפי שם קמפיינר (חיפוש חופשי בשם המלא)' }, agency_id: { type: 'string', description: 'סינון ללקוחות בסוכנות זו בלבד' }, agency_name: { type: 'string', description: 'סינון לפי שם סוכנות (חיפוש חלקי, case-insensitive). חובה להשתמש כשהמשתמש מציין סוכנות בשם.' }, all_scopes: { type: 'boolean', description: 'דרוס את הסקופ האוטומטי של הקמפיינר והחזר את כל הלקוחות בארגון (לשימוש רק אם המשתמש ביקש זאת מפורשות).' } } } },
   { name: 'get_client_info', description: 'מידע על לקוח', parameters: { type: 'object', properties: { client_id: { type: 'string' } }, required: ['client_id'] } },
   { name: 'get_client_operations_package', description: 'תמונת תפעול 360° ללקוח: דופק, התראות פתוחות, עדכוני כרטיס, משימות, הודעות קבוצה (Manus, לפי carmen_client_group_access), קבוצת Green API (קריאה בלבד), והמלצות יזומות. refresh_recommendations=true (ברירת מחדל) מריץ כללי סריקה ללא LLM. פעולות מקדמיות (Meta/WA) — רק דרך אישור.', parameters: { type: 'object', properties: { client_id: { type: 'string' }, refresh_recommendations: { type: 'boolean', description: 'ברירת מחדל true — לעדכן המלצות open' } }, required: ['client_id'] } },
-  { name: 'get_client_green_group_communications', description: 'קריאה בלבד: היסטוריית קבוצת WhatsApp של הלקוח ב-Green API (CRM, clients.whatsapp_group_id). מזהה שאלות ללא מענה מהצוות. אסור לשלוח/להגיב לקבוצה דרך כלי זה — רק לדווח לדוד/קמפיינר (send_whatsapp_to_staff / notify). לא משנה הרשאות Manus.', parameters: { type: 'object', properties: { client_id: { type: 'string' }, days_back: { type: 'integer', description: 'ברירת מחדל 7, מקס 30' }, limit: { type: 'integer' } }, required: ['client_id'] } },
+  { name: 'get_client_green_group_communications', description: 'קריאה בלבד: היסטוריית קבוצת WhatsApp של הלקוח ב-Green API (CRM, clients.whatsapp_group_id). מזהה שאלות ללא מענה, התחייבויות שלא בוצעו, ועדכון שבועי בקבוצה שחסר בכרטיס. אסור לשלוח/להגיב לקבוצה — רק לדווח או לסנכרן לכרטיס בכלים הייעודיים.', parameters: { type: 'object', properties: { client_id: { type: 'string' }, days_back: { type: 'integer', description: 'ברירת מחדל 7, מקס 30' }, limit: { type: 'integer' } }, required: ['client_id'] } },
+  { name: 'sync_weekly_update_from_green_group', description: 'מעתיק עדכון שבועי שנשלח בקבוצת Green API ל-client_updates (update_type=weekly_update). dry_run=true (ברירת מחדל) מציג preview; dry_run=false כותב לכרטיס.', parameters: { type: 'object', properties: { client_id: { type: 'string' }, message_at: { type: 'string', description: 'ISO timestamp של הודעה ספציפית; אופציונלי' }, dry_run: { type: 'boolean' } }, required: ['client_id'] } },
+  { name: 'create_commitment_followup', description: 'כשהובטחה פעולה בקבוצה ולא זוהה ביצוע — יוצר משימת tasks פתוחה + client_update מעקב. לא שולח לקבוצה.', parameters: { type: 'object', properties: { client_id: { type: 'string' }, message_at: { type: 'string', description: 'message_at מה-unfulfilled_staff_commitments' }, task_title: { type: 'string' } }, required: ['client_id', 'message_at'] } },
   { name: 'list_client_operation_recommendations', description: 'רשימת המלצות תפעול פתוחות (Client 360).', parameters: { type: 'object', properties: { client_id: { type: 'string' }, severity: { type: 'string', enum: ['info', 'warning', 'critical'] }, limit: { type: 'integer' } } } },
   { name: 'update_client_operation_recommendation', description: 'עדכון סטטוס המלצה: accepted / dismissed / resolved.', parameters: { type: 'object', properties: { recommendation_id: { type: 'string' }, status: { type: 'string', enum: ['accepted', 'dismissed', 'resolved'] } }, required: ['recommendation_id', 'status'] } },
   { name: 'add_client_update', description: 'הוספת עדכון ללקוח', parameters: { type: 'object', properties: { client_id: { type: 'string' }, content: { type: 'string' } }, required: ['client_id', 'content'] } },
@@ -2195,6 +2201,28 @@ async function executeTool(name: string, args: Record<string, any>, supabase: an
         clientId: String(args.client_id),
         daysBack: args.days_back,
         messageLimit: args.limit,
+      })
+    }
+    case 'sync_weekly_update_from_green_group': {
+      await assertCallerCanAccessClient(supabase, args.client_id, callerScope)
+      const actor = userId !== 'system' ? userId : null
+      return await syncWeeklyUpdateFromGreenGroup(supabase, {
+        tenantId,
+        clientId: String(args.client_id),
+        messageAt: args.message_at,
+        dryRun: args.dry_run !== false,
+        actorUserId: actor,
+      })
+    }
+    case 'create_commitment_followup': {
+      await assertCallerCanAccessClient(supabase, args.client_id, callerScope)
+      const actor = userId !== 'system' ? userId : null
+      return await createCommitmentFollowup(supabase, {
+        tenantId,
+        clientId: String(args.client_id),
+        messageAt: String(args.message_at),
+        taskTitle: args.task_title,
+        actorUserId: actor,
       })
     }
     case 'get_client_operations_package': {

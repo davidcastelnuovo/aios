@@ -44,6 +44,8 @@ export function deriveClientRecommendationDrafts(input: {
   pulse: PulseRowLike | null;
   openAlerts: AlertLike[];
   unansweredGreenGroupQuestions?: Array<{ excerpt: string; waiting_hours: number; message_at: string }>;
+  unfulfilledCommitments?: Array<{ message_at: string; excerpt: string; suggested_task_title: string }>;
+  missingCardWeeklyUpdates?: Array<{ message_at: string; excerpt: string }>;
   nowMs?: number;
 }): RecommendationDraft[] {
   const now = input.nowMs ?? Date.now();
@@ -93,6 +95,32 @@ export function deriveClientRecommendationDrafts(input: {
       requires_approval: false,
       suggested_tool: "get_latest_campaign_pulse",
       fingerprint: `pulse_warning:${(pulse.flags || []).join("|")}`.slice(0, 200),
+    });
+  }
+
+  for (const m of input.missingCardWeeklyUpdates || []) {
+    out.push({
+      recommendation_type: "custom",
+      severity: "warning",
+      title: `${name}: עדכון שבועי בקבוצה — חסר בכרטיס לקוח`,
+      body: "נשלח עדכון/סיכום בקבוצת Green — להריץ sync_weekly_update_from_green_group (dry_run ואז false).",
+      evidence: { message_at: m.message_at, excerpt: m.excerpt },
+      requires_approval: false,
+      suggested_tool: "sync_weekly_update_from_green_group",
+      fingerprint: `missing_weekly_card:${m.message_at}`.slice(0, 200),
+    });
+  }
+
+  for (const c of input.unfulfilledCommitments || []) {
+    out.push({
+      recommendation_type: "custom",
+      severity: "warning",
+      title: `${name}: הובטחה פעולה בקבוצה — לא זוהה ביצוע`,
+      body: `לפתוח משימה + עדכון בכרטיס: create_commitment_followup (message_at=${c.message_at}).`,
+      evidence: { message_at: c.message_at, excerpt: c.excerpt },
+      requires_approval: false,
+      suggested_tool: "create_commitment_followup",
+      fingerprint: `unfulfilled_commitment:${c.message_at}`.slice(0, 200),
     });
   }
 
@@ -300,6 +328,8 @@ export async function buildClientOperationsPackage(
         pulse,
         openAlerts: alerts || [],
         unansweredGreenGroupQuestions: green_api_group.unanswered_client_questions,
+        unfulfilledCommitments: green_api_group.unfulfilled_staff_commitments,
+        missingCardWeeklyUpdates: green_api_group.missing_card_weekly_updates,
       });
       recommendation_sync = await upsertRecommendationDrafts(supabase, {
         tenantId,
