@@ -62,6 +62,185 @@ export function normalizeTitle(title: string): string {
     .trim();
 }
 
+export function extractDevTaskId(context: string | null | undefined): string | null {
+  const m = String(context || "").match(/dev_task_id:\s*([0-9a-f-]{36})/i);
+  return m ? m[1] : null;
+}
+
+export type CursorDispatchRow = {
+  cursor_agent_id?: string | null;
+  session_url?: string | null;
+  context?: string | null;
+  request_text?: string | null;
+  created_at?: string | null;
+};
+
+export type CursorSessionRow = {
+  cursor_agent_id?: string | null;
+  session_url?: string | null;
+  display_name?: string | null;
+  task_title?: string | null;
+  dev_task_id?: string | null;
+  source_tool?: string | null;
+  created_at?: string | null;
+};
+
+/** Match a cursor_dispatches row to a dev task (dev_task_id in context is authoritative). */
+export function matchDispatchRowToDevTask(
+  row: CursorDispatchRow,
+  taskId: string,
+  taskTitle: string,
+): boolean {
+  const agentId = String(row.cursor_agent_id || "").trim();
+  if (!agentId.startsWith("bc-")) return false;
+  const ctxId = extractDevTaskId(row.context);
+  if (ctxId && ctxId === taskId) return true;
+  if (ctxId && ctxId !== taskId) return false;
+  return normalizeTitle(String(row.request_text || "")) === normalizeTitle(taskTitle);
+}
+
+export function matchSessionRowToDevTask(
+  row: CursorSessionRow,
+  taskId: string,
+  taskTitle: string,
+): boolean {
+  const agentId = String(row.cursor_agent_id || "").trim();
+  if (!agentId.startsWith("bc-")) return false;
+  const linked = row.dev_task_id ? String(row.dev_task_id) : null;
+  if (linked && linked !== taskId) return false;
+  if (linked === taskId) return true;
+  const titleNorm = normalizeTitle(taskTitle);
+  const display = normalizeTitle(String(row.display_name || "").replace(/^aios\s*·\s*/i, ""));
+  const taskTitleField = normalizeTitle(String(row.task_title || ""));
+  return display === titleNorm || taskTitleField === titleNorm;
+}
+
+export type ReconciledCursorDelivery = {
+  cursorAgentId: string;
+  sessionUrl: string;
+  source: "cursor_dispatches" | "cursor_task_sessions";
+};
+
+const RECONCILE_POLL_MS = 2_000;
+const RECONCILE_ATTEMPTS = 4;
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function isDispatchTimeoutError(message: string): boolean {
+  const m = message.toLowerCase();
+  return m.includes("timeout") || m.includes("timed out") || m.includes("aborterror");
+}
+
+/** After a dispatch tool error, verify Cursor actually received the task via durable logs. */
+export async function reconcileDevTaskCursorDelivery(
+  supabase: { from: (t: string) => any },
+  args: {
+    tenantId: string;
+    taskId: string;
+    taskTitle: string;
+    sinceIso: string;
+  },
+): Promise<ReconciledCursorDelivery | null> {
+  for (let attempt = 0; attempt < RECONCILE_ATTEMPTS; attempt++) {
+    const hit = await tryReconcileDevTaskCursorDeliveryOnce(supabase, args);
+    if (hit) return hit;
+    if (attempt < RECONCILE_ATTEMPTS - 1) await sleep(RECONCILE_POLL_MS);
+  }
+  return null;
+}
+
+async function tryReconcileDevTaskCursorDeliveryOnce(
+  supabase: { from: (t: string) => any },
+  args: { tenantId: string; taskId: string; taskTitle: string; sinceIso: string },
+): Promise<ReconciledCursorDelivery | null> {
+  const { tenantId, taskId, taskTitle, sinceIso } = args;
+
+  const { data: dispatches, error: dispErr } = await supabase
+    .from("cursor_dispatches")
+    .select("cursor_agent_id, session_url, context, request_text, created_at")
+    .eq("tenant_id", tenantId)
+    .eq("tool", "request_dev_task")
+    .not("cursor_agent_id", "is", null)
+    .gte("created_at", sinceIso)
+    .order("created_at", { ascending: false })
+    .limit(25);
+  if (dispErr) {
+    console.warn("[dev-tasks] reconcile cursor_dispatches query failed:", dispErr.message);
+  } else {
+    for (const row of dispatches || []) {
+      if (!matchDispatchRowToDevTask(row as CursorDispatchRow, taskId, taskTitle)) continue;
+      const cursorAgentId = String(row.cursor_agent_id || "").trim();
+      const sessionUrl = String(row.session_url || "").trim() ||
+        `https://cursor.com/agents/${cursorAgentId}`;
+      return { cursorAgentId, sessionUrl, source: "cursor_dispatches" };
+    }
+  }
+
+  const { data: sessions, error: sessErr } = await supabase
+    .from("cursor_task_sessions")
+    .select("cursor_agent_id, session_url, display_name, task_title, dev_task_id, source_tool, created_at")
+    .eq("tenant_id", tenantId)
+    .gte("created_at", sinceIso)
+    .order("created_at", { ascending: false })
+    .limit(25);
+  if (sessErr) {
+    console.warn("[dev-tasks] reconcile cursor_task_sessions query failed:", sessErr.message);
+    return null;
+  }
+
+  for (const row of sessions || []) {
+    const tool = String((row as CursorSessionRow).source_tool || "");
+    if (tool && tool !== "request_dev_task" && tool !== "dev-task-center") continue;
+    if (!matchSessionRowToDevTask(row as CursorSessionRow, taskId, taskTitle)) continue;
+    const cursorAgentId = String(row.cursor_agent_id || "").trim();
+    const sessionUrl = String(row.session_url || "").trim() ||
+      `https://cursor.com/agents/${cursorAgentId}`;
+    return { cursorAgentId, sessionUrl, source: "cursor_task_sessions" };
+  }
+
+  return null;
+}
+
+export type DispatchDevTaskResult = {
+  task: DevTaskRow;
+  sessionUrl: string;
+  cursorAgentId: string;
+  timedOut: boolean;
+  delivered: boolean;
+  verificationFailed?: boolean;
+  reconciled?: boolean;
+  reconciliationSource?: ReconciledCursorDelivery["source"];
+  userStatus: string;
+  dispatchToolError?: string | null;
+};
+
+function buildDispatchUserStatus(args: {
+  delivered: boolean;
+  verificationFailed?: boolean;
+  sessionUrl?: string;
+  dispatchToolError?: string | null;
+  reconciled?: boolean;
+}): string {
+  if (args.delivered && args.reconciled && args.dispatchToolError) {
+    return (
+      `נשלח ל-Cursor בהצלחה (אומת אחרי שגיאת כלי dispatch). ` +
+      `סשן: ${args.sessionUrl || ""}. שגיאת דיווח מקורית: ${args.dispatchToolError}`
+    );
+  }
+  if (args.delivered) {
+    return `נשלח ל-Cursor. סשן: ${args.sessionUrl || ""}`;
+  }
+  if (args.verificationFailed && args.dispatchToolError) {
+    return (
+      `לא הצלחתי לאמת שהמשימה הגיעה ל-Cursor. שגיאת dispatch: ${args.dispatchToolError}. ` +
+      `אם נפתח סשן bc- — קשרי עם attach_dev_task_session.`
+    );
+  }
+  return "שליחה ל-Cursor נכשלה.";
+}
+
 /** Jaccard word overlap — simple dedup without embeddings. */
 export function titleSimilarity(a: string, b: string): number {
   const wa = new Set(normalizeTitle(a).split(" ").filter((w) => w.length > 2));
@@ -224,7 +403,7 @@ export async function approveDevTask(
 export async function dispatchDevTask(
   supabase: { from: (t: string) => any },
   args: { tenantId: string; taskId: string; actorUserId?: string | null },
-): Promise<{ task: DevTaskRow; sessionUrl: string; cursorAgentId: string; timedOut: boolean }> {
+): Promise<DispatchDevTaskResult> {
   const { data: task, error } = await supabase
     .from("dev_tasks")
     .select("*")
@@ -234,11 +413,14 @@ export async function dispatchDevTask(
   if (error || !task) throw new Error("dev_task not found");
 
   if (task.cursor_session_id && task.cursor_session_url) {
+    const sessionUrl = String(task.cursor_session_url);
     return {
       task: task as DevTaskRow,
-      sessionUrl: task.cursor_session_url,
+      sessionUrl,
       cursorAgentId: task.cursor_session_id,
       timedOut: false,
+      delivered: true,
+      userStatus: buildDispatchUserStatus({ delivered: true, sessionUrl }),
     };
   }
 
@@ -252,10 +434,13 @@ export async function dispatchDevTask(
   if (!supabaseUrl || !bearer) throw new Error("SUPABASE_URL / CURSOR_MCP_BEARER missing");
 
   const { task: prompt, context } = buildDevTaskPrompt(task as DevTaskRow);
+  const dispatchStartedAt = new Date(Date.now() - 60_000).toISOString();
   let sessionUrl = "";
   let cursorAgentId = "";
   let dispatchError: string | null = null;
   let timedOut = false;
+  let reconciled = false;
+  let reconciliationSource: ReconciledCursorDelivery["source"] | undefined;
 
   try {
     const fired = await mcpRequestDevTask(supabaseUrl, bearer, {
@@ -265,15 +450,46 @@ export async function dispatchDevTask(
     });
     sessionUrl = fired.sessionUrl;
     cursorAgentId = fired.cursorAgentId;
+    if (!cursorAgentId && fired.raw) {
+      const idMatch = fired.raw.match(/\bbc-[a-z0-9-]+\b/i);
+      if (idMatch) {
+        cursorAgentId = idMatch[0];
+        sessionUrl = sessionUrl || `https://cursor.com/agents/${cursorAgentId}`;
+      }
+    }
   } catch (e: unknown) {
-    timedOut = true;
     dispatchError = e instanceof Error ? e.message : String(e);
+    timedOut = isDispatchTimeoutError(dispatchError);
     console.warn("[dev-tasks] dispatch error (may reconcile later):", dispatchError);
   }
 
+  if (!cursorAgentId && dispatchError) {
+    const reconciledHit = await reconcileDevTaskCursorDelivery(supabase, {
+      tenantId: args.tenantId,
+      taskId: args.taskId,
+      taskTitle: task.title,
+      sinceIso: dispatchStartedAt,
+    });
+    if (reconciledHit) {
+      cursorAgentId = reconciledHit.cursorAgentId;
+      sessionUrl = reconciledHit.sessionUrl;
+      reconciled = true;
+      reconciliationSource = reconciledHit.source;
+      console.log(
+        `[dev-tasks] reconciled delivery via ${reconciledHit.source} session=${cursorAgentId}`,
+      );
+    }
+  }
+
+  const delivered = Boolean(cursorAgentId);
+  const verificationFailed = Boolean(dispatchError && !delivered);
+  const dispatchErrorStored = delivered && dispatchError
+    ? `[verified_delivered] ${dispatchError}`
+    : dispatchError;
+
   const patch: Record<string, unknown> = {
-    status: cursorAgentId ? "sent_to_cursor" : "approved",
-    dispatch_error: dispatchError,
+    status: delivered ? "sent_to_cursor" : "approved",
+    dispatch_error: dispatchErrorStored,
     dispatched_at: new Date().toISOString(),
     updated_at: new Date().toISOString(),
   };
@@ -310,16 +526,37 @@ export async function dispatchDevTask(
   await logDevTaskEvent(supabase, {
     devTaskId: args.taskId,
     tenantId: args.tenantId,
-    eventType: cursorAgentId ? "dispatched" : "dispatch_failed",
+    eventType: delivered ? "dispatched" : "dispatch_failed",
     actorUserId: args.actorUserId,
-    detail: { sessionUrl, cursorAgentId, timedOut, error: dispatchError },
+    detail: {
+      sessionUrl: patch.cursor_session_url || sessionUrl,
+      cursorAgentId,
+      timedOut,
+      error: dispatchError,
+      reconciled,
+      reconciliationSource,
+      verificationFailed,
+    },
   });
 
+  const finalSessionUrl = String(patch.cursor_session_url || "");
   return {
     task: updated as DevTaskRow,
-    sessionUrl: String(patch.cursor_session_url || ""),
+    sessionUrl: finalSessionUrl,
     cursorAgentId,
     timedOut,
+    delivered,
+    verificationFailed: verificationFailed || undefined,
+    reconciled: reconciled || undefined,
+    reconciliationSource,
+    dispatchToolError: dispatchError,
+    userStatus: buildDispatchUserStatus({
+      delivered,
+      verificationFailed,
+      sessionUrl: finalSessionUrl,
+      dispatchToolError: dispatchError,
+      reconciled,
+    }),
   };
 }
 
