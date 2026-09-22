@@ -76,6 +76,7 @@ import {
   logDevTaskEvent,
 } from '../_shared/dev-tasks.ts'
 import { buildClientOperationsPackage } from '../_shared/client-operations.ts'
+import { fetchClientGreenApiGroupCommunications } from '../_shared/client-green-group-monitor.ts'
 import {
   addGoalBlocker,
   addGoalMilestone,
@@ -677,7 +678,8 @@ const ALL_TOOLS = [
   // CLIENTS
   { name: 'list_clients', description: 'רשימת/חיפוש לקוחות. אפשר לסנן לפי סטטוס, קמפיינר, סוכנות (agency_id/agency_name — חובה לסנן כשהמשתמש שואל על "לקוחות בסוכנות X"), או name_search. הערה: כשהקורא הוא קמפיינר (WhatsApp), ברירת המחדל היא הצגת לקוחות שמשוייכים אליו בלבד בסטטוס active/onboarding — אלא אם סופק campaigner_name/agency_name אחר במפורש. החיפוש case-insensitive. אל תאמר "לא נמצא" לפני שניסית name_search.', parameters: { type: 'object', properties: { status: { type: 'string', description: 'active / onboarding / inactive. ברירת מחדל עבור קמפיינר WhatsApp: active+onboarding בלבד.' }, limit: { type: 'integer' }, name_search: { type: 'string', description: 'חיפוש חלקי בשם הלקוח או איש הקשר (case-insensitive). נסה גם תעתיק אנגלי לעברית ולהפך.' }, campaigner_id: { type: 'string', description: 'סינון ללקוחות המשוייכים לקמפיינר זה (דרך client_team)' }, campaigner_name: { type: 'string', description: 'סינון לפי שם קמפיינר (חיפוש חופשי בשם המלא)' }, agency_id: { type: 'string', description: 'סינון ללקוחות בסוכנות זו בלבד' }, agency_name: { type: 'string', description: 'סינון לפי שם סוכנות (חיפוש חלקי, case-insensitive). חובה להשתמש כשהמשתמש מציין סוכנות בשם.' }, all_scopes: { type: 'boolean', description: 'דרוס את הסקופ האוטומטי של הקמפיינר והחזר את כל הלקוחות בארגון (לשימוש רק אם המשתמש ביקש זאת מפורשות).' } } } },
   { name: 'get_client_info', description: 'מידע על לקוח', parameters: { type: 'object', properties: { client_id: { type: 'string' } }, required: ['client_id'] } },
-  { name: 'get_client_operations_package', description: 'תמונת תפעול 360° ללקוח: דופק, התראות פתוחות, עדכוני כרטיס, משימות, הודעות קבוצה (Manus, לפי carmen_client_group_access), והמלצות יזומות. refresh_recommendations=true (ברירת מחדל) מריץ כללי סריקה ללא LLM. פעולות מקדמיות (Meta/WA) — רק דרך אישור.', parameters: { type: 'object', properties: { client_id: { type: 'string' }, refresh_recommendations: { type: 'boolean', description: 'ברירת מחדל true — לעדכן המלצות open' } }, required: ['client_id'] } },
+  { name: 'get_client_operations_package', description: 'תמונת תפעול 360° ללקוח: דופק, התראות פתוחות, עדכוני כרטיס, משימות, הודעות קבוצה (Manus, לפי carmen_client_group_access), קבוצת Green API (קריאה בלבד), והמלצות יזומות. refresh_recommendations=true (ברירת מחדל) מריץ כללי סריקה ללא LLM. פעולות מקדמיות (Meta/WA) — רק דרך אישור.', parameters: { type: 'object', properties: { client_id: { type: 'string' }, refresh_recommendations: { type: 'boolean', description: 'ברירת מחדל true — לעדכן המלצות open' } }, required: ['client_id'] } },
+  { name: 'get_client_green_group_communications', description: 'קריאה בלבד: היסטוריית קבוצת WhatsApp של הלקוח ב-Green API (CRM, clients.whatsapp_group_id). מזהה שאלות ללא מענה מהצוות. אסור לשלוח/להגיב לקבוצה דרך כלי זה — רק לדווח לדוד/קמפיינר (send_whatsapp_to_staff / notify). לא משנה הרשאות Manus.', parameters: { type: 'object', properties: { client_id: { type: 'string' }, days_back: { type: 'integer', description: 'ברירת מחדל 7, מקס 30' }, limit: { type: 'integer' } }, required: ['client_id'] } },
   { name: 'list_client_operation_recommendations', description: 'רשימת המלצות תפעול פתוחות (Client 360).', parameters: { type: 'object', properties: { client_id: { type: 'string' }, severity: { type: 'string', enum: ['info', 'warning', 'critical'] }, limit: { type: 'integer' } } } },
   { name: 'update_client_operation_recommendation', description: 'עדכון סטטוס המלצה: accepted / dismissed / resolved.', parameters: { type: 'object', properties: { recommendation_id: { type: 'string' }, status: { type: 'string', enum: ['accepted', 'dismissed', 'resolved'] } }, required: ['recommendation_id', 'status'] } },
   { name: 'add_client_update', description: 'הוספת עדכון ללקוח', parameters: { type: 'object', properties: { client_id: { type: 'string' }, content: { type: 'string' } }, required: ['client_id', 'content'] } },
@@ -2185,6 +2187,15 @@ async function executeTool(name: string, args: Record<string, any>, supabase: an
         }
       }
       return data
+    }
+    case 'get_client_green_group_communications': {
+      await assertCallerCanAccessClient(supabase, args.client_id, callerScope)
+      return await fetchClientGreenApiGroupCommunications(supabase, {
+        tenantId,
+        clientId: String(args.client_id),
+        daysBack: args.days_back,
+        messageLimit: args.limit,
+      })
     }
     case 'get_client_operations_package': {
       await assertCallerCanAccessClient(supabase, args.client_id, callerScope)

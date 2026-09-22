@@ -4,6 +4,7 @@
  */
 
 import { CLIENT_CALL_STALE_MS, PULSE_CRITICAL_ALERT_TYPES } from "./campaign-pulse.ts";
+import { fetchClientGreenApiGroupCommunications } from "./client-green-group-monitor.ts";
 
 export type RecommendationDraft = {
   recommendation_type: string;
@@ -42,6 +43,7 @@ export function deriveClientRecommendationDrafts(input: {
   clientName: string;
   pulse: PulseRowLike | null;
   openAlerts: AlertLike[];
+  unansweredGreenGroupQuestions?: Array<{ excerpt: string; waiting_hours: number; message_at: string }>;
   nowMs?: number;
 }): RecommendationDraft[] {
   const now = input.nowMs ?? Date.now();
@@ -91,6 +93,19 @@ export function deriveClientRecommendationDrafts(input: {
       requires_approval: false,
       suggested_tool: "get_latest_campaign_pulse",
       fingerprint: `pulse_warning:${(pulse.flags || []).join("|")}`.slice(0, 200),
+    });
+  }
+
+  for (const u of input.unansweredGreenGroupQuestions || []) {
+    out.push({
+      recommendation_type: "notify_staff",
+      severity: u.waiting_hours >= 24 ? "critical" : "warning",
+      title: `${name}: שאלה בקבוצת Green API בלי מענה (${u.waiting_hours} שע׳)`,
+      body: `לקוח/איש קשר שאל בקבוצה CRM ולא נרשם מענה מהצוות: «${u.excerpt.slice(0, 120)}» — לדווח לקמפיינר/דוד; לא לשלוח לקבוצה אוטומטית.`,
+      evidence: { message_at: u.message_at, waiting_hours: u.waiting_hours, excerpt: u.excerpt },
+      requires_approval: false,
+      suggested_tool: "get_client_green_group_communications",
+      fingerprint: `green_unanswered:${u.message_at}:${u.excerpt.slice(0, 40)}`.slice(0, 200),
     });
   }
 
@@ -267,6 +282,11 @@ export async function buildClientOperationsPackage(
     .limit(10);
 
   const group_messages = await fetchClientLinkedGroupMessages(supabase, { tenantId, clientId });
+  const green_api_group = await fetchClientGreenApiGroupCommunications(supabase, {
+    tenantId,
+    clientId,
+    daysBack: 7,
+  });
 
   let recommendation_sync: { inserted: number; updated: number } | undefined;
   let recommendationsAvailable = true;
@@ -279,6 +299,7 @@ export async function buildClientOperationsPackage(
         clientName: client.name,
         pulse,
         openAlerts: alerts || [],
+        unansweredGreenGroupQuestions: green_api_group.unanswered_client_questions,
       });
       recommendation_sync = await upsertRecommendationDrafts(supabase, {
         tenantId,
@@ -337,6 +358,7 @@ export async function buildClientOperationsPackage(
     })),
     open_tasks: tasks || [],
     group_messages,
+    green_api_group,
     recommendations: sortedRecs,
     recommendations_available: recommendationsAvailable,
     recommendation_sync,

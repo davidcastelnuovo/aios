@@ -529,7 +529,8 @@ For each client, Carmen should **synthesize** (not guess):
 |--------|---------------------------|
 | Campaign KPIs, trends, critical alerts | `campaign_pulse_snapshots`, `campaign_alerts`, `get_latest_campaign_pulse` |
 | Client-card timeline (calls, weekly updates, notes) | Client updates / CRM sync (`resolveClientUpdateType`, pulse call rules) |
-| Group + private WhatsApp relevant to the client | **Manus WA only** — groups where Carmen is a member; map client↔group via `carmen_client_group_access` (never full Green API CRM roster) |
+| Group WhatsApp (Manus) | Groups where Carmen is a member; map via `carmen_client_group_access` only (never full `whatsapp_groups` for permissions) |
+| Group WhatsApp (Green API / CRM) | **Read-only** via `get_client_green_group_communications` — `clients.whatsapp_group_id` + `chat_messages.provider=green_api`. Report unanswered client questions; **never auto-reply** in those groups |
 | Tasks, goals, open approvals | `tasks`, `goals`, `agent_approval_queue` |
 | What already ran / failed | COCL `operation_runs` (Phase 1+) |
 
