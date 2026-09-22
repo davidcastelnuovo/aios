@@ -1,5 +1,5 @@
--- Campaign pulse WhatsApp delivery: once per week — Sunday 07:30 Asia/Jerusalem.
--- Snapshot refresh from sync crons stays deliver:false; only the Sunday cron sends WA.
+-- Ops: Sunday 07:30 pulse — David + campaigners (each tenant's Carmen), no PMM managers.
+-- David request 2026-09-18 correction.
 
 CREATE OR REPLACE FUNCTION public.claim_campaign_pulse_delivery(p_tenant_id uuid)
 RETURNS boolean
@@ -12,12 +12,10 @@ DECLARE
   current_slot timestamp;
   affected_rows integer := 0;
 BEGIN
-  -- ISO day-of-week: 7 = Sunday.
   IF EXTRACT(ISODOW FROM local_now) <> 7 THEN
     RETURN false;
   END IF;
 
-  -- Delivery window: Sunday 07:30 ±10 minutes (cron jitter).
   IF local_now::time < time '07:20' OR local_now::time >= time '07:40' THEN
     RETURN false;
   END IF;
@@ -40,7 +38,6 @@ $$;
 REVOKE ALL ON FUNCTION public.claim_campaign_pulse_delivery(uuid) FROM PUBLIC, anon, authenticated;
 GRANT EXECUTE ON FUNCTION public.claim_campaign_pulse_delivery(uuid) TO service_role;
 
--- Sunday 07:30 Israel (04:30 UTC during IDT; claim window tolerates ±10 min).
 DO $pulse_crons$
 DECLARE
   worker_secret text;
@@ -99,3 +96,36 @@ BEGIN
   );
 END;
 $pulse_crons$;
+
+UPDATE public.tenant_heartbeat_settings ths
+SET
+  campaign_pulse_enabled = true,
+  campaign_pulse_deliver_to_campaigners = true,
+  campaign_pulse_deliver_to_team_managers = false,
+  campaign_pulse_preview_phone = NULL,
+  updated_at = now()
+FROM public.tenants t
+WHERE ths.tenant_id = t.id
+  AND t.slug IN ('dmm', 'marketingcaptain');
+
+UPDATE public.tenant_heartbeat_settings ths
+SET
+  campaign_pulse_phone = '972507677613',
+  updated_at = now()
+FROM public.tenants t
+WHERE ths.tenant_id = t.id
+  AND t.slug = 'dmm';
+
+SELECT
+  t.slug,
+  ths.campaign_pulse_enabled,
+  ths.campaign_pulse_phone,
+  ths.campaign_pulse_deliver_to_campaigners,
+  ths.campaign_pulse_deliver_to_team_managers
+FROM public.tenant_heartbeat_settings ths
+JOIN public.tenants t ON t.id = ths.tenant_id
+WHERE t.slug IN ('dmm', 'marketingcaptain');
+
+SELECT jobname, schedule, active
+FROM cron.job
+WHERE jobname = 'campaign-pulse-sunday-0730';

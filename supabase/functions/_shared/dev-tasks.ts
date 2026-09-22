@@ -560,6 +560,184 @@ export async function dispatchDevTask(
   };
 }
 
+export const COMPLETABLE_DEV_STATUSES: DevTaskStatus[] = [
+  "approved", "sent_to_cursor", "in_progress", "blocked", "pr_opened", "ready_for_review",
+];
+
+export function extractPrUrlFromAgentReply(content: string): string | null {
+  const m = String(content || "").match(/https:\/\/github\.com\/[^\s)>"]+\/pull\/\d+/i);
+  return m ? m[0].replace(/[.,;]+$/, "") : null;
+}
+
+/** Resolve the dev task Carmen dispatched for this Command Center conversation. */
+export async function resolveDevTaskForAgentReply(
+  supabase: { from: (t: string) => any },
+  args: {
+    tenantId: string;
+    conversationId: string;
+    content?: string;
+    devTaskIdHint?: string | null;
+  },
+): Promise<DevTaskRow | null> {
+  const hint = String(args.devTaskIdHint || "").trim();
+  if (hint) {
+    const { data } = await supabase
+      .from("dev_tasks")
+      .select("*")
+      .eq("id", hint)
+      .eq("tenant_id", args.tenantId)
+      .maybeSingle();
+    if (data && COMPLETABLE_DEV_STATUSES.includes(data.status as DevTaskStatus)) {
+      return data as DevTaskRow;
+    }
+  }
+
+  const { data: byConversation } = await supabase
+    .from("dev_tasks")
+    .select("*")
+    .eq("tenant_id", args.tenantId)
+    .eq("source_conversation_id", args.conversationId)
+    .in("status", COMPLETABLE_DEV_STATUSES)
+    .order("dispatched_at", { ascending: false, nullsFirst: false })
+    .limit(1)
+    .maybeSingle();
+  if (byConversation) return byConversation as DevTaskRow;
+
+  const contentId = extractDevTaskId(args.content);
+  if (contentId) {
+    const { data } = await supabase
+      .from("dev_tasks")
+      .select("*")
+      .eq("id", contentId)
+      .eq("tenant_id", args.tenantId)
+      .maybeSingle();
+    if (data && COMPLETABLE_DEV_STATUSES.includes(data.status as DevTaskStatus)) {
+      return data as DevTaskRow;
+    }
+  }
+
+  const since = new Date(Date.now() - 14 * 86400000).toISOString();
+  const { data: dispatches } = await supabase
+    .from("cursor_dispatches")
+    .select("context")
+    .eq("tenant_id", args.tenantId)
+    .eq("tool", "request_dev_task")
+    .gte("created_at", since)
+    .order("created_at", { ascending: false })
+    .limit(40);
+  const convNeedle = args.conversationId.toLowerCase();
+  for (const row of dispatches || []) {
+    const ctx = String(row.context || "");
+    if (!ctx.toLowerCase().includes(convNeedle)) continue;
+    const devTaskId = extractDevTaskId(ctx);
+    if (!devTaskId) continue;
+    const { data: task } = await supabase
+      .from("dev_tasks")
+      .select("*")
+      .eq("id", devTaskId)
+      .eq("tenant_id", args.tenantId)
+      .maybeSingle();
+    if (task && COMPLETABLE_DEV_STATUSES.includes(task.status as DevTaskStatus)) {
+      return task as DevTaskRow;
+    }
+  }
+
+  return null;
+}
+
+/** Mark dev task done when a coding agent delivers the answer back to Carmen. */
+export async function completeDevTaskFromAgentReply(
+  supabase: { from: (t: string) => any },
+  args: {
+    tenantId: string;
+    conversationId: string;
+    content: string;
+    devTaskIdHint?: string | null;
+    actor?: string;
+  },
+): Promise<{ completed: boolean; devTaskId?: string; alreadyDone?: boolean }> {
+  const task = await resolveDevTaskForAgentReply(supabase, args);
+  if (!task) return { completed: false };
+
+  if (task.status === "done" || task.status === "cancelled") {
+    return { completed: true, devTaskId: task.id, alreadyDone: true };
+  }
+
+  const prUrl = extractPrUrlFromAgentReply(args.content);
+  const patch: Record<string, unknown> = {
+    status: "done",
+    updated_at: new Date().toISOString(),
+  };
+  if (prUrl && !task.pr_url) patch.pr_url = prUrl;
+
+  const { error } = await supabase
+    .from("dev_tasks")
+    .update(patch)
+    .eq("id", task.id)
+    .eq("tenant_id", args.tenantId);
+  if (error) throw error;
+
+  await logDevTaskEvent(supabase, {
+    devTaskId: task.id,
+    tenantId: args.tenantId,
+    eventType: "done",
+    actor: args.actor ?? "cursor",
+    detail: {
+      source: "agent_channel_reply",
+      conversation_id: args.conversationId,
+      pr_url: prUrl || task.pr_url || null,
+    },
+  });
+
+  console.log(`[dev-tasks] completed from agent reply dev_task_id=${task.id} conversation=${args.conversationId}`);
+  return { completed: true, devTaskId: task.id };
+}
+
+export async function completeDevTaskById(
+  supabase: { from: (t: string) => any },
+  args: {
+    tenantId: string;
+    taskId: string;
+    summary?: string;
+    prUrl?: string | null;
+    actor?: string;
+  },
+): Promise<DevTaskRow> {
+  const { data: task, error: loadErr } = await supabase
+    .from("dev_tasks")
+    .select("*")
+    .eq("id", args.taskId)
+    .eq("tenant_id", args.tenantId)
+    .maybeSingle();
+  if (loadErr) throw loadErr;
+  if (!task) throw new Error("dev_task not found");
+
+  const prUrl = args.prUrl || extractPrUrlFromAgentReply(args.summary || "") || null;
+  const patch: Record<string, unknown> = {
+    status: "done",
+    updated_at: new Date().toISOString(),
+  };
+  if (prUrl && !task.pr_url) patch.pr_url = prUrl;
+
+  const { data: updated, error } = await supabase
+    .from("dev_tasks")
+    .update(patch)
+    .eq("id", args.taskId)
+    .eq("tenant_id", args.tenantId)
+    .select("*")
+    .single();
+  if (error) throw error;
+
+  await logDevTaskEvent(supabase, {
+    devTaskId: args.taskId,
+    tenantId: args.tenantId,
+    eventType: "done",
+    actor: args.actor ?? "cursor",
+    detail: { source: "complete_dev_task", summary: args.summary || null, pr_url: prUrl },
+  });
+  return updated as DevTaskRow;
+}
+
 export async function attachDevTaskSession(
   supabase: { from: (t: string) => any },
   args: {

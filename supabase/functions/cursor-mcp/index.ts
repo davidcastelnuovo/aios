@@ -252,6 +252,21 @@ const TOOLS = [
       required: ["task_id"],
     },
   },
+  {
+    name: "complete_dev_task",
+    description:
+      "Mark a Carmen dev_tasks row done after finishing work dispatched via dev_task_id in context. " +
+      "reply_to_aios_session also auto-completes when the answer is delivered; use this if you need an explicit done before or without the callback.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        dev_task_id: { type: "string", description: "UUID from dev_task_id in the task context." },
+        summary: { type: "string", description: "Optional completion note (PR link may be parsed)." },
+        pr_url: { type: "string", description: "Optional GitHub PR URL." },
+      },
+      required: ["dev_task_id"],
+    },
+  },
 ];
 
 function rpcResult(id: unknown, result: unknown) {
@@ -695,6 +710,7 @@ function teachingBlock(tenantId: string | null): string {
     `C) FIX-ON-FAIL: if this request says a capability previously taught to Carmen FAILED in practice, that is the priority — ` +
     `diagnose, fix the ai_skills skin and/or underlying code, verify, and report what changed so Carmen can retry.\n` +
     `D) HUMAN TASK QUEUE: if Context includes human_task_id, call MCP tool complete_human_task when done (before or after the PR).\n` +
+    `   DEV TASK CENTER: if Context includes dev_task_id, reply_to_aios_session marks the dev task done automatically; you may also call complete_dev_task with that id.\n` +
     `E) SAFETY (hard rules — see CLAUDE.md / AGENTS.md "Safety rules for autonomous fixes"): never widen anyone's access beyond their existing role/scope; ` +
     `no destructive or policy-widening SQL live (use a migration + PR); only safe scoped fixes autonomously. Log every autonomous prod change to ` +
     `public.claude_carmen_audit and report it. If a request would breach these, refuse and tell David.`
@@ -931,6 +947,23 @@ async function handleToolCall(
     return result.advanced
       ? `✅ משימה ${taskId} הושלמה. המשימה הבאה בתור נשלחה ל-Cursor.`
       : `✅ משימה ${taskId} הושלמה.`;
+  }
+
+  if (name === "complete_dev_task") {
+    const devTaskId = String(args?.dev_task_id ?? "").trim();
+    if (!devTaskId) throw new Error("complete_dev_task requires dev_task_id.");
+    const tenantId = ctx.tenantId || Deno.env.get("CURSOR_DEFAULT_TENANT_ID") || "";
+    if (!tenantId) throw new Error("complete_dev_task requires a tenant context.");
+    const sb = sbClient();
+    if (!sb) throw new Error("Supabase not configured.");
+    const { completeDevTaskById } = await import("../_shared/dev-tasks.ts");
+    const task = await completeDevTaskById(sb, {
+      tenantId,
+      taskId: devTaskId,
+      summary: String(args?.summary ?? "").trim() || undefined,
+      prUrl: String(args?.pr_url ?? "").trim() || null,
+    });
+    return `✅ משימת פיתוח ${task.id} סומנה כבוצעה (${task.status}).`;
   }
 
   if (name === "ask_cursor") {

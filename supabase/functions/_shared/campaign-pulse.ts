@@ -428,8 +428,8 @@ export const PULSE_DELIVERY_EXCLUDED_RECIPIENT_NAMES = ['אילנית'] as const
 /** Owner phone suffixes blocked from automated pulse on specific tenants only. */
 export const PULSE_DELIVERY_EXCLUDED_PHONE_SUFFIXES = ['507677613'] as const
 
-/** Tenants where David's phone must not receive pulse digests or previews (DMM → Felix only). */
-export const PULSE_DELIVERY_OWNER_EXCLUDED_TENANT_SLUGS = ['dmm'] as const
+/** Tenants where specific owner phones must not receive scoped pulse digests. */
+export const PULSE_DELIVERY_OWNER_EXCLUDED_TENANT_SLUGS = [] as const
 
 export function isPulseDeliveryExcludedRecipient(name: string | null | undefined): boolean {
   const normalized = String(name || '').trim()

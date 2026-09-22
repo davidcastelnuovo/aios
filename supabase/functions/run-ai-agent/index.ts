@@ -1765,7 +1765,7 @@ async function tryCreateCalendarEventForTask(
   }
 }
 
-async function executeTool(name: string, args: Record<string, any>, supabase: any, tenantId: string, userId: string | null, callerCampaignerId?: string | null, agentId?: string | null, callerRole?: string | null, callerManagedAgencyIds?: string[] | null, callerPhone?: string | null, waNotify?: any, surface?: string | null): Promise<any> {
+async function executeTool(name: string, args: Record<string, any>, supabase: any, tenantId: string, userId: string | null, callerCampaignerId?: string | null, agentId?: string | null, callerRole?: string | null, callerManagedAgencyIds?: string[] | null, callerPhone?: string | null, waNotify?: any, surface?: string | null, conversationId?: string | null): Promise<any> {
   // WhatsApp / automations often pass the sentinel "system". Never write that into uuid columns.
   const actorUserId = asUuidOrNull(userId)
   // Coding-agent escalations are identity-allowlisted (David=full, Ana=bugfix-only).
@@ -4777,6 +4777,7 @@ async function executeTool(name: string, args: Record<string, any>, supabase: an
         priority: args.priority,
         assignedAgent: args.assigned_agent || 'cursor',
         requestedByUserId: devActorId,
+        sourceConversationId: args.source_conversation_id || conversationId || null,
         sourceMessage: args.source_message,
         dedupOf: args.dedup_of || null,
         actorUserId: devActorId,
@@ -8123,7 +8124,7 @@ ${relevantLongTermMemory.map((item: any) => `• [${item.label}] ${item.text}`).
             result = await mcpExecutors.get(toolName)!(toolArgs)
           } else {
             // Prefer profile UUID resolved from WhatsApp phone; never pass literal "system" into uuid columns.
-            result = await executeTool(toolName, toolArgs, supabase, resolvedTenantId, callerUserId || asUuidOrNull(resolvedUserId), callerCampaignerId, agent_id, callerRole, callerManagedAgencyIds, callerPhone, wa_notify, surface)
+            result = await executeTool(toolName, toolArgs, supabase, resolvedTenantId, callerUserId || asUuidOrNull(resolvedUserId), callerCampaignerId, agent_id, callerRole, callerManagedAgencyIds, callerPhone, wa_notify, surface, serverConversationId)
           }
           console.log(`[AGENT] Tool ${toolName} OK`)
         } catch (e: any) {

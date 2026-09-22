@@ -1,6 +1,7 @@
 import { assertEquals } from "https://deno.land/std@0.224.0/assert/mod.ts";
 import {
   extractDevTaskId,
+  extractPrUrlFromAgentReply,
   matchDispatchRowToDevTask,
   matchSessionRowToDevTask,
 } from "./dev-tasks.ts";
@@ -49,6 +50,13 @@ Deno.test("matchDispatchRowToDevTask falls back to request_text title", () => {
       "Fix dispatch error",
     ),
     true,
+  );
+});
+
+Deno.test("extractPrUrlFromAgentReply finds GitHub PR link", () => {
+  assertEquals(
+    extractPrUrlFromAgentReply("PR: https://github.com/davidcastelnuovo/aios/pull/709"),
+    "https://github.com/davidcastelnuovo/aios/pull/709",
   );
 });
 
