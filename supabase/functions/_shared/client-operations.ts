@@ -5,9 +5,18 @@
 
 import { CLIENT_CALL_STALE_MS, PULSE_CRITICAL_ALERT_TYPES } from "./campaign-pulse.ts";
 import { fetchClientGreenApiGroupCommunications } from "./client-green-group-monitor.ts";
+import {
+  autoExecutePlaybooksForOpenRecommendations,
+  buildProblemDetail,
+  buildProblemSummary,
+  loadPlaybookForSignal,
+  type ClientOpsSignalKind,
+} from "./client-ops-playbooks.ts";
 
 export type RecommendationDraft = {
   recommendation_type: string;
+  signal_kind: ClientOpsSignalKind;
+  problem_summary: string;
   severity: "info" | "warning" | "critical";
   title: string;
   body: string;
@@ -15,6 +24,8 @@ export type RecommendationDraft = {
   requires_approval: boolean;
   suggested_tool?: string;
   fingerprint: string;
+  assignee_policy?: Record<string, unknown>;
+  verification_plan?: Array<Record<string, unknown>>;
 };
 
 export type PulseRowLike = {
@@ -58,53 +69,58 @@ export function deriveClientRecommendationDrafts(input: {
   );
 
   if (criticalAlerts.length > 0) {
+    const signalKind = "performance.critical_campaign_alert" as const;
+    const evidence = {
+      alert_ids: criticalAlerts.map((a) => a.id),
+      alert_types: criticalAlerts.map((a) => a.alert_type),
+    };
     out.push({
       recommendation_type: "handle_critical_alert",
+      signal_kind: signalKind,
+      problem_summary: buildProblemSummary(signalKind, evidence),
       severity: "critical",
       title: `${name}: ${criticalAlerts.length} התראות קריטיות פתוחות`,
       body: "יש לטפל בקמפיין/מודעה לפני המשך — אין לדווח «הכול תקין».",
-      evidence: {
-        alert_ids: criticalAlerts.map((a) => a.id),
-        alert_types: criticalAlerts.map((a) => a.alert_type),
-      },
+      evidence,
       requires_approval: false,
-      suggested_tool: "get_campaign_alerts",
+      suggested_tool: "execute_client_operation_playbook",
       fingerprint: `critical_alerts:${criticalAlerts.map((a) => a.id).sort().join(",")}`.slice(0, 200),
     });
   }
 
   const pulse = input.pulse;
-  if (pulse?.status === "critical") {
+  if (pulse?.status === "critical" || pulse?.status === "warning") {
+    const signalKind = "performance.pulse_degraded" as const;
+    const evidence = {
+      pulse_status: pulse.status,
+      calculated_at: pulse.calculated_at,
+      flags: pulse.flags || [],
+    };
     out.push({
       recommendation_type: "review_pulse",
-      severity: "critical",
-      title: `${name}: דופק במצב critical`,
+      signal_kind: signalKind,
+      problem_summary: buildProblemSummary(signalKind, evidence),
+      severity: pulse.status === "critical" ? "critical" : "warning",
+      title: `${name}: דופק ${pulse.status}`,
       body: "לפתוח פירוט בדשבורד או get_latest_campaign_pulse; אין להריץ analyze אוטומטית.",
-      evidence: { pulse_status: pulse.status, calculated_at: pulse.calculated_at, flags: pulse.flags || [] },
+      evidence,
       requires_approval: false,
-      suggested_tool: "get_latest_campaign_pulse",
-      fingerprint: `pulse_critical:${pulse.calculated_at || "unknown"}`,
-    });
-  } else if (pulse?.status === "warning") {
-    out.push({
-      recommendation_type: "review_pulse",
-      severity: "warning",
-      title: `${name}: דופק warning — כדאי לבדוק`,
-      body: "סקירת flags ומגמה; אופטימיזציה/שינוי תקציב רק באישור.",
-      evidence: { pulse_status: pulse.status, flags: pulse.flags || [] },
-      requires_approval: false,
-      suggested_tool: "get_latest_campaign_pulse",
-      fingerprint: `pulse_warning:${(pulse.flags || []).join("|")}`.slice(0, 200),
+      suggested_tool: "execute_client_operation_playbook",
+      fingerprint: `pulse_${pulse.status}:${pulse.calculated_at || "unknown"}`,
     });
   }
 
   for (const m of input.missingCardWeeklyUpdates || []) {
+    const signalKind = "comms.card_weekly_missing_from_group" as const;
+    const evidence = { message_at: m.message_at, excerpt: m.excerpt };
     out.push({
       recommendation_type: "custom",
+      signal_kind: signalKind,
+      problem_summary: buildProblemSummary(signalKind, evidence),
       severity: "warning",
       title: `${name}: עדכון שבועי בקבוצה — חסר בכרטיס לקוח`,
-      body: "נשלח עדכון/סיכום בקבוצת Green — להריץ sync_weekly_update_from_green_group (dry_run ואז false).",
-      evidence: { message_at: m.message_at, excerpt: m.excerpt },
+      body: "sync_weekly_update_from_green_group או execute_client_operation_playbook.",
+      evidence,
       requires_approval: false,
       suggested_tool: "sync_weekly_update_from_green_group",
       fingerprint: `missing_weekly_card:${m.message_at}`.slice(0, 200),
@@ -112,27 +128,39 @@ export function deriveClientRecommendationDrafts(input: {
   }
 
   for (const c of input.unfulfilledCommitments || []) {
+    const signalKind = "comms.group_staff_commitment_unfulfilled" as const;
+    const evidence = { message_at: c.message_at, excerpt: c.excerpt };
     out.push({
       recommendation_type: "custom",
+      signal_kind: signalKind,
+      problem_summary: buildProblemSummary(signalKind, evidence),
       severity: "warning",
       title: `${name}: הובטחה פעולה בקבוצה — לא זוהה ביצוע`,
-      body: `לפתוח משימה + עדכון בכרטיס: create_commitment_followup (message_at=${c.message_at}).`,
-      evidence: { message_at: c.message_at, excerpt: c.excerpt },
+      body: `Playbook: execute_client_operation_playbook. ${buildProblemDetail(signalKind, evidence).slice(0, 120)}`,
+      evidence,
       requires_approval: false,
-      suggested_tool: "create_commitment_followup",
+      suggested_tool: "execute_client_operation_playbook",
       fingerprint: `unfulfilled_commitment:${c.message_at}`.slice(0, 200),
     });
   }
 
   for (const u of input.unansweredGreenGroupQuestions || []) {
+    const signalKind = "comms.group_client_unanswered" as const;
+    const evidence = {
+      message_at: u.message_at,
+      waiting_hours: u.waiting_hours,
+      excerpt: u.excerpt,
+    };
     out.push({
       recommendation_type: "notify_staff",
+      signal_kind: signalKind,
+      problem_summary: buildProblemSummary(signalKind, evidence),
       severity: u.waiting_hours >= 24 ? "critical" : "warning",
       title: `${name}: שאלה בקבוצת Green API בלי מענה (${u.waiting_hours} שע׳)`,
-      body: `לקוח/איש קשר שאל בקבוצה CRM ולא נרשם מענה מהצוות: «${u.excerpt.slice(0, 120)}» — לדווח לקמפיינר/דוד; לא לשלוח לקבוצה אוטומטית.`,
-      evidence: { message_at: u.message_at, waiting_hours: u.waiting_hours, excerpt: u.excerpt },
+      body: `«${u.excerpt.slice(0, 120)}» — playbook פותח משימה לקמפיינר; לא לשלוח לקבוצה אוטומטית.`,
+      evidence,
       requires_approval: false,
-      suggested_tool: "get_client_green_group_communications",
+      suggested_tool: "execute_client_operation_playbook",
       fingerprint: `green_unanswered:${u.message_at}:${u.excerpt.slice(0, 40)}`.slice(0, 200),
     });
   }
@@ -141,17 +169,21 @@ export function deriveClientRecommendationDrafts(input: {
     const callAt = pulse.last_client_call_at ? new Date(pulse.last_client_call_at).getTime() : NaN;
     const staleCall = !pulse.last_client_call_at || Number.isNaN(callAt) || (now - callAt > CLIENT_CALL_STALE_MS);
     if (staleCall) {
+      const signalKind = "relationship.client_call_stale" as const;
+      const evidence = {
+        last_client_call_at: pulse.last_client_call_at,
+        last_client_call_by: pulse.last_client_call_by,
+      };
       out.push({
         recommendation_type: "contact_client",
+        signal_kind: signalKind,
+        problem_summary: buildProblemSummary(signalKind, evidence),
         severity: pulse.status === "critical" ? "critical" : "warning",
         title: `${name}: אין שיחת טלפון מתועדת ב-14 יום`,
         body: "לתאם שיחה עם הלקוח או לרשום call בכרטיס; במקביל לבדוק ביצועי קמפיין.",
-        evidence: {
-          last_client_call_at: pulse.last_client_call_at,
-          last_client_call_by: pulse.last_client_call_by,
-        },
+        evidence,
         requires_approval: false,
-        suggested_tool: "add_client_update",
+        suggested_tool: "execute_client_operation_playbook",
         fingerprint: "stale_client_call:14d",
       });
     }
@@ -176,10 +208,13 @@ export async function upsertRecommendationDrafts(
       .eq("status", "open")
       .maybeSingle();
 
+    const playbook = await loadPlaybookForSignal(supabase, args.tenantId, d.signal_kind);
     const row = {
       tenant_id: args.tenantId,
       client_id: args.clientId,
       recommendation_type: d.recommendation_type,
+      signal_kind: d.signal_kind,
+      problem_summary: d.problem_summary,
       severity: d.severity,
       title: d.title,
       body: d.body,
@@ -187,6 +222,8 @@ export async function upsertRecommendationDrafts(
       requires_approval: d.requires_approval,
       suggested_tool: d.suggested_tool ?? null,
       fingerprint: d.fingerprint,
+      assignee_policy: playbook?.assignee_policy ?? d.assignee_policy ?? null,
+      verification_plan: playbook?.verification_plan ?? d.verification_plan ?? null,
       updated_at: new Date().toISOString(),
     };
 
@@ -336,6 +373,12 @@ export async function buildClientOperationsPackage(
         clientId,
         drafts,
       });
+      const auto = await autoExecutePlaybooksForOpenRecommendations(supabase, {
+        tenantId,
+        clientId,
+        clientName: client.name,
+      });
+      recommendation_sync = { ...recommendation_sync, playbooks_executed: auto.executed };
     }
 
     const { data: recommendations, error: recErr } = await supabase

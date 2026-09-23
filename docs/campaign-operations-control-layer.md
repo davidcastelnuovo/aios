@@ -560,7 +560,11 @@ flowchart TB
 - **Intelligence:** cheap, mostly **non-LLM** rules on fresh facts (aligned with `carmen-reliability-plan.md`); LLM only for ambiguous “what to say to client” drafts **after** a recommendation exists.
 - **COCL:** every approved action becomes a **run** with scope, verification, and report — so “כרמן אמרה שכיבתה” always matches DB + Meta truth.
 
-### 22.3 Proactive playbook examples (configurable per tenant)
+### 22.3 Signal → Playbook (implementation)
+
+**Canonical spec:** `docs/client-ops-signal-framework.md` — detectors emit `signal_kind` + `problem_summary`; tenant rows in `client_ops_playbooks` define assignee, task templates, verification checks, and `auto_execute`.
+
+### 22.4 Proactive playbook examples (configurable per tenant)
 
 | Trigger | Suggested action | Mutating? | Approval |
 |---------|------------------|-----------|----------|

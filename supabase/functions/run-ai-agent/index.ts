@@ -86,6 +86,10 @@ import {
   listOperationRuns,
 } from '../_shared/operation-control.ts'
 import {
+  runPlaybookForRecommendation,
+  verifyRecommendation,
+} from '../_shared/client-ops-playbook-runner.ts'
+import {
   addGoalBlocker,
   addGoalMilestone,
   createUnifiedGoal,
@@ -692,6 +696,8 @@ const ALL_TOOLS = [
   { name: 'create_commitment_followup', description: 'כשהובטחה פעולה בקבוצה ולא זוהה ביצוע — יוצר משימת tasks פתוחה + client_update מעקב. לא שולח לקבוצה.', parameters: { type: 'object', properties: { client_id: { type: 'string' }, message_at: { type: 'string', description: 'message_at מה-unfulfilled_staff_commitments' }, task_title: { type: 'string' } }, required: ['client_id', 'message_at'] } },
   { name: 'list_client_operation_recommendations', description: 'רשימת המלצות תפעול פתוחות (Client 360).', parameters: { type: 'object', properties: { client_id: { type: 'string' }, severity: { type: 'string', enum: ['info', 'warning', 'critical'] }, limit: { type: 'integer' } } } },
   { name: 'update_client_operation_recommendation', description: 'עדכון סטטוס המלצה: accepted / dismissed / resolved.', parameters: { type: 'object', properties: { recommendation_id: { type: 'string' }, status: { type: 'string', enum: ['accepted', 'dismissed', 'resolved'] } }, required: ['recommendation_id', 'status'] } },
+  { name: 'execute_client_operation_playbook', description: 'מריץ playbook לפי signal_kind על המלצה פתוחה: יוצר tasks+עדכון כרטיס, assignee לפי client_ops_playbooks (ברירת מחדל קמפיינר הלקוח). dry_run=true לתצוגה מקדימה. docs/client-ops-signal-framework.md', parameters: { type: 'object', properties: { recommendation_id: { type: 'string' }, dry_run: { type: 'boolean' } }, required: ['recommendation_id'] } },
+  { name: 'verify_client_operation_recommendation', description: 'מריץ checklist אימות מה-playbook (דופק, מענה בקבוצה, משימה פתוחה וכו׳) ומעדכן last_verification_result.', parameters: { type: 'object', properties: { recommendation_id: { type: 'string' } }, required: ['recommendation_id'] } },
   { name: 'list_operation_runs', description: 'COCL: ריצות תפעול (PEVR) — מה רץ, חריגות, dispatch ל-Cursor. exception_only=true מסנן needs_attention.', parameters: { type: 'object', properties: { since_hours: { type: 'integer', description: 'ברירת מחדל 168 (שבוע)' }, exception_only: { type: 'boolean' }, operation_type: { type: 'string', description: 'dev_dispatch / pulse_check / …' }, limit: { type: 'integer' } } } },
   { name: 'get_operation_run', description: 'COCL: פירוט ריצה — אירועים, אימות, דוחות, קישור dev_task / session.', parameters: { type: 'object', properties: { run_id: { type: 'string' } }, required: ['run_id'] } },
   { name: 'add_client_update', description: 'הוספת עדכון ללקוח', parameters: { type: 'object', properties: { client_id: { type: 'string' }, content: { type: 'string' } }, required: ['client_id', 'content'] } },
@@ -2303,6 +2309,29 @@ async function executeTool(name: string, args: Record<string, any>, supabase: an
         .single()
       if (error) throw error
       return { recommendation: data }
+    }
+    case 'execute_client_operation_playbook': {
+      const recommendationId = String(args.recommendation_id || '')
+      if (!recommendationId) return { error: 'recommendation_id required' }
+      try {
+        return await runPlaybookForRecommendation(supabase, {
+          tenantId,
+          recommendationId,
+          actorUserId: userId,
+          dryRun: args.dry_run === true,
+        })
+      } catch (e: unknown) {
+        const msg = e instanceof Error ? e.message : String(e)
+        if (/client_ops_playbooks|signal_kind/.test(msg)) {
+          return { error: 'schema_pending', note: 'migration 20260923100000' }
+        }
+        throw e
+      }
+    }
+    case 'verify_client_operation_recommendation': {
+      const recommendationId = String(args.recommendation_id || '')
+      if (!recommendationId) return { error: 'recommendation_id required' }
+      return await verifyRecommendation(supabase, { tenantId, recommendationId })
     }
     case 'list_operation_runs': {
       const sinceHours = Number(args.since_hours) || 168

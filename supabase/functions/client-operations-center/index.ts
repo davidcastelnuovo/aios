@@ -7,6 +7,10 @@ import {
   createCommitmentFollowup,
   syncWeeklyUpdateFromGreenGroup,
 } from "../_shared/client-green-group-monitor.ts";
+import {
+  runPlaybookForRecommendation,
+  verifyRecommendation,
+} from "../_shared/client-ops-playbook-runner.ts";
 
 const cors = {
   "Access-Control-Allow-Origin": "*",
@@ -122,6 +126,25 @@ serve(async (req) => {
         taskTitle: body.task_title,
         actorUserId: userId,
       });
+      return json(result);
+    }
+
+    if (action === "execute_playbook") {
+      const recommendationId = String(body.recommendation_id || "");
+      if (!recommendationId) return json({ error: "recommendation_id required" }, 400);
+      const result = await runPlaybookForRecommendation(supabase, {
+        tenantId,
+        recommendationId,
+        actorUserId: userId,
+        dryRun: body.dry_run === true,
+      });
+      return json(result);
+    }
+
+    if (action === "verify_recommendation") {
+      const recommendationId = String(body.recommendation_id || "");
+      if (!recommendationId) return json({ error: "recommendation_id required" }, 400);
+      const result = await verifyRecommendation(supabase, { tenantId, recommendationId });
       return json(result);
     }
 

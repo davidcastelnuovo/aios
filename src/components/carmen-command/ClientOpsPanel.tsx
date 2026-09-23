@@ -206,10 +206,48 @@ export function ClientOpsPanel({ tenantId }: { tenantId: string | null }) {
             {rec.client_name && (
               <p className="text-xs text-[var(--cc-text-dim)]">{rec.client_name}</p>
             )}
+            {rec.problem_summary && (
+              <p className="mt-1 text-[11px] text-[var(--cc-accent)]">{rec.problem_summary}</p>
+            )}
             {rec.body && (
               <p className="mt-1 text-xs leading-relaxed text-[var(--cc-text-dim)]">{rec.body}</p>
             )}
+            {rec.linked_task_id && (
+              <p className="mt-1 text-[10px] text-[var(--cc-text-dim)]">משימה: {rec.linked_task_id.slice(0, 8)}…</p>
+            )}
             <div className="mt-2 flex flex-wrap gap-1">
+              {rec.suggested_tool === "execute_client_operation_playbook" && !rec.linked_task_id && (
+                <button
+                  type="button"
+                  disabled={busyId === rec.id}
+                  onClick={async () => {
+                    if (!tenantId) return;
+                    setBusyId(rec.id);
+                    try {
+                      const { data: { session } } = await supabase.auth.getSession();
+                      if (!session) throw new Error("לא מחובר");
+                      await clientOpsAction(session.access_token, {
+                        action: "execute_playbook",
+                        tenant_id: tenantId,
+                        recommendation_id: rec.id,
+                      });
+                      await qc.invalidateQueries({ queryKey: ["client-ops-rec", tenantId] });
+                      toast({ title: "Playbook", description: "נוצרה משימה לפי סוג הבעיה" });
+                    } catch (e: unknown) {
+                      toast({
+                        title: "שגיאה",
+                        description: e instanceof Error ? e.message : String(e),
+                        variant: "destructive",
+                      });
+                    } finally {
+                      setBusyId(null);
+                    }
+                  }}
+                  className="rounded border border-[var(--cc-accent)] px-2 py-0.5 text-[11px] text-[var(--cc-accent)]"
+                >
+                  משימה לפי playbook
+                </button>
+              )}
               {rec.suggested_tool === "sync_weekly_update_from_green_group" && (
                 <button
                   type="button"

@@ -4,11 +4,14 @@ export type ClientOperationRecommendation = {
   client_id: string;
   client_name?: string | null;
   recommendation_type: string;
+  signal_kind?: string | null;
+  problem_summary?: string | null;
   severity: "info" | "warning" | "critical";
   title: string;
   body?: string | null;
   evidence?: Record<string, unknown>;
   suggested_tool?: string | null;
+  linked_task_id?: string | null;
   status: string;
   created_at: string;
   updated_at: string;
