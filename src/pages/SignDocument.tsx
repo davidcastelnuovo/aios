@@ -16,6 +16,8 @@ import type { SignaturePosition } from "@/components/signatures/SignatureFieldPl
 import { SignatureDocumentViewer } from "@/components/signatures/SignatureDocumentViewer";
 import { SignaturePageNavigation } from "@/components/signatures/SignaturePageNavigation";
 import { SignatureCanvas } from "@/components/signatures/SignatureCanvas";
+import { SignatureDateField } from "@/components/signatures/SignatureDateField";
+import { formatSignatureDate } from "@/lib/signatureDate";
 import { detectMediaKind } from "@/components/signatures/signatureDocumentMedia";
 import { getSignatureStamp, applySignatureStamp } from "@/lib/signatureStamp";
 import {
@@ -204,8 +206,14 @@ export default function SignDocument() {
   const signMutation = useMutation({
     mutationFn: async () => {
       if (missingRequired.length || !primarySignature) throw new Error("יש למלא את כל שדות החובה ולחתום");
+      const submittedValues = { ...fieldValues };
+      for (const field of myFields) {
+        if (field.type === "date" && submittedValues[field.id]) {
+          submittedValues[field.id] = formatSignatureDate(submittedValues[field.id]);
+        }
+      }
       const response = await supabase.functions.invoke("submit-signature", {
-        body: { token, signatureData: primarySignature, fieldValues, action: "sign" },
+        body: { token, signatureData: primarySignature, fieldValues: submittedValues, action: "sign" },
       });
       await signingError(response.data, response.error);
       if (!response.data?.ok) throw new Error("החתימה לא נשמרה. נסה שוב.");
@@ -282,12 +290,6 @@ export default function SignDocument() {
         setFieldValues((values) => ({ ...values, [field.id]: value }));
         setGuideFieldId(field.id);
         setGuideStarted(true);
-        if (field.type === "date" && value) {
-          window.setTimeout(() => {
-            const next = nextFieldToFill(myFields, { ...fieldValues, [field.id]: value }, field.id);
-            if (next) goToField(next);
-          }, 0);
-        }
       },
       onFocus: () => {
         setGuideFieldId(field.id);
@@ -315,7 +317,23 @@ export default function SignDocument() {
         className={`absolute ${guideFieldId === field.id ? "z-20 ring-2 ring-primary ring-offset-1 rounded-sm" : ""}`}
         style={style}
       >
-        {field.type === "address" ? <Textarea {...props} /> : <Input {...props} type={field.type === "phone" ? "tel" : field.type === "date" ? "date" : "text"} />}
+        {field.type === "date" ? (
+          <SignatureDateField
+            value={fieldValues[field.id] ?? ""}
+            label={field.label || getFieldLabel(field.type)}
+            required={isFieldRequired(field)}
+            fontSize={fontSize}
+            onChange={(value) => {
+              setFieldValues((values) => ({ ...values, [field.id]: value }));
+              setGuideFieldId(field.id);
+              setGuideStarted(true);
+            }}
+            onCommit={() => {
+              const next = nextFieldToFill(myFields, { ...fieldValues, [field.id]: "filled" }, field.id);
+              if (next) goToField(next);
+            }}
+          />
+        ) : field.type === "address" ? <Textarea {...props} /> : <Input {...props} type={field.type === "phone" ? "tel" : "text"} />}
       </div>
     );
   };
@@ -348,6 +366,18 @@ export default function SignDocument() {
                       {field.label || getFieldLabel(field.type)}
                       {isFieldRequired(field) ? " *" : ""}
                     </Label>
+                    {field.type === "date" ? (
+                      <SignatureDateField
+                        value={fieldValues[field.id] || ""}
+                        label={field.label || getFieldLabel(field.type)}
+                        required={isFieldRequired(field)}
+                        className="h-10"
+                        onChange={(value) => {
+                          setFieldValues((values) => ({ ...values, [field.id]: value }));
+                          setGuideFieldId(field.id);
+                        }}
+                      />
+                    ) : (
                     <Input
                       id={field.id}
                       value={fieldValues[field.id] || ""}
@@ -360,6 +390,7 @@ export default function SignDocument() {
                         if (next) goToField(next);
                       }}
                     />
+                    )}
                   </div>
                 ))}
                 {(hasSignatureFields ? signatureFields.map((field) => field.id) : [LEGACY_SIGNATURE]).map((id) => (

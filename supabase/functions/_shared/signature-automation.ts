@@ -1,4 +1,9 @@
 import { createClient, SupabaseClient } from 'https://esm.sh/@supabase/supabase-js@2.75.0';
+import {
+  signatureRequestBody,
+  signatureRequestSubject,
+  type SignatureEmailSettings,
+} from './signature-email-template.ts';
 
 const RESEND_API_KEY = Deno.env.get('RESEND_API_KEY') ?? '';
 const DEFAULT_FROM_EMAIL = Deno.env.get('RESEND_FROM_EMAIL') ?? 'noreply@aios.co.il';
@@ -15,37 +20,119 @@ export function safeOrigin(baseUrl?: string): string {
   }
 }
 
+function escapeHtml(value: string): string {
+  return value
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+
+/** Only http(s) image URLs are embedded in the signing email. */
+export function safeLogoUrl(url?: string | null): string | null {
+  if (!url?.trim()) return null;
+  try {
+    const parsed = new URL(url.trim());
+    if (parsed.protocol !== 'https:' && parsed.protocol !== 'http:') return null;
+    return parsed.toString();
+  } catch {
+    return null;
+  }
+}
+
 export function buildSigningEmailHtml(opts: {
   recipientName: string;
   documentTitle: string;
   signingUrl: string;
   senderName?: string;
+  logoUrl?: string | null;
+  bodyText?: string | null;
+  headline?: string;
 }): string {
-  const { recipientName, documentTitle, signingUrl, senderName } = opts;
+  const recipientName = escapeHtml(opts.recipientName);
+  const documentTitle = escapeHtml(opts.documentTitle);
+  const signingUrl = escapeHtml(opts.signingUrl);
+  const senderName = opts.senderName ? escapeHtml(opts.senderName) : '';
+  const logoUrl = safeLogoUrl(opts.logoUrl);
+  const logo = logoUrl
+    ? `<img src="${escapeHtml(logoUrl)}" alt="" width="140" style="display:block;margin:0 auto 16px;max-width:160px;height:auto;border:0;" />`
+    : '';
+  const customBody = opts.bodyText?.trim()
+    ? `<p style="font-size:15px;color:#555555;line-height:1.6;margin:0 0 24px;">${escapeHtml(opts.bodyText).replace(/\n/g, '<br>')}</p>`
+    : '';
+  const headline = escapeHtml(opts.headline || 'בקשה לחתימה דיגיטלית');
+  const action = opts.signingUrl
+    ? `<table role="presentation" cellpadding="0" cellspacing="0" align="center" style="margin:0 auto 24px;">
+              <tr>
+                <td align="center" bgcolor="#2563eb" style="background-color:#2563eb;border-radius:8px;">
+                  <a href="${signingUrl}" style="display:inline-block;padding:14px 32px;color:#ffffff;text-decoration:none;font-size:16px;font-weight:bold;font-family:Arial,Helvetica,sans-serif;">לחץ כאן לחתימה</a>
+                </td>
+              </tr>
+            </table>
+            <p style="font-size:13px;color:#888888;word-break:break-all;margin:0;">או העתק את הקישור: ${signingUrl}</p>`
+    : '';
   return `<!DOCTYPE html>
 <html dir="rtl" lang="he">
 <head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"></head>
-<body style="font-family: Arial, sans-serif; background-color: #f5f5f5; margin: 0; padding: 20px;">
-  <div style="max-width: 600px; margin: 0 auto; background: white; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
-    <div style="background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%); padding: 28px; text-align: center;">
-      <h1 style="color: white; margin: 0; font-size: 22px;">✍️ בקשה לחתימה דיגיטלית</h1>
-    </div>
-    <div style="padding: 28px;">
-      <p style="font-size: 17px; color: #333;">שלום ${recipientName},</p>
-      <p style="font-size: 15px; color: #555; line-height: 1.6;">
-        ${senderName ? `${senderName} שלח/ה לך` : 'נשלח לך'} מסמך לחתימה דיגיטלית:
-        <strong>${documentTitle}</strong>
-      </p>
-      <div style="text-align: center; margin: 28px 0;">
-        <a href="${signingUrl}" style="display: inline-block; background: #2563eb; color: white; text-decoration: none; padding: 14px 32px; border-radius: 8px; font-size: 16px; font-weight: bold;">
-          לחץ כאן לחתימה
-        </a>
-      </div>
-      <p style="font-size: 13px; color: #888; word-break: break-all;">או העתק את הקישור: ${signingUrl}</p>
-    </div>
-  </div>
+<body style="font-family: Arial, Helvetica, sans-serif; background-color: #f5f5f5; margin: 0; padding: 0;">
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background-color:#f5f5f5;padding:20px 0;">
+    <tr><td align="center">
+      <table role="presentation" width="600" cellpadding="0" cellspacing="0" style="width:600px;max-width:600px;background-color:#ffffff;">
+        <tr>
+          <td align="center" bgcolor="#1d4ed8" style="background-color:#1d4ed8;padding:28px 24px;">
+            ${logo}
+            <h1 style="color:#ffffff;margin:0;font-size:22px;font-family:Arial,Helvetica,sans-serif;font-weight:bold;">${headline}</h1>
+          </td>
+        </tr>
+        <tr>
+          <td style="padding:28px 24px;font-family:Arial,Helvetica,sans-serif;" align="right">
+            <p style="font-size:17px;color:#333333;margin:0 0 12px;">שלום ${recipientName},</p>
+            ${customBody || `<p style="font-size:15px;color:#555555;line-height:1.6;margin:0 0 24px;">
+              ${senderName ? `${senderName} שלח/ה לך` : 'נשלח לך'} מסמך לחתימה דיגיטלית:
+              <strong>${documentTitle}</strong>
+            </p>`}
+            ${action}
+          </td>
+        </tr>
+      </table>
+    </td></tr>
+  </table>
 </body>
 </html>`;
+}
+
+export async function loadSignatureEmailSettings(
+  supabase: SupabaseClient,
+  tenantId: string,
+): Promise<SignatureEmailSettings> {
+  const { data } = await supabase
+    .from('tenant_settings')
+    .select('setting_value')
+    .eq('tenant_id', tenantId)
+    .eq('setting_key', 'signature_email')
+    .maybeSingle();
+  const value = data?.setting_value;
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return {};
+  return value as SignatureEmailSettings;
+}
+
+async function resolveSignatureEmailLogo(
+  supabase: SupabaseClient,
+  tenantId: string,
+  logoUrl?: string | null,
+): Promise<string | null> {
+  if (logoUrl === null || logoUrl === '') return null;
+  if (logoUrl) return safeLogoUrl(logoUrl);
+  const saved = await loadSignatureEmailSettings(supabase, tenantId);
+  if (saved.logoUrl) return safeLogoUrl(saved.logoUrl);
+  const { data } = await supabase
+    .from('tenant_settings')
+    .select('setting_value')
+    .eq('tenant_id', tenantId)
+    .eq('setting_key', 'branding')
+    .maybeSingle();
+  const stored = (data?.setting_value as { logoUrl?: string } | null)?.logoUrl;
+  return safeLogoUrl(stored);
 }
 
 export async function resolveTenantOwnerId(supabase: SupabaseClient, tenantId: string): Promise<string> {
@@ -77,9 +164,22 @@ export async function sendSignatureDocumentEmails(
     senderName?: string;
     sendEmail?: boolean;
     requireEmailSuccess?: boolean;
+    /** undefined uses the saved signature logo, then the tenant brand logo. null or "" sends no logo. */
+    logoUrl?: string | null;
+    emailSubject?: string | null;
+    emailBody?: string | null;
+    contact?: {
+      firstName?: string;
+      lastName?: string;
+      companyName?: string;
+      phone?: string;
+      email?: string;
+      address?: string;
+      idNumber?: string;
+    };
   },
 ): Promise<{ sent: number; results: Array<{ email: string; ok: boolean; error?: string }> }> {
-  const { documentId, tenantId, baseUrl, senderName, sendEmail = true, requireEmailSuccess = true } = opts;
+  const { documentId, tenantId, baseUrl, senderName, sendEmail = true, requireEmailSuccess = true, logoUrl, emailSubject, emailBody, contact } = opts;
 
   const { data: doc, error: docError } = await supabase
     .from('signature_documents')
@@ -108,6 +208,8 @@ export async function sendSignatureDocumentEmails(
   }
 
   const origin = safeOrigin(baseUrl);
+  const emailLogoUrl = await resolveSignatureEmailLogo(supabase, tenantId, logoUrl);
+  const emailSettings = await loadSignatureEmailSettings(supabase, tenantId);
   const results: Array<{ email: string; ok: boolean; error?: string }> = [];
 
   for (const recipient of recipients) {
@@ -140,12 +242,36 @@ export async function sendSignatureDocumentEmails(
       body: JSON.stringify({
         from: `${DEFAULT_FROM_NAME} <${DEFAULT_FROM_EMAIL}>`,
         to: [recipient.email],
-        subject: `בקשה לחתימה: ${doc.title}`,
+        subject: signatureRequestSubject(emailSettings, {
+          name: recipient.name,
+          title: doc.title,
+          sender: senderName,
+          first_name: contact?.firstName,
+          last_name: contact?.lastName,
+          company: contact?.companyName,
+          phone: contact?.phone,
+          email: contact?.email || recipient.email,
+          address: contact?.address,
+          id_number: contact?.idNumber,
+        }, emailSubject),
         html: buildSigningEmailHtml({
           recipientName: recipient.name,
           documentTitle: doc.title,
           signingUrl,
           senderName,
+          logoUrl: emailLogoUrl,
+          bodyText: signatureRequestBody(emailSettings, {
+            name: recipient.name,
+            title: doc.title,
+            sender: senderName,
+            first_name: contact?.firstName,
+            last_name: contact?.lastName,
+            company: contact?.companyName,
+            phone: contact?.phone,
+            email: contact?.email || recipient.email,
+            address: contact?.address,
+            id_number: contact?.idNumber,
+          }, emailBody),
         }),
       }),
     });
@@ -164,6 +290,96 @@ export async function sendSignatureDocumentEmails(
   }
 
   return { sent, results };
+}
+
+function pdfBytesToBase64(bytes: Uint8Array): string {
+  let binary = '';
+  const chunk = 0x8000;
+  for (let i = 0; i < bytes.length; i += chunk) {
+    binary += String.fromCharCode(...bytes.subarray(i, i + chunk));
+  }
+  return btoa(binary);
+}
+
+function isDeliverableEmail(email: string | null | undefined): email is string {
+  return !!email && email.includes('@') && !email.endsWith('@sign.aios.local');
+}
+
+/** After signing, mail the signed PDF to the sender and to each signer. */
+export async function emailSignedDocumentCopies(
+  supabase: SupabaseClient,
+  opts: {
+    tenantId: string;
+    title: string;
+    createdBy: string;
+    pdfBytes: Uint8Array;
+    recipients: Array<{ name: string; email: string }>;
+  },
+): Promise<void> {
+  if (!RESEND_API_KEY) {
+    console.warn('[signature] signed copy email skipped: resend_not_configured');
+    return;
+  }
+
+  const logoUrl = await resolveSignatureEmailLogo(supabase, opts.tenantId, undefined);
+  const { data: sender } = await supabase
+    .from('profiles')
+    .select('email, full_name')
+    .eq('id', opts.createdBy)
+    .maybeSingle();
+
+  const filename = `${opts.title.replace(/[\\/:*?"<>|]/g, '').trim().slice(0, 80) || 'signed'}.pdf`;
+  const attachment = { filename, content: pdfBytesToBase64(opts.pdfBytes) };
+  const sentTo = new Set<string>();
+
+  const send = async (to: string, name: string, headline: string, body: string) => {
+    const key = to.toLowerCase();
+    if (sentTo.has(key) || !isDeliverableEmail(to)) return;
+    sentTo.add(key);
+    const res = await fetch('https://api.resend.com/emails', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${RESEND_API_KEY}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        from: `${DEFAULT_FROM_NAME} <${DEFAULT_FROM_EMAIL}>`,
+        to: [to],
+        subject: headline,
+        html: buildSigningEmailHtml({
+          recipientName: name,
+          documentTitle: opts.title,
+          signingUrl: '',
+          logoUrl,
+          headline,
+          bodyText: body,
+        }),
+        attachments: [attachment],
+      }),
+    });
+    if (!res.ok) {
+      const json = await res.json().catch(() => ({}));
+      console.error('[signature] signed copy email failed', to, json);
+    }
+  };
+
+  for (const recipient of opts.recipients) {
+    await send(
+      recipient.email,
+      recipient.name,
+      `המסמך נחתם: ${opts.title}`,
+      `המסמך "${opts.title}" נחתם. הקובץ החתום מצורף למייל זה.`,
+    );
+  }
+
+  if (sender?.email) {
+    await send(
+      sender.email,
+      sender.full_name || 'שלום',
+      `נחתם: ${opts.title}`,
+      `המסמך "${opts.title}" נחתם. הקובץ החתום מצורף למייל זה.`,
+    );
+  }
 }
 
 export interface SignatureSigningLink {
@@ -185,6 +401,7 @@ export async function prepareSignatureDocumentForSigning(
     clientId?: string;
     contactDetails?: {
       name?: string;
+      email?: string;
       companyName?: string;
       firstName?: string;
       lastName?: string;
@@ -192,9 +409,10 @@ export async function prepareSignatureDocumentForSigning(
       address?: string;
       idNumber?: string;
     };
+    fieldMap?: Record<string, string> | null;
   },
 ): Promise<{ documentId: string; signingLinks: SignatureSigningLink[] }> {
-  const { documentId, tenantId, createdBy, baseUrl, recipient, leadId, clientId, contactDetails } = opts;
+  const { documentId, tenantId, createdBy, baseUrl, recipient, leadId, clientId, contactDetails, fieldMap } = opts;
 
   const { data: doc, error: docError } = await supabase
     .from('signature_documents')
@@ -221,6 +439,7 @@ export async function prepareSignatureDocumentForSigning(
       leadId,
       clientId,
       contactDetails: contactDetails ?? { phone: recipient.phone },
+      fieldMap,
     });
   } else {
     const { data: existingRecipients, error: recError } = await supabase
@@ -239,8 +458,9 @@ export async function prepareSignatureDocumentForSigning(
       const position = sigField?.position ?? null;
       const fieldPrefill = buildFieldPrefillFromContact(
         doc.document_fields,
-        { ...contactDetails, name: recipient.name, phone: contactDetails?.phone ?? recipient.phone },
+        { ...contactDetails, name: recipient.name, email: recipient.email, phone: contactDetails?.phone ?? recipient.phone },
         0,
+        fieldMap,
       );
 
       const recipientRow = {
@@ -296,10 +516,36 @@ export async function prepareSignatureDocumentForSigning(
   };
 }
 
+function contactValue(contact: {
+  name?: string;
+  email?: string;
+  companyName?: string;
+  firstName?: string;
+  lastName?: string;
+  phone?: string;
+  address?: string;
+  idNumber?: string;
+}, source: string): string | undefined {
+  const today = new Intl.DateTimeFormat('en-GB', { timeZone: 'Asia/Jerusalem', day: '2-digit', month: '2-digit', year: 'numeric' }).format(new Date());
+  const values: Record<string, string | undefined> = {
+    first_name: contact.firstName,
+    last_name: contact.lastName,
+    full_name: contact.name || [contact.firstName, contact.lastName].filter(Boolean).join(' ') || undefined,
+    company_name: contact.companyName,
+    phone: contact.phone,
+    email: contact.email,
+    address: contact.address,
+    id_number: contact.idNumber,
+    today,
+  };
+  return values[source];
+}
+
 function buildFieldPrefillFromContact(
   documentFields: unknown,
   contact: {
     name?: string;
+    email?: string;
     companyName?: string;
     firstName?: string;
     lastName?: string;
@@ -308,24 +554,19 @@ function buildFieldPrefillFromContact(
     idNumber?: string;
   },
   recipientIndex = 0,
+  fieldMap?: Record<string, string> | null,
 ): Record<string, string> {
   if (!Array.isArray(documentFields)) return {};
-  const typeToValue: Record<string, string | undefined> = {
-    first_name: contact.firstName,
-    last_name: contact.lastName,
-    full_name: contact.name || [contact.firstName, contact.lastName].filter(Boolean).join(' ') || undefined,
-    company_name: contact.companyName,
-    phone: contact.phone,
-    address: contact.address,
-    id_number: contact.idNumber,
-  };
   const prefill: Record<string, string> = {};
   for (const field of documentFields) {
     if (!field || typeof field !== 'object') continue;
     const f = field as { id?: string; type?: string; recipient_index?: number };
     if ((f.recipient_index ?? 0) !== recipientIndex) continue;
-    if (!f.id || !f.type || f.type === 'signature' || f.type === 'signature_stamp' || f.type === 'date') continue;
-    const val = typeToValue[f.type];
+    if (!f.id || !f.type || f.type === 'signature' || f.type === 'signature_stamp') continue;
+    const mapped = fieldMap?.[f.id];
+    const source = mapped === '' || mapped === 'none' ? '' : (mapped || (f.type === 'date' || f.type === 'text' ? '' : f.type));
+    if (!source) continue;
+    const val = contactValue(contact, source);
     if (val?.trim()) prefill[f.id] = val.trim();
   }
   return prefill;
@@ -344,6 +585,7 @@ export async function cloneSignatureFromTemplate(
     clientId?: string;
     contactDetails?: {
       name?: string;
+      email?: string;
       companyName?: string;
       firstName?: string;
       lastName?: string;
@@ -351,6 +593,7 @@ export async function cloneSignatureFromTemplate(
       address?: string;
       idNumber?: string;
     };
+    fieldMap?: Record<string, string> | null;
   },
 ): Promise<string> {
   const {
@@ -363,6 +606,7 @@ export async function cloneSignatureFromTemplate(
     leadId,
     clientId,
     contactDetails,
+    fieldMap,
   } = opts;
 
   const { data: source, error: sourceError } = await supabase
@@ -452,7 +696,7 @@ export async function cloneSignatureFromTemplate(
   const docError = docResult.error;
   if (docError || !doc) throw docError || new Error('יצירת מסמך נכשלה');
 
-  const fieldPrefill = buildFieldPrefillFromContact(template.document_fields, { ...contactDetails, name: recipientName, companyName: businessStampName ?? undefined }, 0);
+  const fieldPrefill = buildFieldPrefillFromContact(template.document_fields, { ...contactDetails, name: recipientName, email: recipientEmail, companyName: businessStampName ?? contactDetails?.companyName }, 0, fieldMap);
 
   const recipientRow = {
     document_id: doc.id,
