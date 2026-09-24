@@ -42,7 +42,7 @@ jobs:
           SUPABASE_STAGING_PROJECT_ID: ${{ secrets.SUPABASE_STAGING_PROJECT_ID }}
 
       - name: Environment and report regression tests
-        run: node --test scripts/edge-deploy-plan.test.mjs scripts/deploy-edge.test.mjs supabase/functions/_shared/staging-outbound.test.mjs supabase/functions/_shared/meeting-summary-prompts.test.ts supabase/functions/_shared/signature-field-text.test.ts supabase/functions/_shared/report-sync-window.test.ts src/lib/carmenLoaderSignal.test.ts src/lib/clipboardFiles.test.ts src/lib/reportRecords.test.ts src/lib/reportCoverage.test.ts src/lib/dashboardDateFilters.test.ts src/lib/weeklyAdsComparison.test.ts src/lib/leadTableLayout.test.ts src/lib/leadTableColumns.test.ts src/lib/leadViewMode.test.ts src/lib/recordingSummaryTarget.test.ts src/lib/sharedReportTabs.test.ts src/lib/signatureFieldGuide.test.ts
+        run: node --test scripts/edge-deploy-plan.test.mjs scripts/deploy-edge.test.mjs supabase/functions/_shared/staging-outbound.test.mjs supabase/functions/_shared/meeting-summary-prompts.test.ts supabase/functions/_shared/signature-field-text.test.ts supabase/functions/_shared/report-sync-window.test.ts src/lib/carmenLoaderSignal.test.ts src/lib/clipboardFiles.test.ts src/lib/reportRecords.test.ts src/lib/reportCoverage.test.ts src/lib/dashboardDateFilters.test.ts src/lib/weeklyAdsComparison.test.ts src/lib/leadTableLayout.test.ts src/lib/leadTableColumns.test.ts src/lib/leadViewMode.test.ts src/lib/leadStageScope.test.ts src/lib/recordingSummaryTarget.test.ts src/lib/sharedReportTabs.test.ts src/lib/signatureFieldGuide.test.ts
 
       - name: Mirror contract tests
         run: python3 -m unittest discover -s scripts -p 'test_staging_mirror.py'

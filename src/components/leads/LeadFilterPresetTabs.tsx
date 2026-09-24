@@ -12,9 +12,13 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Trash2, Filter, Settings2, ChevronDown, Check } from "lucide-react";
+import { Trash2, Filter, Settings2, ChevronDown, Check, Star } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
+import {
+  LEAD_STAGE_SCOPE_LABELS,
+  type LeadStageScope,
+} from "@/lib/leadStageScope";
 
 export interface FilterPreset {
   id: string;
@@ -50,6 +54,8 @@ interface LeadFilterPresetTabsProps {
   activeStageId?: string;
   onStageSelect?: (stageId: string) => void;
   stageCounts?: Record<string, number>;
+  defaultStageScope?: LeadStageScope | null;
+  onDefaultStageScopeChange?: (scope: LeadStageScope) => void;
 }
 
 export function LeadFilterPresetTabs({
@@ -62,6 +68,8 @@ export function LeadFilterPresetTabs({
   activeStageId = "all",
   onStageSelect,
   stageCounts,
+  defaultStageScope = null,
+  onDefaultStageScopeChange,
 }: LeadFilterPresetTabsProps) {
   const { tenantId } = useCurrentTenant();
   const { userId } = useCurrentUser();
@@ -307,6 +315,27 @@ export function LeadFilterPresetTabs({
                 </DropdownMenuItem>
               );
             })}
+            {onDefaultStageScopeChange && (
+              <>
+                <DropdownMenuSeparator className="my-1" />
+                <DropdownMenuLabel className="px-2 py-1 text-xs text-muted-foreground">
+                  ברירת מחדל
+                </DropdownMenuLabel>
+                {(["all", "new"] as const).map((scope) => (
+                  <DropdownMenuItem
+                    key={scope}
+                    onClick={() => onDefaultStageScopeChange(scope)}
+                    className="justify-between gap-2"
+                  >
+                    <span className="flex items-center gap-2">
+                      <Star className={cn("h-3.5 w-3.5", defaultStageScope === scope && "fill-current")} />
+                      {LEAD_STAGE_SCOPE_LABELS[scope]}
+                    </span>
+                    {defaultStageScope === scope && <Check className="h-4 w-4 shrink-0" />}
+                  </DropdownMenuItem>
+                ))}
+              </>
+            )}
           </DropdownMenuContent>
         </DropdownMenu>
       )}
