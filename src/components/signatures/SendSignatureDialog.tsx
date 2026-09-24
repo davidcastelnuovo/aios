@@ -110,6 +110,22 @@ export function SendSignatureDialog({
     enabled: open && !!tenantId,
   });
 
+  const { data: templateEmails } = useQuery({
+    queryKey: ["signature-template-email", tenantId],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("tenant_settings")
+        .select("setting_value")
+        .eq("tenant_id", tenantId!)
+        .eq("setting_key", "signature_template_email")
+        .maybeSingle();
+      if (error) throw error;
+      return (data?.setting_value ?? {}) as Record<string, { logoUrl?: string | null; subject?: string | null; body?: string | null }>;
+    },
+    enabled: open && !!tenantId && resolvedMode === "template",
+  });
+  const templateEmail = doc?.id ? templateEmails?.[doc.id] : undefined;
+
   const { data: brandLogo } = useQuery({
     queryKey: ["tenant-branding-logo", tenantId],
     queryFn: async () => {
@@ -182,8 +198,8 @@ export function SendSignatureDialog({
 
   useEffect(() => {
     if (!open || logoChoice.current === "manual") return;
-    setLogoUrl(emailSettings?.logoUrl || brandLogo || null);
-  }, [open, doc?.id, brandLogo, emailSettings?.logoUrl]);
+    setLogoUrl(templateEmail?.logoUrl || emailSettings?.logoUrl || brandLogo || null);
+  }, [open, doc?.id, brandLogo, emailSettings?.logoUrl, templateEmail?.logoUrl]);
 
   useEffect(() => {
     if (!open) return;
@@ -196,10 +212,12 @@ export function SendSignatureDialog({
   useEffect(() => {
     if (!open) return;
     if (emailDraftReady.current || emailSettings === undefined) return;
+    if (resolvedMode === "template" && templateEmails === undefined) return;
     emailDraftReady.current = true;
-    setEmailSubject(emailSettings?.subject?.trim() || "בקשה לחתימה: {{title}}");
-    setEmailBody(emailSettings?.body || "");
-  }, [open, emailSettings]);
+    const saved = templateEmail || emailSettings;
+    setEmailSubject(saved?.subject?.trim() || "בקשה לחתימה: {{title}}");
+    setEmailBody(saved?.body || "");
+  }, [open, emailSettings, templateEmails, templateEmail, resolvedMode]);
 
   const clearPrepared = () => { preparedDocument.current = null; setLinks([]); setLastAction(null); };
 
@@ -497,19 +515,33 @@ export function SendSignatureDialog({
               type="button"
               size="sm"
               variant="secondary"
-              disabled={!!busy || savingDefaults || !tenantId}
+              disabled={!!busy || savingDefaults || !tenantId || (resolvedMode === "template" && !doc?.id)}
               onClick={async () => {
                 if (!tenantId) return;
                 setSavingDefaults(true);
                 try {
-                  const { error } = await supabase.from("tenant_settings").upsert({
-                    tenant_id: tenantId,
-                    setting_key: "signature_email",
-                    setting_value: { logoUrl, subject: emailSubject, body: emailBody },
-                  }, { onConflict: "tenant_id,setting_key" });
-                  if (error) throw error;
-                  await queryClient.invalidateQueries({ queryKey: ["signature-email-settings", tenantId] });
-                  toast.success("הלוגו, הנושא והגוף נשמרו לסוכנות");
+                  if (resolvedMode === "template" && doc?.id) {
+                    const { error } = await supabase.from("tenant_settings").upsert({
+                      tenant_id: tenantId,
+                      setting_key: "signature_template_email",
+                      setting_value: {
+                        ...(templateEmails ?? {}),
+                        [doc.id]: { logoUrl, subject: emailSubject, body: emailBody },
+                      },
+                    }, { onConflict: "tenant_id,setting_key" });
+                    if (error) throw error;
+                    await queryClient.invalidateQueries({ queryKey: ["signature-template-email", tenantId] });
+                    toast.success("הלוגו, הנושא והגוף נשמרו לתבנית הזו");
+                  } else {
+                    const { error } = await supabase.from("tenant_settings").upsert({
+                      tenant_id: tenantId,
+                      setting_key: "signature_email",
+                      setting_value: { logoUrl, subject: emailSubject, body: emailBody },
+                    }, { onConflict: "tenant_id,setting_key" });
+                    if (error) throw error;
+                    await queryClient.invalidateQueries({ queryKey: ["signature-email-settings", tenantId] });
+                    toast.success("הלוגו, הנושא והגוף נשמרו לסוכנות");
+                  }
                 } catch (err) {
                   toast.error(err instanceof Error ? err.message : "שמירת ההגדרות נכשלה");
                 } finally {
@@ -517,7 +549,7 @@ export function SendSignatureDialog({
                 }
               }}
             >
-              {savingDefaults ? "שומר..." : "שמור לוגו ונוסח קבועים"}
+              {savingDefaults ? "שומר..." : resolvedMode === "template" ? "שמור לתבנית הזו" : "שמור לוגו ונוסח קבועים"}
             </Button>
           </div>
 
