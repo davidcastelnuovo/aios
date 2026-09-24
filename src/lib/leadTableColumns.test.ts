@@ -48,6 +48,7 @@ test("column widths round-trip through storage", () => {
   writeLeadTableColumnWidths({ company: 220, nope: 100 }, storage);
   assert.equal(saved.has(LEAD_TABLE_COLUMN_WIDTHS_STORAGE_KEY), true);
   assert.deepEqual(readLeadTableColumnWidths(storage), { company: 220 });
+  assert.deepEqual(readLeadTableColumnWidths(null), { company: 220 });
   assert.deepEqual(
     applyLeadTableColumnWidths(
       [{ id: "company", width: 170 }, { id: "phone", width: 130 }],

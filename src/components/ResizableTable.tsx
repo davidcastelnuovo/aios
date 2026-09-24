@@ -66,15 +66,15 @@ export function ResizableTable({
     setColumns(prevColumns => {
       return initialColumns.map(newCol => {
         const existingCol = prevColumns.find(c => c.id === newCol.id);
+        const savedWidth = saved[newCol.id];
         if (existingCol) {
-          // Preserve user-modified width and sticky, but update render and other props
+          // Saved width wins over the default that comes back after a view switch.
           return {
             ...newCol,
-            width: existingCol.width,
+            width: savedWidth ?? existingCol.width,
             sticky: existingCol.sticky,
           };
         }
-        const savedWidth = saved[newCol.id];
         return savedWidth ? { ...newCol, width: savedWidth } : newCol;
       });
     });

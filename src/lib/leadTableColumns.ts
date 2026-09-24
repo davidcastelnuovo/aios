@@ -75,14 +75,18 @@ export function parseLeadTableColumnWidths(raw: string | null | undefined): Reco
   }
 }
 
+let memoryWidths: Record<string, number> | null = null;
+
 export function readLeadTableColumnWidths(
   storage?: Pick<Storage, "getItem"> | null,
 ): Record<string, number> {
+  if (memoryWidths) return memoryWidths;
   try {
-    return parseLeadTableColumnWidths(storage?.getItem(LEAD_TABLE_COLUMN_WIDTHS_STORAGE_KEY) ?? null);
+    memoryWidths = parseLeadTableColumnWidths(storage?.getItem(LEAD_TABLE_COLUMN_WIDTHS_STORAGE_KEY) ?? null);
   } catch {
-    return {};
+    memoryWidths = {};
   }
+  return memoryWidths;
 }
 
 export function writeLeadTableColumnWidths(
@@ -90,12 +94,13 @@ export function writeLeadTableColumnWidths(
   storage?: Pick<Storage, "setItem"> | null,
 ): Record<string, number> {
   const clean = parseLeadTableColumnWidths(JSON.stringify(widths));
+  memoryWidths = { ...(memoryWidths ?? {}), ...clean };
   try {
-    storage?.setItem(LEAD_TABLE_COLUMN_WIDTHS_STORAGE_KEY, JSON.stringify(clean));
+    storage?.setItem(LEAD_TABLE_COLUMN_WIDTHS_STORAGE_KEY, JSON.stringify(memoryWidths));
   } catch {
     // Private mode or a full quota should not block resizing.
   }
-  return clean;
+  return memoryWidths;
 }
 
 export function applyLeadTableColumnWidths<T extends { id: string; width: number }>(
