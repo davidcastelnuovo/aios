@@ -80,6 +80,7 @@ import { LeadsChatView } from "@/components/leads/LeadsChatView";
 import { LeadTableColumnsDialog } from "@/components/leads/LeadTableColumnsDialog";
 import { LeadViewModeToggle } from "@/components/leads/LeadViewModeToggle";
 import { useLeadsViewMode } from "@/hooks/useLeadsViewMode";
+import { useLeadStageScope } from "@/hooks/useLeadStageScope";
 import { archiveLeads, excludeArchivedLeads } from "@/lib/leadArchive";
 import { leadSearchOrFilter } from "@/lib/leadPhone";
 import {
@@ -807,6 +808,7 @@ export default function Leads() {
   const queryClient = useQueryClient();
   const [activeId, setActiveId] = useState<string | null>(null);
   const { viewMode, setViewMode, defaultView, setDefaultView } = useLeadsViewMode(userId);
+  const { defaultStageScope, setDefaultStageScope } = useLeadStageScope(userId);
   const [tableLayout, setTableLayoutState] = useState<LeadTableLayout>(() => {
     if (typeof window === "undefined") return "by_user";
     return parseLeadTableLayout(window.localStorage.getItem(LEAD_TABLE_LAYOUT_STORAGE_KEY));
@@ -845,15 +847,16 @@ export default function Leads() {
   }, [isKanbanView]);
 
   useEffect(() => {
-    if (viewMode !== "chat") {
+    if (viewMode !== "chat" && defaultStageScope !== "new") {
       skipChatStageDefault.current = false;
-      return;
     }
     if (skipChatStageDefault.current || activePresetId) return;
+    const openOnNewLeads = defaultStageScope === "new" || (defaultStageScope == null && viewMode === "chat");
+    if (!openOnNewLeads) return;
     if (filterStage !== "all") return;
     if (!pipelineStagesData?.length) return;
     setFilterStage(pipelineStagesData[0].stage_key);
-  }, [viewMode, pipelineStagesData, activePresetId, filterStage]);
+  }, [viewMode, pipelineStagesData, activePresetId, filterStage, defaultStageScope]);
   
   // Reset page to 1 and clear accumulated leads when filters change
   useEffect(() => {
@@ -2448,6 +2451,19 @@ export default function Leads() {
     setActivePresetId(null);
   };
 
+  const handleDefaultStageScope = (scope: "all" | "new") => {
+    setDefaultStageScope(scope);
+    if (scope === "all") {
+      skipChatStageDefault.current = true;
+      setFilterStage("all");
+      return;
+    }
+    const newStage = pipelineStagesData?.[0]?.stage_key;
+    if (!newStage) return;
+    skipChatStageDefault.current = true;
+    setFilterStage(newStage);
+  };
+
   const stagePresetCounts = useMemo(() => {
     const counts: Record<string, number> = {};
     for (const stage of PIPELINE_STAGES) {
@@ -2588,6 +2604,8 @@ export default function Leads() {
                 pipelineStages={PIPELINE_STAGES}
                 activeStageId={filterStage}
                 onStageSelect={handleStageSelect}
+                defaultStageScope={defaultStageScope}
+                onDefaultStageScopeChange={handleDefaultStageScope}
                 stageCounts={stagePresetCounts}
               />
               {viewMode === "table" && (
@@ -2731,6 +2749,8 @@ export default function Leads() {
             pipelineStages={PIPELINE_STAGES}
             activeStageId={filterStage}
             onStageSelect={handleStageSelect}
+            defaultStageScope={defaultStageScope}
+            onDefaultStageScopeChange={handleDefaultStageScope}
             stageCounts={stagePresetCounts}
           />
           
