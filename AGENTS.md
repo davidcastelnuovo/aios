@@ -31,3 +31,9 @@ This is the canonical instruction file for all coding agents; `CLAUDE.md` is a r
 - **Creating or updating issues:** use Linear team **AIO** and read `docs/agents/issue-tracker.md`.
 - **Triaging issues:** read `docs/agents/triage-labels.md` for the five labels in AIO's **Triage** group.
 - **Exploring domain concepts or recording decisions:** read `docs/agents/domain.md` for the single-context glossary and ADR conventions.
+
+## Agent skills
+
+### Autonomic issue pipeline
+
+Daily triage sweep + daily fix worker (~1h later) work the Linear AIO backlog, producing one self-reviewed PR per firing at most. See `docs/agents/autonomic-issues.md`.
