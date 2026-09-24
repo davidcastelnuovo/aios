@@ -378,6 +378,7 @@ export async function prepareSignatureDocumentForSigning(
     clientId?: string;
     contactDetails?: {
       name?: string;
+      email?: string;
       companyName?: string;
       firstName?: string;
       lastName?: string;
@@ -385,9 +386,10 @@ export async function prepareSignatureDocumentForSigning(
       address?: string;
       idNumber?: string;
     };
+    fieldMap?: Record<string, string> | null;
   },
 ): Promise<{ documentId: string; signingLinks: SignatureSigningLink[] }> {
-  const { documentId, tenantId, createdBy, baseUrl, recipient, leadId, clientId, contactDetails } = opts;
+  const { documentId, tenantId, createdBy, baseUrl, recipient, leadId, clientId, contactDetails, fieldMap } = opts;
 
   const { data: doc, error: docError } = await supabase
     .from('signature_documents')
@@ -414,6 +416,7 @@ export async function prepareSignatureDocumentForSigning(
       leadId,
       clientId,
       contactDetails: contactDetails ?? { phone: recipient.phone },
+      fieldMap,
     });
   } else {
     const { data: existingRecipients, error: recError } = await supabase
@@ -432,8 +435,9 @@ export async function prepareSignatureDocumentForSigning(
       const position = sigField?.position ?? null;
       const fieldPrefill = buildFieldPrefillFromContact(
         doc.document_fields,
-        { ...contactDetails, name: recipient.name, phone: contactDetails?.phone ?? recipient.phone },
+        { ...contactDetails, name: recipient.name, email: recipient.email, phone: contactDetails?.phone ?? recipient.phone },
         0,
+        fieldMap,
       );
 
       const recipientRow = {
@@ -489,10 +493,36 @@ export async function prepareSignatureDocumentForSigning(
   };
 }
 
+function contactValue(contact: {
+  name?: string;
+  email?: string;
+  companyName?: string;
+  firstName?: string;
+  lastName?: string;
+  phone?: string;
+  address?: string;
+  idNumber?: string;
+}, source: string): string | undefined {
+  const today = new Intl.DateTimeFormat('en-GB', { timeZone: 'Asia/Jerusalem', day: '2-digit', month: '2-digit', year: 'numeric' }).format(new Date());
+  const values: Record<string, string | undefined> = {
+    first_name: contact.firstName,
+    last_name: contact.lastName,
+    full_name: contact.name || [contact.firstName, contact.lastName].filter(Boolean).join(' ') || undefined,
+    company_name: contact.companyName,
+    phone: contact.phone,
+    email: contact.email,
+    address: contact.address,
+    id_number: contact.idNumber,
+    today,
+  };
+  return values[source];
+}
+
 function buildFieldPrefillFromContact(
   documentFields: unknown,
   contact: {
     name?: string;
+    email?: string;
     companyName?: string;
     firstName?: string;
     lastName?: string;
@@ -501,24 +531,19 @@ function buildFieldPrefillFromContact(
     idNumber?: string;
   },
   recipientIndex = 0,
+  fieldMap?: Record<string, string> | null,
 ): Record<string, string> {
   if (!Array.isArray(documentFields)) return {};
-  const typeToValue: Record<string, string | undefined> = {
-    first_name: contact.firstName,
-    last_name: contact.lastName,
-    full_name: contact.name || [contact.firstName, contact.lastName].filter(Boolean).join(' ') || undefined,
-    company_name: contact.companyName,
-    phone: contact.phone,
-    address: contact.address,
-    id_number: contact.idNumber,
-  };
   const prefill: Record<string, string> = {};
   for (const field of documentFields) {
     if (!field || typeof field !== 'object') continue;
     const f = field as { id?: string; type?: string; recipient_index?: number };
     if ((f.recipient_index ?? 0) !== recipientIndex) continue;
-    if (!f.id || !f.type || f.type === 'signature' || f.type === 'signature_stamp' || f.type === 'date') continue;
-    const val = typeToValue[f.type];
+    if (!f.id || !f.type || f.type === 'signature' || f.type === 'signature_stamp') continue;
+    const mapped = fieldMap?.[f.id];
+    const source = mapped === '' || mapped === 'none' ? '' : (mapped || (f.type === 'date' || f.type === 'text' ? '' : f.type));
+    if (!source) continue;
+    const val = contactValue(contact, source);
     if (val?.trim()) prefill[f.id] = val.trim();
   }
   return prefill;
@@ -537,6 +562,7 @@ export async function cloneSignatureFromTemplate(
     clientId?: string;
     contactDetails?: {
       name?: string;
+      email?: string;
       companyName?: string;
       firstName?: string;
       lastName?: string;
@@ -544,6 +570,7 @@ export async function cloneSignatureFromTemplate(
       address?: string;
       idNumber?: string;
     };
+    fieldMap?: Record<string, string> | null;
   },
 ): Promise<string> {
   const {
@@ -556,6 +583,7 @@ export async function cloneSignatureFromTemplate(
     leadId,
     clientId,
     contactDetails,
+    fieldMap,
   } = opts;
 
   const { data: source, error: sourceError } = await supabase
@@ -645,7 +673,7 @@ export async function cloneSignatureFromTemplate(
   const docError = docResult.error;
   if (docError || !doc) throw docError || new Error('יצירת מסמך נכשלה');
 
-  const fieldPrefill = buildFieldPrefillFromContact(template.document_fields, { ...contactDetails, name: recipientName, companyName: businessStampName ?? undefined }, 0);
+  const fieldPrefill = buildFieldPrefillFromContact(template.document_fields, { ...contactDetails, name: recipientName, email: recipientEmail, companyName: businessStampName ?? contactDetails?.companyName }, 0, fieldMap);
 
   const recipientRow = {
     document_id: doc.id,

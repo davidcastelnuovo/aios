@@ -27,6 +27,7 @@ interface SendSignatureFromTemplateBody {
   logoUrl?: string | null;
   emailSubject?: string | null;
   emailBody?: string | null;
+  fieldMap?: Record<string, string> | null;
 }
 
 const responseHeaders = { ...corsHeaders, 'Content-Type': 'application/json', 'Cache-Control': 'no-store' };
@@ -65,6 +66,7 @@ Deno.serve(async (req) => {
       logoUrl,
       emailSubject,
       emailBody,
+      fieldMap,
     } = body;
 
     if (!templateDocumentId || !recipientName?.trim() || !recipientEmail?.trim()) {
@@ -88,6 +90,7 @@ Deno.serve(async (req) => {
       contactDetails,
       leadId,
       clientId,
+      fieldMap,
     });
 
     const { signingLinks } = await prepareSignatureDocumentForSigning(serviceClient, {

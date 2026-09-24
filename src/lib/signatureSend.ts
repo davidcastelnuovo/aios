@@ -30,6 +30,7 @@ export interface SendSignatureOptions {
   logoUrl?: string | null;
   emailSubject?: string;
   emailBody?: string;
+  fieldMap?: Record<string, string>;
 }
 
 export interface SendSignatureResult {
@@ -89,6 +90,7 @@ export async function sendSignatureDocument(
     logoUrl,
     emailSubject,
     emailBody,
+    fieldMap,
   } = opts;
 
   const functionName = mode === "template" ? "send-signature-from-template" : "send-signature-request";
@@ -107,6 +109,7 @@ export async function sendSignatureDocument(
           logoUrl,
           emailSubject,
           emailBody,
+          fieldMap,
         }
       : {
           documentId,
@@ -119,6 +122,7 @@ export async function sendSignatureDocument(
           logoUrl,
           emailSubject,
           emailBody,
+          fieldMap,
         };
 
   const { data, error } = await supabase.functions.invoke(functionName, { body });

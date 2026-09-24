@@ -55,6 +55,7 @@ export default function SignatureContactPicker({ tenantId, onSelect }: Signature
               lastName: lastName || r.company_name || undefined,
               sourceLabel: `ליד: ${label}`,
               leadId: r.id,
+              companyName: r.company_name || undefined,
             };
           });
       }
@@ -99,6 +100,7 @@ export default function SignatureContactPicker({ tenantId, onSelect }: Signature
             lastName: lastName || (client.contact_name ? client.name : undefined),
             sourceLabel: `לקוח: ${clientLabel}`,
             clientId: client.id,
+            companyName: client.name,
           });
         }
 

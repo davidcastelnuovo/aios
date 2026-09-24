@@ -11,6 +11,7 @@ export interface SignatureContactDetails {
   sourceLabel?: string;
   leadId?: string;
   clientId?: string;
+  companyName?: string;
 }
 
 export function splitContactName(fullName: string): { firstName: string; lastName: string } {

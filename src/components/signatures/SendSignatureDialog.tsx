@@ -11,6 +11,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { parseDocumentFields, getFieldLabel, isSignatureFieldType } from "@/components/signatures/signatureFieldTypes";
 import { toast } from "sonner";
 import { Check, Copy, ImagePlus, Mail, X } from "lucide-react";
 import {
@@ -87,6 +89,7 @@ export function SendSignatureDialog({
   const logoChoice = useRef<"auto" | "manual">("auto");
   const [uploadingLogo, setUploadingLogo] = useState(false);
   const [picked, setPicked] = useState<SignatureContactDetails | null>(null);
+  const [fieldMap, setFieldMap] = useState<Record<string, string>>({});
   const [emailSubject, setEmailSubject] = useState("בקשה לחתימה: {{title}}");
   const [emailBody, setEmailBody] = useState("");
   const [savingDefaults, setSavingDefaults] = useState(false);
@@ -139,6 +142,20 @@ export function SendSignatureDialog({
     enabled: open && !!doc?.id && resolvedMode === "direct" && !doc?.is_template,
   });
 
+  const { data: documentFields = [] } = useQuery({
+    queryKey: ["signature-doc-fields", doc?.id],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("signature_documents")
+        .select("document_fields")
+        .eq("id", doc!.id)
+        .single();
+      if (error) throw error;
+      return parseDocumentFields(data.document_fields).filter((field) => !isSignatureFieldType(field.type));
+    },
+    enabled: open && !!doc?.id,
+  });
+
   useEffect(() => {
     if (!open) {
       initializedDocument.current = null;
@@ -167,6 +184,14 @@ export function SendSignatureDialog({
     if (!open || logoChoice.current === "manual") return;
     setLogoUrl(emailSettings?.logoUrl || brandLogo || null);
   }, [open, doc?.id, brandLogo, emailSettings?.logoUrl]);
+
+  useEffect(() => {
+    if (!open) return;
+    setFieldMap(Object.fromEntries(documentFields.map((field) => [
+      field.id,
+      field.type === "text" || field.type === "date" ? "none" : field.type,
+    ])));
+  }, [open, doc?.id, documentFields]);
 
   useEffect(() => {
     if (!open) return;
@@ -227,7 +252,11 @@ export function SendSignatureDialog({
           firstName: picked?.firstName || defaultRecipient?.firstName,
           lastName: picked?.lastName || defaultRecipient?.lastName,
           phone: phone.trim() || undefined,
+          companyName: picked?.companyName,
+          address: picked?.address,
+          idNumber: picked?.idNumber,
         },
+        fieldMap,
         leadId: picked?.leadId || leadId,
         clientId: picked?.clientId || clientId,
         documentTitleOverride,
@@ -336,6 +365,35 @@ export function SendSignatureDialog({
               />
             </div>
           </div>
+
+          {documentFields.length > 0 && (
+            <div className="space-y-2 rounded-lg border p-3 min-w-0">
+              <p className="text-sm font-medium">מיפוי שדות</p>
+              {documentFields.map((field) => (
+                <div key={field.id} className="grid grid-cols-2 gap-2 items-center">
+                  <span className="text-sm truncate">{field.label || getFieldLabel(field.type)}</span>
+                  <Select
+                    value={fieldMap[field.id] || "none"}
+                    onValueChange={(value) => setFieldMap((current) => ({ ...current, [field.id]: value }))}
+                  >
+                    <SelectTrigger className="h-8"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none">בלי מילוי</SelectItem>
+                      <SelectItem value="full_name">שם מלא</SelectItem>
+                      <SelectItem value="first_name">שם פרטי</SelectItem>
+                      <SelectItem value="last_name">שם משפחה</SelectItem>
+                      <SelectItem value="company_name">חברה</SelectItem>
+                      <SelectItem value="phone">טלפון</SelectItem>
+                      <SelectItem value="email">אימייל</SelectItem>
+                      <SelectItem value="address">כתובת</SelectItem>
+                      <SelectItem value="id_number">ח.פ / ת.ז</SelectItem>
+                      <SelectItem value="today">תאריך היום</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              ))}
+            </div>
+          )}
 
           <div className="space-y-2 rounded-lg border p-3 min-w-0">
             <p className="text-sm font-medium">לוגו במייל</p>
