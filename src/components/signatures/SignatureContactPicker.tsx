@@ -35,13 +35,11 @@ export default function SignatureContactPicker({ tenantId, onSelect }: Signature
           .select("id, contact_name, company_name, email, phone")
           .eq("tenant_id", tenantId)
           .is("archived_at", null)
-          .not("email", "is", null)
           .order("contact_name")
           .limit(500);
         if (error) throw error;
 
         return (data || [])
-          .filter((r) => r.email)
           .map((r) => {
             const displayName = r.contact_name || r.company_name || "ללא שם";
             const { firstName, lastName } = splitContactName(displayName);
@@ -51,11 +49,12 @@ export default function SignatureContactPicker({ tenantId, onSelect }: Signature
             return {
               key: `lead:${r.id}`,
               name: displayName,
-              email: r.email!,
+              email: r.email || "",
               phone: r.phone || undefined,
               firstName,
               lastName: lastName || r.company_name || undefined,
               sourceLabel: `ליד: ${label}`,
+              leadId: r.id,
             };
           });
       }
@@ -89,16 +88,17 @@ export default function SignatureContactPicker({ tenantId, onSelect }: Signature
       for (const client of clients || []) {
         const clientLabel = client.name;
         const primaryName = client.contact_name || client.name;
-        if (client.email) {
+        if (client.email || client.phone || client.name) {
           const { firstName, lastName } = splitContactName(primaryName);
           result.push({
             key: `client:${client.id}:primary`,
             name: primaryName,
-            email: client.email,
+            email: client.email || "",
             phone: client.phone || undefined,
             firstName,
             lastName: lastName || (client.contact_name ? client.name : undefined),
             sourceLabel: `לקוח: ${clientLabel}`,
+            clientId: client.id,
           });
         }
 
@@ -113,6 +113,7 @@ export default function SignatureContactPicker({ tenantId, onSelect }: Signature
             firstName,
             lastName,
             sourceLabel: `לקוח: ${clientLabel}${sc.role ? ` · ${sc.role}` : ""}`,
+            clientId: client.id,
           });
         }
       }
@@ -175,7 +176,7 @@ export default function SignatureContactPicker({ tenantId, onSelect }: Signature
               <p className="text-xs text-muted-foreground text-center py-4">טוען...</p>
             ) : filtered.length === 0 ? (
               <p className="text-xs text-muted-foreground text-center py-4">
-                {entity === "lead" ? "לא נמצאו לידים עם אימייל" : "לא נמצאו לקוחות עם אימייל"}
+                {entity === "lead" ? "לא נמצאו לידים" : "לא נמצאו לקוחות"}
               </p>
             ) : (
               filtered.map((option) => (

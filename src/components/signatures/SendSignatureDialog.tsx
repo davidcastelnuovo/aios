@@ -19,6 +19,8 @@ import {
   type SigningLinkResult,
 } from "@/lib/signatureSend";
 import { buildWhatsAppSignUrl, copySigningUrl } from "@/lib/signatureShare";
+import SignatureContactPicker from "@/components/signatures/SignatureContactPicker";
+import type { SignatureContactDetails } from "@/components/signatures/signatureContactUtils";
 
 function WhatsAppIcon({ className }: { className?: string }) {
   return (
@@ -84,6 +86,7 @@ export function SendSignatureDialog({
   const [logoUrl, setLogoUrl] = useState<string | null>(null);
   const logoChoice = useRef<"auto" | "manual">("auto");
   const [uploadingLogo, setUploadingLogo] = useState(false);
+  const [picked, setPicked] = useState<SignatureContactDetails | null>(null);
   const [emailSubject, setEmailSubject] = useState("בקשה לחתימה: {{title}}");
   const [emailBody, setEmailBody] = useState("");
   const [savingDefaults, setSavingDefaults] = useState(false);
@@ -144,6 +147,7 @@ export function SendSignatureDialog({
       setBusy(null);
       setLastAction(null);
       setLogoUrl(null);
+      setPicked(null);
       logoChoice.current = "auto";
       emailDraftReady.current = false;
       return;
@@ -220,12 +224,12 @@ export function SendSignatureDialog({
           phone: phone.trim() || undefined,
         },
         contactDetails: {
-          firstName: defaultRecipient?.firstName,
-          lastName: defaultRecipient?.lastName,
+          firstName: picked?.firstName || defaultRecipient?.firstName,
+          lastName: picked?.lastName || defaultRecipient?.lastName,
           phone: phone.trim() || undefined,
         },
-        leadId,
-        clientId,
+        leadId: picked?.leadId || leadId,
+        clientId: picked?.clientId || clientId,
         documentTitleOverride,
         logoUrl: logoChoice.current === "manual" ? logoUrl : logoUrl ?? undefined,
         emailSubject,
@@ -283,7 +287,22 @@ export function SendSignatureDialog({
 
         <div className="min-w-0 flex-1 overflow-y-auto overflow-x-hidden space-y-4">
           <div className="space-y-3 rounded-lg border p-3 min-w-0">
-            <p className="text-sm font-medium">פרטי החותם</p>
+            <div className="flex items-center justify-between gap-2">
+              <p className="text-sm font-medium">פרטי החותם</p>
+              <SignatureContactPicker
+                tenantId={tenantId}
+                onSelect={(contact) => {
+                  setPicked(contact);
+                  setName(contact.name);
+                  setEmail(contact.email);
+                  setPhone(contact.phone || "");
+                  clearPrepared();
+                }}
+              />
+            </div>
+            {picked?.sourceLabel && (
+              <p className="text-xs text-primary">{picked.sourceLabel}</p>
+            )}
             <div className="space-y-2 min-w-0">
               <Label>שם</Label>
               <Input
