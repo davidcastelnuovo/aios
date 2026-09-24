@@ -103,7 +103,7 @@ import {
   type SurfaceSalesPerson,
   LEAD_TABLE_LAYOUT_STORAGE_KEY,
 } from "@/lib/leadTableLayout";
-import { isLeadTableColumnVisible } from "@/lib/leadTableColumns";
+import { isLeadTableColumnVisible, LEAD_TABLE_COLUMN_WIDTHS_STORAGE_KEY } from "@/lib/leadTableColumns";
 
 
 // Lets nested cards/table rows ask the page to open a lead in the chat view (instead of a modal).
@@ -3713,6 +3713,7 @@ function TableWithStickyScroll({
       {/* Resizable Table */}
       <div className={fillHeight ? "min-h-0 flex-1" : "h-[min(75vh,880px)]"} dir="rtl">
         <ResizableTable
+          columnWidthStorageKey={LEAD_TABLE_COLUMN_WIDTHS_STORAGE_KEY}
           columns={[
             { 
               id: "name", 
