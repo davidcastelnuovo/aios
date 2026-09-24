@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import {
   Dialog,
@@ -9,6 +9,7 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
 import { Check, Copy, ImagePlus, Mail, X } from "lucide-react";
@@ -71,6 +72,7 @@ export function SendSignatureDialog({
   documentTitleOverride,
   onSuccess,
 }: SendSignatureDialogProps) {
+  const queryClient = useQueryClient();
   const resolvedMode = mode ?? (doc?.is_template ? "template" : "direct");
 
   const [name, setName] = useState("");
@@ -82,6 +84,25 @@ export function SendSignatureDialog({
   const [logoUrl, setLogoUrl] = useState<string | null>(null);
   const logoChoice = useRef<"auto" | "manual">("auto");
   const [uploadingLogo, setUploadingLogo] = useState(false);
+  const [emailSubject, setEmailSubject] = useState("בקשה לחתימה: {{title}}");
+  const [emailBody, setEmailBody] = useState("");
+  const [savingDefaults, setSavingDefaults] = useState(false);
+  const emailDraftReady = useRef(false);
+
+  const { data: emailSettings } = useQuery({
+    queryKey: ["signature-email-settings", tenantId],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("tenant_settings")
+        .select("setting_value")
+        .eq("tenant_id", tenantId!)
+        .eq("setting_key", "signature_email")
+        .maybeSingle();
+      if (error) throw error;
+      return (data?.setting_value ?? null) as { logoUrl?: string | null; subject?: string | null; body?: string | null } | null;
+    },
+    enabled: open && !!tenantId,
+  });
 
   const { data: brandLogo } = useQuery({
     queryKey: ["tenant-branding-logo", tenantId],
@@ -124,6 +145,7 @@ export function SendSignatureDialog({
       setLastAction(null);
       setLogoUrl(null);
       logoChoice.current = "auto";
+      emailDraftReady.current = false;
       return;
     }
     if (!doc?.id || loadingRecipients || initializedDocument.current === doc.id) return;
@@ -139,8 +161,16 @@ export function SendSignatureDialog({
 
   useEffect(() => {
     if (!open || logoChoice.current === "manual") return;
-    setLogoUrl(brandLogo ?? null);
-  }, [open, doc?.id, brandLogo]);
+    setLogoUrl(emailSettings?.logoUrl || brandLogo || null);
+  }, [open, doc?.id, brandLogo, emailSettings?.logoUrl]);
+
+  useEffect(() => {
+    if (!open) return;
+    if (emailDraftReady.current || emailSettings === undefined) return;
+    emailDraftReady.current = true;
+    setEmailSubject(emailSettings?.subject?.trim() || "בקשה לחתימה: {{title}}");
+    setEmailBody(emailSettings?.body || "");
+  }, [open, emailSettings]);
 
   const clearPrepared = () => { preparedDocument.current = null; setLinks([]); setLastAction(null); };
 
@@ -198,6 +228,8 @@ export function SendSignatureDialog({
         clientId,
         documentTitleOverride,
         logoUrl: logoChoice.current === "manual" ? logoUrl : logoUrl ?? undefined,
+        emailSubject,
+        emailBody,
       });
 
       // Start clipboard work in the original user gesture, before awaiting the server.
@@ -345,6 +377,40 @@ export function SendSignatureDialog({
                 }}
               />
             </div>
+            <div className="space-y-2">
+              <Label>נושא האימייל</Label>
+              <Input value={emailSubject} onChange={(event) => setEmailSubject(event.target.value)} disabled={!!busy} />
+            </div>
+            <div className="space-y-2">
+              <Label>גוף האימייל</Label>
+              <Textarea value={emailBody} onChange={(event) => setEmailBody(event.target.value)} disabled={!!busy} rows={4} placeholder="ריק = הנוסח הרגיל. אפשר {{name}} {{title}} {{sender}}" />
+            </div>
+            <Button
+              type="button"
+              size="sm"
+              variant="secondary"
+              disabled={!!busy || savingDefaults || !tenantId}
+              onClick={async () => {
+                if (!tenantId) return;
+                setSavingDefaults(true);
+                try {
+                  const { error } = await supabase.from("tenant_settings").upsert({
+                    tenant_id: tenantId,
+                    setting_key: "signature_email",
+                    setting_value: { logoUrl, subject: emailSubject, body: emailBody },
+                  }, { onConflict: "tenant_id,setting_key" });
+                  if (error) throw error;
+                  await queryClient.invalidateQueries({ queryKey: ["signature-email-settings", tenantId] });
+                  toast.success("הלוגו, הנושא והגוף נשמרו לסוכנות");
+                } catch (err) {
+                  toast.error(err instanceof Error ? err.message : "שמירת ההגדרות נכשלה");
+                } finally {
+                  setSavingDefaults(false);
+                }
+              }}
+            >
+              {savingDefaults ? "שומר..." : "שמור לוגו ונוסח קבועים"}
+            </Button>
           </div>
 
           <div className="grid gap-2 min-w-0">

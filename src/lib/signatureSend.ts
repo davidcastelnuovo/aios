@@ -28,6 +28,8 @@ export interface SendSignatureOptions {
   documentTitleOverride?: string;
   /** Public https URL. null omits the logo. */
   logoUrl?: string | null;
+  emailSubject?: string;
+  emailBody?: string;
 }
 
 export interface SendSignatureResult {
@@ -85,6 +87,8 @@ export async function sendSignatureDocument(
     clientId,
     documentTitleOverride,
     logoUrl,
+    emailSubject,
+    emailBody,
   } = opts;
 
   const functionName = mode === "template" ? "send-signature-from-template" : "send-signature-request";
@@ -101,6 +105,8 @@ export async function sendSignatureDocument(
           leadId,
           clientId,
           logoUrl,
+          emailSubject,
+          emailBody,
         }
       : {
           documentId,
@@ -111,6 +117,8 @@ export async function sendSignatureDocument(
           leadId,
           clientId,
           logoUrl,
+          emailSubject,
+          emailBody,
         };
 
   const { data, error } = await supabase.functions.invoke(functionName, { body });
