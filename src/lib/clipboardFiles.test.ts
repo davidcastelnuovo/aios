@@ -19,6 +19,16 @@ test("filesFromClipboardData reads screenshot blobs from items", () => {
   assert.equal(files[0].name, "screenshot.png");
 });
 
+test("filesFromClipboardData collapses the same image from items and files", () => {
+  const fromItem = new File([new Uint8Array([1, 2, 3])], "image.png", { type: "image/png", lastModified: 10 });
+  const fromList = new File([new Uint8Array([1, 2, 3])], "screenshot.png", { type: "image/png", lastModified: 99 });
+  const files = filesFromClipboardData({
+    items: [{ kind: "file", type: "image/png", getAsFile: () => fromItem }],
+    files: [fromList],
+  });
+  assert.equal(files.length, 1);
+});
+
 test("filesFromClipboardData keeps a real filename and de-dupes files list", () => {
   const file = new File([new Uint8Array([9])], "brief.pdf", { type: "application/pdf", lastModified: 1 });
   const files = filesFromClipboardData({

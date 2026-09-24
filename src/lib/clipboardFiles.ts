@@ -27,7 +27,7 @@ export function filesFromClipboardData(
   const push = (file: File | null | undefined) => {
     if (!file) return;
     const named = namedClipboardFile(file);
-    const key = `${named.name}:${named.size}:${named.type}:${named.lastModified}`;
+    const key = `${named.size}:${named.type || named.name}`;
     if (seen.has(key)) return;
     seen.add(key);
     files.push(named);
@@ -82,8 +82,8 @@ let clipboardPasteLock = false;
 export function claimClipboardPaste(): boolean {
   if (clipboardPasteLock) return false;
   clipboardPasteLock = true;
-  queueMicrotask(() => {
+  setTimeout(() => {
     clipboardPasteLock = false;
-  });
+  }, 250);
   return true;
 }
