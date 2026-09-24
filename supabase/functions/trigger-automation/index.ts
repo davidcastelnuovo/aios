@@ -12,6 +12,7 @@ import {
 import { withManyChatDestinationLock } from '../_shared/manychat-destination-lock.ts'
 import {
   claimTaskNotificationDelivery,
+  taskUpdateEventKey,
   releaseTaskNotificationDelivery,
   taskNotificationRecipientKey,
 } from '../_shared/task-notification-dedupe.ts'
@@ -881,6 +882,9 @@ async function sendTaskNotificationFromTenantCarmen(supabase: any, requestBody: 
       notifyCampaignerId: overrideCampaignerId,
       campaignerId: campaigner?.id || task.campaigner_id,
       salesPersonId: task.sales_person_id,
+      eventKey: notificationType === 'task_update_added'
+        ? taskUpdateEventKey(String(requestBody?.data?.update_content || ''))
+        : null,
     })
   const deliveryClaim = await claimTaskNotificationDelivery(supabase, {
     taskId: task.id,

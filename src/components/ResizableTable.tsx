@@ -3,6 +3,13 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Button } from "@/components/ui/button";
 import { Pin, PinOff } from "lucide-react";
 import {
+  applyLeadTableColumnWidths,
+  LEAD_TABLE_COLUMN_MIN_WIDTH,
+  LEAD_TABLE_COLUMN_WIDTHS_EVENT,
+  readLeadTableColumnWidths,
+  writeLeadTableColumnWidths,
+} from "@/lib/leadTableColumns";
+import {
   Popover,
   PopoverContent,
   PopoverTrigger,
@@ -28,6 +35,8 @@ interface ResizableTableProps {
   };
   getRowClassName?: (row: any, rowIndex: number) => string;
   getStickyCellClassName?: (row: any, rowIndex: number) => string;
+  /** When set, resized widths are restored on the next CRM visit. */
+  columnWidthStorageKey?: string;
 }
 
 export function ResizableTable({ 
@@ -36,36 +45,52 @@ export function ResizableTable({
   onColumnsChange,
   checkboxColumn,
   getRowClassName,
-  getStickyCellClassName
+  getStickyCellClassName,
+  columnWidthStorageKey,
 }: ResizableTableProps) {
-  const [columns, setColumns] = useState<ColumnConfig[]>(initialColumns);
+  const [columns, setColumns] = useState<ColumnConfig[]>(() => {
+    if (!columnWidthStorageKey || typeof window === "undefined") return initialColumns;
+    return applyLeadTableColumnWidths(initialColumns, readLeadTableColumnWidths(window.localStorage));
+  });
   const [resizing, setResizing] = useState<{ columnId: string; startX: number; startWidth: number } | null>(null);
   const tableRef = useRef<HTMLDivElement>(null);
+  const widthStorageKeyRef = useRef(columnWidthStorageKey);
+  widthStorageKeyRef.current = columnWidthStorageKey;
 
   // Sync columns with initialColumns when they change (e.g., after data loads)
   // Preserve user-modified properties (width, sticky) while updating render functions
   useEffect(() => {
+    const saved = columnWidthStorageKey && typeof window !== "undefined"
+      ? readLeadTableColumnWidths(window.localStorage)
+      : {};
     setColumns(prevColumns => {
       return initialColumns.map(newCol => {
         const existingCol = prevColumns.find(c => c.id === newCol.id);
+        const savedWidth = saved[newCol.id];
         if (existingCol) {
-          // Preserve user-modified width and sticky, but update render and other props
+          // Saved width wins over the default that comes back after a view switch.
           return {
             ...newCol,
-            width: existingCol.width,
+            width: savedWidth ?? existingCol.width,
             sticky: existingCol.sticky,
           };
         }
-        return newCol;
+        return savedWidth ? { ...newCol, width: savedWidth } : newCol;
       });
     });
-  }, [initialColumns]);
+  }, [initialColumns, columnWidthStorageKey]);
 
   const updateColumn = useCallback((columnId: string, updates: Partial<ColumnConfig>) => {
     setColumns(prev => {
       const newColumns = prev.map(col => 
         col.id === columnId ? { ...col, ...updates } : col
       );
+      if (typeof updates.width === "number" && widthStorageKeyRef.current && typeof window !== "undefined") {
+        writeLeadTableColumnWidths(
+          Object.fromEntries(newColumns.map((col) => [col.id, col.width])),
+          window.localStorage,
+        );
+      }
       onColumnsChange?.(newColumns);
       return newColumns;
     });
@@ -80,14 +105,30 @@ export function ResizableTable({
     if (!resizing) return;
     
     const diff = e.clientX - resizing.startX;
-    const newWidth = Math.max(resizing.startWidth + diff, 80);
+    const newWidth = Math.max(resizing.startWidth + diff, LEAD_TABLE_COLUMN_MIN_WIDTH);
     
     updateColumn(resizing.columnId, { width: newWidth });
   }, [resizing, updateColumn]);
 
   const handleMouseUp = useCallback(() => {
     setResizing(null);
+    if (widthStorageKeyRef.current && typeof window !== "undefined") {
+      window.dispatchEvent(new CustomEvent(LEAD_TABLE_COLUMN_WIDTHS_EVENT));
+    }
   }, []);
+
+  useEffect(() => {
+    if (!columnWidthStorageKey || typeof window === "undefined") return;
+    const applySavedWidths = () => {
+      const saved = readLeadTableColumnWidths(window.localStorage);
+      setColumns((prev) => prev.map((col) => {
+        const width = saved[col.id];
+        return width ? { ...col, width } : col;
+      }));
+    };
+    window.addEventListener(LEAD_TABLE_COLUMN_WIDTHS_EVENT, applySavedWidths);
+    return () => window.removeEventListener(LEAD_TABLE_COLUMN_WIDTHS_EVENT, applySavedWidths);
+  }, [columnWidthStorageKey]);
 
   useEffect(() => {
     if (resizing) {
