@@ -1,6 +1,11 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { signatureFieldTextLayout } from "./signature-field-text.ts";
+import { formatSignatureDateValue, signatureFieldTextLayout } from "./signature-field-text.ts";
+
+test("signature dates print as day/month/year", () => {
+  assert.equal(formatSignatureDateValue("2026-09-24"), "24/09/2026");
+  assert.equal(formatSignatureDateValue("24/09/2026"), "24/09/2026");
+});
 
 test("field text starts at the right edge of the box", () => {
   const layout = signatureFieldTextLayout(200, 40);

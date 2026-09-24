@@ -2,6 +2,7 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.75.0';
 import { PDFDocument, rgb, StandardFonts } from 'https://esm.sh/pdf-lib@1.17.1';
 import fontkit from 'https://esm.sh/@pdf-lib/fontkit@1.0.0';
 import { signatureStoragePath } from '../_shared/signature-storage.ts';
+import { formatSignatureDateValue } from '../_shared/signature-field-text.ts';
 import { corsHeaders } from '../_shared/cors.ts';
 import { saveSignedPdfToEntity } from '../_shared/signature-automation.ts';
 import {
@@ -307,7 +308,8 @@ async function buildSignedPdf(doc: {
             businessStampPng,
           );
         } else {
-          await drawTextOnPage(pdfDoc, pageIndex, value, field.position, textFont);
+          const printed = field.type === 'date' ? formatSignatureDateValue(value) : value;
+          await drawTextOnPage(pdfDoc, pageIndex, printed, field.position, textFont);
         }
       }
     }

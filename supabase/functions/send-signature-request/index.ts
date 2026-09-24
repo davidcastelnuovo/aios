@@ -25,6 +25,7 @@ interface SendSignatureRequest {
   };
   leadId?: string;
   clientId?: string;
+  logoUrl?: string | null;
 }
 
 const responseHeaders = { ...corsHeaders, 'Content-Type': 'application/json', 'Cache-Control': 'no-store' };
@@ -50,7 +51,7 @@ Deno.serve(async (req) => {
     }
 
     const body: SendSignatureRequest = await req.json();
-    const { documentId, baseUrl, sendEmail = false, recipient, contactDetails, leadId, clientId } = body;
+    const { documentId, baseUrl, sendEmail = false, recipient, contactDetails, leadId, clientId, logoUrl } = body;
     if (!documentId) {
       return new Response(JSON.stringify({ error: 'missing_document_id' }), { status: 400, headers: responseHeaders });
     }
@@ -92,6 +93,7 @@ Deno.serve(async (req) => {
         senderName,
         sendEmail: true,
         requireEmailSuccess: false,
+        logoUrl,
       });
       emails = emailResult.results;
       sent = emailResult.sent;

@@ -15,37 +15,93 @@ export function safeOrigin(baseUrl?: string): string {
   }
 }
 
+function escapeHtml(value: string): string {
+  return value
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+
+/** Only http(s) image URLs are embedded in the signing email. */
+export function safeLogoUrl(url?: string | null): string | null {
+  if (!url?.trim()) return null;
+  try {
+    const parsed = new URL(url.trim());
+    if (parsed.protocol !== 'https:' && parsed.protocol !== 'http:') return null;
+    return parsed.toString();
+  } catch {
+    return null;
+  }
+}
+
 export function buildSigningEmailHtml(opts: {
   recipientName: string;
   documentTitle: string;
   signingUrl: string;
   senderName?: string;
+  logoUrl?: string | null;
 }): string {
-  const { recipientName, documentTitle, signingUrl, senderName } = opts;
+  const recipientName = escapeHtml(opts.recipientName);
+  const documentTitle = escapeHtml(opts.documentTitle);
+  const signingUrl = escapeHtml(opts.signingUrl);
+  const senderName = opts.senderName ? escapeHtml(opts.senderName) : '';
+  const logoUrl = safeLogoUrl(opts.logoUrl);
+  const logo = logoUrl
+    ? `<img src="${escapeHtml(logoUrl)}" alt="" width="140" style="display:block;margin:0 auto 16px;max-width:160px;height:auto;border:0;" />`
+    : '';
   return `<!DOCTYPE html>
 <html dir="rtl" lang="he">
 <head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"></head>
-<body style="font-family: Arial, sans-serif; background-color: #f5f5f5; margin: 0; padding: 20px;">
-  <div style="max-width: 600px; margin: 0 auto; background: white; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
-    <div style="background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%); padding: 28px; text-align: center;">
-      <h1 style="color: white; margin: 0; font-size: 22px;">✍️ בקשה לחתימה דיגיטלית</h1>
-    </div>
-    <div style="padding: 28px;">
-      <p style="font-size: 17px; color: #333;">שלום ${recipientName},</p>
-      <p style="font-size: 15px; color: #555; line-height: 1.6;">
-        ${senderName ? `${senderName} שלח/ה לך` : 'נשלח לך'} מסמך לחתימה דיגיטלית:
-        <strong>${documentTitle}</strong>
-      </p>
-      <div style="text-align: center; margin: 28px 0;">
-        <a href="${signingUrl}" style="display: inline-block; background: #2563eb; color: white; text-decoration: none; padding: 14px 32px; border-radius: 8px; font-size: 16px; font-weight: bold;">
-          לחץ כאן לחתימה
-        </a>
-      </div>
-      <p style="font-size: 13px; color: #888; word-break: break-all;">או העתק את הקישור: ${signingUrl}</p>
-    </div>
-  </div>
+<body style="font-family: Arial, Helvetica, sans-serif; background-color: #f5f5f5; margin: 0; padding: 0;">
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background-color:#f5f5f5;padding:20px 0;">
+    <tr><td align="center">
+      <table role="presentation" width="600" cellpadding="0" cellspacing="0" style="width:600px;max-width:600px;background-color:#ffffff;">
+        <tr>
+          <td align="center" bgcolor="#1d4ed8" style="background-color:#1d4ed8;padding:28px 24px;">
+            ${logo}
+            <h1 style="color:#ffffff;margin:0;font-size:22px;font-family:Arial,Helvetica,sans-serif;font-weight:bold;">בקשה לחתימה דיגיטלית</h1>
+          </td>
+        </tr>
+        <tr>
+          <td style="padding:28px 24px;font-family:Arial,Helvetica,sans-serif;" align="right">
+            <p style="font-size:17px;color:#333333;margin:0 0 12px;">שלום ${recipientName},</p>
+            <p style="font-size:15px;color:#555555;line-height:1.6;margin:0 0 24px;">
+              ${senderName ? `${senderName} שלח/ה לך` : 'נשלח לך'} מסמך לחתימה דיגיטלית:
+              <strong>${documentTitle}</strong>
+            </p>
+            <table role="presentation" cellpadding="0" cellspacing="0" align="center" style="margin:0 auto 24px;">
+              <tr>
+                <td align="center" bgcolor="#2563eb" style="background-color:#2563eb;border-radius:8px;">
+                  <a href="${signingUrl}" style="display:inline-block;padding:14px 32px;color:#ffffff;text-decoration:none;font-size:16px;font-weight:bold;font-family:Arial,Helvetica,sans-serif;">לחץ כאן לחתימה</a>
+                </td>
+              </tr>
+            </table>
+            <p style="font-size:13px;color:#888888;word-break:break-all;margin:0;">או העתק את הקישור: ${signingUrl}</p>
+          </td>
+        </tr>
+      </table>
+    </td></tr>
+  </table>
 </body>
 </html>`;
+}
+
+async function resolveSignatureEmailLogo(
+  supabase: SupabaseClient,
+  tenantId: string,
+  logoUrl?: string | null,
+): Promise<string | null> {
+  if (logoUrl === null || logoUrl === '') return null;
+  if (logoUrl) return safeLogoUrl(logoUrl);
+  const { data } = await supabase
+    .from('tenant_settings')
+    .select('setting_value')
+    .eq('tenant_id', tenantId)
+    .eq('setting_key', 'branding')
+    .maybeSingle();
+  const stored = (data?.setting_value as { logoUrl?: string } | null)?.logoUrl;
+  return safeLogoUrl(stored);
 }
 
 export async function resolveTenantOwnerId(supabase: SupabaseClient, tenantId: string): Promise<string> {
@@ -77,9 +133,11 @@ export async function sendSignatureDocumentEmails(
     senderName?: string;
     sendEmail?: boolean;
     requireEmailSuccess?: boolean;
+    /** undefined uses the tenant brand logo. null or "" sends no logo. */
+    logoUrl?: string | null;
   },
 ): Promise<{ sent: number; results: Array<{ email: string; ok: boolean; error?: string }> }> {
-  const { documentId, tenantId, baseUrl, senderName, sendEmail = true, requireEmailSuccess = true } = opts;
+  const { documentId, tenantId, baseUrl, senderName, sendEmail = true, requireEmailSuccess = true, logoUrl } = opts;
 
   const { data: doc, error: docError } = await supabase
     .from('signature_documents')
@@ -108,6 +166,7 @@ export async function sendSignatureDocumentEmails(
   }
 
   const origin = safeOrigin(baseUrl);
+  const emailLogoUrl = await resolveSignatureEmailLogo(supabase, tenantId, logoUrl);
   const results: Array<{ email: string; ok: boolean; error?: string }> = [];
 
   for (const recipient of recipients) {
@@ -146,6 +205,7 @@ export async function sendSignatureDocumentEmails(
           documentTitle: doc.title,
           signingUrl,
           senderName,
+          logoUrl: emailLogoUrl,
         }),
       }),
     });

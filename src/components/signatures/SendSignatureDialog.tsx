@@ -11,7 +11,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
-import { Check, Copy, Mail } from "lucide-react";
+import { Check, Copy, ImagePlus, Mail, X } from "lucide-react";
 import {
   copyFirstSigningLink,
   sendSignatureDocument,
@@ -79,6 +79,25 @@ export function SendSignatureDialog({
   const [busy, setBusy] = useState<SendAction | null>(null);
   const [links, setLinks] = useState<SigningLinkResult[]>([]);
   const [lastAction, setLastAction] = useState<SendAction | null>(null);
+  const [logoUrl, setLogoUrl] = useState<string | null>(null);
+  const logoChoice = useRef<"auto" | "manual">("auto");
+  const [uploadingLogo, setUploadingLogo] = useState(false);
+
+  const { data: brandLogo } = useQuery({
+    queryKey: ["tenant-branding-logo", tenantId],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("tenant_settings")
+        .select("setting_value")
+        .eq("tenant_id", tenantId!)
+        .eq("setting_key", "branding")
+        .maybeSingle();
+      if (error) throw error;
+      const settings = data?.setting_value as { logoUrl?: string } | null;
+      return settings?.logoUrl || null;
+    },
+    enabled: open && !!tenantId,
+  });
 
   const initializedDocument = useRef<string | null>(null);
   const preparedDocument = useRef<string | null>(null);
@@ -103,6 +122,8 @@ export function SendSignatureDialog({
       setLinks([]);
       setBusy(null);
       setLastAction(null);
+      setLogoUrl(null);
+      logoChoice.current = "auto";
       return;
     }
     if (!doc?.id || loadingRecipients || initializedDocument.current === doc.id) return;
@@ -115,6 +136,11 @@ export function SendSignatureDialog({
     setLinks([]);
     setLastAction(null);
   }, [open, doc?.id, defaultRecipient?.name, defaultRecipient?.email, defaultRecipient?.phone, existingRecipients, loadingRecipients]);
+
+  useEffect(() => {
+    if (!open || logoChoice.current === "manual") return;
+    setLogoUrl(brandLogo ?? null);
+  }, [open, doc?.id, brandLogo]);
 
   const clearPrepared = () => { preparedDocument.current = null; setLinks([]); setLastAction(null); };
 
@@ -171,6 +197,7 @@ export function SendSignatureDialog({
         leadId,
         clientId,
         documentTitleOverride,
+        logoUrl: logoChoice.current === "manual" ? logoUrl : logoUrl ?? undefined,
       });
 
       // Start clipboard work in the original user gesture, before awaiting the server.
@@ -255,6 +282,67 @@ export function SendSignatureDialog({
                 placeholder="05..."
                 dir="ltr"
                 className="text-left min-w-0"
+              />
+            </div>
+          </div>
+
+          <div className="space-y-2 rounded-lg border p-3 min-w-0">
+            <p className="text-sm font-medium">לוגו במייל</p>
+            {logoUrl ? (
+              <div className="flex items-center gap-3">
+                <img src={logoUrl} alt="" className="h-12 max-w-[140px] object-contain bg-white border rounded" />
+                <Button type="button" size="sm" variant="ghost" disabled={!!busy} onClick={() => { logoChoice.current = "manual"; setLogoUrl(null); }}>
+                  <X className="h-4 w-4" />
+                  בלי לוגו
+                </Button>
+              </div>
+            ) : (
+              <p className="text-xs text-muted-foreground">המייל יישלח בלי לוגו</p>
+            )}
+            <div className="flex flex-wrap gap-2">
+              {brandLogo && logoUrl !== brandLogo && (
+                <Button type="button" size="sm" variant="outline" disabled={!!busy} onClick={() => { logoChoice.current = "manual"; setLogoUrl(brandLogo); }}>
+                  לוגו המותג
+                </Button>
+              )}
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                disabled={!!busy || uploadingLogo || !tenantId}
+                onClick={() => document.getElementById("signature-email-logo")?.click()}
+              >
+                <ImagePlus className="h-4 w-4" />
+                {uploadingLogo ? "מעלה..." : "בחר לוגו"}
+              </Button>
+              <input
+                id="signature-email-logo"
+                type="file"
+                accept="image/png,image/jpeg,image/webp,image/gif"
+                className="hidden"
+                onChange={async (event) => {
+                  const file = event.target.files?.[0];
+                  event.target.value = "";
+                  if (!file || !tenantId) return;
+                  if (!file.type.startsWith("image/") || file.size > 2 * 1024 * 1024) {
+                    toast.error("יש להעלות תמונה עד 2MB");
+                    return;
+                  }
+                  setUploadingLogo(true);
+                  try {
+                    const ext = file.name.split(".").pop() || "png";
+                    const path = `${tenantId}/signature-email/${crypto.randomUUID()}.${ext}`;
+                    const { error } = await supabase.storage.from("tenant-logos").upload(path, file, { upsert: false });
+                    if (error) throw error;
+                    const { data } = supabase.storage.from("tenant-logos").getPublicUrl(path);
+                    logoChoice.current = "manual";
+                    setLogoUrl(data.publicUrl);
+                  } catch (err) {
+                    toast.error(err instanceof Error ? err.message : "העלאת הלוגו נכשלה");
+                  } finally {
+                    setUploadingLogo(false);
+                  }
+                }}
               />
             </div>
           </div>
