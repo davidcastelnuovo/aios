@@ -1,6 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -40,6 +40,7 @@ import { withTaskCreatorNames } from "@/lib/taskCreators";
 import { useCurrentTenant } from "@/hooks/useCurrentTenant";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
 import { resolveClientUpdateType } from "@/lib/clientUpdateType";
+import { getClientMoodChanges, type ClientMoodStatus } from "@/lib/clientMoodHistory";
 import { SeoUpdateModal } from "@/components/clients/SeoUpdateModal";
 
 interface ClientUpdatesTabProps {
@@ -49,6 +50,8 @@ interface ClientUpdatesTabProps {
 }
 
 type DateFilter = "week" | "month" | "all";
+type UpdateTypeFilter = "all" | "mood_change" | string;
+type MoodFilter = "all" | ClientMoodStatus;
 
 // ── Unified mood/status config ───────────────────────────────────────────────
 const MOOD_STATUS_OPTIONS = [
@@ -71,6 +74,8 @@ const INTERACTION_TYPES = [
 
 export function ClientUpdatesTab({ clientId, clientName, currentMoodStatus }: ClientUpdatesTabProps) {
   const [dateFilter, setDateFilter] = useState<DateFilter>("month");
+  const [updateTypeFilter, setUpdateTypeFilter] = useState<UpdateTypeFilter>("all");
+  const [moodFilter, setMoodFilter] = useState<MoodFilter>("all");
   const [editingTask, setEditingTask] = useState<any>(null);
   const [newUpdate, setNewUpdate] = useState("");
   const [newUpdateType, setNewUpdateType] = useState<string>("weekly_update");
@@ -132,6 +137,7 @@ export function ClientUpdatesTab({ clientId, clientName, currentMoodStatus }: Cl
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["comm-log-latest", clientId] });
+      queryClient.invalidateQueries({ queryKey: ["client-mood-history", clientId] });
       queryClient.invalidateQueries({ queryKey: ["communication-logs-latest", tenantId] });
       queryClient.invalidateQueries({ queryKey: ["comm-logs-agency", tenantId] });
       queryClient.invalidateQueries({ queryKey: ["clients", tenantId] });
@@ -200,6 +206,23 @@ export function ClientUpdatesTab({ clientId, clientName, currentMoodStatus }: Cl
       const { data, error } = await query;
       if (error) throw error;
       return data;
+    },
+    enabled: !!clientId,
+  });
+
+  // Full log so a mood change can be compared with the previous status,
+  // even when the visible date range starts mid-history. Same source as the
+  // client-update-filters draft — do not add a second mood pipeline.
+  const { data: communicationLogs, isLoading: communicationLogsLoading } = useQuery({
+    queryKey: ["client-mood-history", clientId],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("communication_logs")
+        .select("id, status, interaction_type, note, created_at")
+        .eq("client_id", clientId)
+        .order("created_at", { ascending: true });
+      if (error) throw error;
+      return data ?? [];
     },
     enabled: !!clientId,
   });
@@ -290,14 +313,55 @@ export function ClientUpdatesTab({ clientId, clientName, currentMoodStatus }: Cl
   });
 
   const handleAddUpdate = () => {
+    if (newUpdateType === "seo_update") {
+      setSeoUpdateOpen(true);
+      return;
+    }
     if (!newUpdate.trim()) return;
+    saveCommMutation.mutate(commStatus);
     addUpdateMutation.mutate({ content: newUpdate.trim(), updateType: newUpdateType });
   };
 
   const inProgressTasks = tasks?.filter(t => t.status === "open" || t.status === "in_progress") || [];
   const completedTasks = tasks?.filter(t => t.status === "done") || [];
 
-  const isLoading = tasksLoading || updatesLoading;
+  const historyEvents = useMemo(() => {
+    const moodChanges = getClientMoodChanges(communicationLogs || []);
+    const cutoff = new Date();
+    if (dateFilter === "week") cutoff.setDate(cutoff.getDate() - 7);
+    if (dateFilter === "month") cutoff.setDate(cutoff.getDate() - 30);
+    const isInDateRange = (createdAt?: string | null) =>
+      dateFilter === "all" || new Date(createdAt ?? 0) >= cutoff;
+
+    const updateEvents = (updates || [])
+      .filter((update) => moodFilter === "all"
+        && (updateTypeFilter === "all"
+          || (update.update_type ?? "other") === updateTypeFilter))
+      .map((update) => ({
+        kind: "update" as const,
+        id: update.id,
+        createdAt: update.created_at,
+        update,
+      }));
+
+    const moodEvents = moodChanges
+      .filter((change) =>
+        isInDateRange(change.created_at)
+        && (updateTypeFilter === "all" || updateTypeFilter === "mood_change")
+        && (moodFilter === "all" || change.moodStatus === moodFilter))
+      .map((change) => ({
+        kind: "mood" as const,
+        id: `mood-${change.id}`,
+        createdAt: change.created_at,
+        change,
+      }));
+
+    return [...updateEvents, ...moodEvents].sort(
+      (a, b) => new Date(b.createdAt ?? 0).getTime() - new Date(a.createdAt ?? 0).getTime(),
+    );
+  }, [communicationLogs, dateFilter, moodFilter, updateTypeFilter, updates]);
+
+  const isLoading = tasksLoading || updatesLoading || communicationLogsLoading;
 
   if (isLoading) {
     return <div className="text-center py-8 text-muted-foreground">טוען...</div>;
@@ -306,241 +370,318 @@ export function ClientUpdatesTab({ clientId, clientName, currentMoodStatus }: Cl
   return (
     <div className="space-y-4 overflow-x-hidden w-full" dir="rtl">
 
-      {/* ── Unified: Client Status + Add Update ─────────────────────── */}
-      <Card>
-        <CardContent className="p-3 sm:p-4 space-y-3">
-          <div className="flex items-center gap-2">
-            <MessageSquare className="h-4 w-4 text-primary" />
-            <h3 className="font-semibold text-sm">עדכון מצב לקוח</h3>
-            {latestComm && (
-              <span className="text-xs text-muted-foreground mr-auto">
-                עדכון אחרון: {format(new Date((latestComm as any).created_at), "d/M/yy", { locale: he })}
-                {" — "}
-                {MOOD_STATUS_OPTIONS.find(o => o.value === (latestComm as any).status)?.label ?? (latestComm as any).status}
-              </span>
-            )}
-          </div>
+      {/* Composer (right 25%) + history filtered by סוג עדכון (left 75%), one white frame */}
+      <Card className="bg-card border-border/60 shadow-sm">
+        <CardContent className="p-3 sm:p-4">
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+            <div className="md:col-span-1 space-y-3 min-w-0">
+              <div className="space-y-1">
+                <div className="flex items-center gap-2">
+                  <MessageSquare className="h-4 w-4 text-primary shrink-0" />
+                  <h3 className="font-semibold text-sm">עדכון מצב לקוח</h3>
+                </div>
+                {latestComm && (
+                  <p className="text-xs text-muted-foreground">
+                    עדכון אחרון: {format(new Date((latestComm as any).created_at), "d/M/yy", { locale: he })}
+                    {" — "}
+                    {MOOD_STATUS_OPTIONS.find(o => o.value === (latestComm as any).status)?.label ?? (latestComm as any).status}
+                  </p>
+                )}
+              </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-            <div>
-              <Label className="text-xs text-muted-foreground mb-1 block">מצב לקוח</Label>
-              <Select
-                value={commStatus}
-                onValueChange={(value) => {
-                  setCommStatus(value);
-                  // Persist mood_status immediately so the main client badge updates
-                  saveCommMutation.mutate(value);
-                }}
-              >
-                <SelectTrigger className="h-8 text-sm">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {MOOD_STATUS_OPTIONS.map(opt => (
-                    <SelectItem key={opt.value} value={opt.value}>
-                      <span className={opt.color}>{opt.label}</span>
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div>
-              <Label className="text-xs text-muted-foreground mb-1 block">סוג עדכון</Label>
-              <Select
-                value={newUpdateType}
-                onValueChange={(value) => {
-                  setNewUpdateType(value);
-                  if (value === "seo_update") setSeoUpdateOpen(true);
-                }}
-              >
-                <SelectTrigger className="h-8 text-sm">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {INTERACTION_TYPES.map(opt => {
-                    const Icon = opt.icon;
-                    return (
+              <div>
+                <Label className="text-xs text-muted-foreground mb-1 block">מצב לקוח</Label>
+                <Select
+                  value={commStatus}
+                  onValueChange={(value) => {
+                    setCommStatus(value);
+                    saveCommMutation.mutate(value);
+                  }}
+                >
+                  <SelectTrigger className="h-8 text-sm bg-card">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {MOOD_STATUS_OPTIONS.map(opt => (
                       <SelectItem key={opt.value} value={opt.value}>
-                        <span className="flex items-center gap-2">
-                          <Icon className="h-3.5 w-3.5" />
-                          {opt.label}
-                        </span>
+                        <span className={opt.color}>{opt.label}</span>
                       </SelectItem>
-                    );
-                  })}
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
 
-          <div className="flex gap-2">
-            <Textarea
-              placeholder="הוסף עדכון חדש..."
-              value={newUpdate}
-              onChange={(e) => setNewUpdate(e.target.value)}
-              className="min-h-[60px] resize-none flex-1"
-            />
-            <Button
-              onClick={() => {
-                if (newUpdateType === "seo_update") {
-                  setSeoUpdateOpen(true);
-                  return;
-                }
-                if (!newUpdate.trim()) return;
-                saveCommMutation.mutate(commStatus);
-                addUpdateMutation.mutate({ content: newUpdate.trim(), updateType: newUpdateType });
-              }}
-              disabled={!newUpdate.trim() || addUpdateMutation.isPending || saveCommMutation.isPending}
-              className="self-end shrink-0"
-            >
-              {(addUpdateMutation.isPending || saveCommMutation.isPending) ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
-              ) : (
-                <Send className="h-4 w-4" />
-              )}
-            </Button>
+              <div>
+                <Label className="text-xs text-muted-foreground mb-1 block">סוג עדכון</Label>
+                <Select
+                  value={newUpdateType}
+                  onValueChange={(value) => {
+                    setNewUpdateType(value);
+                    if (value === "seo_update") setSeoUpdateOpen(true);
+                  }}
+                >
+                  <SelectTrigger className="h-8 text-sm bg-card">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {INTERACTION_TYPES.map(opt => {
+                      const Icon = opt.icon;
+                      return (
+                        <SelectItem key={opt.value} value={opt.value}>
+                          <span className="flex items-center gap-2">
+                            <Icon className="h-3.5 w-3.5" />
+                            {opt.label}
+                          </span>
+                        </SelectItem>
+                      );
+                    })}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="flex gap-2">
+                <Textarea
+                  placeholder="הוסף עדכון חדש..."
+                  value={newUpdate}
+                  onChange={(e) => setNewUpdate(e.target.value)}
+                  className="min-h-[88px] resize-none flex-1 bg-card"
+                />
+                <Button
+                  onClick={handleAddUpdate}
+                  disabled={!newUpdate.trim() || addUpdateMutation.isPending || saveCommMutation.isPending}
+                  className="self-end shrink-0"
+                >
+                  {(addUpdateMutation.isPending || saveCommMutation.isPending) ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <Send className="h-4 w-4" />
+                  )}
+                </Button>
+              </div>
+            </div>
+
+            <div className="md:col-span-3 min-w-0 space-y-3 md:border-s md:ps-4 border-border/60">
+              <div className="flex flex-col gap-2 xl:flex-row xl:items-end xl:justify-between">
+                <div className="flex items-center gap-2">
+                  <MessageSquare className="h-4 w-4 text-primary" />
+                  <h3 className="font-semibold text-sm">היסטוריית עדכונים</h3>
+                  <Badge variant="secondary" className="text-xs">{historyEvents.length}</Badge>
+                </div>
+                <div className="flex flex-wrap items-end gap-3">
+                  <div className="w-full sm:w-52">
+                    <Label className="text-xs text-muted-foreground mb-1 block">סינון לפי סוג עדכון</Label>
+                    <Select
+                      value={updateTypeFilter}
+                      onValueChange={(value) => {
+                        setUpdateTypeFilter(value);
+                        if (value !== "mood_change") setMoodFilter("all");
+                      }}
+                    >
+                      <SelectTrigger className="h-8 text-sm bg-card">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">כל סוגי העדכונים</SelectItem>
+                        <SelectItem value="mood_change">שינוי מצב לקוח</SelectItem>
+                        {INTERACTION_TYPES.map((option) => (
+                          <SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="w-full sm:w-52">
+                    <Label className="text-xs text-muted-foreground mb-1 block">סינון לפי מצב לקוח</Label>
+                    <Select
+                      value={moodFilter}
+                      onValueChange={(value) => {
+                        setMoodFilter(value as MoodFilter);
+                        if (value !== "all") setUpdateTypeFilter("mood_change");
+                      }}
+                    >
+                      <SelectTrigger className="h-8 text-sm bg-card">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">כל המצבים</SelectItem>
+                        {MOOD_STATUS_OPTIONS.map((option) => (
+                          <SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <RadioGroup
+                    value={dateFilter}
+                    onValueChange={(value) => setDateFilter(value as DateFilter)}
+                    className="flex gap-3 flex-wrap pb-1"
+                  >
+                    <div className="flex items-center space-x-2 space-x-reverse">
+                      <RadioGroupItem value="week" id="week" />
+                      <Label htmlFor="week" className="cursor-pointer text-sm">שבוע</Label>
+                    </div>
+                    <div className="flex items-center space-x-2 space-x-reverse">
+                      <RadioGroupItem value="month" id="month" />
+                      <Label htmlFor="month" className="cursor-pointer text-sm">חודש</Label>
+                    </div>
+                    <div className="flex items-center space-x-2 space-x-reverse">
+                      <RadioGroupItem value="all" id="all" />
+                      <Label htmlFor="all" className="cursor-pointer text-sm">הכל</Label>
+                    </div>
+                  </RadioGroup>
+                </div>
+              </div>
+
+              <div className="space-y-2 max-h-[420px] overflow-y-auto">
+                {historyEvents.length === 0 ? (
+                  <div className="rounded-lg border border-dashed border-border/70 bg-card p-4 text-center text-sm text-muted-foreground">
+                    אין עדכונים התואמים לסינון
+                  </div>
+                ) : historyEvents.map((event) => {
+                  if (event.kind === "mood") {
+                    const currentOption = MOOD_STATUS_OPTIONS.find(
+                      (option) => option.value === event.change.moodStatus,
+                    );
+                    const previousOption = MOOD_STATUS_OPTIONS.find(
+                      (option) => option.value === event.change.previousMoodStatus,
+                    );
+                    const changedAt = event.createdAt ? new Date(event.createdAt) : null;
+                    return (
+                      <Card key={event.id} className={`bg-card shadow-none ${currentOption?.bg ?? ""}`}>
+                        <CardContent className="p-3">
+                          <Badge variant="outline" className="mb-2 gap-1 text-xs bg-card">
+                            <Activity className="h-3 w-3" />
+                            שינוי מצב לקוח
+                          </Badge>
+                          <p className={`text-sm font-medium ${currentOption?.color ?? ""}`}>
+                            {previousOption
+                              ? `מצב הלקוח השתנה מ־${previousOption.label} ל־${currentOption?.label ?? event.change.moodStatus}`
+                              : `מצב הלקוח נקבע ל־${currentOption?.label ?? event.change.moodStatus}`}
+                          </p>
+                          {event.change.note && (
+                            <p className="text-sm whitespace-pre-wrap mt-1">{event.change.note}</p>
+                          )}
+                          {changedAt && !Number.isNaN(changedAt.getTime()) && (
+                            <div className="flex items-center gap-2 text-xs text-muted-foreground mt-2">
+                              <Calendar className="h-3 w-3 shrink-0" />
+                              <span>{format(changedAt, "d/M/yy HH:mm", { locale: he })}</span>
+                            </div>
+                          )}
+                        </CardContent>
+                      </Card>
+                    );
+                  }
+
+                  const update = event.update;
+                  const isEditing = editingUpdateId === update.id;
+                  const isOwner = user?.id === update.user_id;
+
+                  return (
+                    <Card key={update.id} className="bg-card border-border/60 shadow-none">
+                      <CardContent className="p-3">
+                        {isEditing ? (
+                          <div className="space-y-2">
+                            <Textarea
+                              value={editingUpdateContent}
+                              onChange={(e) => setEditingUpdateContent(e.target.value)}
+                              className="min-h-[60px] resize-none text-sm bg-card"
+                            />
+                            <div className="flex gap-2 justify-end">
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                onClick={() => {
+                                  setEditingUpdateId(null);
+                                  setEditingUpdateContent("");
+                                }}
+                              >
+                                <X className="h-4 w-4" />
+                              </Button>
+                              <Button
+                                size="sm"
+                                onClick={() => editUpdateMutation.mutate({ id: update.id, content: editingUpdateContent })}
+                                disabled={!editingUpdateContent.trim() || editUpdateMutation.isPending}
+                              >
+                                {editUpdateMutation.isPending ? (
+                                  <Loader2 className="h-4 w-4 animate-spin" />
+                                ) : (
+                                  <Check className="h-4 w-4" />
+                                )}
+                              </Button>
+                            </div>
+                          </div>
+                        ) : (
+                          <>
+                            {update.update_type && (() => {
+                              const t = INTERACTION_TYPES.find(o => o.value === update.update_type);
+                              if (!t) return null;
+                              const Icon = t.icon;
+                              return (
+                                <Badge variant="outline" className="mb-2 gap-1 text-xs bg-card">
+                                  <Icon className="h-3 w-3" />
+                                  {t.label}
+                                </Badge>
+                              );
+                            })()}
+                            <p className="text-sm whitespace-pre-wrap">{update.content}</p>
+                            <div className="flex items-center justify-between mt-2">
+                              <div className="flex items-center gap-2 text-xs text-muted-foreground flex-wrap">
+                                <User className="h-3 w-3 shrink-0" />
+                                <span>{update.profiles?.full_name || update.profiles?.email || "משתמש"}</span>
+                                <span>•</span>
+                                <Calendar className="h-3 w-3 shrink-0" />
+                                <span>{format(new Date(update.created_at), "d/M/yy HH:mm", { locale: he })}</span>
+                              </div>
+                              {isOwner && (
+                                <div className="flex gap-1 shrink-0">
+                                  <Button
+                                    size="icon"
+                                    variant="ghost"
+                                    className="h-6 w-6"
+                                    onClick={() => {
+                                      setEditingUpdateId(update.id);
+                                      setEditingUpdateContent(update.content);
+                                    }}
+                                  >
+                                    <Pencil className="h-3 w-3" />
+                                  </Button>
+                                  <Button
+                                    size="icon"
+                                    variant="ghost"
+                                    className="h-6 w-6 text-destructive hover:text-destructive"
+                                    onClick={() => deleteUpdateMutation.mutate(update.id)}
+                                    disabled={deleteUpdateMutation.isPending}
+                                  >
+                                    {deleteUpdateMutation.isPending ? (
+                                      <Loader2 className="h-3 w-3 animate-spin" />
+                                    ) : (
+                                      <Trash2 className="h-3 w-3" />
+                                    )}
+                                  </Button>
+                                </div>
+                              )}
+                            </div>
+                          </>
+                        )}
+                      </CardContent>
+                    </Card>
+                  );
+                })}
+              </div>
+            </div>
           </div>
         </CardContent>
       </Card>
 
-      {/* Header with filters */}
-      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+      <div className="flex justify-start">
         <AddTaskForm
           clientId={clientId}
           triggerButton={
-            <Button size="sm" variant="outline" className="w-full sm:w-auto">
+            <Button size="sm" variant="outline" className="w-full sm:w-auto bg-card">
               <Plus className="h-4 w-4 mr-2" />
               הוסף משימה
             </Button>
           }
         />
-
-        <RadioGroup 
-          value={dateFilter} 
-          onValueChange={(value) => setDateFilter(value as DateFilter)} 
-          className="flex gap-3 flex-wrap"
-        >
-          <div className="flex items-center space-x-2 space-x-reverse">
-            <RadioGroupItem value="week" id="week" />
-            <Label htmlFor="week" className="cursor-pointer text-sm">שבוע</Label>
-          </div>
-          <div className="flex items-center space-x-2 space-x-reverse">
-            <RadioGroupItem value="month" id="month" />
-            <Label htmlFor="month" className="cursor-pointer text-sm">חודש</Label>
-          </div>
-          <div className="flex items-center space-x-2 space-x-reverse">
-            <RadioGroupItem value="all" id="all" />
-            <Label htmlFor="all" className="cursor-pointer text-sm">הכל</Label>
-          </div>
-        </RadioGroup>
       </div>
-
-      {/* Updates History */}
-      {updates && updates.length > 0 && (
-        <div className="space-y-2">
-          <div className="flex items-center gap-2">
-            <MessageSquare className="h-4 w-4 text-primary" />
-            <h3 className="font-semibold">היסטוריית עדכונים</h3>
-          </div>
-          <div className="space-y-2 max-h-[200px] overflow-y-auto">
-            {updates.map((update: any) => {
-              const isEditing = editingUpdateId === update.id;
-              const isOwner = user?.id === update.user_id;
-              
-              return (
-                <Card key={update.id} className="bg-muted/50">
-                  <CardContent className="p-3">
-                    {isEditing ? (
-                      <div className="space-y-2">
-                        <Textarea
-                          value={editingUpdateContent}
-                          onChange={(e) => setEditingUpdateContent(e.target.value)}
-                          className="min-h-[60px] resize-none text-sm"
-                        />
-                        <div className="flex gap-2 justify-end">
-                          <Button
-                            size="sm"
-                            variant="ghost"
-                            onClick={() => {
-                              setEditingUpdateId(null);
-                              setEditingUpdateContent("");
-                            }}
-                          >
-                            <X className="h-4 w-4" />
-                          </Button>
-                          <Button
-                            size="sm"
-                            onClick={() => editUpdateMutation.mutate({ id: update.id, content: editingUpdateContent })}
-                            disabled={!editingUpdateContent.trim() || editUpdateMutation.isPending}
-                          >
-                            {editUpdateMutation.isPending ? (
-                              <Loader2 className="h-4 w-4 animate-spin" />
-                            ) : (
-                              <Check className="h-4 w-4" />
-                            )}
-                          </Button>
-                        </div>
-                      </div>
-                    ) : (
-                      <>
-                        {update.update_type && (() => {
-                          const t = INTERACTION_TYPES.find(o => o.value === update.update_type);
-                          if (!t) return null;
-                          const Icon = t.icon;
-                          return (
-                            <Badge variant="outline" className="mb-2 gap-1 text-xs">
-                              <Icon className="h-3 w-3" />
-                              {t.label}
-                            </Badge>
-                          );
-                        })()}
-                        <p className="text-sm whitespace-pre-wrap">{update.content}</p>
-                        <div className="flex items-center justify-between mt-2">
-                          <div className="flex items-center gap-2 text-xs text-muted-foreground flex-wrap">
-                            <User className="h-3 w-3 shrink-0" />
-                            <span>{update.profiles?.full_name || update.profiles?.email || "משתמש"}</span>
-                            <span>•</span>
-                            <Calendar className="h-3 w-3 shrink-0" />
-                            <span>{format(new Date(update.created_at), "d/M/yy HH:mm", { locale: he })}</span>
-                          </div>
-                          {isOwner && (
-                            <div className="flex gap-1 shrink-0">
-                              <Button
-                                size="icon"
-                                variant="ghost"
-                                className="h-6 w-6"
-                                onClick={() => {
-                                  setEditingUpdateId(update.id);
-                                  setEditingUpdateContent(update.content);
-                                }}
-                              >
-                                <Pencil className="h-3 w-3" />
-                              </Button>
-                              <Button
-                                size="icon"
-                                variant="ghost"
-                                className="h-6 w-6 text-destructive hover:text-destructive"
-                                onClick={() => deleteUpdateMutation.mutate(update.id)}
-                                disabled={deleteUpdateMutation.isPending}
-                              >
-                                {deleteUpdateMutation.isPending ? (
-                                  <Loader2 className="h-3 w-3 animate-spin" />
-                                ) : (
-                                  <Trash2 className="h-3 w-3" />
-                                )}
-                              </Button>
-                            </div>
-                          )}
-                        </div>
-                      </>
-                    )}
-                  </CardContent>
-                </Card>
-              );
-            })}
-          </div>
-        </div>
-      )}
 
       {/* Tasks Columns */}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
