@@ -3,13 +3,26 @@ export function taskNotificationRecipientKey(input: {
   notifyCampaignerId?: string | null
   campaignerId?: string | null
   salesPersonId?: string | null
+  eventKey?: string | null
 }): string {
-  return String(
+  const recipient = String(
     input.notifyCampaignerId
       || input.campaignerId
       || input.salesPersonId
       || '',
   ).trim()
+  const eventKey = String(input.eventKey || '').trim()
+  return eventKey ? `${recipient}:${eventKey}` : recipient
+}
+
+/** Stable per-update suffix so later comments on the same task are not treated as duplicates. */
+export function taskUpdateEventKey(content: string): string {
+  let hash = 5381
+  const text = String(content || '').trim()
+  for (let i = 0; i < text.length; i += 1) {
+    hash = ((hash << 5) + hash + text.charCodeAt(i)) >>> 0
+  }
+  return hash.toString(16)
 }
 
 export async function claimTaskNotificationDelivery(
