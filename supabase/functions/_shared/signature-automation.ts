@@ -168,9 +168,18 @@ export async function sendSignatureDocumentEmails(
     logoUrl?: string | null;
     emailSubject?: string | null;
     emailBody?: string | null;
+    contact?: {
+      firstName?: string;
+      lastName?: string;
+      companyName?: string;
+      phone?: string;
+      email?: string;
+      address?: string;
+      idNumber?: string;
+    };
   },
 ): Promise<{ sent: number; results: Array<{ email: string; ok: boolean; error?: string }> }> {
-  const { documentId, tenantId, baseUrl, senderName, sendEmail = true, requireEmailSuccess = true, logoUrl, emailSubject, emailBody } = opts;
+  const { documentId, tenantId, baseUrl, senderName, sendEmail = true, requireEmailSuccess = true, logoUrl, emailSubject, emailBody, contact } = opts;
 
   const { data: doc, error: docError } = await supabase
     .from('signature_documents')
@@ -237,6 +246,13 @@ export async function sendSignatureDocumentEmails(
           name: recipient.name,
           title: doc.title,
           sender: senderName,
+          first_name: contact?.firstName,
+          last_name: contact?.lastName,
+          company: contact?.companyName,
+          phone: contact?.phone,
+          email: contact?.email || recipient.email,
+          address: contact?.address,
+          id_number: contact?.idNumber,
         }, emailSubject),
         html: buildSigningEmailHtml({
           recipientName: recipient.name,
@@ -248,6 +264,13 @@ export async function sendSignatureDocumentEmails(
             name: recipient.name,
             title: doc.title,
             sender: senderName,
+            first_name: contact?.firstName,
+            last_name: contact?.lastName,
+            company: contact?.companyName,
+            phone: contact?.phone,
+            email: contact?.email || recipient.email,
+            address: contact?.address,
+            id_number: contact?.idNumber,
           }, emailBody),
         }),
       }),

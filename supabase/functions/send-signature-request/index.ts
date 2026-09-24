@@ -100,6 +100,7 @@ Deno.serve(async (req) => {
         logoUrl,
         emailSubject,
         emailBody,
+        contact: contactDetails,
       });
       emails = emailResult.results;
       sent = emailResult.sent;

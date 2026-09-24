@@ -460,7 +460,38 @@ export function SendSignatureDialog({
             </div>
             <div className="space-y-2">
               <Label>גוף האימייל</Label>
-              <Textarea value={emailBody} onChange={(event) => setEmailBody(event.target.value)} disabled={!!busy} rows={4} placeholder="ריק = הנוסח הרגיל. אפשר {{name}} {{title}} {{sender}}" />
+              <div className="flex flex-wrap gap-1">
+                {[
+                  ["שם פרטי", "{{first_name}}"],
+                  ["שם משפחה", "{{last_name}}"],
+                  ["שם מלא", "{{name}}"],
+                  ["חברה", "{{company}}"],
+                  ["טלפון", "{{phone}}"],
+                  ["אימייל", "{{email}}"],
+                  ["כתובת", "{{address}}"],
+                  ["ח.פ / ת.ז", "{{id_number}}"],
+                  ["שם המסמך", "{{title}}"],
+                  ["שולח", "{{sender}}"],
+                ].map(([label, token]) => (
+                  <Button
+                    key={token}
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    className="h-7 px-2 text-xs"
+                    disabled={!!busy}
+                    onClick={() => setEmailBody((current) => `${current}${current && !current.endsWith(" ") ? " " : ""}${token}`)}
+                  >
+                    {label}
+                  </Button>
+                ))}
+              </div>
+              {picked && (
+                <p className="text-xs text-muted-foreground">
+                  {[picked.firstName && `שם פרטי: ${picked.firstName}`, picked.lastName && `שם משפחה: ${picked.lastName}`, picked.phone && `טלפון: ${picked.phone}`].filter(Boolean).join(" · ") || picked.name}
+                </p>
+              )}
+              <Textarea value={emailBody} onChange={(event) => setEmailBody(event.target.value)} disabled={!!busy} rows={4} placeholder="היי {{first_name}}, מצורף מסמך לחתימה" />
             </div>
             <Button
               type="button"

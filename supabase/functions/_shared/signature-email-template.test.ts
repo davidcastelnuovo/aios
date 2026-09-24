@@ -15,7 +15,7 @@ test("empty subject falls back to the default", () => {
 
 test("body placeholders are replaced", () => {
   assert.equal(
-    signatureRequestBody({ body: "שלום {{name}}, מ{{sender}}" }, { name: "רעיה", sender: "דוד" }),
+    signatureRequestBody({ body: "שלום {{first_name}}, מ{{sender}}" }, { first_name: "רעיה", sender: "דוד" }),
     "שלום רעיה, מדוד",
   );
 });

@@ -6,16 +6,26 @@ export interface SignatureEmailSettings {
 
 const DEFAULT_SUBJECT = "בקשה לחתימה: {{title}}";
 
-export function applySignatureEmailTemplate(
-  template: string,
-  vars: { name?: string; title?: string; sender?: string },
-): string {
-  return template.replace(/\{\{\s*(name|title|sender)\s*\}\}/g, (_match, key: string) => vars[key as "name" | "title" | "sender"] ?? "");
+export interface SignatureEmailVars {
+  name?: string;
+  title?: string;
+  sender?: string;
+  first_name?: string;
+  last_name?: string;
+  company?: string;
+  phone?: string;
+  email?: string;
+  address?: string;
+  id_number?: string;
+}
+
+export function applySignatureEmailTemplate(template: string, vars: SignatureEmailVars): string {
+  return template.replace(/\{\{\s*(name|title|sender|first_name|last_name|company|phone|email|address|id_number)\s*\}\}/g, (_match, key: string) => vars[key as keyof SignatureEmailVars] ?? "");
 }
 
 export function signatureRequestSubject(
   settings: SignatureEmailSettings | null | undefined,
-  vars: { name?: string; title?: string; sender?: string },
+  vars: SignatureEmailVars,
   override?: string | null,
 ): string {
   const raw = (override ?? settings?.subject ?? "").trim() || DEFAULT_SUBJECT;
@@ -24,7 +34,7 @@ export function signatureRequestSubject(
 
 export function signatureRequestBody(
   settings: SignatureEmailSettings | null | undefined,
-  vars: { name?: string; title?: string; sender?: string },
+  vars: SignatureEmailVars,
   override?: string | null,
 ): string | null {
   const raw = override ?? settings?.body ?? "";
