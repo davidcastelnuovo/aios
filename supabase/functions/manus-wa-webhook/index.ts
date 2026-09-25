@@ -19,6 +19,7 @@ import {
   isUsableLidKey,
   looksLikeRealPhone,
   outboundThirdPartyGuardDecision,
+  pickGroupAuthorLidDigits,
   pickInboundLidDigits,
   pickPayloadRealPhone,
   pickPrivateCarmenTarget,
@@ -37,9 +38,9 @@ function normalizePhone(p: string): string {
   return (p || '').replace(/\D/g, '').slice(-9);
 }
 
+/** Real mobile phone — never treat long WhatsApp LIDs as Israeli tails. */
 function isIsraeliMobileTail(digits: string): boolean {
-  const tail = String(digits || '').replace(/\D/g, '').slice(-9);
-  return /^[5-9]\d{8}$/.test(tail);
+  return looksLikeRealPhone(digits);
 }
 
 /** True when Manus did not give us a usable participant phone for identity checks. */
@@ -52,7 +53,8 @@ function isUnresolvedGroupAuthor(
   if (!authorPhone) return true;
   if (authorPhone === groupDigits) return true;
   if (/@lid/i.test(authorRaw)) return true;
-  return !isIsraeliMobileTail(authorPhone);
+  if (isUsableLidKey(authorPhone)) return true;
+  return !looksLikeRealPhone(authorPhone);
 }
 
 // ── Incoming voice notes → transcript (OpenAI Whisper) ────────────────
@@ -919,22 +921,31 @@ Deno.serve(async (req) => {
         authorCandidates[0] ||
         '';
       let authorPhone = authorRaw ? authorRaw.split('@')[0].replace(/\D/g, '') : '';
-      const lidDigitsForMap = /@lid/i.test(authorRaw)
-        ? authorRaw.split('@')[0].replace(/\D/g, '')
-        : '';
+      // Bare senderLid/from (no @lid suffix) still carry the participant LID.
+      const lidDigitsForMap = pickGroupAuthorLidDigits({
+        authorRaw,
+        authorPhone,
+        groupChatId,
+        senderLidRaw: payload.senderLid,
+        fromRaw: payload.from || fromRaw,
+        senderPhoneRaw: payload.senderPhone,
+        senderNumberRaw: payload.senderNumber,
+        keyParticipantRaw: key.participant,
+      });
 
       // GROUP AUTHOR LID RESOLUTION — same layers as the private branch above.
       // The "כרמן" trigger comes from group MEMBERS, and members often arrive as
-      // anonymous @lid authors; without resolution Carmen can't tell WHO in the
-      // group is speaking. 1) real-phone payload fields → 2) learned wa_lid_map.
-      // Payload resolutions are persisted so group traffic keeps teaching the map.
-      if (/@lid/i.test(authorRaw) && isUsableLidKey(authorPhone)) {
-        const lidDigits = authorPhone;
-        const realCandidates = [payload.senderPn, payload.participantPn, payload.senderPhone, payload.senderNumber]
-          .map((v: unknown) => String(v || '').split('@')[0].replace(/\D/g, ''))
-          .filter((d: string) => d && d.length >= 9 && d.length <= 15 && d !== lidDigits);
-        if (realCandidates.length > 0) {
-          authorPhone = realCandidates[0];
+      // anonymous @lid authors (sometimes WITHOUT the `@lid` suffix). Without
+      // resolution Carmen can't tell WHO in the group is speaking.
+      // 1) real-phone payload fields → 2) learned wa_lid_map.
+      if (isUsableLidKey(lidDigitsForMap)) {
+        const lidDigits = lidDigitsForMap;
+        const realFromPayload = pickPayloadRealPhone(
+          [payload.senderPn, payload.participantPn, payload.senderPhone, payload.senderNumber],
+          lidDigits,
+        );
+        if (realFromPayload && looksLikeRealPhone(realFromPayload)) {
+          authorPhone = realFromPayload;
           console.log('[manus-wa group] author LID resolved from payload field', { lid: lidDigits, phone: authorPhone });
           supabase.from('wa_lid_map')
             .upsert({ lid: lidDigits, phone: authorPhone, connection_user_id: connectionUserId, source: 'payload' }, { onConflict: 'lid' })
@@ -945,9 +956,12 @@ Deno.serve(async (req) => {
             .select('phone')
             .eq('lid', lidDigits)
             .maybeSingle();
-          if (knownLid?.phone) {
+          if (knownLid?.phone && looksLikeRealPhone(knownLid.phone)) {
             authorPhone = String(knownLid.phone).replace(/\D/g, '');
             console.log('[manus-wa group] author LID resolved from learned map', { lid: lidDigits, phone: authorPhone });
+          } else if (!looksLikeRealPhone(authorPhone)) {
+            // Keep LID digits out of identity — Carmen would treat them as a phone.
+            authorPhone = '';
           }
         }
       }
@@ -958,18 +972,19 @@ Deno.serve(async (req) => {
       // the group id (or LID digits) into the authorization layer. Prefer provider
       // message id; fall back to the same body within a short window for gateways
       // that use different ids. Wait briefly — Green API often arrives after Manus.
+      // Search ALL tenants that registered this group_chat_id: the operator's Green
+      // phone often syncs the group under MarketingCaptain while Carmen Manus owns DMM.
       if (isUnresolvedGroupAuthor(authorPhone, authorRaw, groupChatId)) {
         await new Promise((resolve) => setTimeout(resolve, 2600));
         try {
           const since = new Date(Date.now() - 2 * 60 * 1000).toISOString();
           const groupDigits = groupChatId.split('@')[0].replace(/\D/g, '');
-          const { data: wgRow } = await supabase
+          const { data: wgRows } = await supabase
             .from('whatsapp_groups')
             .select('id')
-            .eq('tenant_id', groupTenantId)
             .eq('group_chat_id', groupChatId)
-            .maybeSingle();
-          const groupDbId = wgRow?.id as string | undefined;
+            .limit(20);
+          const groupDbIds = (wgRows || []).map((r: any) => r.id).filter(Boolean);
 
           const basePairedQuery = () => {
             let q = supabase.from('chat_messages')
@@ -978,7 +993,8 @@ Deno.serve(async (req) => {
               .gte('created_at', since)
               .order('created_at', { ascending: false })
               .limit(10);
-            if (groupDbId) q = q.eq('group_id', groupDbId);
+            if (groupDbIds.length === 1) q = q.eq('group_id', groupDbIds[0]);
+            else if (groupDbIds.length > 1) q = q.in('group_id', groupDbIds);
             return q;
           };
 
@@ -1174,14 +1190,16 @@ Deno.serve(async (req) => {
             }
 
             // Map members from Carmen's Manus group traffic (for identity when addressed).
-            if (!isOutgoingFromPhone && (authorPhone || /@lid/i.test(authorRaw || ''))) {
+            if (!isOutgoingFromPhone && (authorPhone || lidDigitsForMap)) {
               try {
                 const observed = await observeManusGroupMember(supabase, {
                   tenantId: groupTenantId,
                   groupId: wgId,
                   groupChatId,
                   phone: authorPhone || null,
-                  whatsappLid: /@lid/i.test(authorRaw || '') ? authorRaw : null,
+                  whatsappLid: lidDigitsForMap
+                    ? `${lidDigitsForMap}@lid`
+                    : (/@lid/i.test(authorRaw || '') ? authorRaw : null),
                   whatsappName: senderName,
                   source: 'manus_wa',
                 });

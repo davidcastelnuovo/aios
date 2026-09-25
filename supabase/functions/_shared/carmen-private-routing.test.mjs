@@ -7,6 +7,7 @@ import {
   isUsableLidKey,
   looksLikeRealPhone,
   outboundThirdPartyGuardDecision,
+  pickGroupAuthorLidDigits,
   pickInboundLidDigits,
   pickPayloadRealPhone,
   pickPrivateCarmenTarget,
@@ -211,6 +212,46 @@ test("a phone-shaped LID key resolves to itself instead of the single allowed ph
   });
   assert.equal(resolved.phone, "972508266089");
   assert.equal(resolved.reason, "lid_is_real_phone");
+});
+
+test("group author bare senderLid (no @lid) is still picked as a LID", () => {
+  // Live DMM regression: Manus group payload had senderLid/from/senderPhone as
+  // bare digits 224686986293269 with author/participant null — the @-only filter
+  // dropped them and Carmen replied «אני לא מזהה אותך».
+  const groupChatId = "120363413246972906@g.us";
+  const lid = pickGroupAuthorLidDigits({
+    authorRaw: "",
+    authorPhone: "",
+    groupChatId,
+    senderLidRaw: davidLid,
+    fromRaw: davidLid,
+    senderPhoneRaw: davidLid,
+  });
+  assert.equal(lid, davidLid);
+  assert.equal(isUsableLidKey(lid), true);
+  assert.equal(looksLikeRealPhone(lid), false);
+});
+
+test("group author @c.us phone wins and bare group id is not a LID", () => {
+  const groupChatId = "120363413246972906@g.us";
+  assert.equal(
+    pickGroupAuthorLidDigits({
+      authorRaw: `${davidPhone}@c.us`,
+      authorPhone: davidPhone,
+      groupChatId,
+      senderLidRaw: davidLid,
+    }),
+    davidLid,
+  );
+  assert.equal(
+    pickGroupAuthorLidDigits({
+      authorRaw: "",
+      authorPhone: "",
+      groupChatId,
+      fromRaw: "120363413246972906",
+    }),
+    "",
+  );
 });
 
 test("authorized Ana private target never equals David chat", () => {
