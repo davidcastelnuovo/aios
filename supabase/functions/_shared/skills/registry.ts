@@ -59,6 +59,13 @@ const FALLBACK_ECOMMERCE: CarmenSkill = {
   prompt: '=== סקיל: בדיקת דופק איקומרס ===\nללקוחות is_ecommerce=true: רכישות, CPP, רווח, ROAS — לא CPL.',
   source: 'fallback',
 }
+const FALLBACK_RETENTION: CarmenSkill = {
+  id: 'client_retention_scan',
+  triggers: [/שימור/, /נטישה/, /סיכון\s*נטישה/, /בריאות\s*לקוח/, /\bchurn\b/i, /client\s*retention/i],
+  tools: ['get_client_retention_scan', 'batch_update_client_health', 'update_client_health'],
+  prompt: '=== סקיל: דופק שימור ===\nחובה לקרוא ל-get_client_retention_scan. בוואטסאפ החזירי רק whatsapp_digest. אסור לשלוח הודעה ללקוח. אסור לחשב דופק חדש. batch_update_client_health רק אם ביקשו במפורש לעדכן את הדשבורד, עם note לכל לקוח.',
+  source: 'fallback',
+}
 const FALLBACK_AD_HEALTH: CarmenSkill = {
   id: 'ad_accounts_health',
   triggers: [/חשבונות\s*מודעות/, /תקינות\s*חשבונות/, /\bad\s*accounts?\b/i],
@@ -80,6 +87,7 @@ const FALLBACK_DEV_ENVIRONMENT: CarmenSkill = {
 
 const FALLBACKS: Record<string, CarmenSkill> = {
   pulse_check: FALLBACK_PULSE_CHECK,
+  client_retention_scan: FALLBACK_RETENTION,
   ecommerce_pulse: FALLBACK_ECOMMERCE,
   ad_accounts_health: FALLBACK_AD_HEALTH,
   [DEV_ENVIRONMENT_SKILL_SLUG]: FALLBACK_DEV_ENVIRONMENT,
@@ -91,7 +99,7 @@ const ALWAYS_ON_SKILL_SLUGS = new Set([DEV_ENVIRONMENT_SKILL_SLUG])
 export const PULSE_CHECK_SKILL = FALLBACK_PULSE_CHECK
 export const ECOMMERCE_PULSE_SKILL = FALLBACK_ECOMMERCE
 export const AD_ACCOUNTS_HEALTH_SKILL = FALLBACK_AD_HEALTH
-export const SKILLS_REGISTRY = [FALLBACK_PULSE_CHECK, FALLBACK_ECOMMERCE, FALLBACK_AD_HEALTH, FALLBACK_DEV_ENVIRONMENT]
+export const SKILLS_REGISTRY = [FALLBACK_PULSE_CHECK, FALLBACK_RETENTION, FALLBACK_ECOMMERCE, FALLBACK_AD_HEALTH, FALLBACK_DEV_ENVIRONMENT]
 
 // ────────── DB Loader with cache ──────────
 

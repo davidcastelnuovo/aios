@@ -104,6 +104,7 @@ import {
   pulseSurfacePrefersWhatsAppDigest,
   selectPulseCriticalAlerts,
 } from '../_shared/campaign-pulse.ts'
+import { buildRetentionScan, RETENTION_BATCH_LIMIT } from '../_shared/client-retention.ts'
 
 function scoreNameMatchSafe(fullName: string, query: string): number {
   return scoreNameMatch(fullName, query)
@@ -716,6 +717,8 @@ const ALL_TOOLS = [
   { name: 'get_maskyoo_calls_report', description: 'דוח שיחות מסקיו לדוחות SEO. מחזיר ספירות שיחות נכנסות לפי לקוח וקטגוריה (organic/paid) מ-seo_call_snapshots. אם אין snapshot — שולף ישירות מ-call_logs. מחזיר השוואה בין תקופות אם period_compare=true.', parameters: { type: 'object', properties: { client_id: { type: 'string', description: 'מזהה לקוח (אופציונלי — בלעדיו מחזיר כל הלקוחות)' }, client_name: { type: 'string', description: 'חיפוש לקוח לפי שם אם אין client_id' }, period_start: { type: 'string', description: 'תחילת תקופה YYYY-MM-DD (ברירת מחדל: תחילת החודש הנוכחי)' }, period_end: { type: 'string', description: 'סוף תקופה YYYY-MM-DD (ברירת מחדל: היום)' }, category: { type: 'string', enum: ['organic', 'paid', 'all'], description: 'ברירת מחדל: all' }, period_compare: { type: 'boolean', description: 'אם true — מחזיר גם תקופה קודמת מקבילה להשוואה' } } } },
   { name: 'sync_maskyoo_cdr', description: 'סנכרון CDRs (Call Detail Records) מ-API של מסקיו אל call_logs. הרץ כשהנתונים לא עדכניים. מחזיר כמה רשומות נוספו.', parameters: { type: 'object', properties: { from_date: { type: 'string', description: 'YYYY-MM-DD — תאריך התחלה לסנכרון (ברירת מחדל 7 ימים אחורה)' } } } },
   { name: 'update_client_health', description: 'עדכון מצב בריאות לקוח: מעדכן mood_status בטבלת clients ויוצר רשומה ב-communication_logs. השתמש בכלי הזה כדי להדליק דגל על לקוח כשמזהים בעיה (התייקרות, ירידה בביצועים).', parameters: { type: 'object', properties: { client_id: { type: 'string' }, mood_status: { type: 'string', enum: ['happy', 'wavering', 'churn_risk'], description: 'מצב הלקוח: happy=תקין, wavering=מתלבט, churn_risk=סיכון נטישה' }, communication_status: { type: 'string', enum: ['normal', 'sensitive', 'complaint'], description: 'סטטוס תקשורת לרשומת communication_logs' }, note: { type: 'string', description: 'הערה/סיכום — מה הבעיה שזוהתה' } }, required: ['client_id', 'mood_status', 'note'] } },
+  { name: 'get_client_retention_scan', description: 'דופק שימור: מדרג לקוחות פעילים לטיפול עכשיו או למעקב לפי דופק שמור ומצב CRM. לא מחשב דופק חדש, לא קורא למודל, ולא שולח הודעה ללקוח. בוואטסאפ החזירי רק whatsapp_digest.', parameters: { type: 'object', properties: { client_id: { type: 'string' }, client_name: { type: 'string', description: 'חיפוש חלקי בשם הלקוח' } } } },
+  { name: 'batch_update_client_health', description: 'עדכון בריאות לכמה לקוחות בבת אחת (עד 25). לכל שורה חובה client_id, mood_status ו-note. רק אחרי בקשה מפורשת לעדכן את הדשבורד — לא כחלק מסריקת שימור.', parameters: { type: 'object', properties: { updates: { type: 'array', items: { type: 'object', properties: { client_id: { type: 'string' }, mood_status: { type: 'string', enum: ['happy', 'wavering', 'churn_risk'] }, communication_status: { type: 'string', enum: ['normal', 'sensitive', 'complaint'] }, note: { type: 'string' } }, required: ['client_id', 'mood_status', 'note'] } } }, required: ['updates'] } },
   // CLIENTS - full CRUD
   { name: 'create_client', description: 'יצירת לקוח חדש במערכת', parameters: { type: 'object', properties: { name: { type: 'string', description: 'שם העסק/לקוח' }, contact_name: { type: 'string' }, phone: { type: 'string' }, email: { type: 'string' }, agency_id: { type: 'string', description: 'מזהה סוכנות (אופציונלי)' }, notes: { type: 'string' } }, required: ['name'] } },
   { name: 'update_client', description: 'עדכון פרטי לקוח קיים', parameters: { type: 'object', properties: { client_id: { type: 'string' }, name: { type: 'string' }, contact_name: { type: 'string' }, phone: { type: 'string' }, email: { type: 'string' }, status: { type: 'string', enum: ['active', 'inactive', 'lead'] }, notes: { type: 'string' }, follow_up_date: { type: 'string', description: 'תאריך לדבר עם הלקוח בפורמט YYYY-MM-DD' } }, required: ['client_id'] } },
@@ -3287,6 +3290,157 @@ async function executeTool(name: string, args: Record<string, any>, supabase: an
       }
 
       return { success: true, client_id: args.client_id, mood_status: args.mood_status, communication_status: commStatus, user_id: effectiveUserId }
+    }
+    case 'get_client_retention_scan': {
+      let clientQuery = supabase
+        .from('clients')
+        .select('id, name, mood_status, status')
+        .in('tenant_id', accessibleTenantIds)
+        .eq('status', 'active')
+      if (args.client_id) clientQuery = clientQuery.eq('id', args.client_id)
+      if (callerManagedAgencyIds && callerManagedAgencyIds.length > 0) {
+        clientQuery = clientQuery.in('agency_id', callerManagedAgencyIds)
+      }
+      const { data: clientRows, error: clientError } = await clientQuery
+      if (clientError) throw clientError
+      let activeClients = clientRows || []
+      if (args.client_name) {
+        const needle = String(args.client_name).toLocaleLowerCase('he')
+        activeClients = activeClients.filter((client: any) => String(client.name || '').toLocaleLowerCase('he').includes(needle))
+      }
+      if (callerCampaignerId && !bypassCampaignerScope) {
+        const { data: links, error: linksError } = await supabase
+          .from('client_team')
+          .select('client_id')
+          .eq('campaigner_id', callerCampaignerId)
+        if (linksError) throw linksError
+        const assigned = new Set((links || []).map((link: any) => link.client_id).filter(Boolean))
+        activeClients = activeClients.filter((client: any) => assigned.has(client.id))
+      }
+      const clientIds = activeClients.map((client: any) => client.id).filter(Boolean)
+      let callKnown = true
+      let pulseRows: any[] = []
+      if (clientIds.length) {
+        const loadPulses = async (columns: string) => await supabase
+          .from('campaign_pulse_snapshots')
+          .select(columns)
+          .in('tenant_id', accessibleTenantIds)
+          .in('client_id', clientIds)
+          .order('calculated_at', { ascending: false })
+        let pulseResult = await loadPulses('client_id, status, flags, last_client_call_at, calculated_at')
+        if (pulseResult.error && /last_client_call/.test(pulseResult.error.message)) {
+          callKnown = false
+          pulseResult = await loadPulses('client_id, status, flags, calculated_at')
+        }
+        if (pulseResult.error) throw pulseResult.error
+        pulseRows = pulseResult.data || []
+      }
+      const freshestPulse = new Map<string, any>()
+      for (const row of pulseRows) {
+        if (!freshestPulse.has(row.client_id)) freshestPulse.set(row.client_id, row)
+      }
+      const scan = buildRetentionScan(activeClients.map((client: any) => {
+        const pulse = freshestPulse.get(client.id)
+        return {
+          client_id: client.id,
+          client_name: client.name || 'לקוח',
+          mood_status: client.mood_status,
+          pulse_status: pulse?.status || null,
+          last_client_call_at: pulse?.last_client_call_at || null,
+          flags: pulse?.flags || [],
+          has_campaign_snapshot: !!pulse,
+          call_known: callKnown,
+        }
+      }))
+      const preferDigest = pulseSurfacePrefersWhatsAppDigest(surface)
+      return {
+        data_source: 'stored_pulse_and_crm_mood',
+        external_api_called: false,
+        ai_used_to_calculate: false,
+        outbound_sent: false,
+        call_freshness_available: callKnown,
+        scanned: scan.scanned,
+        act_now_count: scan.act_now_count,
+        watch_count: scan.watch_count,
+        steady_count: scan.steady_count,
+        truncated: scan.truncated,
+        whatsapp_digest: scan.whatsapp_digest,
+        items: preferDigest ? undefined : scan.items,
+        instructions_to_agent:
+          'הציגי את whatsapp_digest. אסור לטעון שנשלחה הודעה ללקוח. אסור לעדכן mood בלי בקשה מפורשת לעדכן את הדשבורד.',
+      }
+    }
+    case 'batch_update_client_health': {
+      const updates = Array.isArray(args.updates) ? args.updates : []
+      if (!updates.length) throw new Error('נדרשת רשימת עדכונים')
+      if (updates.length > RETENTION_BATCH_LIMIT) {
+        throw new Error(`אפשר לעדכן עד ${RETENTION_BATCH_LIMIT} לקוחות בקריאה אחת`)
+      }
+      let batchUserId = userId !== 'system' ? userId : null
+      if (!batchUserId) {
+        const { data: ownerRole } = await supabase
+          .from('user_roles')
+          .select('user_id')
+          .in('tenant_id', accessibleTenantIds)
+          .eq('role', 'owner')
+          .limit(1)
+          .maybeSingle()
+        batchUserId = ownerRole?.user_id || null
+      }
+      const results: any[] = []
+      for (const update of updates) {
+        const clientId = update?.client_id
+        const mood = update?.mood_status
+        const note = typeof update?.note === 'string' ? update.note.trim() : ''
+        if (!clientId || !mood || !note) {
+          results.push({ client_id: clientId || null, success: false, error: 'חסר client_id, mood_status או note' })
+          continue
+        }
+        if (!['happy', 'wavering', 'churn_risk'].includes(mood)) {
+          results.push({ client_id: clientId, success: false, error: 'mood_status לא חוקי' })
+          continue
+        }
+        try {
+          await assertCallerCanAccessClient(supabase, clientId, callerScope)
+          const { error: clientErr } = await supabase
+            .from('clients')
+            .update({ mood_status: mood })
+            .eq('id', clientId)
+            .in('tenant_id', accessibleTenantIds)
+          if (clientErr) throw clientErr
+          const commStatus = update.communication_status || (mood === 'happy' ? 'normal' : mood === 'wavering' ? 'sensitive' : 'complaint')
+          const { error: logErr } = await supabase.from('communication_logs').insert({
+            client_id: clientId,
+            tenant_id: tenantId,
+            status: commStatus,
+            interaction_type: 'system_alert',
+            note,
+            updated_by: batchUserId,
+          })
+          if (logErr) throw logErr
+          if (batchUserId) {
+            const { error: clientUpdateErr } = await supabase.from('client_updates').insert({
+              client_id: clientId,
+              tenant_id: tenantId,
+              user_id: batchUserId,
+              content: `[עדכון אוטומטי - כרמן] ${note}`,
+            })
+            if (clientUpdateErr) throw clientUpdateErr
+          }
+          results.push({ client_id: clientId, success: true, mood_status: mood })
+        } catch (err: any) {
+          results.push({ client_id: clientId, success: false, error: err?.message || 'update failed' })
+        }
+      }
+      const updated = results.filter((row) => row.success).length
+      return {
+        success: updated === results.length,
+        updated,
+        failed: results.length - updated,
+        outbound_sent: false,
+        results,
+        instructions_to_agent: 'דווחי כמה עודכנו וכמה נכשלו. אסור לומר שנשלחה הודעה ללקוח.',
+      }
     }
     case 'create_social_post': {
       // Insert into both social_media_posts (for publishing) and social_gantt_posts (for planning view)
@@ -7025,7 +7179,7 @@ async function handleRunAgent(bodyJson: any, surface: Surface, emit: Emit): Prom
         'sentiment-analyzer': 'בכל הודעה שמקבלת, נתחי את הטון הרגשי (חיובי/שלילי/נייטרלי) והתאם את התגובה בהתאם.',
         'faq-responder': 'כשעונה לשאלות, שלוף קודם את הנתונים הקיימים במערכת וענה לפי המידע הקיים.',
         'upsell-advisor': 'כשמתבקשת לנתח לקוח, זהה הזדמנויות לאפסליינג וקרוס-סלינג לפי היסטוריית הקניות.',
-        'churn-predictor': 'נתח את דפוסי הלקוחות וזהה סימני אזהרה לנטישה פוטנציאלית. הצע פעולות שימור מתאימות.',
+        'churn-predictor': 'קראי get_client_retention_scan ודווחי act_now ואז watch. אל תשלחי הודעה ללקוח. עדכני בריאות רק אם ביקשו במפורש.',
         'campaign-optimizer': 'נתח נתוני קמפיינים מהמערכת, זהה מה עובד ומה לא, והצע שיפורים קונקרטיים.',
         'smart-summarizer': 'כשמתבקשת סיכום, שלוף את כל המידע הרלוונטי והצג את העיקריות בצורה קצרה וברורה.',
         'crm-health-monitor': `את מנהלת דשבורד CRM לסוכנות שיווק. תפקידך לנתח כל לקוח ולעדכן את המצב שלו בדיוק לפי הכללים הבאים:
@@ -7122,7 +7276,7 @@ async function handleRunAgent(bodyJson: any, surface: Surface, emit: Emit): Prom
         'sentiment-analyzer': 'בכל הודעה שמקבלת, נתחי את הטון הרגשי (חיובי/שלילי/נייטרלי) והתאם את התגובה בהתאם.',
         'faq-responder': 'כשעונה לשאלות, שלוף קודם את הנתונים הקיימים במערכת וענה לפי המידע הקיים.',
         'upsell-advisor': 'כשמתבקשת לנתח לקוח, זהה הזדמנויות לאפסליינג וקרוס-סלינג לפי היסטוריית הקניות.',
-        'churn-predictor': 'נתח את דפוסי הלקוחות וזהה סימני אזהרה לנטישה פוטנציאלית. הצע פעולות שימור מתאימות.',
+        'churn-predictor': 'קראי get_client_retention_scan ודווחי act_now ואז watch. אל תשלחי הודעה ללקוח. עדכני בריאות רק אם ביקשו במפורש.',
         'campaign-optimizer': 'נתח נתוני קמפיינים מהמערכת, זהה מה עובד ומה לא, והצע שיפורים קונקרטיים.',
         'smart-summarizer': 'כשמתבקשת סיכום, שלוף את כל המידע הרלוונטי והצג את העיקריות בצורה קצרה וברורה.',
         'crm-health-monitor': `את מנהלת דשבורד CRM לסוכנות שיווק. תפקידך לנתח כל לקוח ולעדכן את המצב שלו בדיוק לפי הכללים הבאים:
