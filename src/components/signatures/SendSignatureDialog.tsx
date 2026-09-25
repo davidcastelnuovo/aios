@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import {
   Dialog,
@@ -9,15 +9,20 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { parseDocumentFields, getFieldLabel, isSignatureFieldType } from "@/components/signatures/signatureFieldTypes";
 import { toast } from "sonner";
-import { Check, Copy, Mail } from "lucide-react";
+import { Check, Copy, ImagePlus, Mail, X } from "lucide-react";
 import {
   copyFirstSigningLink,
   sendSignatureDocument,
   type SigningLinkResult,
 } from "@/lib/signatureSend";
 import { buildWhatsAppSignUrl, copySigningUrl } from "@/lib/signatureShare";
+import SignatureContactPicker from "@/components/signatures/SignatureContactPicker";
+import type { SignatureContactDetails } from "@/components/signatures/signatureContactUtils";
 
 function WhatsAppIcon({ className }: { className?: string }) {
   return (
@@ -71,6 +76,7 @@ export function SendSignatureDialog({
   documentTitleOverride,
   onSuccess,
 }: SendSignatureDialogProps) {
+  const queryClient = useQueryClient();
   const resolvedMode = mode ?? (doc?.is_template ? "template" : "direct");
 
   const [name, setName] = useState("");
@@ -79,6 +85,62 @@ export function SendSignatureDialog({
   const [busy, setBusy] = useState<SendAction | null>(null);
   const [links, setLinks] = useState<SigningLinkResult[]>([]);
   const [lastAction, setLastAction] = useState<SendAction | null>(null);
+  const [logoUrl, setLogoUrl] = useState<string | null>(null);
+  const logoChoice = useRef<"auto" | "manual">("auto");
+  const [uploadingLogo, setUploadingLogo] = useState(false);
+  const [picked, setPicked] = useState<SignatureContactDetails | null>(null);
+  const [fieldMap, setFieldMap] = useState<Record<string, string>>({});
+  const [emailSubject, setEmailSubject] = useState("בקשה לחתימה: {{title}}");
+  const [emailBody, setEmailBody] = useState("");
+  const [savingDefaults, setSavingDefaults] = useState(false);
+  const emailDraftReady = useRef(false);
+
+  const { data: emailSettings } = useQuery({
+    queryKey: ["signature-email-settings", tenantId],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("tenant_settings")
+        .select("setting_value")
+        .eq("tenant_id", tenantId!)
+        .eq("setting_key", "signature_email")
+        .maybeSingle();
+      if (error) throw error;
+      return (data?.setting_value ?? null) as { logoUrl?: string | null; subject?: string | null; body?: string | null } | null;
+    },
+    enabled: open && !!tenantId,
+  });
+
+  const { data: templateEmails } = useQuery({
+    queryKey: ["signature-template-email", tenantId],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("tenant_settings")
+        .select("setting_value")
+        .eq("tenant_id", tenantId!)
+        .eq("setting_key", "signature_template_email")
+        .maybeSingle();
+      if (error) throw error;
+      return (data?.setting_value ?? {}) as Record<string, { logoUrl?: string | null; subject?: string | null; body?: string | null }>;
+    },
+    enabled: open && !!tenantId && resolvedMode === "template",
+  });
+  const templateEmail = doc?.id ? templateEmails?.[doc.id] : undefined;
+
+  const { data: brandLogo } = useQuery({
+    queryKey: ["tenant-branding-logo", tenantId],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("tenant_settings")
+        .select("setting_value")
+        .eq("tenant_id", tenantId!)
+        .eq("setting_key", "branding")
+        .maybeSingle();
+      if (error) throw error;
+      const settings = data?.setting_value as { logoUrl?: string } | null;
+      return settings?.logoUrl || null;
+    },
+    enabled: open && !!tenantId,
+  });
 
   const initializedDocument = useRef<string | null>(null);
   const preparedDocument = useRef<string | null>(null);
@@ -96,6 +158,20 @@ export function SendSignatureDialog({
     enabled: open && !!doc?.id && resolvedMode === "direct" && !doc?.is_template,
   });
 
+  const { data: documentFields = [] } = useQuery({
+    queryKey: ["signature-doc-fields", doc?.id],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("signature_documents")
+        .select("document_fields")
+        .eq("id", doc!.id)
+        .single();
+      if (error) throw error;
+      return parseDocumentFields(data.document_fields).filter((field) => !isSignatureFieldType(field.type));
+    },
+    enabled: open && !!doc?.id,
+  });
+
   useEffect(() => {
     if (!open) {
       initializedDocument.current = null;
@@ -103,6 +179,10 @@ export function SendSignatureDialog({
       setLinks([]);
       setBusy(null);
       setLastAction(null);
+      setLogoUrl(null);
+      setPicked(null);
+      logoChoice.current = "auto";
+      emailDraftReady.current = false;
       return;
     }
     if (!doc?.id || loadingRecipients || initializedDocument.current === doc.id) return;
@@ -115,6 +195,28 @@ export function SendSignatureDialog({
     setLinks([]);
     setLastAction(null);
   }, [open, doc?.id, defaultRecipient?.name, defaultRecipient?.email, defaultRecipient?.phone, existingRecipients, loadingRecipients]);
+
+  useEffect(() => {
+    if (!open || logoChoice.current === "manual") return;
+    setLogoUrl(emailSettings?.logoUrl || brandLogo || null);
+  }, [open, doc?.id, brandLogo, emailSettings?.logoUrl]);
+
+  useEffect(() => {
+    if (!open) return;
+    setFieldMap(Object.fromEntries(documentFields.map((field) => [
+      field.id,
+      field.type === "text" || field.type === "date" ? "none" : field.type,
+    ])));
+  }, [open, doc?.id, documentFields]);
+
+  useEffect(() => {
+    if (!open) return;
+    if (emailDraftReady.current || emailSettings === undefined) return;
+    if (resolvedMode === "template" && templateEmails === undefined) return;
+    emailDraftReady.current = true;
+    setEmailSubject(templateEmail?.subject?.trim() || "בקשה לחתימה: {{title}}");
+    setEmailBody(templateEmail?.body || "");
+  }, [open, emailSettings, templateEmails, templateEmail, resolvedMode]);
 
   const clearPrepared = () => { preparedDocument.current = null; setLinks([]); setLastAction(null); };
 
@@ -164,13 +266,20 @@ export function SendSignatureDialog({
           phone: phone.trim() || undefined,
         },
         contactDetails: {
-          firstName: defaultRecipient?.firstName,
-          lastName: defaultRecipient?.lastName,
+          firstName: picked?.firstName || defaultRecipient?.firstName,
+          lastName: picked?.lastName || defaultRecipient?.lastName,
           phone: phone.trim() || undefined,
+          companyName: picked?.companyName,
+          address: picked?.address,
+          idNumber: picked?.idNumber,
         },
-        leadId,
-        clientId,
+        fieldMap,
+        leadId: picked?.leadId || leadId,
+        clientId: picked?.clientId || clientId,
         documentTitleOverride,
+        logoUrl: logoChoice.current === "manual" ? logoUrl : logoUrl ?? undefined,
+        emailSubject,
+        emailBody,
       });
 
       // Start clipboard work in the original user gesture, before awaiting the server.
@@ -224,7 +333,22 @@ export function SendSignatureDialog({
 
         <div className="min-w-0 flex-1 overflow-y-auto overflow-x-hidden space-y-4">
           <div className="space-y-3 rounded-lg border p-3 min-w-0">
-            <p className="text-sm font-medium">פרטי החותם</p>
+            <div className="flex items-center justify-between gap-2">
+              <p className="text-sm font-medium">פרטי החותם</p>
+              <SignatureContactPicker
+                tenantId={tenantId}
+                onSelect={(contact) => {
+                  setPicked(contact);
+                  setName(contact.name);
+                  setEmail(contact.email);
+                  setPhone(contact.phone || "");
+                  clearPrepared();
+                }}
+              />
+            </div>
+            {picked?.sourceLabel && (
+              <p className="text-xs text-primary">{picked.sourceLabel}</p>
+            )}
             <div className="space-y-2 min-w-0">
               <Label>שם</Label>
               <Input
@@ -257,6 +381,173 @@ export function SendSignatureDialog({
                 className="text-left min-w-0"
               />
             </div>
+          </div>
+
+          {documentFields.length > 0 && (
+            <div className="space-y-2 rounded-lg border p-3 min-w-0">
+              <p className="text-sm font-medium">מיפוי שדות</p>
+              {documentFields.map((field) => (
+                <div key={field.id} className="grid grid-cols-2 gap-2 items-center">
+                  <span className="text-sm truncate">{field.label || getFieldLabel(field.type)}</span>
+                  <Select
+                    value={fieldMap[field.id] || "none"}
+                    onValueChange={(value) => setFieldMap((current) => ({ ...current, [field.id]: value }))}
+                  >
+                    <SelectTrigger className="h-8"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none">בלי מילוי</SelectItem>
+                      <SelectItem value="full_name">שם מלא</SelectItem>
+                      <SelectItem value="first_name">שם פרטי</SelectItem>
+                      <SelectItem value="last_name">שם משפחה</SelectItem>
+                      <SelectItem value="company_name">חברה</SelectItem>
+                      <SelectItem value="phone">טלפון</SelectItem>
+                      <SelectItem value="email">אימייל</SelectItem>
+                      <SelectItem value="address">כתובת</SelectItem>
+                      <SelectItem value="id_number">ח.פ / ת.ז</SelectItem>
+                      <SelectItem value="today">תאריך היום</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              ))}
+            </div>
+          )}
+
+          <div className="space-y-2 rounded-lg border p-3 min-w-0">
+            <p className="text-sm font-medium">לוגו במייל</p>
+            {logoUrl ? (
+              <div className="flex items-center gap-3">
+                <img src={logoUrl} alt="" className="h-12 max-w-[140px] object-contain bg-white border rounded" />
+                <Button type="button" size="sm" variant="ghost" disabled={!!busy} onClick={() => { logoChoice.current = "manual"; setLogoUrl(null); }}>
+                  <X className="h-4 w-4" />
+                  בלי לוגו
+                </Button>
+              </div>
+            ) : (
+              <p className="text-xs text-muted-foreground">המייל יישלח בלי לוגו</p>
+            )}
+            <div className="flex flex-wrap gap-2">
+              {brandLogo && logoUrl !== brandLogo && (
+                <Button type="button" size="sm" variant="outline" disabled={!!busy} onClick={() => { logoChoice.current = "manual"; setLogoUrl(brandLogo); }}>
+                  לוגו המותג
+                </Button>
+              )}
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                disabled={!!busy || uploadingLogo || !tenantId}
+                onClick={() => document.getElementById("signature-email-logo")?.click()}
+              >
+                <ImagePlus className="h-4 w-4" />
+                {uploadingLogo ? "מעלה..." : "בחר לוגו"}
+              </Button>
+              <input
+                id="signature-email-logo"
+                type="file"
+                accept="image/png,image/jpeg,image/webp,image/gif"
+                className="hidden"
+                onChange={async (event) => {
+                  const file = event.target.files?.[0];
+                  event.target.value = "";
+                  if (!file || !tenantId) return;
+                  if (!file.type.startsWith("image/") || file.size > 2 * 1024 * 1024) {
+                    toast.error("יש להעלות תמונה עד 2MB");
+                    return;
+                  }
+                  setUploadingLogo(true);
+                  try {
+                    const ext = file.name.split(".").pop() || "png";
+                    const path = `${tenantId}/signature-email/${crypto.randomUUID()}.${ext}`;
+                    const { error } = await supabase.storage.from("tenant-logos").upload(path, file, { upsert: false });
+                    if (error) throw error;
+                    const { data } = supabase.storage.from("tenant-logos").getPublicUrl(path);
+                    logoChoice.current = "manual";
+                    setLogoUrl(data.publicUrl);
+                  } catch (err) {
+                    toast.error(err instanceof Error ? err.message : "העלאת הלוגו נכשלה");
+                  } finally {
+                    setUploadingLogo(false);
+                  }
+                }}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>נושא האימייל</Label>
+              <Input value={emailSubject} onChange={(event) => setEmailSubject(event.target.value)} disabled={!!busy} />
+            </div>
+            <div className="space-y-2">
+              <Label>גוף האימייל</Label>
+              <div className="flex flex-wrap gap-1">
+                {[
+                  ["שם פרטי", "{{first_name}}"],
+                  ["שם משפחה", "{{last_name}}"],
+                  ["שם מלא", "{{name}}"],
+                  ["חברה", "{{company}}"],
+                  ["טלפון", "{{phone}}"],
+                  ["אימייל", "{{email}}"],
+                  ["כתובת", "{{address}}"],
+                  ["ח.פ / ת.ז", "{{id_number}}"],
+                  ["שם המסמך", "{{title}}"],
+                  ["שולח", "{{sender}}"],
+                ].map(([label, token]) => (
+                  <Button
+                    key={token}
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    className="h-7 px-2 text-xs"
+                    disabled={!!busy}
+                    onClick={() => setEmailBody((current) => `${current}${current && !current.endsWith(" ") ? " " : ""}${token}`)}
+                  >
+                    {label}
+                  </Button>
+                ))}
+              </div>
+              {picked && (
+                <p className="text-xs text-muted-foreground">
+                  {[picked.firstName && `שם פרטי: ${picked.firstName}`, picked.lastName && `שם משפחה: ${picked.lastName}`, picked.phone && `טלפון: ${picked.phone}`].filter(Boolean).join(" · ") || picked.name}
+                </p>
+              )}
+              <Textarea value={emailBody} onChange={(event) => setEmailBody(event.target.value)} disabled={!!busy} rows={4} placeholder="היי {{first_name}}, מצורף מסמך לחתימה" />
+            </div>
+            <Button
+              type="button"
+              size="sm"
+              variant="secondary"
+              disabled={!!busy || savingDefaults || !tenantId || (resolvedMode === "template" && !doc?.id)}
+              onClick={async () => {
+                if (!tenantId) return;
+                setSavingDefaults(true);
+                try {
+                  const { error: logoError } = await supabase.from("tenant_settings").upsert({
+                    tenant_id: tenantId,
+                    setting_key: "signature_email",
+                    setting_value: { ...(emailSettings ?? {}), logoUrl },
+                  }, { onConflict: "tenant_id,setting_key" });
+                  if (logoError) throw logoError;
+                  if (resolvedMode === "template" && doc?.id) {
+                    const { error } = await supabase.from("tenant_settings").upsert({
+                      tenant_id: tenantId,
+                      setting_key: "signature_template_email",
+                      setting_value: {
+                        ...(templateEmails ?? {}),
+                        [doc.id]: { subject: emailSubject, body: emailBody },
+                      },
+                    }, { onConflict: "tenant_id,setting_key" });
+                    if (error) throw error;
+                    await queryClient.invalidateQueries({ queryKey: ["signature-template-email", tenantId] });
+                  }
+                  await queryClient.invalidateQueries({ queryKey: ["signature-email-settings", tenantId] });
+                  toast.success(resolvedMode === "template" ? "הלוגו נשמר לסוכנות, והנושא והגוף לתבנית" : "הלוגו נשמר לסוכנות");
+                } catch (err) {
+                  toast.error(err instanceof Error ? err.message : "שמירת ההגדרות נכשלה");
+                } finally {
+                  setSavingDefaults(false);
+                }
+              }}
+            >
+              {savingDefaults ? "שומר..." : resolvedMode === "template" ? "שמור לוגו לסוכנות ונוסח לתבנית" : "שמור לוגו לסוכנות"}
+            </Button>
           </div>
 
           <div className="grid gap-2 min-w-0">

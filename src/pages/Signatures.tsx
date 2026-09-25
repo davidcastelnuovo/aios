@@ -31,6 +31,7 @@ import { SignatureDocumentFieldEditor } from "@/components/signatures/SignatureD
 import { SendSignatureDialog } from "@/components/signatures/SendSignatureDialog";
 import { mediaKindFromFile, detectMediaKind } from "@/components/signatures/signatureDocumentMedia";
 import { SignatureOriginalFileLink } from "@/components/signatures/SignatureOriginalFileLink";
+import { SignedSignatureReview } from "@/components/signatures/SignedSignatureReview";
 
 interface Recipient {
   name: string;
@@ -132,6 +133,23 @@ export default function Signatures() {
     },
     enabled: !!tenantId,
   });
+
+  const { data: freshDoc } = useQuery({
+    queryKey: ["signature-document", selectedDoc?.id],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("signature_documents")
+        .select("*")
+        .eq("id", selectedDoc.id)
+        .single();
+      if (error) throw error;
+      return data;
+    },
+    enabled: isViewOpen && !!selectedDoc?.id,
+    refetchInterval: (query) =>
+      query.state.data?.status === "completed" && !query.state.data?.signed_file_url ? 4000 : false,
+  });
+  const viewedDoc = freshDoc ?? selectedDoc;
 
   // Fetch recipients for selected doc
   const { data: docRecipients } = useQuery({
@@ -1071,14 +1089,16 @@ export default function Signatures() {
 
       {/* View Document Dialog */}
       <Dialog open={isViewOpen} onOpenChange={(open) => { setIsViewOpen(open); if (!open) setLastSentLinks([]); }}>
-        <DialogContent className="max-w-2xl max-h-[90vh] overflow-x-hidden overflow-y-auto min-w-0" dir="rtl">
+        <DialogContent className={`${viewedDoc?.status === "completed" ? "max-w-4xl" : "max-w-2xl"} max-h-[90vh] overflow-x-hidden overflow-y-auto min-w-0`} dir="rtl">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
-              {selectedDoc?.title}
-              {selectedDoc?.is_template && <Badge variant="secondary">תבנית</Badge>}
+              {viewedDoc?.title}
+              {viewedDoc?.is_template && <Badge variant="secondary">תבנית</Badge>}
             </DialogTitle>
           </DialogHeader>
-          {selectedDoc && (
+          {viewedDoc?.status === "completed" ? (
+            <SignedSignatureReview doc={viewedDoc} signers={docRecipients ?? []} tenantId={tenantId} />
+          ) : selectedDoc && (
             <div className="space-y-4">
               {/* Document Content */}
               {selectedDoc.document_type === "created" && selectedDoc.content && (
