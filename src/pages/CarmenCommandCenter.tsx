@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Link, Navigate, useParams } from "react-router-dom";
-import { ArrowRight, History, LayoutDashboard, Target, Users, Wrench } from "lucide-react";
+import { ArrowRight, ClipboardList, History, LayoutDashboard, Target, Users, Wrench } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useCurrentTenant } from "@/hooks/useCurrentTenant";
 import { useCommandCenterAccess } from "@/components/carmen-command/access";
@@ -8,6 +8,7 @@ import type { CarmenFaceState } from "@/components/carmen-command/CarmenFace";
 import { CarmenDashboardView } from "@/components/carmen-command/CarmenDashboardView";
 import { DevTasksCommandCenterView } from "@/components/carmen-command/DevTasksCommandCenterView";
 import { GoalsCommandCenterView } from "@/components/carmen-command/GoalsCommandCenterView";
+import { ClientOpsCommandCenterView } from "@/components/carmen-command/ClientOpsCommandCenterView";
 import { HudMenu } from "@/components/carmen-command/HudMenu";
 import { AgentSeatRail, AgentSeatStatus } from "@/components/carmen-command/AgentSeatRail";
 import { CarmenChatBar, CarmenChatBarHandle } from "@/components/carmen-command/CarmenChatBar";
@@ -18,7 +19,7 @@ import type { HudStage } from "@/lib/agentChannelRouting";
 
 import "@/components/carmen-command/command-center.css";
 
-export type CommandCenterViewMode = "agents" | "dashboard" | "dev_tasks" | "goals";
+export type CommandCenterViewMode = "agents" | "dashboard" | "dev_tasks" | "goals" | "client_ops";
 
 const VIEW_MODE_KEY = "aios:cc-view-mode";
 
@@ -28,6 +29,7 @@ function readViewMode(): CommandCenterViewMode {
     if (v === "dashboard") return "dashboard";
     if (v === "dev_tasks") return "dev_tasks";
     if (v === "goals") return "goals";
+    if (v === "client_ops") return "client_ops";
     return "agents";
   } catch {
     return "agents";
@@ -122,10 +124,11 @@ export default function CarmenCommandCenter() {
   const isDashboard = viewMode === "dashboard";
   const isDevTasks = viewMode === "dev_tasks";
   const isGoals = viewMode === "goals";
-  const isSpecialView = isDevTasks || isGoals;
+  const isClientOps = viewMode === "client_ops";
+  const isSpecialView = isDevTasks || isGoals || isClientOps;
 
   return (
-    <div dir="rtl" className={`cc-root relative flex flex-col overflow-hidden font-heebo${isDashboard ? " is-dashboard" : ""}${isDevTasks ? " is-dev-tasks" : ""}${isGoals ? " is-goals" : ""}`}>
+    <div dir="rtl" className={`cc-root relative flex flex-col overflow-hidden font-heebo${isDashboard ? " is-dashboard" : ""}${isDevTasks ? " is-dev-tasks" : ""}${isGoals ? " is-goals" : ""}${isClientOps ? " is-client-ops" : ""}`}>
       <header className="cc-header-bar shrink-0">
         <div className="cc-header-bar__brand flex min-w-0 items-center gap-1.5 sm:gap-2">
           <Link
@@ -199,6 +202,20 @@ export default function CarmenCommandCenter() {
             <span className="hidden sm:inline">{isGoals ? "יעדי ביצוע" : "יעדים"}</span>
           </button>
 
+          <button
+            type="button"
+            title="תפעול לקוחות — המלצות, קבוצות Green, משימות"
+            onClick={() => switchViewMode(isClientOps ? "agents" : "client_ops")}
+            className={`cc-header-btn flex items-center gap-1 rounded-md border px-2 text-xs ${
+              isClientOps
+                ? "border-[var(--cc-accent)] text-[var(--cc-accent)]"
+                : "border-[var(--cc-line)] text-[var(--cc-text-dim)] hover:border-[var(--cc-line-strong)]"
+            }`}
+          >
+            <ClipboardList className="h-4 w-4" />
+            <span className="hidden sm:inline">{isClientOps ? "תפעול לקוחות" : "תפעול"}</span>
+          </button>
+
           {!isDashboard && !isSpecialView && (
             <>
               <HudMenu
@@ -241,6 +258,8 @@ export default function CarmenCommandCenter() {
 
       {isGoals ? (
         <GoalsCommandCenterView tenantId={tenantId} />
+      ) : isClientOps ? (
+        <ClientOpsCommandCenterView tenantId={tenantId} />
       ) : isDevTasks ? (
         <DevTasksCommandCenterView tenantId={tenantId} />
       ) : isDashboard ? (

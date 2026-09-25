@@ -75,6 +75,20 @@ import {
   findDuplicateDevTasks,
   logDevTaskEvent,
 } from '../_shared/dev-tasks.ts'
+import { buildClientOperationsPackage } from '../_shared/client-operations.ts'
+import {
+  createCommitmentFollowup,
+  fetchClientGreenApiGroupCommunications,
+  syncWeeklyUpdateFromGreenGroup,
+} from '../_shared/client-green-group-monitor.ts'
+import {
+  getOperationRunDetail,
+  listOperationRuns,
+} from '../_shared/operation-control.ts'
+import {
+  runPlaybookForRecommendation,
+  verifyRecommendation,
+} from '../_shared/client-ops-playbook-runner.ts'
 import {
   addGoalBlocker,
   addGoalMilestone,
@@ -676,6 +690,16 @@ const ALL_TOOLS = [
   // CLIENTS
   { name: 'list_clients', description: 'רשימת/חיפוש לקוחות. אפשר לסנן לפי סטטוס, קמפיינר, סוכנות (agency_id/agency_name — חובה לסנן כשהמשתמש שואל על "לקוחות בסוכנות X"), או name_search. הערה: כשהקורא הוא קמפיינר (WhatsApp), ברירת המחדל היא הצגת לקוחות שמשוייכים אליו בלבד בסטטוס active/onboarding — אלא אם סופק campaigner_name/agency_name אחר במפורש. החיפוש case-insensitive. אל תאמר "לא נמצא" לפני שניסית name_search.', parameters: { type: 'object', properties: { status: { type: 'string', description: 'active / onboarding / inactive. ברירת מחדל עבור קמפיינר WhatsApp: active+onboarding בלבד.' }, limit: { type: 'integer' }, name_search: { type: 'string', description: 'חיפוש חלקי בשם הלקוח או איש הקשר (case-insensitive). נסה גם תעתיק אנגלי לעברית ולהפך.' }, campaigner_id: { type: 'string', description: 'סינון ללקוחות המשוייכים לקמפיינר זה (דרך client_team)' }, campaigner_name: { type: 'string', description: 'סינון לפי שם קמפיינר (חיפוש חופשי בשם המלא)' }, agency_id: { type: 'string', description: 'סינון ללקוחות בסוכנות זו בלבד' }, agency_name: { type: 'string', description: 'סינון לפי שם סוכנות (חיפוש חלקי, case-insensitive). חובה להשתמש כשהמשתמש מציין סוכנות בשם.' }, all_scopes: { type: 'boolean', description: 'דרוס את הסקופ האוטומטי של הקמפיינר והחזר את כל הלקוחות בארגון (לשימוש רק אם המשתמש ביקש זאת מפורשות).' } } } },
   { name: 'get_client_info', description: 'מידע על לקוח', parameters: { type: 'object', properties: { client_id: { type: 'string' } }, required: ['client_id'] } },
+  { name: 'get_client_operations_package', description: 'תמונת תפעול 360° ללקוח: דופק, התראות פתוחות, עדכוני כרטיס, משימות, הודעות קבוצה (Manus, לפי carmen_client_group_access), קבוצת Green API (קריאה בלבד), והמלצות יזומות. refresh_recommendations=true (ברירת מחדל) מריץ כללי סריקה ללא LLM. פעולות מקדמיות (Meta/WA) — רק דרך אישור.', parameters: { type: 'object', properties: { client_id: { type: 'string' }, refresh_recommendations: { type: 'boolean', description: 'ברירת מחדל true — לעדכן המלצות open' } }, required: ['client_id'] } },
+  { name: 'get_client_green_group_communications', description: 'קריאה בלבד: היסטוריית קבוצת WhatsApp של הלקוח ב-Green API (CRM, clients.whatsapp_group_id). מזהה שאלות ללא מענה, התחייבויות שלא בוצעו, ועדכון שבועי בקבוצה שחסר בכרטיס. אסור לשלוח/להגיב לקבוצה — רק לדווח או לסנכרן לכרטיס בכלים הייעודיים.', parameters: { type: 'object', properties: { client_id: { type: 'string' }, days_back: { type: 'integer', description: 'ברירת מחדל 7, מקס 30' }, limit: { type: 'integer' } }, required: ['client_id'] } },
+  { name: 'sync_weekly_update_from_green_group', description: 'מעתיק עדכון שבועי שנשלח בקבוצת Green API ל-client_updates (update_type=weekly_update). dry_run=true (ברירת מחדל) מציג preview; dry_run=false כותב לכרטיס.', parameters: { type: 'object', properties: { client_id: { type: 'string' }, message_at: { type: 'string', description: 'ISO timestamp של הודעה ספציפית; אופציונלי' }, dry_run: { type: 'boolean' } }, required: ['client_id'] } },
+  { name: 'create_commitment_followup', description: 'כשהובטחה פעולה בקבוצה ולא זוהה ביצוע — יוצר משימת tasks פתוחה + client_update מעקב. לא שולח לקבוצה.', parameters: { type: 'object', properties: { client_id: { type: 'string' }, message_at: { type: 'string', description: 'message_at מה-unfulfilled_staff_commitments' }, task_title: { type: 'string' } }, required: ['client_id', 'message_at'] } },
+  { name: 'list_client_operation_recommendations', description: 'רשימת המלצות תפעול פתוחות (Client 360).', parameters: { type: 'object', properties: { client_id: { type: 'string' }, severity: { type: 'string', enum: ['info', 'warning', 'critical'] }, limit: { type: 'integer' } } } },
+  { name: 'update_client_operation_recommendation', description: 'עדכון סטטוס המלצה: accepted / dismissed / resolved.', parameters: { type: 'object', properties: { recommendation_id: { type: 'string' }, status: { type: 'string', enum: ['accepted', 'dismissed', 'resolved'] } }, required: ['recommendation_id', 'status'] } },
+  { name: 'execute_client_operation_playbook', description: 'מריץ playbook לפי signal_kind על המלצה פתוחה: יוצר tasks+עדכון כרטיס, assignee לפי client_ops_playbooks (ברירת מחדל קמפיינר הלקוח). dry_run=true לתצוגה מקדימה. docs/client-ops-signal-framework.md', parameters: { type: 'object', properties: { recommendation_id: { type: 'string' }, dry_run: { type: 'boolean' } }, required: ['recommendation_id'] } },
+  { name: 'verify_client_operation_recommendation', description: 'מריץ checklist אימות מה-playbook (דופק, מענה בקבוצה, משימה פתוחה וכו׳) ומעדכן last_verification_result.', parameters: { type: 'object', properties: { recommendation_id: { type: 'string' } }, required: ['recommendation_id'] } },
+  { name: 'list_operation_runs', description: 'COCL: ריצות תפעול (PEVR) — מה רץ, חריגות, dispatch ל-Cursor. exception_only=true מסנן needs_attention.', parameters: { type: 'object', properties: { since_hours: { type: 'integer', description: 'ברירת מחדל 168 (שבוע)' }, exception_only: { type: 'boolean' }, operation_type: { type: 'string', description: 'dev_dispatch / pulse_check / …' }, limit: { type: 'integer' } } } },
+  { name: 'get_operation_run', description: 'COCL: פירוט ריצה — אירועים, אימות, דוחות, קישור dev_task / session.', parameters: { type: 'object', properties: { run_id: { type: 'string' } }, required: ['run_id'] } },
   { name: 'add_client_update', description: 'הוספת עדכון ללקוח', parameters: { type: 'object', properties: { client_id: { type: 'string' }, content: { type: 'string' } }, required: ['client_id', 'content'] } },
   // MESSAGES
   { name: 'send_message', description: 'שליחת הודעת WhatsApp ללקוח או ליד', parameters: { type: 'object', properties: { contact_type: { type: 'string', enum: ['lead', 'client'] }, contact_id: { type: 'string' }, message_text: { type: 'string' } }, required: ['contact_type', 'contact_id', 'message_text'] } },
@@ -2181,6 +2205,185 @@ async function executeTool(name: string, args: Record<string, any>, supabase: an
         }
       }
       return data
+    }
+    case 'get_client_green_group_communications': {
+      await assertCallerCanAccessClient(supabase, args.client_id, callerScope)
+      return await fetchClientGreenApiGroupCommunications(supabase, {
+        tenantId,
+        clientId: String(args.client_id),
+        daysBack: args.days_back,
+        messageLimit: args.limit,
+      })
+    }
+    case 'sync_weekly_update_from_green_group': {
+      await assertCallerCanAccessClient(supabase, args.client_id, callerScope)
+      const actor = userId !== 'system' ? userId : null
+      return await syncWeeklyUpdateFromGreenGroup(supabase, {
+        tenantId,
+        clientId: String(args.client_id),
+        messageAt: args.message_at,
+        dryRun: args.dry_run !== false,
+        actorUserId: actor,
+      })
+    }
+    case 'create_commitment_followup': {
+      await assertCallerCanAccessClient(supabase, args.client_id, callerScope)
+      const actor = userId !== 'system' ? userId : null
+      return await createCommitmentFollowup(supabase, {
+        tenantId,
+        clientId: String(args.client_id),
+        messageAt: String(args.message_at),
+        taskTitle: args.task_title,
+        actorUserId: actor,
+      })
+    }
+    case 'get_client_operations_package': {
+      await assertCallerCanAccessClient(supabase, args.client_id, callerScope)
+      try {
+        return await buildClientOperationsPackage(supabase, {
+          tenantId,
+          clientId: String(args.client_id),
+          accessibleTenantIds,
+          refreshRecommendations: args.refresh_recommendations !== false,
+        })
+      } catch (e: unknown) {
+        const msg = e instanceof Error ? e.message : String(e)
+        if (/client_operation_recommendations/.test(msg)) {
+          return {
+            error: 'schema_pending',
+            note: 'הטבלה client_operation_recommendations עדיין לא ב-Staging — הריצו מיגרציה 20260922200000.',
+            client_id: args.client_id,
+          }
+        }
+        throw e
+      }
+    }
+    case 'list_client_operation_recommendations': {
+      let q = supabase
+        .from('client_operation_recommendations')
+        .select('*')
+        .eq('tenant_id', tenantId)
+        .eq('status', 'open')
+        .order('updated_at', { ascending: false })
+      if (args.client_id) {
+        await assertCallerCanAccessClient(supabase, args.client_id, callerScope)
+        q = q.eq('client_id', args.client_id)
+      }
+      if (args.severity) q = q.eq('severity', args.severity)
+      const limit = Math.min(Number(args.limit) || 30, 80)
+      const { data, error } = await q.limit(limit)
+      if (error) {
+        if (/client_operation_recommendations/.test(error.message)) {
+          return { count: 0, recommendations: [], note: 'schema_pending' }
+        }
+        throw error
+      }
+      return { count: data?.length || 0, recommendations: data || [] }
+    }
+    case 'update_client_operation_recommendation': {
+      const id = String(args.recommendation_id || '')
+      const status = String(args.status || '')
+      const { data: row, error: fetchErr } = await supabase
+        .from('client_operation_recommendations')
+        .select('id, client_id, tenant_id')
+        .eq('id', id)
+        .eq('tenant_id', tenantId)
+        .maybeSingle()
+      if (fetchErr) throw fetchErr
+      if (!row) return { error: 'not_found' }
+      await assertCallerCanAccessClient(supabase, row.client_id, callerScope)
+      const patch: Record<string, unknown> = {
+        status,
+        updated_at: new Date().toISOString(),
+      }
+      if (status === 'resolved' || status === 'dismissed') {
+        patch.resolved_at = new Date().toISOString()
+        patch.resolved_by = userId
+      }
+      const { data, error } = await supabase
+        .from('client_operation_recommendations')
+        .update(patch)
+        .eq('id', id)
+        .eq('tenant_id', tenantId)
+        .select('*')
+        .single()
+      if (error) throw error
+      return { recommendation: data }
+    }
+    case 'execute_client_operation_playbook': {
+      const recommendationId = String(args.recommendation_id || '')
+      if (!recommendationId) return { error: 'recommendation_id required' }
+      try {
+        return await runPlaybookForRecommendation(supabase, {
+          tenantId,
+          recommendationId,
+          actorUserId: userId,
+          dryRun: args.dry_run === true,
+        })
+      } catch (e: unknown) {
+        const msg = e instanceof Error ? e.message : String(e)
+        if (/client_ops_playbooks|signal_kind/.test(msg)) {
+          return { error: 'schema_pending', note: 'migration 20260923100000' }
+        }
+        throw e
+      }
+    }
+    case 'verify_client_operation_recommendation': {
+      const recommendationId = String(args.recommendation_id || '')
+      if (!recommendationId) return { error: 'recommendation_id required' }
+      return await verifyRecommendation(supabase, { tenantId, recommendationId })
+    }
+    case 'list_operation_runs': {
+      const sinceHours = Number(args.since_hours) || 168
+      const sinceIso = new Date(Date.now() - sinceHours * 3600_000).toISOString()
+      try {
+        const runs = await listOperationRuns(supabase, {
+          tenantId,
+          limit: args.limit,
+          exceptionOnly: !!args.exception_only,
+          sinceIso,
+          operationType: args.operation_type,
+        })
+        const needsAttention = runs.filter(
+          (r: { rollup_status?: string }) => r.rollup_status === 'needs_attention',
+        ).length
+        return {
+          count: runs.length,
+          needs_attention: needsAttention,
+          runs: runs.map((r: Record<string, unknown>) => ({
+            id: r.id,
+            title: r.title,
+            status: r.status,
+            rollup_status: r.rollup_status,
+            summary: r.summary,
+            planned_at: r.planned_at,
+            operation_type: (r.operation_plans as { operation_type?: string } | null)?.operation_type,
+            dev_task_id: r.dev_task_id,
+            session_url: (r.metadata as { session_url?: string } | null)?.session_url,
+          })),
+        }
+      } catch (e: unknown) {
+        const msg = e instanceof Error ? e.message : String(e)
+        if (/operation_runs/.test(msg)) {
+          return { count: 0, runs: [], note: 'schema_pending — COCL migration 20260922240000' }
+        }
+        throw e
+      }
+    }
+    case 'get_operation_run': {
+      const runId = String(args.run_id || '')
+      if (!runId) return { error: 'run_id required' }
+      try {
+        const detail = await getOperationRunDetail(supabase, tenantId, runId)
+        if (!detail) return { error: 'not_found' }
+        return detail
+      } catch (e: unknown) {
+        const msg = e instanceof Error ? e.message : String(e)
+        if (/operation_runs/.test(msg)) {
+          return { error: 'schema_pending' }
+        }
+        throw e
+      }
     }
     case 'add_client_update': {
       await assertCallerCanAccessClient(supabase, args.client_id, callerScope)

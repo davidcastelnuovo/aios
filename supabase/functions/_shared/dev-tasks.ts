@@ -539,6 +539,29 @@ export async function dispatchDevTask(
     },
   });
 
+  try {
+    const { recordDevDispatchOperationRun } = await import("./operation-control.ts");
+    await recordDevDispatchOperationRun(supabase, {
+      tenantId: args.tenantId,
+      devTaskId: args.taskId,
+      taskTitle: task.title,
+      delivered,
+      verificationFailed: verificationFailed || undefined,
+      reconciled: reconciled || undefined,
+      reconciliationSource,
+      sessionUrl: String(patch.cursor_session_url || sessionUrl),
+      cursorAgentId,
+      dispatchToolError: dispatchError,
+      actorUserId: args.actorUserId,
+      dispatchedAt: patch.dispatched_at as string,
+    });
+  } catch (coclErr: unknown) {
+    const msg = coclErr instanceof Error ? coclErr.message : String(coclErr);
+    if (!/operation_runs|operation_plans|schema/.test(msg)) {
+      console.warn("[dev-tasks] COCL recordDevDispatchOperationRun:", msg);
+    }
+  }
+
   const finalSessionUrl = String(patch.cursor_session_url || "");
   return {
     task: updated as DevTaskRow,

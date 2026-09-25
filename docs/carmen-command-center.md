@@ -64,13 +64,15 @@ src/components/carmen-command/
 
 ## משימות פיתוח (Dev Task Command Center)
 
+כפתור **תפעול** בכותרת פותח מצב `client_ops` — המלצות תפעול לקוח (דופק, Green API, משימות), סריקת לקוחות, משיכת עדכון שבועי לכרטיס, מעקב התחייבויות. API: `client-operations-center`.
+
 כפתור **פיתוח** בכותרת פותח מצב `dev_tasks` — רשימת משימות פיתוח מובנות ל-Cursor/Grok/Manus.
 
 - **טבלאות:** `dev_tasks` + `dev_task_events` (מיגרציה `20260831170000`).
 - **API:** edge function `dev-task-center` (JWT).
 - **כלי כרמן:** `find_dev_task_duplicates`, `create_dev_task`, `approve_dev_task`, `dispatch_dev_task`, `list_dev_tasks`, `update_dev_task`, `attach_dev_task_session`.
 - **דדופ:** חיפוש כותרות דומות במשימות פתוחות לפני יצירה/שליחה.
-- **reconcile:** `dispatch_dev_task` בודק אוטומטית `cursor_dispatches` / `cursor_task_sessions` אחרי שגיאת כלי; אם `delivered=true` — לדווח נשלח. אחרת — `attach_dev_task_session` ידני.
+- **reconcile:** `dispatch_dev_task` בודק אוטומטית `cursor_dispatches` / `cursor_task_sessions` אחרי שגיאת כלי; אם `delivered=true` — לדווח נשלח (`userStatus`). אחרת — `attach_dev_task_session` ידני. אפיון שכבת בקרה: `docs/campaign-operations-control-layer.md`.
 - **אין הגבלת מקביליות** — ניהול לפי עדיפות, סטטוס, דדופ וקישורים בלבד.
 
 ## בורר מוח
