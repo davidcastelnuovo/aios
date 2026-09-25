@@ -1,7 +1,9 @@
 import { createClient, SupabaseClient } from 'https://esm.sh/@supabase/supabase-js@2.75.0';
 import {
+  resolveSignatureEmailColors,
   signatureRequestBody,
   signatureRequestSubject,
+  type SignatureEmailColors,
   type SignatureEmailSettings,
 } from './signature-email-template.ts';
 
@@ -48,7 +50,9 @@ export function buildSigningEmailHtml(opts: {
   logoUrl?: string | null;
   bodyText?: string | null;
   headline?: string;
+  colors?: Partial<SignatureEmailColors> | null;
 }): string {
+  const colors = resolveSignatureEmailColors(opts.colors);
   const recipientName = escapeHtml(opts.recipientName);
   const documentTitle = escapeHtml(opts.documentTitle);
   const signingUrl = escapeHtml(opts.signingUrl);
@@ -58,14 +62,14 @@ export function buildSigningEmailHtml(opts: {
     ? `<img src="${escapeHtml(logoUrl)}" alt="" width="140" style="display:block;margin:0 auto 16px;max-width:160px;height:auto;border:0;" />`
     : '';
   const customBody = opts.bodyText?.trim()
-    ? `<p style="font-size:15px;color:#555555;line-height:1.6;margin:0 0 24px;">${escapeHtml(opts.bodyText).replace(/\n/g, '<br>')}</p>`
+    ? `<p style="font-size:15px;color:${colors.textColor};line-height:1.6;margin:0 0 24px;">${escapeHtml(opts.bodyText).replace(/\n/g, '<br>')}</p>`
     : '';
   const headline = escapeHtml(opts.headline || 'בקשה לחתימה דיגיטלית');
   const action = opts.signingUrl
     ? `<table role="presentation" cellpadding="0" cellspacing="0" align="center" style="margin:0 auto 24px;">
               <tr>
-                <td align="center" bgcolor="#2563eb" style="background-color:#2563eb;border-radius:8px;">
-                  <a href="${signingUrl}" style="display:inline-block;padding:14px 32px;color:#ffffff;text-decoration:none;font-size:16px;font-weight:bold;font-family:Arial,Helvetica,sans-serif;">לחץ כאן לחתימה</a>
+                <td align="center" bgcolor="${colors.buttonColor}" style="background-color:${colors.buttonColor};border-radius:8px;">
+                  <a href="${signingUrl}" style="display:inline-block;padding:14px 32px;color:${colors.buttonText};text-decoration:none;font-size:16px;font-weight:bold;font-family:Arial,Helvetica,sans-serif;">לחץ כאן לחתימה</a>
                 </td>
               </tr>
             </table>
@@ -74,20 +78,20 @@ export function buildSigningEmailHtml(opts: {
   return `<!DOCTYPE html>
 <html dir="rtl" lang="he">
 <head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"></head>
-<body style="font-family: Arial, Helvetica, sans-serif; background-color: #f5f5f5; margin: 0; padding: 0;">
-  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background-color:#f5f5f5;padding:20px 0;">
+<body style="font-family: Arial, Helvetica, sans-serif; background-color: ${colors.pageBackground}; margin: 0; padding: 0;">
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background-color:${colors.pageBackground};padding:20px 0;">
     <tr><td align="center">
-      <table role="presentation" width="600" cellpadding="0" cellspacing="0" style="width:600px;max-width:600px;background-color:#ffffff;">
+      <table role="presentation" width="600" cellpadding="0" cellspacing="0" style="width:600px;max-width:600px;background-color:${colors.cardBackground};">
         <tr>
-          <td align="center" bgcolor="#1d4ed8" style="background-color:#1d4ed8;padding:28px 24px;">
+          <td align="center" bgcolor="${colors.headerColor}" style="background-color:${colors.headerColor};padding:28px 24px;">
             ${logo}
-            <h1 style="color:#ffffff;margin:0;font-size:22px;font-family:Arial,Helvetica,sans-serif;font-weight:bold;">${headline}</h1>
+            <h1 style="color:${colors.headerText};margin:0;font-size:22px;font-family:Arial,Helvetica,sans-serif;font-weight:bold;">${headline}</h1>
           </td>
         </tr>
         <tr>
           <td style="padding:28px 24px;font-family:Arial,Helvetica,sans-serif;" align="right">
-            <p style="font-size:17px;color:#333333;margin:0 0 12px;">שלום ${recipientName},</p>
-            ${customBody || `<p style="font-size:15px;color:#555555;line-height:1.6;margin:0 0 24px;">
+            <p style="font-size:17px;color:${colors.textColor};margin:0 0 12px;">שלום ${recipientName},</p>
+            ${customBody || `<p style="font-size:15px;color:${colors.textColor};line-height:1.6;margin:0 0 24px;">
               ${senderName ? `${senderName} שלח/ה לך` : 'נשלח לך'} מסמך לחתימה דיגיטלית:
               <strong>${documentTitle}</strong>
             </p>`}
@@ -168,6 +172,7 @@ export async function sendSignatureDocumentEmails(
     logoUrl?: string | null;
     emailSubject?: string | null;
     emailBody?: string | null;
+    emailColors?: Partial<SignatureEmailColors> | null;
     contact?: {
       firstName?: string;
       lastName?: string;
@@ -179,7 +184,7 @@ export async function sendSignatureDocumentEmails(
     };
   },
 ): Promise<{ sent: number; results: Array<{ email: string; ok: boolean; error?: string }> }> {
-  const { documentId, tenantId, baseUrl, senderName, sendEmail = true, requireEmailSuccess = true, logoUrl, emailSubject, emailBody, contact } = opts;
+  const { documentId, tenantId, baseUrl, senderName, sendEmail = true, requireEmailSuccess = true, logoUrl, emailSubject, emailBody, emailColors, contact } = opts;
 
   const { data: doc, error: docError } = await supabase
     .from('signature_documents')
@@ -260,6 +265,7 @@ export async function sendSignatureDocumentEmails(
           signingUrl,
           senderName,
           logoUrl: emailLogoUrl,
+          colors: emailColors ?? emailSettings,
           bodyText: signatureRequestBody(emailSettings, {
             name: recipient.name,
             title: doc.title,
@@ -322,6 +328,7 @@ export async function emailSignedDocumentCopies(
   }
 
   const logoUrl = await resolveSignatureEmailLogo(supabase, opts.tenantId, undefined);
+  const emailSettings = await loadSignatureEmailSettings(supabase, opts.tenantId);
   const { data: sender } = await supabase
     .from('profiles')
     .select('email, full_name')
@@ -353,6 +360,7 @@ export async function emailSignedDocumentCopies(
           logoUrl,
           headline,
           bodyText: body,
+          colors: emailSettings,
         }),
         attachments: [attachment],
       }),

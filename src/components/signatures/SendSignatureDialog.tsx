@@ -23,6 +23,12 @@ import {
 import { buildWhatsAppSignUrl, copySigningUrl } from "@/lib/signatureShare";
 import SignatureContactPicker from "@/components/signatures/SignatureContactPicker";
 import type { SignatureContactDetails } from "@/components/signatures/signatureContactUtils";
+import { SignatureEmailColorFields, SignatureEmailPreview } from "@/components/signatures/SignatureEmailPreview";
+import {
+  DEFAULT_SIGNATURE_EMAIL_COLORS,
+  resolveSignatureEmailColors,
+  type SignatureEmailColors,
+} from "../../../supabase/functions/_shared/signature-email-template.ts";
 
 function WhatsAppIcon({ className }: { className?: string }) {
   return (
@@ -92,8 +98,10 @@ export function SendSignatureDialog({
   const [fieldMap, setFieldMap] = useState<Record<string, string>>({});
   const [emailSubject, setEmailSubject] = useState("בקשה לחתימה: {{title}}");
   const [emailBody, setEmailBody] = useState("");
+  const [emailColors, setEmailColors] = useState<SignatureEmailColors>(DEFAULT_SIGNATURE_EMAIL_COLORS);
   const [savingDefaults, setSavingDefaults] = useState(false);
   const emailDraftReady = useRef(false);
+  const colorsReady = useRef(false);
 
   const { data: emailSettings } = useQuery({
     queryKey: ["signature-email-settings", tenantId],
@@ -105,7 +113,7 @@ export function SendSignatureDialog({
         .eq("setting_key", "signature_email")
         .maybeSingle();
       if (error) throw error;
-      return (data?.setting_value ?? null) as { logoUrl?: string | null; subject?: string | null; body?: string | null } | null;
+      return (data?.setting_value ?? null) as ({ logoUrl?: string | null } & Partial<SignatureEmailColors>) | null;
     },
     enabled: open && !!tenantId,
   });
@@ -183,6 +191,7 @@ export function SendSignatureDialog({
       setPicked(null);
       logoChoice.current = "auto";
       emailDraftReady.current = false;
+      colorsReady.current = false;
       return;
     }
     if (!doc?.id || loadingRecipients || initializedDocument.current === doc.id) return;
@@ -217,6 +226,12 @@ export function SendSignatureDialog({
     setEmailSubject(templateEmail?.subject?.trim() || "בקשה לחתימה: {{title}}");
     setEmailBody(templateEmail?.body || "");
   }, [open, emailSettings, templateEmails, templateEmail, resolvedMode]);
+
+  useEffect(() => {
+    if (!open || colorsReady.current || emailSettings === undefined) return;
+    colorsReady.current = true;
+    setEmailColors(resolveSignatureEmailColors(emailSettings));
+  }, [open, emailSettings]);
 
   const clearPrepared = () => { preparedDocument.current = null; setLinks([]); setLastAction(null); };
 
@@ -280,6 +295,7 @@ export function SendSignatureDialog({
         logoUrl: logoChoice.current === "manual" ? logoUrl : logoUrl ?? undefined,
         emailSubject,
         emailBody,
+        emailColors,
       });
 
       // Start clipboard work in the original user gesture, before awaiting the server.
@@ -322,7 +338,7 @@ export function SendSignatureDialog({
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
-        className="!flex !flex-col !gap-4 w-[calc(100vw-2rem)] max-w-md max-h-[90vh] overflow-hidden p-4 sm:p-6"
+        className="!flex !flex-col !gap-4 w-[calc(100vw-2rem)] max-w-5xl max-h-[90vh] overflow-hidden p-4 sm:p-6"
         dir="rtl"
       >
         <DialogHeader className="min-w-0 shrink-0 pr-6">
@@ -331,7 +347,9 @@ export function SendSignatureDialog({
           </DialogTitle>
         </DialogHeader>
 
-        <div className="min-w-0 flex-1 overflow-y-auto overflow-x-hidden space-y-4">
+        <div className="min-w-0 flex-1 overflow-y-auto overflow-x-hidden">
+        <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_320px]">
+        <div className="min-w-0 space-y-4">
           <div className="space-y-3 rounded-lg border p-3 min-w-0">
             <div className="flex items-center justify-between gap-2">
               <p className="text-sm font-medium">פרטי החותם</p>
@@ -510,6 +528,15 @@ export function SendSignatureDialog({
               )}
               <Textarea value={emailBody} onChange={(event) => setEmailBody(event.target.value)} disabled={!!busy} rows={4} placeholder="היי {{first_name}}, מצורף מסמך לחתימה" />
             </div>
+            <div className="space-y-2">
+              <div className="flex items-center justify-between gap-2">
+                <Label>צבעי המייל</Label>
+                <Button type="button" size="sm" variant="ghost" className="h-7 px-2 text-xs" disabled={!!busy} onClick={() => setEmailColors(DEFAULT_SIGNATURE_EMAIL_COLORS)}>
+                  איפוס
+                </Button>
+              </div>
+              <SignatureEmailColorFields colors={emailColors} disabled={!!busy} onChange={setEmailColors} />
+            </div>
             <Button
               type="button"
               size="sm"
@@ -522,7 +549,7 @@ export function SendSignatureDialog({
                   const { error: logoError } = await supabase.from("tenant_settings").upsert({
                     tenant_id: tenantId,
                     setting_key: "signature_email",
-                    setting_value: { ...(emailSettings ?? {}), logoUrl },
+                    setting_value: { ...(emailSettings ?? {}), logoUrl, ...emailColors },
                   }, { onConflict: "tenant_id,setting_key" });
                   if (logoError) throw logoError;
                   if (resolvedMode === "template" && doc?.id) {
@@ -538,7 +565,7 @@ export function SendSignatureDialog({
                     await queryClient.invalidateQueries({ queryKey: ["signature-template-email", tenantId] });
                   }
                   await queryClient.invalidateQueries({ queryKey: ["signature-email-settings", tenantId] });
-                  toast.success(resolvedMode === "template" ? "הלוגו נשמר לסוכנות, והנושא והגוף לתבנית" : "הלוגו נשמר לסוכנות");
+                  toast.success(resolvedMode === "template" ? "הלוגו והצבעים נשמרו לסוכנות, והנושא והגוף לתבנית" : "הלוגו והצבעים נשמרו לסוכנות");
                 } catch (err) {
                   toast.error(err instanceof Error ? err.message : "שמירת ההגדרות נכשלה");
                 } finally {
@@ -546,7 +573,7 @@ export function SendSignatureDialog({
                 }
               }}
             >
-              {savingDefaults ? "שומר..." : resolvedMode === "template" ? "שמור לוגו לסוכנות ונוסח לתבנית" : "שמור לוגו לסוכנות"}
+              {savingDefaults ? "שומר..." : resolvedMode === "template" ? "שמור עיצוב לסוכנות ונוסח לתבנית" : "שמור עיצוב לסוכנות"}
             </Button>
           </div>
 
@@ -621,6 +648,28 @@ export function SendSignatureDialog({
               )}
             </div>
           )}
+        </div>
+        <div className="min-w-0 lg:sticky lg:top-0">
+          <SignatureEmailPreview
+            colors={emailColors}
+            logoUrl={logoUrl}
+            subject={emailSubject}
+            body={emailBody}
+            vars={{
+              name: name.trim() || picked?.name,
+              title: documentTitleOverride || doc?.title,
+              sender: "השולח",
+              first_name: picked?.firstName || defaultRecipient?.firstName,
+              last_name: picked?.lastName || defaultRecipient?.lastName,
+              company: picked?.companyName,
+              phone: phone.trim() || picked?.phone,
+              email: email.trim() || picked?.email,
+              address: picked?.address,
+              id_number: picked?.idNumber,
+            }}
+          />
+        </div>
+        </div>
         </div>
 
         <Button

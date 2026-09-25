@@ -28,6 +28,15 @@ interface SendSignatureRequest {
   logoUrl?: string | null;
   emailSubject?: string | null;
   emailBody?: string | null;
+  emailColors?: {
+    headerColor?: string;
+    headerText?: string;
+    buttonColor?: string;
+    buttonText?: string;
+    pageBackground?: string;
+    cardBackground?: string;
+    textColor?: string;
+  } | null;
   fieldMap?: Record<string, string> | null;
 }
 
@@ -54,7 +63,7 @@ Deno.serve(async (req) => {
     }
 
     const body: SendSignatureRequest = await req.json();
-    const { documentId, baseUrl, sendEmail = false, recipient, contactDetails, leadId, clientId, logoUrl, emailSubject, emailBody, fieldMap } = body;
+    const { documentId, baseUrl, sendEmail = false, recipient, contactDetails, leadId, clientId, logoUrl, emailSubject, emailBody, emailColors, fieldMap } = body;
     if (!documentId) {
       return new Response(JSON.stringify({ error: 'missing_document_id' }), { status: 400, headers: responseHeaders });
     }
@@ -100,6 +109,7 @@ Deno.serve(async (req) => {
         logoUrl,
         emailSubject,
         emailBody,
+        emailColors,
         contact: contactDetails,
       });
       emails = emailResult.results;

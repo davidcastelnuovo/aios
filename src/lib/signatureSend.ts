@@ -30,6 +30,15 @@ export interface SendSignatureOptions {
   logoUrl?: string | null;
   emailSubject?: string;
   emailBody?: string;
+  emailColors?: {
+    headerColor?: string;
+    headerText?: string;
+    buttonColor?: string;
+    buttonText?: string;
+    pageBackground?: string;
+    cardBackground?: string;
+    textColor?: string;
+  };
   fieldMap?: Record<string, string>;
 }
 
@@ -90,6 +99,7 @@ export async function sendSignatureDocument(
     logoUrl,
     emailSubject,
     emailBody,
+    emailColors,
     fieldMap,
   } = opts;
 
@@ -109,6 +119,7 @@ export async function sendSignatureDocument(
           logoUrl,
           emailSubject,
           emailBody,
+          emailColors,
           fieldMap,
         }
       : {
@@ -122,6 +133,7 @@ export async function sendSignatureDocument(
           logoUrl,
           emailSubject,
           emailBody,
+          emailColors,
           fieldMap,
         };
 

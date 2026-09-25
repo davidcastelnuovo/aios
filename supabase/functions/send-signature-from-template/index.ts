@@ -27,6 +27,15 @@ interface SendSignatureFromTemplateBody {
   logoUrl?: string | null;
   emailSubject?: string | null;
   emailBody?: string | null;
+  emailColors?: {
+    headerColor?: string;
+    headerText?: string;
+    buttonColor?: string;
+    buttonText?: string;
+    pageBackground?: string;
+    cardBackground?: string;
+    textColor?: string;
+  } | null;
   fieldMap?: Record<string, string> | null;
 }
 
@@ -66,6 +75,7 @@ Deno.serve(async (req) => {
       logoUrl,
       emailSubject,
       emailBody,
+      emailColors,
       fieldMap,
     } = body;
 
@@ -130,6 +140,7 @@ Deno.serve(async (req) => {
         logoUrl,
         emailSubject,
         emailBody,
+        emailColors,
         contact: contactDetails,
       });
       emails = emailResult.results;
