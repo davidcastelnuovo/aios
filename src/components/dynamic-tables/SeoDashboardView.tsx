@@ -135,7 +135,13 @@ export function SeoDashboardView({ tenantId, clientId, accessibleTenantIds, gaRe
         ? [tenantId]
         : [];
 
-  const { data: reports = [], isLoading, isFetching: reportsFetching, error: reportsError } = useAhrefsReports({
+  const {
+    data: reports = [],
+    isLoading,
+    isPending: reportsPending,
+    isFetching: reportsFetching,
+    error: reportsError,
+  } = useAhrefsReports({
     clientId,
     tenantIds: reportTenants,
     domain: expectedDomain || undefined,
@@ -529,7 +535,11 @@ export function SeoDashboardView({ tenantId, clientId, accessibleTenantIds, gaRe
 
   // First load only — background ahrefs_reports refetches must not unmount the
   // whole SEO dashboard (that made client SEO views look empty after #328).
-  if (isLoading && reports.length === 0) {
+  // Mirrors the hook's own `enabled`, so an unscoped view still reaches the
+  // empty state instead of waiting on a query that never runs.
+  const reportsScoped = !!clientId || reportTenants.length > 0;
+
+  if ((isLoading || (reportsPending && reportsScoped)) && reports.length === 0) {
     return (
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4" dir="rtl">
         {[1, 2, 3, 4].map(i => (

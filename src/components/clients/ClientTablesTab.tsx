@@ -44,7 +44,7 @@ export function ClientTablesTab({ clientId, clientName }: ClientTablesTabProps) 
   const userSelectedRef = useRef(false);
 
   // Tables linked to this client (server-filtered)
-  const { data: tables = [], isLoading } = useQuery({
+  const { data: tables = [], isPending: tablesPending } = useQuery({
     queryKey: ["client-crm-tables", tenantId, clientId],
     queryFn: async () => {
       const response = await supabase.functions.invoke(
@@ -86,7 +86,7 @@ export function ClientTablesTab({ clientId, clientName }: ClientTablesTabProps) 
   }, [allTables, clientId, tableSearch]);
 
   // Dashboards linked to this client (includes DMM-hosted rows for shared agencies).
-  const { data: dashboards = [] } = useQuery({
+  const { data: dashboards = [], isPending: dashboardsPending } = useQuery({
     queryKey: ["client-dashboards", tenantId, clientId],
     queryFn: async () => {
       const rows = await fetchAccessibleDashboards(tenantId!, { select: "*" });
@@ -250,7 +250,8 @@ export function ClientTablesTab({ clientId, clientName }: ClientTablesTabProps) 
     else prefetchDashboardView();
   }, [activeItem?.id, activeItem?.kind]);
 
-  if (isLoading) {
+  // Both lists feed the same empty state, so it may only show once both settled.
+  if (!!tenantId && !!clientId && (tablesPending || dashboardsPending)) {
     return (
       <div className="space-y-3" dir="rtl">
         <Skeleton className="h-24 w-full" />
