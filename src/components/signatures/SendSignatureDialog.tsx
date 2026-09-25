@@ -11,10 +11,12 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { parseDocumentFields, getFieldLabel, isSignatureFieldType } from "@/components/signatures/signatureFieldTypes";
 import { toast } from "sonner";
-import { Check, Copy, ImagePlus, Mail, X } from "lucide-react";
+import { Check, ChevronDown, Copy, ImagePlus, Mail, X } from "lucide-react";
 import {
   copyFirstSigningLink,
   sendSignatureDocument,
@@ -29,6 +31,7 @@ import {
   resolveSignatureEmailColors,
   type SignatureEmailColors,
 } from "../../../supabase/functions/_shared/signature-email-template.ts";
+import { isFieldRequired } from "@/lib/signatureFieldGuide";
 
 function WhatsAppIcon({ className }: { className?: string }) {
   return (
@@ -96,6 +99,8 @@ export function SendSignatureDialog({
   const [uploadingLogo, setUploadingLogo] = useState(false);
   const [picked, setPicked] = useState<SignatureContactDetails | null>(null);
   const [fieldMap, setFieldMap] = useState<Record<string, string>>({});
+  const [fieldRequired, setFieldRequired] = useState<Record<string, boolean>>({});
+  const [fieldsOpen, setFieldsOpen] = useState(false);
   const [emailSubject, setEmailSubject] = useState("בקשה לחתימה: {{title}}");
   const [emailBody, setEmailBody] = useState("");
   const [emailColors, setEmailColors] = useState<SignatureEmailColors>(DEFAULT_SIGNATURE_EMAIL_COLORS);
@@ -175,7 +180,7 @@ export function SendSignatureDialog({
         .eq("id", doc!.id)
         .single();
       if (error) throw error;
-      return parseDocumentFields(data.document_fields).filter((field) => !isSignatureFieldType(field.type));
+      return parseDocumentFields(data.document_fields);
     },
     enabled: open && !!doc?.id,
   });
@@ -212,10 +217,13 @@ export function SendSignatureDialog({
 
   useEffect(() => {
     if (!open) return;
-    setFieldMap(Object.fromEntries(documentFields.map((field) => [
+    const fillable = documentFields.filter((field) => !isSignatureFieldType(field.type));
+    setFieldMap(Object.fromEntries(fillable.map((field) => [
       field.id,
       field.type === "text" || field.type === "date" ? "none" : field.type,
     ])));
+    setFieldRequired(Object.fromEntries(documentFields.map((field) => [field.id, isFieldRequired(field)])));
+    setFieldsOpen(false);
   }, [open, doc?.id, documentFields]);
 
   useEffect(() => {
@@ -289,6 +297,7 @@ export function SendSignatureDialog({
           idNumber: picked?.idNumber,
         },
         fieldMap,
+        fieldRequired,
         leadId: picked?.leadId || leadId,
         clientId: picked?.clientId || clientId,
         documentTitleOverride,
@@ -402,32 +411,50 @@ export function SendSignatureDialog({
           </div>
 
           {documentFields.length > 0 && (
-            <div className="space-y-2 rounded-lg border p-3 min-w-0">
-              <p className="text-sm font-medium">מיפוי שדות</p>
-              {documentFields.map((field) => (
-                <div key={field.id} className="grid grid-cols-2 gap-2 items-center">
-                  <span className="text-sm truncate">{field.label || getFieldLabel(field.type)}</span>
-                  <Select
-                    value={fieldMap[field.id] || "none"}
-                    onValueChange={(value) => setFieldMap((current) => ({ ...current, [field.id]: value }))}
-                  >
-                    <SelectTrigger className="h-8"><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="none">בלי מילוי</SelectItem>
-                      <SelectItem value="full_name">שם מלא</SelectItem>
-                      <SelectItem value="first_name">שם פרטי</SelectItem>
-                      <SelectItem value="last_name">שם משפחה</SelectItem>
-                      <SelectItem value="company_name">חברה</SelectItem>
-                      <SelectItem value="phone">טלפון</SelectItem>
-                      <SelectItem value="email">אימייל</SelectItem>
-                      <SelectItem value="address">כתובת</SelectItem>
-                      <SelectItem value="id_number">ח.פ / ת.ז</SelectItem>
-                      <SelectItem value="today">תאריך היום</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-              ))}
-            </div>
+            <Collapsible open={fieldsOpen} onOpenChange={setFieldsOpen} className="rounded-lg border p-3 min-w-0">
+              <CollapsibleTrigger className="flex w-full items-center justify-between gap-2 text-sm font-medium">
+                <span>מיפוי שדות ({documentFields.length})</span>
+                <ChevronDown className={`h-4 w-4 shrink-0 transition-transform ${fieldsOpen ? "rotate-180" : ""}`} />
+              </CollapsibleTrigger>
+              <CollapsibleContent className="space-y-2 pt-3">
+                {documentFields.map((field) => {
+                  const signatureField = isSignatureFieldType(field.type);
+                  return (
+                    <div key={field.id} className="grid grid-cols-[minmax(0,1fr)_auto] gap-2 items-center">
+                      <span className="text-sm truncate">{field.label || getFieldLabel(field.type)}</span>
+                      <label className="flex items-center gap-1.5 text-xs whitespace-nowrap">
+                        <Checkbox
+                          checked={fieldRequired[field.id] === true}
+                          disabled={!!busy}
+                          onCheckedChange={(checked) => setFieldRequired((current) => ({ ...current, [field.id]: checked === true }))}
+                        />
+                        חובה
+                      </label>
+                      {!signatureField && (
+                        <Select
+                          value={fieldMap[field.id] || "none"}
+                          onValueChange={(value) => setFieldMap((current) => ({ ...current, [field.id]: value }))}
+                        >
+                          <SelectTrigger className="col-span-2 h-8"><SelectValue /></SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="none">בלי מילוי</SelectItem>
+                            <SelectItem value="full_name">שם מלא</SelectItem>
+                            <SelectItem value="first_name">שם פרטי</SelectItem>
+                            <SelectItem value="last_name">שם משפחה</SelectItem>
+                            <SelectItem value="company_name">חברה</SelectItem>
+                            <SelectItem value="phone">טלפון</SelectItem>
+                            <SelectItem value="email">אימייל</SelectItem>
+                            <SelectItem value="address">כתובת</SelectItem>
+                            <SelectItem value="id_number">ח.פ / ת.ז</SelectItem>
+                            <SelectItem value="today">תאריך היום</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      )}
+                    </div>
+                  );
+                })}
+              </CollapsibleContent>
+            </Collapsible>
           )}
 
           <div className="space-y-2 rounded-lg border p-3 min-w-0">

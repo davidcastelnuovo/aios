@@ -418,9 +418,10 @@ export async function prepareSignatureDocumentForSigning(
       idNumber?: string;
     };
     fieldMap?: Record<string, string> | null;
+    fieldRequired?: Record<string, boolean> | null;
   },
 ): Promise<{ documentId: string; signingLinks: SignatureSigningLink[] }> {
-  const { documentId, tenantId, createdBy, baseUrl, recipient, leadId, clientId, contactDetails, fieldMap } = opts;
+  const { documentId, tenantId, createdBy, baseUrl, recipient, leadId, clientId, contactDetails, fieldMap, fieldRequired } = opts;
 
   const { data: doc, error: docError } = await supabase
     .from('signature_documents')
@@ -448,6 +449,7 @@ export async function prepareSignatureDocumentForSigning(
       clientId,
       contactDetails: contactDetails ?? { phone: recipient.phone },
       fieldMap,
+      fieldRequired,
     });
   } else {
     const { data: existingRecipients, error: recError } = await supabase
@@ -455,6 +457,13 @@ export async function prepareSignatureDocumentForSigning(
       .select('id')
       .eq('document_id', targetDocId);
     if (recError) throw recError;
+
+    if (fieldRequired) {
+      await supabase
+        .from('signature_documents')
+        .update({ document_fields: applyFieldRequiredFlags(doc.document_fields, fieldRequired) })
+        .eq('id', targetDocId);
+    }
 
     if (!existingRecipients?.length) {
       if (!recipient?.name?.trim() || !recipient?.email?.trim()) {
@@ -549,6 +558,17 @@ function contactValue(contact: {
   return values[source];
 }
 
+function applyFieldRequiredFlags(fields: unknown, fieldRequired?: Record<string, boolean> | null): unknown[] {
+  const list = Array.isArray(fields) ? fields : [];
+  if (!fieldRequired) return list;
+  return list.map((field) => {
+    if (!field || typeof field !== 'object') return field;
+    const id = (field as { id?: unknown }).id;
+    if (typeof id !== 'string' || !(id in fieldRequired)) return field;
+    return { ...(field as Record<string, unknown>), required: fieldRequired[id] === true };
+  });
+}
+
 function buildFieldPrefillFromContact(
   documentFields: unknown,
   contact: {
@@ -602,6 +622,7 @@ export async function cloneSignatureFromTemplate(
       idNumber?: string;
     };
     fieldMap?: Record<string, string> | null;
+    fieldRequired?: Record<string, boolean> | null;
   },
 ): Promise<string> {
   const {
@@ -615,6 +636,7 @@ export async function cloneSignatureFromTemplate(
     clientId,
     contactDetails,
     fieldMap,
+    fieldRequired,
   } = opts;
 
   const { data: source, error: sourceError } = await supabase
@@ -635,6 +657,14 @@ export async function cloneSignatureFromTemplate(
   }
 
   const template = source;
+  const documentFields = applyFieldRequiredFlags(template.document_fields, fieldRequired);
+  if (fieldRequired && template.is_template === true) {
+    await supabase
+      .from('signature_documents')
+      .update({ document_fields: documentFields })
+      .eq('id', templateDocumentId)
+      .eq('tenant_id', effectiveTenantId);
+  }
 
   const { data: templateRecipients } = await supabase
     .from('signature_recipients')
@@ -673,7 +703,7 @@ export async function cloneSignatureFromTemplate(
     status: 'draft',
     created_by: createdBy,
     is_template: false,
-    document_fields: template.document_fields ?? [],
+    document_fields: documentFields,
     lead_id: leadId ?? null,
     client_id: clientId ?? null,
     business_stamp_name: businessStampName,
@@ -704,7 +734,7 @@ export async function cloneSignatureFromTemplate(
   const docError = docResult.error;
   if (docError || !doc) throw docError || new Error('יצירת מסמך נכשלה');
 
-  const fieldPrefill = buildFieldPrefillFromContact(template.document_fields, { ...contactDetails, name: recipientName, email: recipientEmail, companyName: businessStampName ?? contactDetails?.companyName }, 0, fieldMap);
+  const fieldPrefill = buildFieldPrefillFromContact(documentFields, { ...contactDetails, name: recipientName, email: recipientEmail, companyName: businessStampName ?? contactDetails?.companyName }, 0, fieldMap);
 
   const recipientRow = {
     document_id: doc.id,

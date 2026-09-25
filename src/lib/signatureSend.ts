@@ -40,6 +40,7 @@ export interface SendSignatureOptions {
     textColor?: string;
   };
   fieldMap?: Record<string, string>;
+  fieldRequired?: Record<string, boolean>;
 }
 
 export interface SendSignatureResult {
@@ -101,6 +102,7 @@ export async function sendSignatureDocument(
     emailBody,
     emailColors,
     fieldMap,
+    fieldRequired,
   } = opts;
 
   const functionName = mode === "template" ? "send-signature-from-template" : "send-signature-request";
@@ -121,6 +123,7 @@ export async function sendSignatureDocument(
           emailBody,
           emailColors,
           fieldMap,
+          fieldRequired,
         }
       : {
           documentId,
@@ -135,6 +138,7 @@ export async function sendSignatureDocument(
           emailBody,
           emailColors,
           fieldMap,
+          fieldRequired,
         };
 
   const { data, error } = await supabase.functions.invoke(functionName, { body });
