@@ -10,16 +10,32 @@ export type UpdateFieldsResult = {
 export async function updateSignatureDocumentFields(
   docId: string,
   fields: DocumentField[],
+  meta?: { title?: string; isTemplate?: boolean },
 ): Promise<UpdateFieldsResult> {
-  const withFields = {
+  const title = meta?.title?.trim();
+  const withFields: {
+    document_fields: import("@/integrations/supabase/types").Json;
+    updated_at: string;
+    title?: string;
+    template_name?: string | null;
+  } = {
     document_fields: fields as unknown as import("@/integrations/supabase/types").Json,
     updated_at: new Date().toISOString(),
+    ...(title ? { title, template_name: meta?.isTemplate ? title : undefined } : {}),
   };
 
   const { error } = await supabase
     .from("signature_documents")
     .update(withFields)
     .eq("id", docId);
+
+  if (error?.message?.includes("template_name")) {
+    const { template_name: _name, ...withoutName } = withFields;
+    const retry = await supabase.from("signature_documents").update(withoutName).eq("id", docId);
+    if (retry.error) throw retry.error;
+    const savedRecipientPosition = await syncSignatureRecipientPosition(docId, fields);
+    return { savedDocumentFields: true, savedRecipientPosition };
+  }
 
   if (error?.message?.includes("document_fields")) {
     // Column missing — still try recipient signature_position so send/sign works

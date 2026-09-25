@@ -1,6 +1,7 @@
 import { useState, useRef, useCallback, useEffect, useMemo } from "react";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Minus, Plus, X, Crosshair } from "lucide-react";
 import { isFieldRequired } from "@/lib/signatureFieldGuide";
 import {
@@ -188,6 +189,10 @@ export default function SignatureFieldPlacer({
       fieldX: field.position.x,
       fieldY: field.position.y,
     };
+  };
+
+  const setAutofill = (fieldId: string, autofill: DocumentField["autofill"]) => {
+    onFieldsChange(fieldsRef.current.map((f) => (f.id === fieldId ? { ...f, autofill } : f)));
   };
 
   const toggleRequired = (fieldId: string) => {
@@ -448,6 +453,19 @@ export default function SignatureFieldPlacer({
                     />
                     <span>{isFieldRequired(selectedField ?? { required: false }) ? "שדה חובה" : "לא חובה"}</span>
                   </label>
+                  {selectedField && !isSignatureFieldType(selectedField.type) && (
+                    <Select
+                      value={selectedField.autofill || "none"}
+                      onValueChange={(value) => setAutofill(selectedField.id, value as DocumentField["autofill"])}
+                    >
+                      <SelectTrigger className="h-7 w-36 text-xs"><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="none">נשאר ריק</SelectItem>
+                        <SelectItem value="full_name">שם הליד</SelectItem>
+                        <SelectItem value="company_name">שם החברה</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  )}
                 </div>
               )}
             </div>
