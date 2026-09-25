@@ -35,4 +35,8 @@ AIOS has **multiple independent WhatsApp connections**. Agents must keep them st
 
 5. When unsure which connection owns a group: check `chat_messages.provider` (`manus_wa` vs `green_api`) and `tenant_integrations.integration_type`. Prefer Manus Gateway membership over any CRM group list.
 
+6. **Do not replay old WhatsApp notifications.**
+   - A delivery fix must not send missed assignments, updates, or reminders unless David explicitly approves that backfill.
+   - Applying a schema or function fix is not approval to deliver the backlog.
+
 If a task asks for "Carmen's groups" and the list looks like the full CRM/Green API roster — **stop and filter to Manus**. Mixing channels is a regression.
