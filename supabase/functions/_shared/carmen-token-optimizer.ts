@@ -8,6 +8,7 @@
 
 import { aiEmbed, aiEmbedBatch } from './ai.ts'
 import { hasPulseIntent } from './pulse-request.mjs'
+import { hasRetentionIntent } from './client-retention.ts'
 import { NATIVE_DEV_TASK_TOOLS } from './dev-escalation-auth.mjs'
 
 export function shouldUseTokenOptimize(agent: { metadata?: Record<string, unknown> | null }, isCarmen: boolean): boolean {
@@ -193,6 +194,9 @@ export function applyToolForceIncludes(userText: string, picked: Set<string>, he
   }
   if (hasPulseIntent(userText)) {
     promote(['get_latest_campaign_pulse'])
+  }
+  if (hasRetentionIntent(userText)) {
+    promote(['get_client_retention_scan', 'batch_update_client_health', 'update_client_health'])
   }
   if (/(openai|open ai|קרדיט|יתרת|billing|usage|חיוב|כמה.*(נשאר|עולה|הוצא)|api.*(cost|credit|balance))/i.test(userText)) {
     promote(['get_openai_billing_status'])

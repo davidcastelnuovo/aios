@@ -48,7 +48,7 @@ jobs:
         run: python3 -m unittest discover -s scripts -p 'test_staging_mirror.py'
 
       - name: Carmen pulse regression tests
-        run: node --test supabase/functions/_shared/pulse-foundation.test.mjs
+        run: node --experimental-strip-types --test supabase/functions/_shared/pulse-foundation.test.mjs supabase/functions/_shared/client-retention.test.ts
 
       - name: Build frontend
         run: pnpm build
