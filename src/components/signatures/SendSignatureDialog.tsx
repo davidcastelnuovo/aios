@@ -220,7 +220,9 @@ export function SendSignatureDialog({
     const fillable = documentFields.filter((field) => !isSignatureFieldType(field.type));
     setFieldMap(Object.fromEntries(fillable.map((field) => [
       field.id,
-      field.type === "text" || field.type === "date" ? "none" : field.type,
+      field.autofill === "none"
+        ? "none"
+        : field.autofill || (field.type === "text" || field.type === "date" ? "none" : field.type),
     ])));
     setFieldRequired(Object.fromEntries(documentFields.map((field) => [field.id, isFieldRequired(field)])));
     setFieldsOpen(false);

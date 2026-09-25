@@ -592,7 +592,10 @@ function buildFieldPrefillFromContact(
     if ((f.recipient_index ?? 0) !== recipientIndex) continue;
     if (!f.id || !f.type || f.type === 'signature' || f.type === 'signature_stamp') continue;
     const mapped = fieldMap?.[f.id];
-    const source = mapped === '' || mapped === 'none' ? '' : (mapped || (f.type === 'date' || f.type === 'text' ? '' : f.type));
+    const stored = (field as { autofill?: string }).autofill;
+    const source = mapped === '' || mapped === 'none'
+      ? ''
+      : (mapped || (stored === 'none' ? '' : stored) || (f.type === 'date' || f.type === 'text' ? '' : f.type));
     if (!source) continue;
     const val = contactValue(contact, source);
     if (val?.trim()) prefill[f.id] = val.trim();

@@ -20,6 +20,8 @@ export interface DocumentField {
   position: SignaturePosition;
   required?: boolean;
   recipient_index?: number;
+  /** none leaves the field empty. full_name and company_name fill from the lead or client. */
+  autofill?: "none" | "full_name" | "company_name";
 }
 
 export const SIGNATURE_FIELD_OPTIONS: Array<{
@@ -34,7 +36,7 @@ export const SIGNATURE_FIELD_OPTIONS: Array<{
   { type: "first_name", label: "שם פרטי", width: 18, height: 5 },
   { type: "last_name", label: "שם משפחה", width: 18, height: 5 },
   { type: "full_name", label: "שם מלא", width: 24, height: 5 },
-  { type: "company_name", label: "שם העסק/חברה", width: 26, height: 5 },
+  { type: "company_name", label: "שם החברה", width: 26, height: 5 },
   { type: "phone", label: "טלפון", width: 20, height: 5 },
   { type: "address", label: "כתובת", width: 30, height: 6 },
   { type: "date", label: "תאריך", width: 14, height: 5 },
@@ -84,6 +86,7 @@ export function createDocumentField(
     label: type === "text" ? "" : getFieldLabel(type),
     position,
     required: type === "text" ? false : true,
+    autofill: type === "company_name" ? "company_name" : type === "full_name" || type === "first_name" || type === "last_name" ? "full_name" : "none",
     recipient_index: recipientIndex,
   };
 }
