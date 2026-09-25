@@ -86,10 +86,11 @@ serve(async (req) => {
       );
     }
 
-    // Reset the user's password using admin API
+    // Confirm the email too. Invited users have no email_confirmed_at, so
+    // signInWithPassword rejects them even after an admin sets a password.
     const { data, error } = await supabaseAdmin.auth.admin.updateUserById(
       userId,
-      { password: newPassword }
+      { password: newPassword, email_confirm: true }
     );
 
     if (error) {
