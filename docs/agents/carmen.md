@@ -17,6 +17,7 @@ Hard rules for every agent:
 2. **Never** dump the full `whatsapp_groups` table into Carmen permissions — it includes Green API operator groups.
 3. Staging Manus is often `mocked` without tokens — do **not** "fix" by copying Green API groups or Production WA tokens.
 4. Automations stay connection-scoped (`carmen_integration_id` / Manus vs Green). Do not bypass dual-channel guards.
+5. **Do not replay old WhatsApp notifications.** Fixing Carmen delivery does not authorize sending missed task assignments, updates, or reminders. Backfill only after David explicitly approves that send. Database changes for the fix go to Staging first.
 
 ## AI providers (replacing the former Lovable AI gateway)
 We use the org's own connected models. Standardized helper: `supabase/functions/_shared/ai.ts`.
