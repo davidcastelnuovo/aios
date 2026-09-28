@@ -4,7 +4,7 @@ Static mirror of Marketing Captain, deployed to Vercel project **marketing-capta
 
 ## Carmen overlay (additive)
 
-- `overlay/carmen/` — CSS, JS, portrait (does **not** replace Elementor pages).
+- `overlay/carmen/` — CSS, JS, Carmen Marketing OS logo + MC-style visuals (does **not** replace Elementor pages).
 - `patch-html.mjs` — adds `<link>` + `<script>` to each `index.html`.
 - `carmen.js` inserts the hero / intro **after** the existing header.
 

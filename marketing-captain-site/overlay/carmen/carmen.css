@@ -1,14 +1,18 @@
-/* Carmen layer — additive only; does not override Elementor/MC styles globally. */
+/* Carmen layer — Marketing Captain design tokens (Elementor kit 10) */
 
 #carmen-layer {
-  --carmen-mc-navy: #0b1533;
-  --carmen-mc-blue: #1a3a6b;
-  --carmen-mc-accent: #00c2ff;
-  --carmen-mc-violet: #7b61ff;
-  --carmen-coat: #c41e3a;
+  --mc-primary: #08f467;
+  --mc-bg: #0a1526;
+  --mc-bg-alt: #162741;
+  --mc-text: #efefef;
+  --mc-text-muted: rgba(239, 239, 239, 0.75);
+  --mc-tint: #e3fae0;
+  --mc-border: rgba(8, 244, 103, 0.35);
+
   font-family: assistant, "Assistant", sans-serif;
   direction: rtl;
   box-sizing: border-box;
+  color: var(--mc-text);
 }
 
 #carmen-layer *,
@@ -20,18 +24,22 @@
 .carmen-block {
   position: relative;
   overflow: hidden;
-  color: #fff;
-  background: radial-gradient(ellipse 120% 80% at 100% 0%, rgba(123, 97, 255, 0.35), transparent 55%),
-    radial-gradient(ellipse 80% 60% at 0% 100%, rgba(0, 194, 255, 0.2), transparent 50%),
-    linear-gradient(165deg, var(--carmen-mc-navy) 0%, var(--carmen-mc-blue) 100%);
+  background-color: var(--mc-bg);
+  background-image: radial-gradient(
+      ellipse 90% 70% at 85% 10%,
+      rgba(227, 250, 224, 0.12) 0%,
+      transparent 55%
+    ),
+    linear-gradient(180deg, var(--mc-tint) 0%, var(--mc-bg) 42%);
 }
 
 .carmen-block--compact {
   padding: 2rem 1.25rem;
+  border-bottom: 1px solid rgba(8, 244, 103, 0.15);
 }
 
 .carmen-block--hero {
-  padding: 2.5rem 1.25rem 3rem;
+  padding: 2.25rem 1.25rem 3rem;
 }
 
 .carmen-inner {
@@ -47,13 +55,23 @@
 
 @media (min-width: 900px) {
   .carmen-hero-grid {
-    grid-template-columns: 1.05fr 0.95fr;
+    grid-template-columns: 1.05fr 0.92fr;
     gap: 2.5rem;
   }
 
   .carmen-block--hero {
-    padding: 3.5rem 2rem 4rem;
+    padding: 3rem 2rem 3.5rem;
   }
+}
+
+.carmen-logo-row {
+  margin-bottom: 1.25rem;
+}
+
+.carmen-logo-row img {
+  display: block;
+  height: auto;
+  width: min(260px, 88vw);
 }
 
 .carmen-badge {
@@ -62,40 +80,40 @@
   gap: 0.5rem;
   padding: 0.35rem 0.85rem;
   border-radius: 999px;
-  border: 1px solid rgba(0, 194, 255, 0.45);
-  background: rgba(0, 194, 255, 0.12);
-  color: #b8ecff;
+  border: 1px solid var(--mc-border);
+  background: rgba(8, 244, 103, 0.08);
+  color: var(--mc-primary);
   font-size: 0.875rem;
   font-weight: 600;
-  margin-bottom: 1.25rem;
+  margin-bottom: 1rem;
 }
 
 .carmen-badge-dot {
   width: 8px;
   height: 8px;
   border-radius: 50%;
-  background: var(--carmen-mc-accent);
-  box-shadow: 0 0 12px var(--carmen-mc-accent);
+  background: var(--mc-primary);
+  box-shadow: 0 0 10px var(--mc-primary);
 }
 
 .carmen-title {
   margin: 0 0 1rem;
-  font-size: clamp(1.85rem, 5vw, 3rem);
+  font-size: clamp(1.75rem, 5vw, 2.75rem);
   font-weight: 700;
   line-height: 1.15;
-  letter-spacing: -0.02em;
+  color: var(--mc-text);
 }
 
 .carmen-title em {
   font-style: normal;
-  color: var(--carmen-mc-accent);
+  color: var(--mc-primary);
 }
 
 .carmen-lead {
   margin: 0 0 1.25rem;
-  font-size: clamp(1.05rem, 2.5vw, 1.25rem);
+  font-size: clamp(1.05rem, 2.5vw, 1.2rem);
   line-height: 1.65;
-  color: rgba(255, 255, 255, 0.88);
+  color: var(--mc-text-muted);
   max-width: 36rem;
 }
 
@@ -103,16 +121,19 @@
   margin: 0 0 1.75rem;
   padding: 1rem 1.15rem;
   border-radius: 12px;
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  background: rgba(255, 255, 255, 0.06);
+  border: 2px solid rgba(8, 244, 103, 0.25);
+  background: linear-gradient(
+    180deg,
+    rgba(227, 250, 224, 0.08) 0%,
+    rgba(10, 21, 38, 0.95) 58%
+  );
   font-size: 0.95rem;
   line-height: 1.6;
-  color: rgba(255, 255, 255, 0.82);
+  color: var(--mc-text-muted);
 }
 
 .carmen-note strong {
-  color: #fff;
-  font-weight: 700;
+  color: var(--mc-text);
 }
 
 .carmen-actions {
@@ -126,61 +147,77 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  padding: 0.85rem 1.5rem;
+  padding: 12px 28px;
   border-radius: 999px;
   font-size: 1rem;
   font-weight: 700;
   text-decoration: none !important;
-  transition: transform 0.2s ease, box-shadow 0.2s ease, background 0.2s ease;
+  transition: background 0.2s ease, color 0.2s ease, transform 0.15s ease;
 }
 
 .carmen-btn--primary {
-  color: #061022 !important;
-  background: linear-gradient(135deg, #5eead4, var(--carmen-mc-accent));
-  box-shadow: 0 8px 28px rgba(0, 194, 255, 0.35);
+  color: var(--mc-bg) !important;
+  background-color: var(--mc-primary);
 }
 
 .carmen-btn--primary:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 12px 32px rgba(0, 194, 255, 0.45);
+  background-color: var(--mc-bg);
+  color: var(--mc-primary) !important;
+  transform: translateY(-1px);
 }
 
 .carmen-btn--ghost {
-  color: #fff !important;
-  border: 1px solid rgba(255, 255, 255, 0.35);
-  background: rgba(255, 255, 255, 0.08);
+  color: var(--mc-bg) !important;
+  background-color: var(--mc-text);
 }
 
 .carmen-btn--ghost:hover {
-  background: rgba(255, 255, 255, 0.14);
+  background-color: var(--mc-bg);
+  color: var(--mc-text) !important;
 }
 
 .carmen-visual {
   position: relative;
   margin: 0 auto;
-  max-width: 420px;
+  max-width: 380px;
 }
 
 .carmen-visual-frame {
-  border-radius: 20px;
+  border-radius: 16px;
   overflow: hidden;
-  border: 1px solid rgba(255, 255, 255, 0.15);
-  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.45);
-  background: rgba(0, 0, 0, 0.25);
+  border: 2px solid rgba(8, 244, 103, 0.2);
+  background: var(--mc-bg-alt);
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.35);
 }
 
 .carmen-visual-frame img {
   display: block;
   width: 100%;
   height: auto;
-  vertical-align: middle;
+}
+
+.carmen-visual-deco {
+  position: absolute;
+  width: 42%;
+  opacity: 0.9;
+  pointer-events: none;
+}
+
+.carmen-visual-deco--tl {
+  top: -8%;
+  left: -6%;
+}
+
+.carmen-visual-deco--br {
+  bottom: -6%;
+  right: -8%;
 }
 
 .carmen-visual-caption {
   margin-top: 0.75rem;
   text-align: center;
   font-size: 0.85rem;
-  color: rgba(255, 255, 255, 0.55);
+  color: rgba(239, 239, 239, 0.55);
 }
 
 .carmen-steps {
@@ -197,31 +234,57 @@
 
 .carmen-step {
   padding: 1.15rem 1.1rem;
-  border-radius: 14px;
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  background: rgba(255, 255, 255, 0.05);
+  border-radius: 12px;
+  border: 2px solid rgba(8, 244, 103, 0.2);
+  background: linear-gradient(
+    180deg,
+    rgba(227, 250, 224, 0.06) -80px,
+    var(--mc-bg) 58%
+  );
 }
 
 .carmen-step h3 {
   margin: 0 0 0.5rem;
   font-size: 1.05rem;
   font-weight: 700;
-  color: #fff;
+  color: var(--mc-primary);
 }
 
 .carmen-step p {
   margin: 0;
   font-size: 0.9rem;
   line-height: 1.55;
-  color: rgba(255, 255, 255, 0.75);
+  color: var(--mc-text-muted);
 }
 
 .carmen-powered {
-  margin-top: 1.5rem;
+  margin-top: 1.25rem;
   font-size: 0.8rem;
-  color: rgba(255, 255, 255, 0.45);
+  color: rgba(239, 239, 239, 0.45);
 }
 
 .carmen-powered span {
-  color: rgba(255, 255, 255, 0.65);
+  color: var(--mc-primary);
+}
+
+.carmen-accent {
+  color: var(--mc-primary);
+}
+
+/* Header logo swap (additive — hides MC wordmark SVG only) */
+header.elementor-location-header .elementor-element-b95edfe a.elementor-icon svg {
+  display: none !important;
+}
+
+header.elementor-location-header .carmen-site-logo {
+  display: block;
+  height: 22px;
+  width: auto;
+  max-width: min(240px, 70vw);
+}
+
+@media (min-width: 768px) {
+  header.elementor-location-header .carmen-site-logo {
+    height: 26px;
+  }
 }
