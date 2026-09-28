@@ -76,27 +76,60 @@ export function renderLayout({ site, navigation, mainHtml, title }) {
 
 export function renderHome({ site, posts }) {
   const recent = posts.slice(0, 6);
+  const slides =
+    site.heroCarousel ||
+    (site.heroSlides || []).map((image, i) => ({
+      image,
+      title: site.heroTitles?.[i] || site.name,
+    }));
+
   return `
-    <section class="hero" aria-label="גלריה">
-      <div class="hero-slider" data-hero-slider>
-        ${site.heroSlides
+    <section
+      class="hero-carousel"
+      data-hero-carousel
+      aria-roledescription="carousel"
+      aria-label="באנר ראשי"
+    >
+      <div class="hero-carousel__slides">
+        ${slides
           .map(
-            (src, i) =>
-              `<div class="hero-slide${i === 0 ? " is-active" : ""}" style="background-image:url('${src}')"></div>`,
+            (slide, i) => `
+          <div
+            class="hero-carousel__slide${i === 0 ? " is-active" : ""}"
+            data-hero-slide
+            data-title="${slide.title.replace(/"/g, "&quot;")}"
+            aria-hidden="${i === 0 ? "false" : "true"}"
+          >
+            <img src="${slide.image}" alt="${slide.title}" width="1920" height="700" decoding="async" />
+          </div>`,
           )
           .join("")}
       </div>
-      <div class="hero-overlay">
-        <p class="hero-kicker">התקשרו עכשיו: <a href="tel:${site.phoneTel}">${site.phone}</a></p>
-        <h1>ציוד למכבסות</h1>
-        <p class="hero-lead">
-          עומדים לפתוח מכבסה? מעוניינים בשירות עצמי או לייעל מכבסה קיימת?
-          וודהיל ונדינג מספקת מכונות כביסה תעשייתיות, ייבוש, הקמת מתקנים, תחזוקה והשכרת ציוד.
-        </p>
-        <div class="hero-actions">
-          <a class="btn btn-primary" href="tel:${site.phoneTel}">חייגו ${site.phone}</a>
-          <a class="btn btn-secondary" href="#/%d7%a6%d7%95%d7%a8-%d7%a7%d7%a9%d7%a8" data-nav="/%d7%a6%d7%95%d7%a8-%d7%a7%d7%a9%d7%a8">צור קשר</a>
+      <div class="hero-carousel__chrome">
+        <p class="sr-only" data-hero-status aria-live="polite">${slides[0]?.title || ""}</p>
+        <div class="hero-carousel__controls">
+          <button type="button" class="hero-carousel__arrow hero-carousel__arrow--prev" data-hero-prev aria-label="שקף קודם">‹</button>
+          <div class="hero-carousel__dots" role="tablist" aria-label="בחירת שקף">
+            ${slides
+              .map(
+                (slide, i) =>
+                  `<button type="button" role="tab" class="hero-carousel__dot${i === 0 ? " is-active" : ""}" data-hero-dot aria-label="${slide.title}" aria-selected="${i === 0 ? "true" : "false"}"></button>`,
+              )
+              .join("")}
+          </div>
+          <button type="button" class="hero-carousel__arrow hero-carousel__arrow--next" data-hero-next aria-label="שקף הבא">›</button>
         </div>
+      </div>
+    </section>
+
+    <section class="section intro">
+      <div class="container narrow center">
+        <img class="intro-logo" src="${site.logo}" alt="" width="150" height="150" />
+        <h1>ציוד למכבסות</h1>
+        <p>
+          עומדים לפתוח מכבסה? מעוניינים בשירות עצמי או לייעל מכבסה קיימת?
+          לייעוץ והזמנת ציוד חייגו <a href="tel:${site.phoneTel}">${site.phone}</a>.
+        </p>
       </div>
     </section>
 

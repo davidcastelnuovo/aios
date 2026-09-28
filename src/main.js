@@ -1,5 +1,6 @@
 import { createRouter } from "./router.js";
 import { renderLayout, resolveMainHtml } from "./views.js";
+import { initHeroCarousel } from "./hero-carousel.js";
 
 let siteData = null;
 
@@ -38,18 +39,7 @@ function bindInteractions(root, navigate) {
     }
   });
 
-  const slider = root.querySelector("[data-hero-slider]");
-  if (slider) {
-    const slides = [...slider.querySelectorAll(".hero-slide")];
-    if (slides.length > 1) {
-      let index = 0;
-      window.setInterval(() => {
-        slides[index].classList.remove("is-active");
-        index = (index + 1) % slides.length;
-        slides[index].classList.add("is-active");
-      }, 5000);
-    }
-  }
+  initHeroCarousel(root);
 }
 
 async function renderRoute(path) {

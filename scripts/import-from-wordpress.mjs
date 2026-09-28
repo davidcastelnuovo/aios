@@ -134,10 +134,23 @@ const siteMeta = {
   email: "woodhillvending@gmail.com",
   address: "ירושלים",
   logo: "https://www.woodhill.co.il/wp-content/uploads/2017/04/logobig.png",
-  heroSlides: [
-    "https://www.woodhill.co.il/wp-content/uploads/2018/02/1.jpg",
-    "https://www.woodhill.co.il/wp-content/uploads/2018/02/2.jpg",
-    "https://www.woodhill.co.il/wp-content/uploads/2018/02/3.jpg",
+  heroCarousel: [
+    {
+      image: "https://www.woodhill.co.il/wp-content/uploads/2018/02/1.jpg",
+      title: "מכונות כביסה בשירות עצמי",
+    },
+    {
+      image: "https://www.woodhill.co.il/wp-content/uploads/2018/03/payments1.jpg",
+      title: "תשלום באמצעות אשראי, מטבעות, טלפון ושטרות",
+    },
+    {
+      image: "https://www.woodhill.co.il/wp-content/uploads/2018/02/2.jpg",
+      title: "אספקת ציוד איכותי למכבסות",
+    },
+    {
+      image: "https://www.woodhill.co.il/wp-content/uploads/2018/02/3.jpg",
+      title: "ייבוש כביסה בשירות עצמי",
+    },
   ],
   youtube: "https://www.youtube.com/embed/JT7sfgLE7nM?rel=0",
 };
