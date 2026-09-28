@@ -160,6 +160,97 @@ function renderPostCard(post, { heading = "h3" } = {}) {
     </article>`;
 }
 
+function renderSiteFooter({ site }) {
+  const links = site.footerLinks || [
+    { label: "בית", path: "/" },
+    { label: "אודות", path: "/%d7%90%d7%95%d7%93%d7%95%d7%aa" },
+    { label: "צור קשר", path: "/%d7%a6%d7%95%d7%a8-%d7%a7%d7%a9%d7%a8" },
+    { label: "ציוד למכבסות", path: "/%d7%a6%d7%99%d7%95%d7%93-%d7%9c%d7%9e%d7%9b%d7%91%d7%a1%d7%95%d7%aa" },
+    { label: "מדיניות פרטיות", path: "/%d7%9e%d7%93%d7%99%d7%a0%d7%99%d7%95%d7%aa-%d7%a4%d7%a8%d7%98%d7%99%d7%95%d7%aa" },
+  ];
+  const badges = site.isoBadges || [];
+  const fb = site.facebookPage || "https://www.facebook.com/woodhillvending/";
+  const fbEmbed = `https://www.facebook.com/plugins/page.php?href=${encodeURIComponent(fb)}&tabs&width=340&height=214&small_header=false&adapt_container_width=true&hide_cover=false&show_facepile=true`;
+  const credit = site.siteCredit;
+  const year = new Date().getFullYear();
+
+  return `
+    <footer class="site-footer">
+      <div class="footer-main">
+        <div class="container footer-columns">
+          <section class="footer-col" aria-labelledby="footer-links-heading">
+            <h2 id="footer-links-heading" class="footer-heading">קישורים שימושיים</h2>
+            <ul class="footer-links">
+              ${links
+                .map(
+                  (item) =>
+                    `<li><a href="#${item.path}" data-nav="${item.path}">${item.label}</a></li>`,
+                )
+                .join("")}
+            </ul>
+          </section>
+          <section class="footer-col footer-col--contact" aria-labelledby="footer-contact-heading">
+            <h2 id="footer-contact-heading" class="footer-heading">פרטי קשר</h2>
+            <div class="footer-contact">
+              <p class="footer-contact__name">${site.name.replace(/ בע"מ$/, "")}</p>
+              <p><a href="tel:${site.phoneTel}">${site.phone}</a></p>
+              <p>
+                <span class="footer-contact__label">מייל:</span>
+                <a href="mailto:${site.email}">${site.email}</a>
+              </p>
+              <p>
+                <span class="footer-contact__label">כתובת:</span>
+                ${site.address}
+              </p>
+            </div>
+            ${
+              badges.length
+                ? `<div class="footer-badges">${badges
+                    .map(
+                      (src) =>
+                        `<img src="${src}" alt="תקן ISO 9001" width="120" height="72" loading="lazy" decoding="async" />`,
+                    )
+                    .join("")}</div>`
+                : ""
+            }
+          </section>
+          <section class="footer-col footer-col--social" aria-labelledby="footer-social-heading">
+            <h2 id="footer-social-heading" class="footer-heading">הצטרפו לפייסבוק שלנו</h2>
+            <div class="footer-facebook">
+              <iframe
+                title="עמוד הפייסבוק של וודהיל ונדינג"
+                src="${fbEmbed}"
+                width="340"
+                height="214"
+                style="border:none;overflow:hidden"
+                scrolling="no"
+                frameborder="0"
+                allow="autoplay; clipboard-write; encrypted-media; picture-in-picture; web-share"
+                allowfullscreen
+                loading="lazy"
+              ></iframe>
+            </div>
+            <p class="footer-facebook-fallback">
+              <a href="${fb}" rel="noopener noreferrer" target="_blank">עקבו אחרינו בפייסבוק</a>
+            </p>
+          </section>
+        </div>
+      </div>
+      <div class="footer-bottom">
+        <div class="container footer-bottom__inner">
+          <p>
+            © ${year} ${site.name}. כל הזכויות שמורות.
+            ${
+              credit
+                ? ` | נבנה ע&quot;י <a href="${credit.url}" rel="noopener noreferrer" target="_blank">${credit.label}</a>`
+                : ""
+            }
+          </p>
+        </div>
+      </div>
+    </footer>`;
+}
+
 export function renderLayout({ site, navigation, mainHtml, title }) {
   document.title = title
     ? `${stripTags(title)} | ${site.name}`
@@ -219,26 +310,7 @@ export function renderLayout({ site, navigation, mainHtml, title }) {
       </div>
     </header>
     <main id="main" class="site-main">${mainHtml}</main>
-    <footer class="site-footer">
-      <div class="container footer-grid">
-        <div>
-          <h2>פרטי קשר</h2>
-          <p><strong>${site.name}</strong></p>
-          <p><a href="tel:${site.phoneTel}">${site.phone}</a></p>
-          <p><a href="mailto:${site.email}">${site.email}</a></p>
-          <p>${site.address}</p>
-        </div>
-        <div>
-          <h2>קישורים</h2>
-          <ul class="footer-links">
-            <li><a href="#/${encodeURIComponent("ציוד-למכבסות")}" data-nav="/%d7%a6%d7%99%d7%95%d7%93-%d7%9c%d7%9e%d7%9b%d7%91%d7%a1%d7%95%d7%aa">ציוד למכבסות</a></li>
-            <li><a href="#/${encodeURIComponent("מדיניות-פרטיות")}" data-nav="/%d7%9e%d7%93%d7%99%d7%a0%d7%99%d7%95%d7%aa-%d7%a4%d7%a8%d7%98%d7%99%d7%95%d7%aa">מדיניות פרטיות</a></li>
-            <li><a href="#/${encodeURIComponent("צור-קשר")}" data-nav="/%d7%a6%d7%95%d7%a8-%d7%a7%d7%a9%d7%a8">צור קשר</a></li>
-          </ul>
-        </div>
-      </div>
-      <p class="footer-copy container">© ${new Date().getFullYear()} ${site.name}</p>
-    </footer>
+    ${renderSiteFooter({ site })}
   `;
 }
 

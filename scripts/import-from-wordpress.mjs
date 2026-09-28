@@ -149,6 +149,19 @@ const siteMeta = {
     },
   ],
   youtube: "https://www.youtube.com/embed/JT7sfgLE7nM?rel=0",
+  facebookPage: "https://www.facebook.com/woodhillvending/",
+  isoBadges: [
+    "https://www.woodhill.co.il/wp-content/uploads/2018/02/1.png",
+    "https://www.woodhill.co.il/wp-content/uploads/2018/02/2.png",
+  ],
+  footerLinks: [
+    { label: "בית", path: "/" },
+    { label: "אודות", path: "/%d7%90%d7%95%d7%93%d7%95%d7%aa" },
+    { label: "צור קשר", path: "/%d7%a6%d7%95%d7%a8-%d7%a7%d7%a9%d7%a8" },
+    { label: "ציוד למכבסות", path: "/%d7%a6%d7%99%d7%95%d7%93-%d7%9c%d7%9e%d7%9b%d7%91%d7%a1%d7%95%d7%aa" },
+    { label: "מדיניות פרטיות", path: "/%d7%9e%d7%93%d7%99%d7%a0%d7%99%d7%95%d7%aa-%d7%a4%d7%a8%d7%98%d7%99%d7%95%d7%aa" },
+  ],
+  siteCredit: { label: "לנה בניית אתרים", url: "http://www.lana.co.il" },
 };
 
 console.log("Fetching WordPress pages…");
