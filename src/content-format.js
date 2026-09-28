@@ -25,6 +25,8 @@ export function improveContent(html) {
     return `<img loading="lazy" decoding="async"${attrs}>`;
   });
 
+  out = out.replace(/<div id="wpcf7[^"]*"[\s\S]*?<\/form>\s*<\/div>/gi, "");
+
   return out.trim();
 }
 

@@ -31,14 +31,15 @@ function bindInteractions(root, navigate) {
     toggle.setAttribute("aria-expanded", open ? "true" : "false");
   });
 
-  const form = root.querySelector("[data-contact-form]");
-  form?.addEventListener("submit", (event) => {
-    event.preventDefault();
-    const note = form.querySelector("[data-form-success]");
-    if (note) {
-      note.hidden = false;
-      form.reset();
-    }
+  root.querySelectorAll("[data-contact-form]").forEach((form) => {
+    form.addEventListener("submit", (event) => {
+      event.preventDefault();
+      const note = form.querySelector("[data-form-success]");
+      if (note) {
+        note.hidden = false;
+        form.reset();
+      }
+    });
   });
 
   initHeroCarousel(root);

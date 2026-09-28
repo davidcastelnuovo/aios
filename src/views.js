@@ -25,6 +25,119 @@ function contentWithoutDuplicateHero(entry) {
   return entry.content.replace(new RegExp(`<img[^>]*src="${escaped}"[^>]*>`, "i"), "");
 }
 
+const CONTACT_PATH = normalizePath("/%d7%a6%d7%95%d7%a8-%d7%a7%d7%a9%d7%a8");
+
+function isContactPath(normalized) {
+  return normalized === CONTACT_PATH || normalized === "/צור-קשר";
+}
+
+function renderContactForm({ idPrefix = "cf", compact = false } = {}) {
+  const extraFields = compact
+    ? ""
+    : `
+      <div class="form-field">
+        <label class="form-label" for="${idPrefix}-email">דוא&quot;ל</label>
+        <input
+          class="form-control"
+          id="${idPrefix}-email"
+          name="email"
+          type="email"
+          autocomplete="email"
+          inputmode="email"
+          placeholder="name@example.com"
+        />
+      </div>
+      <div class="form-field">
+        <label class="form-label" for="${idPrefix}-message">הערות</label>
+        <textarea
+          class="form-control form-control--textarea"
+          id="${idPrefix}-message"
+          name="message"
+          rows="4"
+          placeholder="ספרו לנו במה נוכל לעזור…"
+        ></textarea>
+      </div>`;
+
+  return `
+    <form class="contact-form" data-contact-form novalidate>
+      <div class="form-field">
+        <label class="form-label" for="${idPrefix}-name">
+          שם מלא <span class="form-required" aria-hidden="true">*</span>
+        </label>
+        <input
+          class="form-control"
+          id="${idPrefix}-name"
+          name="name"
+          type="text"
+          required
+          autocomplete="name"
+          placeholder="השם שלכם"
+        />
+      </div>
+      <div class="form-field">
+        <label class="form-label" for="${idPrefix}-phone">
+          טלפון <span class="form-required" aria-hidden="true">*</span>
+        </label>
+        <input
+          class="form-control"
+          id="${idPrefix}-phone"
+          name="phone"
+          type="tel"
+          required
+          autocomplete="tel"
+          inputmode="tel"
+          placeholder="050-0000000"
+        />
+      </div>
+      ${extraFields}
+      <div class="form-field form-field--checkbox">
+        <input type="checkbox" id="${idPrefix}-privacy" name="privacy" required />
+        <label class="form-label form-label--checkbox" for="${idPrefix}-privacy">
+          קראתי ואני מסכים/ה ל<a href="#/%d7%9e%d7%93%d7%99%d7%a0%d7%99%d7%95%d7%aa-%d7%a4%d7%a8%d7%98%d7%99%d7%95%d7%aa" data-nav="/%d7%9e%d7%93%d7%99%d7%a0%d7%99%d7%95%d7%aa-%d7%a4%d7%a8%d7%98%d7%99%d7%95%d7%aa">מדיניות הפרטיות</a>
+        </label>
+      </div>
+      <div class="form-actions">
+        <button type="submit" class="btn btn-primary btn--block">שליחה</button>
+      </div>
+      <p class="form-note" hidden data-form-success>תודה! קיבלנו את הפנייה ונחזור אליכם בהקדם.</p>
+      <p class="form-disclaimer">טופס הדגמה — ללא שליחה לשרת בשלב זה.</p>
+    </form>`;
+}
+
+export function renderContactPage({ site }) {
+  return `
+    <section class="section page page--contact">
+      <div class="container">
+        <div class="contact-layout">
+          <div class="contact-intro">
+            <h1>צור קשר</h1>
+            <p class="contact-intro__lead">
+              לייעוץ, הצעת מחיר או שאלה — מלאו את הטופס או התקשרו אלינו ישירות.
+            </p>
+            <ul class="contact-details">
+              <li>
+                <span class="contact-details__label">טלפון</span>
+                <a href="tel:${site.phoneTel}">${site.phone}</a>
+              </li>
+              <li>
+                <span class="contact-details__label">דוא&quot;ל</span>
+                <a href="mailto:${site.email}">${site.email}</a>
+              </li>
+              <li>
+                <span class="contact-details__label">כתובת</span>
+                <span>${site.address}</span>
+              </li>
+            </ul>
+          </div>
+          <div class="contact-form-panel">
+            <h2 class="contact-form-panel__title">שלחו הודעה</h2>
+            ${renderContactForm({ idPrefix: "contact-page" })}
+          </div>
+        </div>
+      </div>
+    </section>`;
+}
+
 function renderPostCard(post, { heading = "h3" } = {}) {
   const media = post.featuredImage
     ? `<div class="post-card__media"><img src="${post.featuredImage}" alt="" loading="lazy" decoding="async" /></div>`
@@ -220,22 +333,9 @@ export function renderHome({ site, posts }) {
           <h2>צרו איתנו קשר</h2>
           <p>לפרטים נוספים, הצעת מחיר או ייעוץ — השאירו פרטים או חייגו.</p>
         </div>
-        <form class="contact-form" data-contact-form>
-          <label>
-            <span class="sr-only">שם מלא</span>
-            <input name="name" required placeholder="שם מלא" autocomplete="name" />
-          </label>
-          <label>
-            <span class="sr-only">טלפון</span>
-            <input name="phone" required placeholder="טלפון" autocomplete="tel" />
-          </label>
-          <label class="checkbox">
-            <input type="checkbox" name="privacy" required />
-            <span>קראתי ואני מסכים/ה ל<a href="#/%d7%9e%d7%93%d7%99%d7%a0%d7%99%d7%95%d7%aa-%d7%a4%d7%a8%d7%98%d7%99%d7%95%d7%aa" data-nav="/%d7%9e%d7%93%d7%99%d7%a0%d7%99%d7%95%d7%aa-%d7%a4%d7%a8%d7%98%d7%99%d7%95%d7%aa">מדיניות הפרטיות</a></span>
-          </label>
-          <button type="submit" class="btn btn-primary">שליחה</button>
-          <p class="form-note" hidden data-form-success>תודה! נחזור אליכם בהקדם. (טופס הדגמה — ללא שליחה לשרת)</p>
-        </form>
+        <div class="contact-form-panel contact-form-panel--inline">
+          ${renderContactForm({ idPrefix: "home", compact: true })}
+        </div>
       </div>
     </section>
 
@@ -317,6 +417,10 @@ export function resolveMainHtml(data, path) {
     normalized === "/מאמרים"
   ) {
     return { html: renderArticlesIndex({ posts: data.posts }), title: "מאמרים" };
+  }
+
+  if (isContactPath(normalized)) {
+    return { html: renderContactPage({ site: data.site }), title: "צור קשר" };
   }
 
   const entry = findContent(data, path);
