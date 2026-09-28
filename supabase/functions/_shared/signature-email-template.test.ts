@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { signatureRequestBody, signatureRequestSubject } from "./signature-email-template.ts";
+import { resolveSignatureEmailColors, signatureRequestBody, signatureRequestSubject } from "./signature-email-template.ts";
 
 test("request subject fills the document title", () => {
   assert.equal(
@@ -18,4 +18,16 @@ test("body placeholders are replaced", () => {
     signatureRequestBody({ body: "שלום {{first_name}}, מ{{sender}}" }, { first_name: "רעיה", sender: "דוד" }),
     "שלום רעיה, מדוד",
   );
+});
+
+test("email colors keep saved hex and drop unsafe values", () => {
+  const colors = resolveSignatureEmailColors({
+    headerColor: "#ABC",
+    buttonColor: "red;background:url(x)",
+    textColor: "#112233",
+  });
+  assert.equal(colors.headerColor, "#aabbcc");
+  assert.equal(colors.buttonColor, "#2563eb");
+  assert.equal(colors.textColor, "#112233");
+  assert.equal(colors.pageBackground, "#f5f5f5");
 });
