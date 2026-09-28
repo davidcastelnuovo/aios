@@ -128,6 +128,8 @@ const siteMeta = {
   email: "woodhillvending@gmail.com",
   address: "ירושלים",
   logo: "https://www.woodhill.co.il/wp-content/uploads/2017/04/logobig.png",
+  headerLogo:
+    "https://www.woodhill.co.il/wp-content/uploads/2018/03/logobig.png",
   heroCarousel: [
     {
       image: "https://www.woodhill.co.il/wp-content/uploads/2018/02/1.jpg",

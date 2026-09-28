@@ -22,10 +22,12 @@ function bindInteractions(root, navigate) {
     });
   });
 
+  const header = root.querySelector(".site-header");
   const toggle = root.querySelector(".nav-toggle");
   const nav = root.querySelector("#site-nav");
   toggle?.addEventListener("click", () => {
-    const open = nav.classList.toggle("is-open");
+    const open = header?.classList.toggle("site-header--nav-open");
+    nav?.classList.toggle("is-open", open);
     toggle.setAttribute("aria-expanded", open ? "true" : "false");
   });
 
@@ -53,7 +55,19 @@ async function renderRoute(path) {
     title,
   });
   bindInteractions(app, router.navigate);
+  highlightActiveNav(app, path);
   window.scrollTo({ top: 0, behavior: "smooth" });
+}
+
+function highlightActiveNav(root, path) {
+  const normalized = path === "/" ? "/" : path.replace(/\/$/, "");
+  root.querySelectorAll("[data-nav]").forEach((el) => {
+    const target = el.getAttribute("data-nav");
+    const isActive =
+      target === normalized ||
+      (normalized !== "/" && target !== "/" && normalized.startsWith(target));
+    el.classList.toggle("is-active", Boolean(isActive));
+  });
 }
 
 const router = createRouter({ onRoute: renderRoute });

@@ -55,40 +55,56 @@ export function renderLayout({ site, navigation, mainHtml, title }) {
   return `
     <a class="skip-link" href="#main">דלג לתוכן</a>
     <header class="site-header">
-      <div class="container header-inner">
-        <a class="brand" href="#/" data-nav="/">
-          <img src="${site.logo}" alt="${site.name}" width="72" height="72" />
-          <span class="brand-text">
-            <strong>${site.name}</strong>
-            <small>${site.tagline}</small>
-          </span>
-        </a>
-        <a class="header-phone" href="tel:${site.phoneTel}">${site.phone}</a>
-        <button type="button" class="nav-toggle" aria-expanded="false" aria-controls="site-nav">
-          תפריט
-        </button>
-        <nav id="site-nav" class="site-nav" aria-label="ראשי">
-          ${navigation
-            .map((item) => {
-              const hasChildren = item.children?.length;
-              if (!hasChildren) {
-                return `<a href="#${item.path}" data-nav="${item.path}">${item.label}</a>`;
-              }
-              return `
-                <div class="nav-group">
-                  <a href="#${item.path}" data-nav="${item.path}">${item.label}</a>
-                  <div class="nav-dropdown">
-                    ${item.children
-                      .map(
-                        (child) =>
-                          `<a href="#${child.path}" data-nav="${child.path}">${child.label}</a>`,
-                      )
-                      .join("")}
-                  </div>
-                </div>`;
-            })
-            .join("")}
-        </nav>
+      <div class="header-top">
+        <div class="container header-top__inner">
+          <p class="header-tagline">
+            התקשרו עכשיו:
+            <a href="tel:${site.phoneTel}" class="header-tagline__phone">${site.phone}</a>
+          </p>
+        </div>
+      </div>
+      <div class="header-main">
+        <div class="container header-main__inner">
+          <a class="brand" href="#/" data-nav="/">
+            <img
+              class="brand-logo"
+              src="${site.headerLogo || site.logo}"
+              alt="${site.name}"
+              width="607"
+              height="80"
+            />
+          </a>
+          <button type="button" class="nav-toggle" aria-expanded="false" aria-controls="site-nav">
+            <span class="nav-toggle__bars" aria-hidden="true"></span>
+            <span class="nav-toggle__label">תפריט</span>
+          </button>
+        </div>
+      </div>
+      <div class="header-nav">
+        <div class="container">
+          <nav id="site-nav" class="site-nav" aria-label="ראשי">
+            ${navigation
+              .map((item) => {
+                const hasChildren = item.children?.length;
+                if (!hasChildren) {
+                  return `<a class="site-nav__link" href="#${item.path}" data-nav="${item.path}">${item.label}</a>`;
+                }
+                return `
+                  <div class="nav-group">
+                    <a class="site-nav__link site-nav__link--has-sub" href="#${item.path}" data-nav="${item.path}">${item.label}</a>
+                    <div class="nav-dropdown">
+                      ${item.children
+                        .map(
+                          (child) =>
+                            `<a class="nav-dropdown__link" href="#${child.path}" data-nav="${child.path}">${child.label}</a>`,
+                        )
+                        .join("")}
+                    </div>
+                  </div>`;
+              })
+              .join("")}
+          </nav>
+        </div>
       </div>
     </header>
     <main id="main" class="site-main">${mainHtml}</main>
