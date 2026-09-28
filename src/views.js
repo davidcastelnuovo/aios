@@ -1,0 +1,237 @@
+import { findContent, normalizePath } from "./router.js";
+
+const stripTags = (html) =>
+  html
+    .replace(/<[^>]+>/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+
+export function renderLayout({ site, navigation, mainHtml, title }) {
+  document.title = title
+    ? `${stripTags(title)} | ${site.name}`
+    : `${site.name} — ${site.tagline}`;
+
+  return `
+    <a class="skip-link" href="#main">דלג לתוכן</a>
+    <header class="site-header">
+      <div class="container header-inner">
+        <a class="brand" href="#/" data-nav="/">
+          <img src="${site.logo}" alt="${site.name}" width="72" height="72" />
+          <span class="brand-text">
+            <strong>${site.name}</strong>
+            <small>${site.tagline}</small>
+          </span>
+        </a>
+        <a class="header-phone" href="tel:${site.phoneTel}">${site.phone}</a>
+        <button type="button" class="nav-toggle" aria-expanded="false" aria-controls="site-nav">
+          תפריט
+        </button>
+        <nav id="site-nav" class="site-nav" aria-label="ראשי">
+          ${navigation
+            .map((item) => {
+              const hasChildren = item.children?.length;
+              if (!hasChildren) {
+                return `<a href="#${item.path}" data-nav="${item.path}">${item.label}</a>`;
+              }
+              return `
+                <div class="nav-group">
+                  <a href="#${item.path}" data-nav="${item.path}">${item.label}</a>
+                  <div class="nav-dropdown">
+                    ${item.children
+                      .map(
+                        (child) =>
+                          `<a href="#${child.path}" data-nav="${child.path}">${child.label}</a>`,
+                      )
+                      .join("")}
+                  </div>
+                </div>`;
+            })
+            .join("")}
+        </nav>
+      </div>
+    </header>
+    <main id="main" class="site-main">${mainHtml}</main>
+    <footer class="site-footer">
+      <div class="container footer-grid">
+        <div>
+          <h2>פרטי קשר</h2>
+          <p><strong>${site.name}</strong></p>
+          <p><a href="tel:${site.phoneTel}">${site.phone}</a></p>
+          <p><a href="mailto:${site.email}">${site.email}</a></p>
+          <p>${site.address}</p>
+        </div>
+        <div>
+          <h2>קישורים</h2>
+          <ul class="footer-links">
+            <li><a href="#/${encodeURIComponent("ציוד-למכבסות")}" data-nav="/%d7%a6%d7%99%d7%95%d7%93-%d7%9c%d7%9e%d7%9b%d7%91%d7%a1%d7%95%d7%aa">ציוד למכבסות</a></li>
+            <li><a href="#/${encodeURIComponent("מדיניות-פרטיות")}" data-nav="/%d7%9e%d7%93%d7%99%d7%a0%d7%99%d7%95%d7%aa-%d7%a4%d7%a8%d7%98%d7%99%d7%95%d7%aa">מדיניות פרטיות</a></li>
+            <li><a href="#/${encodeURIComponent("צור-קשר")}" data-nav="/%d7%a6%d7%95%d7%a8-%d7%a7%d7%a9%d7%a8">צור קשר</a></li>
+          </ul>
+        </div>
+      </div>
+      <p class="footer-copy container">© ${new Date().getFullYear()} ${site.name}</p>
+    </footer>
+  `;
+}
+
+export function renderHome({ site, posts }) {
+  const recent = posts.slice(0, 6);
+  return `
+    <section class="hero" aria-label="גלריה">
+      <div class="hero-slider" data-hero-slider>
+        ${site.heroSlides
+          .map(
+            (src, i) =>
+              `<div class="hero-slide${i === 0 ? " is-active" : ""}" style="background-image:url('${src}')"></div>`,
+          )
+          .join("")}
+      </div>
+      <div class="hero-overlay">
+        <p class="hero-kicker">התקשרו עכשיו: <a href="tel:${site.phoneTel}">${site.phone}</a></p>
+        <h1>ציוד למכבסות</h1>
+        <p class="hero-lead">
+          עומדים לפתוח מכבסה? מעוניינים בשירות עצמי או לייעל מכבסה קיימת?
+          וודהיל ונדינג מספקת מכונות כביסה תעשייתיות, ייבוש, הקמת מתקנים, תחזוקה והשכרת ציוד.
+        </p>
+        <div class="hero-actions">
+          <a class="btn btn-primary" href="tel:${site.phoneTel}">חייגו ${site.phone}</a>
+          <a class="btn btn-secondary" href="#/%d7%a6%d7%95%d7%a8-%d7%a7%d7%a9%d7%a8" data-nav="/%d7%a6%d7%95%d7%a8-%d7%a7%d7%a9%d7%a8">צור קשר</a>
+        </div>
+      </div>
+    </section>
+
+    <section class="section services">
+      <div class="container">
+        <h2>מה אנחנו מציעים</h2>
+        <ul class="card-grid">
+          <li class="card"><h3>מכונות כביסה תעשייתיות</h3><p>אלקטרולוקס, מייטג ופתרונות לפי נפח עבודה.</p></li>
+          <li class="card"><h3>מכונות ייבוש</h3><p>ייעוץ, אספקה ותחזוקה למייבשים תעשייתיים.</p></li>
+          <li class="card"><h3>הקמה ותחזוקה</h3><p>מתקני כביסה במוסדות, טכנאים ותיקונים בשטח.</p></li>
+          <li class="card"><h3>ציוד למכבסות</h3><p>מגוון אביזרים ופתרונות להשלמת המכבסה.</p></li>
+        </ul>
+      </div>
+    </section>
+
+    <section class="section video-section">
+      <div class="container narrow">
+        <h2>וודהיל ונדינג בע&quot;מ</h2>
+        <div class="video-embed">
+          <iframe src="${site.youtube}" title="סרטון וודהיל" loading="lazy" allowfullscreen></iframe>
+        </div>
+      </div>
+    </section>
+
+    <section class="section contact-teaser">
+      <div class="container contact-grid">
+        <div>
+          <h2>צרו איתנו קשר</h2>
+          <p>לפרטים נוספים, הצעת מחיר או ייעוץ — השאירו פרטים או חייגו.</p>
+        </div>
+        <form class="contact-form" data-contact-form>
+          <label>
+            <span class="sr-only">שם מלא</span>
+            <input name="name" required placeholder="שם מלא" autocomplete="name" />
+          </label>
+          <label>
+            <span class="sr-only">טלפון</span>
+            <input name="phone" required placeholder="טלפון" autocomplete="tel" />
+          </label>
+          <label class="checkbox">
+            <input type="checkbox" name="privacy" required />
+            <span>קראתי ואני מסכים/ה ל<a href="#/%d7%9e%d7%93%d7%99%d7%a0%d7%99%d7%95%d7%aa-%d7%a4%d7%a8%d7%98%d7%99%d7%95%d7%aa" data-nav="/%d7%9e%d7%93%d7%99%d7%a0%d7%99%d7%95%d7%aa-%d7%a4%d7%a8%d7%98%d7%99%d7%95%d7%aa">מדיניות הפרטיות</a></span>
+          </label>
+          <button type="submit" class="btn btn-primary">שליחה</button>
+          <p class="form-note" hidden data-form-success>תודה! נחזור אליכם בהקדם. (טופס הדגמה — ללא שליחה לשרת)</p>
+        </form>
+      </div>
+    </section>
+
+    <section class="section posts">
+      <div class="container">
+        <div class="section-head">
+          <h2>מאמרים אחרונים</h2>
+          <a href="#/%d7%9e%d7%90%d7%9e%d7%a8%d7%99%d7%9d" data-nav="/%d7%9e%d7%90%d7%9e%d7%a8%d7%99%d7%9d">כל המאמרים</a>
+        </div>
+        <ul class="post-grid">
+          ${recent
+            .map(
+              (post) => `
+            <li>
+              <a href="#${post.path}" data-nav="${post.path}">
+                <h3>${post.title}</h3>
+                <p>${stripTags(post.excerpt).slice(0, 120)}…</p>
+              </a>
+            </li>`,
+            )
+            .join("")}
+        </ul>
+      </div>
+    </section>
+  `;
+}
+
+export function renderArticlesIndex({ posts }) {
+  return `
+    <section class="section page">
+      <div class="container">
+        <h1>מאמרים</h1>
+        <ul class="post-list">
+          ${posts
+            .map(
+              (post) => `
+            <li>
+              <a href="#${post.path}" data-nav="${post.path}">
+                <h2>${post.title}</h2>
+                <p>${stripTags(post.excerpt).slice(0, 160)}…</p>
+              </a>
+            </li>`,
+            )
+            .join("")}
+        </ul>
+      </div>
+    </section>
+  `;
+}
+
+export function renderContentPage(entry) {
+  return `
+    <article class="section page prose">
+      <div class="container narrow">
+        <h1>${entry.title}</h1>
+        <div class="prose-body">${entry.content}</div>
+      </div>
+    </article>
+  `;
+}
+
+export function renderNotFound(path) {
+  return `
+    <section class="section page">
+      <div class="container narrow">
+        <h1>הדף לא נמצא</h1>
+        <p>לא מצאנו תוכן עבור ${path}</p>
+        <p><a class="btn btn-primary" href="#/" data-nav="/">חזרה לדף הבית</a></p>
+      </div>
+    </section>
+  `;
+}
+
+export function resolveMainHtml(data, path) {
+  const normalized = normalizePath(path);
+  if (normalized === "/") {
+    return { html: renderHome({ site: data.site, posts: data.posts }), title: "בית" };
+  }
+  if (
+    normalized === normalizePath("/%d7%9e%d7%90%d7%9e%d7%a8%d7%99%d7%9d") ||
+    normalized === "/מאמרים"
+  ) {
+    return { html: renderArticlesIndex({ posts: data.posts }), title: "מאמרים" };
+  }
+
+  const entry = findContent(data, path);
+  if (entry) {
+    return { html: renderContentPage(entry), title: entry.title };
+  }
+
+  return { html: renderNotFound(path), title: "404" };
+}
