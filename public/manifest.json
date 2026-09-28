@@ -1,7 +1,7 @@
 {
-  "name": "כרמן · Marketing Agency OS",
-  "short_name": "כרמן",
-  "description": "מנהלת שיווק ומערכת AIOS לצמיחה עסקית",
+  "name": "AfterLead Marketing",
+  "short_name": "AfterLead",
+  "description": "פלטפורמת CRM לסוכנויות דיגיטל",
   "start_url": "/",
   "display": "standalone",
   "orientation": "any",

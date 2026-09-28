@@ -6,42 +6,67 @@ import { Button } from "@/components/ui/button";
 import OptionsSelector from "@/components/OptionsSelector";
 import AnimatedJoinButton from "@/components/AnimatedJoinButton";
 import DemoRequestDialog from "@/components/DemoRequestDialog";
-import { CarmenWorkingScene } from "@/components/shared/CarmenLoadingScreen";
-import {
+import { 
+  Target,
+  CheckCircle2, 
+  Zap, 
+  Users, 
+  DollarSign, 
+  MessageSquare,
   Sparkles,
-  Download,
+  RefreshCw,
+  Calendar,
+  Building2,
+  Shield,
+  BarChart3,
   ArrowLeft,
-  Handshake,
-  Layers,
-  TrendingUp,
-  UserCircle2,
-  Briefcase,
-  Cpu,
+  Check,
+  CalendarClock,
+  PieChart,
+  Download,
+  Smartphone,
 } from "lucide-react";
 import logoImage from "@/assets/logo.png";
 
-const WAITLIST_CTA = "הרשמה לבטא של כרמן";
+interface ModuleCardProps {
+  title: string;
+  description: string;
+  icon: React.ElementType;
+  color: string;
+  isNew?: boolean;
+}
 
-const howItWorksSteps = [
-  {
-    icon: Handshake,
-    title: "שותפות עם הבעלים",
-    description:
-      "כרמן עובדת איתך ובעלות המקצוע — לא במקומכם. יחד מגדירים יעדי צמיחה, סדר עדיפויות ומה success נראה אצלכם.",
-  },
-  {
-    icon: Briefcase,
-    title: "ניהול מלא + אנשי מקצוע",
-    description:
-      "כרמן מתזמרת קמפיינים, תוכן, SEO, קריאייטיב ועוד — עם צוות מומחים שמבצע, והיא שומרת על קו אחיד ודיווח שקוף.",
-  },
-  {
-    icon: Cpu,
-    title: "מערכת AIOS ברקע",
-    description:
-      "לידים, משימות, אוטומציות, דוחות ו-WhatsApp — לא עוד כלים מפוזרים. הכל רץ על מערכת ההפעלה שכרמן מפעילה עבור העסק.",
-  },
-];
+const ModuleCard: React.FC<ModuleCardProps> = ({
+  title,
+  description,
+  icon: Icon,
+  color,
+  isNew,
+}) => {
+  return (
+    <div className="group relative p-8 rounded-3xl bg-gradient-to-br from-white/10 to-white/5 border border-white/10 hover:border-[#36d399]/30 transition-all duration-300 overflow-hidden">
+      {/* Decorative circles */}
+      <div className="absolute -top-6 -right-6 w-24 h-24 border border-[#36d399]/20 rounded-full" />
+      <div className="absolute -top-3 -right-3 w-16 h-16 border border-[#36d399]/10 rounded-full" />
+      <div className="absolute -bottom-4 -left-4 w-20 h-20 border border-white/5 rounded-full" />
+      
+      {isNew && (
+        <span className="absolute top-5 left-5 px-3 py-1.5 text-sm font-medium bg-[#36d399] text-[#0A1526] rounded-full z-10">
+          חדש
+        </span>
+      )}
+      
+      <div className="relative z-10 flex flex-col items-center text-center">
+        <div className={`w-16 h-16 rounded-2xl bg-gradient-to-br ${color} flex items-center justify-center mb-4 group-hover:scale-105 transition-transform`}>
+          <Icon className="h-8 w-8 text-white" />
+        </div>
+        
+        <h3 className="text-xl font-bold text-white mb-2">{title}</h3>
+        <p className="text-white/60 text-sm leading-relaxed">{description}</p>
+      </div>
+    </div>
+  );
+};
 
 const Landing = () => {
   const navigate = useNavigate();
@@ -49,15 +74,11 @@ const Landing = () => {
   const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
   const [isAppInstalled, setIsAppInstalled] = useState(false);
 
-  const openWaitlist = () => setWaitlistDialogOpen(true);
-
   useEffect(() => {
     let cancelled = false;
 
     const redirectIfSignedIn = async () => {
-      const {
-        data: { session },
-      } = await supabase.auth.getSession();
+      const { data: { session } } = await supabase.auth.getSession();
       if (!session?.user || cancelled) return;
       const homePath = await resolveAppHomePath(session.user.id);
       if (homePath && !cancelled) {
@@ -67,9 +88,7 @@ const Landing = () => {
 
     void redirectIfSignedIn();
 
-    const {
-      data: { subscription },
-    } = supabase.auth.onAuthStateChange((_event, session) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       if (session?.user) {
         void resolveAppHomePath(session.user.id).then((homePath) => {
           if (homePath && !cancelled) navigate(homePath, { replace: true });
@@ -88,18 +107,18 @@ const Landing = () => {
       e.preventDefault();
       setDeferredPrompt(e);
     };
-    window.addEventListener("beforeinstallprompt", handler);
-    if (window.matchMedia("(display-mode: standalone)").matches) {
+    window.addEventListener('beforeinstallprompt', handler);
+    if (window.matchMedia('(display-mode: standalone)').matches) {
       setIsAppInstalled(true);
     }
-    return () => window.removeEventListener("beforeinstallprompt", handler);
+    return () => window.removeEventListener('beforeinstallprompt', handler);
   }, []);
 
   const handleInstallApp = async () => {
     if (deferredPrompt) {
       deferredPrompt.prompt();
       const result = await deferredPrompt.userChoice;
-      if (result.outcome === "accepted") setIsAppInstalled(true);
+      if (result.outcome === 'accepted') setIsAppInstalled(true);
       setDeferredPrompt(null);
     } else {
       const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
@@ -110,275 +129,331 @@ const Landing = () => {
       }
     }
   };
+  const modules = [
+    {
+      title: "ניהול לידים",
+      description: "פייפליין מכירות, סטטוסים דינמיים, יבוא מפייסבוק",
+      icon: Target,
+      color: "from-primary/20 to-primary/5"
+    },
+    {
+      title: "ניהול משימות",
+      description: "קנבן, טבלה, לוח שנה - תזכורות אוטומטיות",
+      icon: CheckCircle2,
+      color: "from-green-500/20 to-green-500/5"
+    },
+    {
+      title: "אוטומציות",
+      description: "טריגרים אוטומטיים, פולואפים, התראות",
+      icon: Zap,
+      color: "from-yellow-500/20 to-yellow-500/5"
+    },
+    {
+      title: "ניהול לקוחות",
+      description: "כרטיס לקוח מפורט, היסטוריה, צוותי עבודה",
+      icon: Users,
+      color: "from-blue-500/20 to-blue-500/5"
+    },
+    {
+      title: "ניהול כספים",
+      description: "מעקב תשלומים, דוחות, אינטגרציות",
+      icon: DollarSign,
+      color: "from-emerald-500/20 to-emerald-500/5"
+    },
+    {
+      title: "אינטגרציית WhatsApp",
+      description: "Green API, ManyChat, צ'אט מובנה",
+      icon: MessageSquare,
+      color: "from-green-400/20 to-green-400/5"
+    },
+    {
+      title: "זימון פגישות אוטומטי",
+      description: "אינטגרציה ל-Google Calendar, שליחת זימונים ללקוחות ולידים",
+      icon: CalendarClock,
+      color: "from-sky-500/20 to-sky-500/5",
+      isNew: true
+    },
+    {
+      title: "דוחות אוטומטיים",
+      description: "אינטגרציה ישירה למערכות פרסום, דוחות ביצועים בזמן אמת",
+      icon: PieChart,
+      color: "from-pink-500/20 to-pink-500/5",
+      isNew: true
+    },
+    {
+      title: "בינה מלאכותית",
+      description: "עוזר AI חכם לתמיכה וניהול",
+      icon: Sparkles,
+      color: "from-purple-500/20 to-purple-500/5",
+      isNew: true
+    },
+    {
+      title: "פולואפים אוטומטיים",
+      description: "מעקב אוטומטי, תזכורות חכמות",
+      icon: RefreshCw,
+      color: "from-orange-500/20 to-orange-500/5"
+    },
+    {
+      title: "אינטגרציית יומן",
+      description: "Google Calendar, קביעת פגישות",
+      icon: Calendar,
+      color: "from-red-500/20 to-red-500/5"
+    }
+  ];
+
+  const multiTenantBenefits = [
+    { icon: Building2, text: "כל לקוח מקבל חשבון נפרד ומאובטח" },
+    { icon: Shield, text: "בידוד מלא בין ארגונים" },
+    { icon: BarChart3, text: "צפייה בכל הארגונים ממקום אחד" },
+    { icon: Users, text: "ניהול הרשאות מתקדם" }
+  ];
 
   return (
     <div className="min-h-screen bg-[#0A1526] text-white overflow-x-hidden">
+      {/* Background Elements */}
       <div className="fixed inset-0 pointer-events-none overflow-hidden">
         <div className="absolute top-0 right-0 w-[800px] h-[800px] bg-[#36d399]/10 rounded-full blur-[150px] -translate-y-1/2 translate-x-1/3" />
         <div className="absolute bottom-0 left-0 w-[600px] h-[600px] bg-[#36d399]/5 rounded-full blur-[120px] translate-y-1/2 -translate-x-1/3" />
         <div className="absolute top-1/2 left-1/2 w-[400px] h-[400px] bg-[#36d399]/5 rounded-full blur-[100px] -translate-x-1/2 -translate-y-1/2" />
       </div>
 
+      {/* Sticky Header */}
       <header className="sticky top-0 z-50 backdrop-blur-xl bg-[#0A1526]/80 border-b border-white/5">
         <div className="container mx-auto px-6 py-4">
-          <div className="flex items-center justify-between gap-4">
-            <div className="flex items-center gap-3 min-w-0">
-              <img src={logoImage} alt="AIOS" className="h-10 w-auto shrink-0" />
-              <div className="min-w-0 leading-tight">
-                <div className="text-lg font-bold truncate">כרמן</div>
-                <div className="text-xs text-white/50 truncate hidden sm:block">
-                  Marketing Agency OS
-                </div>
-              </div>
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <img src={logoImage} alt="AfterLead" className="h-10 w-auto" />
             </div>
 
-            <nav className="hidden lg:flex items-center gap-6 text-sm text-white/60">
-              <a href="#how-it-works" className="hover:text-white transition-colors">
-                איך זה עובד
-              </a>
-              <a href="#capabilities" className="hover:text-white transition-colors">
-                יכולות המערכת
-              </a>
-              <a href="#about" className="hover:text-white transition-colors">
-                מי מאחורי כרמן
-              </a>
-            </nav>
-
-            <div className="flex items-center gap-2 sm:gap-3 shrink-0">
+            <div className="flex items-center gap-3">
               {!isAppInstalled && (
-                <Button
-                  variant="ghost"
-                  className="text-white/70 hover:text-white hover:bg-white/10 gap-2 hidden sm:flex"
+                <Button 
+                  variant="ghost" 
+                  className="text-white/70 hover:text-white hover:bg-white/10 gap-2"
                   onClick={handleInstallApp}
                 >
                   <Download className="h-4 w-4" />
-                  <span className="hidden md:inline">התקן אפליקציה</span>
+                  <span className="hidden sm:inline">התקן אפליקציה</span>
                 </Button>
               )}
               <Link to="/auth">
-                <Button
-                  variant="ghost"
-                  className="text-white/70 hover:text-white hover:bg-white/10"
-                >
+                <Button variant="ghost" className="text-white/70 hover:text-white hover:bg-white/10">
                   התחברות
                 </Button>
               </Link>
-              <Button
-                onClick={openWaitlist}
-                className="bg-[#36d399] hover:bg-[#36d399]/90 text-[#0A1526] font-semibold hidden sm:inline-flex"
+              <Button 
+                onClick={() => setWaitlistDialogOpen(true)}
+                className="bg-[#36d399] hover:bg-[#36d399]/90 text-[#0A1526] font-semibold"
               >
-                {WAITLIST_CTA}
+                הרשמה לרשימת המתנה
               </Button>
             </div>
           </div>
         </div>
       </header>
 
-      <section className="relative pt-16 pb-20 md:pt-20 md:pb-28">
+      {/* Hero Section */}
+      <section className="relative pt-20 pb-32">
         <div className="container mx-auto px-6">
-          <div className="max-w-6xl mx-auto grid lg:grid-cols-2 gap-12 lg:gap-16 items-center">
-            <div className="text-center lg:text-right order-2 lg:order-1">
-              <div className="inline-flex items-center gap-3 px-5 py-2.5 rounded-full bg-[#36d399]/10 border border-[#36d399]/30 mb-8">
-                <Sparkles className="h-5 w-5 text-[#36d399]" />
-                <span className="text-sm md:text-base font-medium text-[#36d399]">
-                  Marketing Agency OS · מערכת AIOS
-                </span>
-              </div>
+          <div className="max-w-4xl mx-auto text-center">
+            {/* Logo & Brand */}
+            <div className="flex items-center justify-center gap-4 mb-8">
+              <img src={logoImage} alt="AfterLead" className="h-16 md:h-20 w-auto" />
+              <span className="text-4xl md:text-6xl font-bold text-white">AfterLead</span>
+            </div>
 
-              <h1 className="text-4xl md:text-5xl xl:text-6xl font-bold mb-6 leading-tight">
-                <span className="text-white">מנהלת השיווק שלך </span>
-                <span className="text-[#36d399]">לצמיחה אמיתית</span>
-              </h1>
+            {/* Badge */}
+            <div className="inline-flex items-center gap-3 px-6 py-3 rounded-full bg-[#36d399]/10 border border-[#36d399]/30 mb-10">
+              <Sparkles className="h-5 w-5 text-[#36d399]" />
+              <span className="text-lg md:text-xl font-medium text-[#36d399]">מערכת AIOS — מערכת הפעלה מבוססת בינה מלאכותית</span>
+            </div>
 
-              <p className="text-lg md:text-xl text-white/60 mb-8 leading-relaxed max-w-xl mx-auto lg:mx-0 lg:mr-0">
-                כרמן נותנת מענה מלא לעסקים שרוצים לשגשג — שותפות מלאה עם הבעלים,
-                ניהול שוטף עם אנשי מקצוע, ומערכת הפעלה חכמה שמחברת הכל.
+            {/* Main Headline */}
+            <h1 className="text-5xl md:text-7xl font-bold mb-6 leading-tight">
+              <span className="text-white">השותפים שלך </span>
+              <span className="text-[#36d399]">לצמיחה</span>
+            </h1>
+
+            {/* Subtitle */}
+            <p className="text-xl md:text-2xl text-white/60 mb-10 max-w-2xl mx-auto leading-relaxed">
+              ניהול לידים לעסק שלך וללקוחות שלך
+              <br />
+              <span className="text-white/40">בנוי במיוחד עבור סוכנויות שיווק.</span>
+            </p>
+
+            {/* AIOS Description */}
+            <div className="max-w-2xl mx-auto mb-10 px-6 py-5 rounded-2xl bg-white/5 border border-white/10 text-right">
+              <p className="text-white/70 text-base md:text-lg leading-relaxed">
+                <span className="text-[#36d399] font-semibold">AIOS</span> היא לא סתם תוכנת CRM — היא מערכת הפעלה חכמה לעסק שלך.
+                במקום לנהל כלים נפרדים, AfterLead מרכזת הכל במקום אחד: לידים, לקוחות, משימות, אוטומציות, ואינטגרציות —
+                ומניעה אותם עם בינה מלאכותית שעובדת בשבילך ברקע, 24/7.
               </p>
-
-              <div className="max-w-xl mx-auto lg:mx-0 mb-10 px-5 py-4 rounded-2xl bg-white/5 border border-white/10 text-right">
-                <p className="text-white/70 text-base leading-relaxed">
-                  <span className="text-[#36d399] font-semibold">היעד:</span> לעזור לעסקים
-                  לצמוח עד{" "}
-                  <span className="text-white font-medium">פי 10</span> תוך שנה עד שלוש —
-                  לפי בשלות לסקייל ומורכבות השירות או המוצר.
-                </p>
-              </div>
-
-              <div className="flex flex-col sm:flex-row items-center justify-center lg:justify-start gap-4">
-                <AnimatedJoinButton
-                  text={WAITLIST_CTA}
-                  hoverText="נתראה בבטא!"
-                  width={300}
-                  onClick={openWaitlist}
-                />
-                <Link to="/auth">
-                  <Button
-                    size="lg"
-                    variant="outline"
-                    className="border-white/40 bg-white/10 text-white font-semibold hover:bg-white/20 text-base px-6 py-6 rounded-xl backdrop-blur-sm gap-2"
-                  >
-                    יש לי חשבון
-                    <ArrowLeft className="h-4 w-4" />
-                  </Button>
-                </Link>
-              </div>
             </div>
 
-            <div className="order-1 lg:order-2 flex justify-center">
-              <div className="w-full max-w-md">
-                <CarmenWorkingScene size="lg" />
-                <p className="text-center text-sm text-white/40 mt-4">
-                  כרמן — מנהלת שיווק שמתזמרת מומחים ו-AIOS
-                </p>
+            {/* CTA Buttons */}
+            <div className="flex flex-col sm:flex-row items-center justify-center gap-6">
+              <AnimatedJoinButton 
+                text="הרשמה לרשימת המתנה" 
+                hoverText="הצטרפו!" 
+                width={320}
+                onClick={() => setWaitlistDialogOpen(true)} 
+              />
+              <Link to="/auth">
+                <Button size="lg" variant="outline" className="border-white/40 bg-white/10 text-white font-semibold hover:bg-white/20 text-lg px-8 py-6 rounded-xl backdrop-blur-sm">
+                  יש לי חשבון
+                </Button>
+              </Link>
+            </div>
+
+            {/* Stats */}
+            <div className="mt-20 grid grid-cols-3 gap-8 max-w-xl mx-auto">
+              <div className="text-center">
+                <div className="text-3xl font-bold text-[#36d399]">50+</div>
+                <div className="text-sm text-white/40">ארגונים פעילים</div>
+              </div>
+              <div className="text-center">
+                <div className="text-3xl font-bold text-[#36d399]">10K+</div>
+                <div className="text-sm text-white/40">לידים מנוהלים</div>
+              </div>
+              <div className="text-center">
+                <div className="text-3xl font-bold text-[#36d399]">99%</div>
+                <div className="text-sm text-white/40">שביעות רצון</div>
               </div>
             </div>
           </div>
+
+          {/* Decorative Lines */}
+          <div className="absolute top-1/2 left-0 w-32 h-px bg-gradient-to-r from-transparent to-[#36d399]/30" />
+          <div className="absolute top-1/2 right-0 w-32 h-px bg-gradient-to-l from-transparent to-[#36d399]/30" />
         </div>
       </section>
 
-      <section id="how-it-works" className="relative py-20 md:py-28 scroll-mt-24">
-        <div className="container mx-auto px-6">
-          <div className="max-w-3xl mx-auto text-center mb-14">
-            <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-white/5 border border-white/10 mb-4">
-              <Layers className="h-4 w-4 text-[#36d399]" />
-              <span className="text-sm text-white/70">שילוב אחד</span>
-            </div>
-            <h2 className="text-3xl md:text-4xl font-bold text-white mb-4">
-              סגנון סוכנות. כוח של מערכת. כרמן במרכז.
-            </h2>
-            <p className="text-white/50 text-lg leading-relaxed">
-              לא עוד CRM נפרד מסוכנות נפרדת. מוצר אחד: כרמן מנהלת את השיווק,
-              הצוות מבצע, ו-AIOS מחזיק את התשתית.
-            </p>
-          </div>
-
-          <div className="grid md:grid-cols-3 gap-6 max-w-5xl mx-auto">
-            {howItWorksSteps.map((step) => (
-              <div
-                key={step.title}
-                className="p-8 rounded-3xl bg-gradient-to-br from-white/10 to-white/5 border border-white/10"
-              >
-                <div className="w-12 h-12 rounded-xl bg-[#36d399]/15 flex items-center justify-center mb-5">
-                  <step.icon className="h-6 w-6 text-[#36d399]" />
+      {/* Multi-Tenant Section */}
+      <section id="multi-tenant" className="relative py-24 overflow-hidden">
+        {/* Background Glow */}
+        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] bg-[#3b82f6]/15 rounded-full blur-[150px]" />
+        
+        <div className="container mx-auto px-6 relative">
+          <div className="max-w-5xl mx-auto">
+            <div className="grid md:grid-cols-2 gap-12 items-center">
+              {/* Text Content */}
+              <div>
+                <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-[#36d399]/10 border border-[#36d399]/20 mb-6">
+                  <span className="text-xs font-medium text-[#36d399]">חדש!</span>
+                  <span className="text-sm text-white/70">Multi-Tenant</span>
                 </div>
-                <h3 className="text-xl font-bold text-white mb-3">{step.title}</h3>
-                <p className="text-white/55 text-sm leading-relaxed">{step.description}</p>
+                
+                <h2 className="text-3xl md:text-4xl font-bold text-white mb-6 leading-tight">
+                  פתח חשבונות
+                  <br />
+                  <span className="text-[#36d399]">ללקוחות שלך</span>
+                </h2>
+                
+                <p className="text-white/50 text-lg mb-8 leading-relaxed">
+                  אפשר ללקוחות שלך לנהל את העסק שלהם דרך המערכת שלך. 
+                  כל לקוח מקבל גישה מותאמת אישית לנתונים שלו בלבד.
+                </p>
+
+                <div className="space-y-4">
+                  {multiTenantBenefits.map((benefit, index) => (
+                    <div key={index} className="flex items-center gap-4">
+                      <div className="w-10 h-10 rounded-lg bg-[#36d399]/10 flex items-center justify-center flex-shrink-0">
+                        <benefit.icon className="h-5 w-5 text-[#36d399]" />
+                      </div>
+                      <span className="text-white/70">{benefit.text}</span>
+                    </div>
+                  ))}
+                </div>
               </div>
-            ))}
+
+              {/* Visual Element */}
+              <div className="relative">
+                <div className="relative p-8 rounded-3xl bg-gradient-to-br from-white/10 to-white/5 border border-white/10">
+                  {/* Organization Cards Stack */}
+                  <div className="space-y-4">
+                    {["סוכנות שיווק ראשית", "לקוח - חברת טכנולוגיה", "לקוח - מסעדה"].map((org, idx) => (
+                      <div 
+                        key={idx}
+                        className="flex items-center gap-4 p-4 rounded-xl bg-white/5 border border-white/10"
+                        style={{ transform: `translateX(${idx * 10}px)` }}
+                      >
+                        <div className={`w-10 h-10 rounded-lg ${idx === 0 ? 'bg-[#36d399]' : 'bg-white/10'} flex items-center justify-center`}>
+                          <Building2 className={`h-5 w-5 ${idx === 0 ? 'text-[#0A1526]' : 'text-white/50'}`} />
+                        </div>
+                        <div>
+                          <div className={`text-sm font-medium ${idx === 0 ? 'text-white' : 'text-white/70'}`}>{org}</div>
+                          <div className="text-xs text-white/40">{idx === 0 ? 'מנהל' : 'לקוח'}</div>
+                        </div>
+                        {idx === 0 && <Check className="h-5 w-5 text-[#36d399] mr-auto" />}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+                
+                {/* Decorative Elements */}
+                <div className="absolute -top-4 -right-4 w-24 h-24 border border-[#36d399]/20 rounded-full" />
+                <div className="absolute -bottom-4 -left-4 w-16 h-16 border border-[#36d399]/10 rounded-full" />
+              </div>
+            </div>
           </div>
         </div>
       </section>
 
-      <section id="capabilities" className="relative scroll-mt-24">
-        <div className="container mx-auto px-6 pt-8 pb-4">
-          <div className="max-w-3xl mx-auto text-center mb-2">
-            <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-[#36d399]/10 border border-[#36d399]/20 mb-4">
-              <TrendingUp className="h-4 w-4 text-[#36d399]" />
-              <span className="text-sm text-[#36d399]">מה כרמן מפעילה</span>
-            </div>
-            <h2 className="text-3xl md:text-4xl font-bold text-white mb-3">
-              יכולות המערכת שמניעות את הצמיחה
-            </h2>
-            <p className="text-white/50 text-lg">
-              אותה תשתית AIOS — מוצגת דרך ניהול השיווק של כרמן. מחירים וחבילות — בהמשך.
-            </p>
-          </div>
-        </div>
+
+      {/* Options Selector Demo */}
+      <section className="relative">
         <OptionsSelector />
       </section>
 
-      <section id="about" className="relative py-20 md:py-28 scroll-mt-24">
-        <div className="container mx-auto px-6">
-          <div className="max-w-5xl mx-auto grid md:grid-cols-2 gap-12 items-center">
-            <div className="relative rounded-3xl overflow-hidden border border-white/10 aspect-[4/3] bg-white/5">
-              <img
-                src="/command-center/ghost-carmen.png"
-                alt=""
-                className="absolute inset-0 w-full h-full object-cover opacity-90"
-              />
-              <div className="absolute inset-0 bg-gradient-to-t from-[#0A1526] via-transparent to-transparent" />
-            </div>
-            <div className="text-right">
-              <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-white/5 border border-white/10 mb-4">
-                <UserCircle2 className="h-4 w-4 text-[#36d399]" />
-                <span className="text-sm text-white/70">אודות</span>
-              </div>
-              <h2 className="text-3xl md:text-4xl font-bold text-white mb-4">
-                מי מאחורי כרמן · מי בנה אותה
-              </h2>
-              <p className="text-white/55 text-lg leading-relaxed mb-4">
-                כאן יעלו הסרטונים, הסיפור המקצועי וכל מה שעד היום הופיע תחת Marketing
-                Captain ותחת הבונים — כדי שתדעו מי עומד מאחורי המוצר ומי מפעיל את רשת
-                המומחים.
-              </p>
-              <p className="text-white/40 text-sm">
-                (תוכן מלא — בשלב ההעברה הבא; המבנה והניווט כבר מוכנים.)
-              </p>
-            </div>
-          </div>
-        </div>
-      </section>
-
+      {/* CTA Section */}
       <section className="relative py-24">
         <div className="container mx-auto px-6">
           <div className="max-w-3xl mx-auto text-center p-12 rounded-3xl bg-gradient-to-br from-[#36d399]/20 to-[#36d399]/5 border border-[#36d399]/20 relative overflow-hidden">
+            {/* Background Circles */}
             <div className="absolute top-0 right-0 w-40 h-40 bg-[#36d399]/20 rounded-full blur-[60px]" />
             <div className="absolute bottom-0 left-0 w-32 h-32 bg-[#36d399]/10 rounded-full blur-[40px]" />
-
+            
             <div className="relative">
               <h2 className="text-3xl md:text-4xl font-bold text-white mb-4">
-                רוצים גישה מוקדמת?
+                רוצים להצטרף?
               </h2>
               <p className="text-white/60 text-lg mb-8">
-                הירשמו לרשימת המתנה לבטא של כרמן — נעדכן כשהדלת נפתחת.
+                הירשמו לרשימת המתנה ונעדכן אתכם כשהגישה תיפתח
               </p>
-              <AnimatedJoinButton
-                text={WAITLIST_CTA}
-                hoverText="נתראה בבטא!"
-                width={300}
-                onClick={openWaitlist}
+              <AnimatedJoinButton 
+                text="הרשמה לרשימת המתנה" 
+                hoverText="הצטרפו!" 
+                width={320}
+                onClick={() => setWaitlistDialogOpen(true)} 
               />
             </div>
           </div>
         </div>
       </section>
 
+      {/* Footer */}
       <footer className="border-t border-white/5 py-12">
         <div className="container mx-auto px-6">
           <div className="flex flex-col md:flex-row items-center justify-between gap-6">
             <div className="flex items-center gap-3">
-              <img src={logoImage} alt="AIOS" className="h-8 w-auto" />
-              <div>
-                <div className="text-lg font-semibold text-white">כרמן · AIOS</div>
-                <div className="text-xs text-white/40">Marketing Agency OS</div>
-              </div>
+              <img src={logoImage} alt="AfterLead" className="h-8 w-auto" />
+              <span className="text-lg font-semibold text-white">AfterLead</span>
             </div>
-
+            
             <div className="flex items-center gap-6 text-sm">
-              <a href="#about" className="text-white/50 hover:text-white transition-colors">
-                אודות
-              </a>
-              <Link to="/privacy" className="text-white/50 hover:text-white transition-colors">
-                מדיניות פרטיות
-              </Link>
-              <Link to="/terms" className="text-white/50 hover:text-white transition-colors">
-                תנאי שימוש
-              </Link>
-              <a
-                href="mailto:support@aios.co.il"
-                className="text-white/50 hover:text-white transition-colors"
-              >
-                צור קשר
-              </a>
+              <Link to="/privacy" className="text-white/50 hover:text-white transition-colors">מדיניות פרטיות</Link>
+              <Link to="/terms" className="text-white/50 hover:text-white transition-colors">תנאי שימוש</Link>
+              <a href="mailto:support@afterlead.co.il" className="text-white/50 hover:text-white transition-colors">צור קשר</a>
             </div>
-
-            <div className="text-white/30 text-sm text-center md:text-left">
-              © {new Date().getFullYear()} AIOS. כל הזכויות שמורות.
+            
+            <div className="text-white/30 text-sm">
+              © {new Date().getFullYear()} AfterLead. כל הזכויות שמורות.
             </div>
           </div>
         </div>
       </footer>
 
+      {/* Demo Request Dialog */}
       <DemoRequestDialog open={waitlistDialogOpen} onOpenChange={setWaitlistDialogOpen} />
     </div>
   );
