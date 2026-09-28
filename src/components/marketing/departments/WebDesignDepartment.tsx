@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { useParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { ensurePipelineForClient } from "@/components/marketing/lib/ensurePipeline";
 import { Badge } from "@/components/ui/badge";
@@ -25,7 +24,6 @@ import {
   Globe,
   Loader2,
   Plus,
-  WandSparkles,
 } from "lucide-react";
 
 interface Props {
@@ -55,7 +53,6 @@ function isWebDepartmentItem(item: WebItem) {
 }
 
 export function WebDesignDepartment({ clientFilter, tenantId, onClientChange }: Props) {
-  const { tenantSlug } = useParams<{ tenantSlug: string }>();
   const queryClient = useQueryClient();
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
@@ -279,20 +276,9 @@ export function WebDesignDepartment({ clientFilter, tenantId, onClientChange }: 
           ) : (
             <p className="text-xs text-muted-foreground">לא הוגדר אתר ללקוח ב-CRM</p>
           )}
-          <Button
-            variant="outline"
-            className="w-full gap-2"
-            onClick={() => {
-              const slug = tenantSlug ?? "";
-              window.open(`/t/${slug}/manus-tasks`, "_blank", "noopener,noreferrer");
-            }}
-          >
-            <WandSparkles className="h-4 w-4" />
-            משימת Manus לבנייה
-          </Button>
           <Card className="p-3 text-[11px] leading-relaxed text-muted-foreground">
-            העתיקו את הבריף מכאן ל-Manus, או שלחו לכרמן בצ&apos;אט עם קישור לפרויקט. בקרוב: אוטומציה
-            ישירה מהמחלקה.
+            בריף וסטטוס הפרויקט נשמרים כאן. בניית האתר בפועל תתחבר בהמשך לזרימת העבודה שתגדירו (כרמן,
+            סוכן פיתוח, או כלי חיצוני) — בלי קישור ל-Manus.
           </Card>
         </div>
       </aside>
