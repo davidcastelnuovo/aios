@@ -141,14 +141,14 @@ export function SeoContentPlanReview({ workItemId, payload, onUpdated, onApprove
 
       <div className="space-y-2">
         {items.map((item, index) => (
-          <Card key={index} className="grid gap-2 p-3 md:grid-cols-[1fr_120px]">
+          <Card key={index} className="flex flex-col gap-2 p-3 sm:grid sm:grid-cols-[1fr_120px]">
             <div className="space-y-2">
               <Input value={item.title ?? ""} placeholder="כותרת מאמר" onChange={(e) => {
                 const next = [...items];
                 next[index] = { ...next[index], title: e.target.value };
                 setItems(next);
               }} />
-              <div className="grid grid-cols-2 gap-2">
+              <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
                 <Input value={item.primaryKeyword ?? ""} placeholder="ביטוי ראשי" dir="rtl" onChange={(e) => {
                   const next = [...items];
                   next[index] = { ...next[index], primaryKeyword: e.target.value };
@@ -179,12 +179,12 @@ export function SeoContentPlanReview({ workItemId, payload, onUpdated, onApprove
         </Button>
       </div>
 
-      <div className="flex flex-wrap gap-2">
-        <Button disabled={saving} variant="secondary" className="gap-1" onClick={() => savePlan(items)}>
+      <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap">
+        <Button disabled={saving} variant="secondary" className="w-full gap-1 sm:w-auto" onClick={() => savePlan(items)}>
           {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Pencil className="h-4 w-4" />}שמור עריכה ידנית
         </Button>
         {!approved && (
-          <Button disabled={saving} className="gap-1 bg-emerald-600 hover:bg-emerald-700" onClick={approve}>
+          <Button disabled={saving} className="w-full gap-1 bg-emerald-600 hover:bg-emerald-700 sm:w-auto" onClick={approve}>
             <CheckCircle2 className="h-4 w-4" />אשר תוכנית תוכן
           </Button>
         )}

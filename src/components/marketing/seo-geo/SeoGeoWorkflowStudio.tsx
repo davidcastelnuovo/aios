@@ -171,6 +171,11 @@ export function SeoGeoWorkflowStudio({
     invalidate();
   };
 
+  const monthKey = format(month, "yyyy-MM");
+  const monthEntries = useMemo(
+    () => entries.filter((e) => e.scheduled_date.startsWith(monthKey)).sort((a, b) => a.scheduled_date.localeCompare(b.scheduled_date)),
+    [entries, monthKey],
+  );
   const days = useMemo(() => eachDayOfInterval({ start: startOfMonth(month), end: endOfMonth(month) }), [month]);
   const byDay = useMemo(() => {
     const map = new Map<string, SeoGeoCalendarEntry[]>();
@@ -204,16 +209,16 @@ export function SeoGeoWorkflowStudio({
   const planApproved = String(workItem.payload?.seo_plan_status ?? "") === "approved";
 
   return (
-    <div className="grid min-h-0 flex-1 grid-cols-[minmax(0,1fr)_300px]">
+    <div className="flex min-h-0 flex-1 flex-col lg:grid lg:grid-cols-[minmax(0,1fr)_minmax(0,280px)]">
       <div className="flex min-h-0 min-w-0 flex-col">
-        <div className="flex flex-wrap items-center gap-3 border-b bg-card/60 px-4 py-2">
-          <div className="flex items-center gap-2">
-            <Label className="text-xs">אתר WordPress</Label>
+        <div className="flex flex-col gap-2 border-b bg-card/60 px-3 py-2 sm:flex-row sm:flex-wrap sm:items-center sm:gap-3 sm:px-4">
+          <div className="flex w-full min-w-0 flex-col gap-1 sm:w-auto sm:flex-row sm:items-center sm:gap-2">
+            <Label className="text-xs shrink-0">אתר WordPress</Label>
             <Select
               value={program?.wordpress_site_id ?? ""}
               onValueChange={(v) => updateProgram({ wordpress_site_id: v || null }).catch((e) => toast.error(String(e)))}
             >
-              <SelectTrigger className="h-8 w-52"><SelectValue placeholder="בחר אתר" /></SelectTrigger>
+              <SelectTrigger className="h-9 w-full min-w-0 sm:h-8 sm:w-52"><SelectValue placeholder="בחר אתר" /></SelectTrigger>
               <SelectContent>
                 {wpSites.map((s) => (
                   <SelectItem key={s.id} value={s.id}>{s.site_name || s.site_url}</SelectItem>
@@ -221,7 +226,7 @@ export function SeoGeoWorkflowStudio({
               </SelectContent>
             </Select>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex w-full items-center justify-between gap-2 sm:w-auto sm:justify-start">
             <Switch
               checked={!!program?.auto_approve}
               disabled={loadingProgram}
@@ -229,9 +234,11 @@ export function SeoGeoWorkflowStudio({
             />
             <Label className="text-xs">אישור אוטומטי (כרמן)</Label>
           </div>
+          <div className="grid w-full grid-cols-1 gap-2 sm:flex sm:w-auto sm:flex-wrap">
           <Button
             size="sm"
             variant="outline"
+            className="w-full sm:w-auto"
             disabled={!hasPlan || !planApproved || materialize.isPending}
             onClick={() => {
               if (!planApproved) {
@@ -240,7 +247,6 @@ export function SeoGeoWorkflowStudio({
               }
               materialize.mutate();
             }}
-            className="gap-1"
           >
             {materialize.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <CalendarDays className="h-3.5 w-3.5" />}
             הכנס תוכנית לגאנט
@@ -248,6 +254,7 @@ export function SeoGeoWorkflowStudio({
           <Button
             size="sm"
             variant="outline"
+            className="w-full sm:w-auto"
             disabled={!entries.some((e) => isEntryApproved(e.approval_status) && e.generation_status === "planned")}
             onClick={async () => {
               const targets = entries.filter((e) => isEntryApproved(e.approval_status) && e.generation_status === "planned");
@@ -260,18 +267,18 @@ export function SeoGeoWorkflowStudio({
                 }
               }
             }}
-            className="gap-1"
           >
             <WandSparkles className="h-3.5 w-3.5" />כתבי כל המאושרים
           </Button>
-          <Button size="sm" variant="outline" onClick={() => publishDue()} className="gap-1"><Rocket className="h-3.5 w-3.5" />פרסם מוכנים ל-WP</Button>
+          <Button size="sm" variant="outline" className="col-span-full w-full sm:col-span-1 sm:w-auto" onClick={() => publishDue()}><Rocket className="h-3.5 w-3.5" />פרסם מוכנים ל-WP</Button>
+          </div>
         </div>
 
         <Tabs defaultValue="gantt" className="flex min-h-0 flex-1 flex-col">
-          <TabsList className="mx-4 mt-2 w-fit">
-            <TabsTrigger value="gantt">גאנט תוכן</TabsTrigger>
-            <TabsTrigger value="keywords">ביטויים לקידום</TabsTrigger>
-            <TabsTrigger value="strategy">אסטרטגיה</TabsTrigger>
+          <TabsList className="mx-3 mt-2 flex h-auto w-[calc(100%-1.5rem)] flex-wrap gap-1 sm:mx-4 sm:w-fit">
+            <TabsTrigger value="gantt" className="flex-1 text-xs sm:flex-none sm:text-sm">גאנט תוכן</TabsTrigger>
+            <TabsTrigger value="keywords" className="flex-1 text-xs sm:flex-none sm:text-sm">ביטויים</TabsTrigger>
+            <TabsTrigger value="strategy" className="flex-1 text-xs sm:flex-none sm:text-sm">אסטרטגיה</TabsTrigger>
           </TabsList>
 
           <TabsContent value="keywords" className="mt-0 flex-1 overflow-hidden">
@@ -303,32 +310,55 @@ export function SeoGeoWorkflowStudio({
             {loadingEntries ? (
               <Loader2 className="m-auto animate-spin" />
             ) : (
-              <ScrollArea className="flex-1">
-                <div className="grid grid-cols-7 gap-1 p-3">
-                  {days.map((day) => {
-                    const key = format(day, "yyyy-MM-dd");
-                    const dayEntries = byDay.get(key) ?? [];
-                    return (
-                      <div key={key} className={cn("min-h-24 rounded-lg border p-1", isSameDay(day, new Date()) && "border-emerald-400 bg-emerald-50/50 dark:bg-emerald-950/20")}>
-                        <div className="text-[10px] font-medium text-muted-foreground">{format(day, "d")}</div>
-                        <div className="mt-1 space-y-1">
-                          {dayEntries.map((entry) => (
-                            <GanttChip
-                              key={entry.id}
-                              entry={entry}
-                              onApprove={() => setApproval(entry, "approved")}
-                              onRevoke={() => setApproval(entry, "pending")}
-                              onGenerate={() => generateEntry(entry.id).catch((e) => toast.error(e.message))}
-                              onPreview={() => setPreviewEntry(entry)}
-                              onPublish={() => publishDue(entry.id).catch((e) => toast.error(e.message))}
-                            />
-                          ))}
-                        </div>
-                      </div>
-                    );
-                  })}
+              <>
+                <div className="space-y-2 p-3 lg:hidden">
+                  {monthEntries.length === 0 ? (
+                    <p className="py-6 text-center text-sm text-muted-foreground">אין פריטים בחודש זה</p>
+                  ) : (
+                    monthEntries.map((entry) => (
+                      <Card key={entry.id} className="p-3">
+                        <div className="mb-2 text-xs font-medium text-muted-foreground">{entry.scheduled_date}</div>
+                        <GanttChip
+                          entry={entry}
+                          compact={false}
+                          onApprove={() => setApproval(entry, "approved")}
+                          onRevoke={() => setApproval(entry, "pending")}
+                          onGenerate={() => generateEntry(entry.id).catch((e) => toast.error(e.message))}
+                          onPreview={() => setPreviewEntry(entry)}
+                          onPublish={() => publishDue(entry.id).catch((e) => toast.error(e.message))}
+                        />
+                      </Card>
+                    ))
+                  )}
                 </div>
-              </ScrollArea>
+                <ScrollArea className="hidden flex-1 lg:block">
+                  <div className="grid min-w-[640px] grid-cols-7 gap-1 p-3">
+                    {days.map((day) => {
+                      const key = format(day, "yyyy-MM-dd");
+                      const dayEntries = byDay.get(key) ?? [];
+                      return (
+                        <div key={key} className={cn("min-h-24 rounded-lg border p-1", isSameDay(day, new Date()) && "border-emerald-400 bg-emerald-50/50 dark:bg-emerald-950/20")}>
+                          <div className="text-[10px] font-medium text-muted-foreground">{format(day, "d")}</div>
+                          <div className="mt-1 space-y-1">
+                            {dayEntries.map((entry) => (
+                              <GanttChip
+                                key={entry.id}
+                                entry={entry}
+                                compact
+                                onApprove={() => setApproval(entry, "approved")}
+                                onRevoke={() => setApproval(entry, "pending")}
+                                onGenerate={() => generateEntry(entry.id).catch((e) => toast.error(e.message))}
+                                onPreview={() => setPreviewEntry(entry)}
+                                onPublish={() => publishDue(entry.id).catch((e) => toast.error(e.message))}
+                              />
+                            ))}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </ScrollArea>
+              </>
             )}
           </TabsContent>
 
@@ -338,7 +368,7 @@ export function SeoGeoWorkflowStudio({
         </Tabs>
       </div>
 
-      <aside className="flex min-h-0 flex-col border-r bg-card/80">
+      <aside className="flex max-h-[min(420px,50dvh)] min-h-0 flex-col border-t bg-card/80 lg:max-h-none lg:border-r lg:border-t-0">
         <div className="border-b p-3">
           <div className="flex items-center gap-2 text-sm font-bold"><MessageSquare className="h-4 w-4 text-emerald-600" />כרמן SEO/GEO</div>
           <p className="text-[10px] text-muted-foreground">אישור, גאנט, מחקר, שכתוב — כמו ידני</p>
@@ -365,6 +395,7 @@ export function SeoGeoWorkflowStudio({
 
 function GanttChip({
   entry,
+  compact = false,
   onApprove,
   onRevoke,
   onGenerate,
@@ -372,6 +403,7 @@ function GanttChip({
   onPublish,
 }: {
   entry: SeoGeoCalendarEntry;
+  compact?: boolean;
   onApprove: () => void;
   onRevoke: () => void;
   onGenerate: () => void;
@@ -380,15 +412,15 @@ function GanttChip({
 }) {
   const approved = isEntryApproved(entry.approval_status);
   return (
-    <div className="rounded border bg-background p-1 text-[9px] leading-tight">
-      <div className="truncate font-semibold">{entry.title}</div>
-      <div className="mt-0.5 flex flex-wrap gap-0.5">
-        <Badge variant="outline" className={cn("h-4 px-1 text-[8px]", approved ? "border-emerald-500 text-emerald-700" : "border-amber-400 text-amber-700")}>
+    <div className={cn("rounded border bg-background leading-tight", compact ? "p-1 text-[9px]" : "p-2 text-xs")}>
+      <div className={cn("font-semibold", compact ? "truncate" : "")}>{entry.title}</div>
+      <div className="mt-1 flex flex-wrap gap-1">
+        <Badge variant="outline" className={cn(compact ? "h-4 px-1 text-[8px]" : "text-[10px]", approved ? "border-emerald-500 text-emerald-700" : "border-amber-400 text-amber-700")}>
           {entry.approval_status === "auto_approved" ? "אושר (כרמן)" : approved ? "אושר" : "לא אושר"}
         </Badge>
-        <Badge variant="secondary" className="h-4 px-1 text-[8px]">{entry.generation_status}</Badge>
+        <Badge variant="secondary" className={compact ? "h-4 px-1 text-[8px]" : "text-[10px]"}>{entry.generation_status}</Badge>
       </div>
-      <div className="mt-1 flex flex-wrap gap-0.5">
+      <div className={cn("mt-1 flex flex-wrap gap-2", compact && "gap-0.5")}>
         {!approved ? (
           <button type="button" className="text-emerald-600 underline" onClick={onApprove}>אשר</button>
         ) : (

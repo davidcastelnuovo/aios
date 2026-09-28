@@ -58,9 +58,9 @@ export function SeoGeoArticlePreviewDialog({
 
   return (
     <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
-      <DialogContent className="max-h-[90vh] max-w-4xl overflow-hidden" dir="rtl">
+      <DialogContent className="max-h-[90dvh] w-[calc(100vw-1.5rem)] max-w-4xl overflow-hidden p-4 sm:p-6" dir="rtl">
         <DialogHeader><DialogTitle>פריוויו ועריכה</DialogTitle></DialogHeader>
-        <div className="grid max-h-[calc(90vh-5rem)] gap-4 overflow-y-auto md:grid-cols-2">
+        <div className="grid max-h-[calc(90dvh-5rem)] gap-4 overflow-y-auto lg:grid-cols-2">
           <div className="space-y-3">
             <div><Label>כותרת</Label><Input className="mt-1" value={title} onChange={(e) => setTitle(e.target.value)} /></div>
             <div><Label>תקציר</Label><Textarea className="mt-1 min-h-20" value={excerpt} onChange={(e) => setExcerpt(e.target.value)} /></div>

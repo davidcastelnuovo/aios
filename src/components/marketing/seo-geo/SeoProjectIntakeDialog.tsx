@@ -180,7 +180,7 @@ export function SeoProjectIntakeDialog({ open, onClose, tenantId, defaultClientI
 
   return (
     <Dialog open={open} onOpenChange={(value) => !value && onClose()}>
-      <DialogContent className="max-w-2xl" dir="rtl">
+      <DialogContent className="max-h-[90dvh] w-[calc(100vw-1.5rem)] max-w-2xl overflow-hidden p-4 sm:p-6" dir="rtl">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Globe className="h-5 w-5 text-emerald-600" />
@@ -251,7 +251,7 @@ export function SeoProjectIntakeDialog({ open, onClose, tenantId, defaultClientI
               </div>
             )}
 
-            <div className="grid grid-cols-2 gap-2">
+            <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
               <PathButton
                 active={path === "carmen"}
                 title="קרמן תעשי הכל"
