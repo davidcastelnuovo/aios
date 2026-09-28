@@ -271,7 +271,7 @@ export function SeoProjectIntakeDialog({ open, onClose, tenantId, defaultClientI
                   className="mt-1 min-h-24"
                   value={carmenPrompt}
                   onChange={(e) => setCarmenPrompt(e.target.value)}
-                  placeholder="לינק או דגשים — כרמן תסרוק את האתר ותמשוך את כל מה שמחובר ב-CRM (דוחות, וואטסאפ Manus, פגישות)"
+                  placeholder="לינק או דגשים — כרמן תסרוק את האתר ותמשוך CRM: דוחות, וואטסאפ (Green API + בוט כרמן), פגישות"
                 />
               </div>
             )}

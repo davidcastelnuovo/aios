@@ -14,14 +14,32 @@ export async function gatherSeoClientContext(
     { data: chats },
     { data: recordings },
   ] = await Promise.all([
-    admin.from("clients").select("name,website,business_description,industry,ahrefs_domain,services,gsc_site_url,ga_property_id").eq("id", clientId).maybeSingle(),
+    admin.from("clients").select("name,website,business_description,industry,ahrefs_domain,services,gsc_site_url,ga_property_id,whatsapp_group_id").eq("id", clientId).maybeSingle(),
     admin.from("social_media_wordpress_sites").select("id,site_url,site_name,is_active").eq("tenant_id", tenantId).eq("client_id", clientId),
     admin.from("marketing_work_items").select("id,title,payload,updated_at").eq("tenant_id", tenantId).eq("client_id", clientId).order("updated_at", { ascending: false }).limit(8),
     admin.from("ahrefs_reports").select("report_type,report_date").eq("tenant_id", tenantId).eq("client_id", clientId).order("report_date", { ascending: false }).limit(6),
     admin.from("rank_tracking_projects").select("id,domain").eq("tenant_id", tenantId).eq("client_id", clientId).eq("is_active", true),
-    admin.from("chat_messages").select("direction,message,created_at,provider,sender_name").eq("tenant_id", tenantId).eq("client_id", clientId).order("created_at", { ascending: false }).limit(40),
+    admin.from("chat_messages").select("id,direction,message_text,created_at,provider,sender_name,group_id").eq("tenant_id", tenantId).eq("client_id", clientId).order("created_at", { ascending: false }).limit(40),
     admin.from("zoom_recordings").select("meeting_topic,summary_md,transcription,start_time").eq("tenant_id", tenantId).eq("client_id", clientId).order("start_time", { ascending: false }).limit(5),
   ]);
+
+  let chatsMerged = chats ?? [];
+  const linkedGroupId = client?.whatsapp_group_id as string | null | undefined;
+  if (linkedGroupId) {
+    const { data: groupChats } = await admin
+      .from("chat_messages")
+      .select("id,direction,message_text,created_at,provider,sender_name,group_id")
+      .eq("tenant_id", tenantId)
+      .eq("group_id", linkedGroupId)
+      .order("created_at", { ascending: false })
+      .limit(35);
+    const seen = new Set(chatsMerged.map((m) => m.id));
+    for (const row of groupChats ?? []) {
+      if (!seen.has(row.id)) chatsMerged.push(row);
+    }
+    chatsMerged.sort((a, b) => String(b.created_at).localeCompare(String(a.created_at)));
+    chatsMerged = chatsMerged.slice(0, 55);
+  }
 
   const projectIds = (projects ?? []).map((p) => p.id);
   const { data: trackedKeywords } = projectIds.length
@@ -37,8 +55,8 @@ export async function gatherSeoClientContext(
     })
     .filter(Boolean);
 
-  const manusChats = (chats ?? []).filter((m) => m.provider === "manus_wa").slice(0, 20);
-  const crmChats = (chats ?? []).filter((m) => m.provider !== "manus_wa").slice(0, 15);
+  const manusChats = chatsMerged.filter((m) => m.provider === "manus_wa").slice(0, 20);
+  const crmChats = chatsMerged.filter((m) => m.provider !== "manus_wa").slice(0, 25);
 
   return {
     client,
@@ -52,15 +70,18 @@ export async function gatherSeoClientContext(
       manus_wa_messages: manusChats.map((m) => ({
         direction: m.direction,
         from: m.sender_name,
-        text: String(m.message ?? "").slice(0, 400),
+        text: String(m.message_text ?? "").slice(0, 400),
         at: m.created_at,
       })),
-      other_messages: crmChats.map((m) => ({
+      green_api_and_crm_messages: crmChats.map((m) => ({
         provider: m.provider,
         direction: m.direction,
-        text: String(m.message ?? "").slice(0, 300),
+        from: m.sender_name,
+        in_client_whatsapp_group: m.group_id === linkedGroupId,
+        text: String(m.message_text ?? "").slice(0, 300),
         at: m.created_at,
       })),
+      client_whatsapp_group_id: linkedGroupId ?? null,
     },
     meetings: (recordings ?? []).map((r) => ({
       topic: r.meeting_topic,
