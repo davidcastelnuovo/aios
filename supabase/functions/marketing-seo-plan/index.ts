@@ -40,29 +40,78 @@ serve(async (req) => {
     if (!settings.openai_api_key) throw new Error("OpenAI API key חסר בהגדרות האינטגרציות");
 
     const payload = (item.payload ?? {}) as Record<string, unknown>;
-    const modeInstruction = mode === "fill" ? "שמור על התוכנית הקיימת, השלם פערים ושפר החלטות חלשות." : mode === "brief" ? "בנה תוכנית מהבריף והקופי הקיימים, בלי להמציא נתוני ביצועים." : "פעל כמנהלת מחלקת SEO/GEO ובנה אסטרטגיה מלאה מאפס.";
+    const months = Math.max(1, Math.min(Number(horizon_months) || 3, 12));
+    const minArticles = Math.min(16, Math.max(8, months * 4));
+    const minKeywords = 12;
+    const minClusters = 4;
+    const modeInstruction = mode === "fill" ? "שמור על מה שכבר אושר, השלם פערים עד המינימום, ואל תמחק כותרות טובות בלי סיבה." : mode === "brief" ? "בנה תוכנית מלאה מהבריף ומהנתונים המחוברים." : "פעל כמנהלת מחלקת SEO/GEO ובנה אסטרטגיה מלאה.";
     const context = {
       client,
       brief: payload.brief_text ?? payload.brief,
       copy: payload.copy_text,
       existing_plan: mode === "fill" ? payload.seo_plan : undefined,
-      ahrefs_reports: reports ?? [],
+      ahrefs_report_count: reports?.length ?? 0,
+      ahrefs_reports: (reports ?? []).slice(0, 4),
+      tracked_keyword_count: trackedKeywords?.length ?? 0,
       tracked_keywords: trackedKeywords ?? [],
       user_prompt: prompt,
-      horizon_months: Math.max(1, Math.min(Number(horizon_months) || 3, 12)),
+      horizon_months: months,
     };
-    const system = `${skinBlock}\n\nאת כרמן בתפקיד מנהלת SEO/GEO. הפרידי תמיד בין נתונים אמיתיים להמלצות. אל תמציאי volume, difficulty, ranking או traffic. אם נתון לא קיים החזירי null. החזירי JSON תקין בלבד.`;
-    const user = `${modeInstruction}\n\nהקשר:\n${JSON.stringify(context)}\n\nהחזירי בדיוק:
-{"strategy":{"objective":"","audience":"","market":"","currentState":"","opportunity":""},"clusters":[{"name":"","intent":"informational|commercial|transactional|navigational","pillarKeyword":"","supportingKeywords":[""],"priority":"high|medium|low","evidence":""}],"contentPlan":[{"title":"","contentType":"pillar|article|comparison|landing|faq|case_study","primaryKeyword":"","cluster":"","intent":"","angle":"","geoQuestions":[""],"priority":"high|medium|low","status":"idea"}],"geo":{"entities":[""],"questions":[""],"citationTargets":[""],"schemaRecommendations":[""]},"technicalPriorities":[{"issue":"","impact":"","action":"","priority":"high|medium|low"}],"dataNotes":[""]}`;
-    const ai = await fetch("https://api.openai.com/v1/chat/completions", { method: "POST", headers: { Authorization: `Bearer ${settings.openai_api_key}`, "Content-Type": "application/json" }, body: JSON.stringify({ model: "gpt-4o-mini", response_format: { type: "json_object" }, temperature: 0.45, messages: [{ role: "system", content: system }, { role: "user", content: user }] }) });
-    if (!ai.ok) throw new Error(`SEO planning failed: ${ai.status} ${await ai.text()}`);
-    const data = await ai.json();
-    const plan = JSON.parse(data.choices?.[0]?.message?.content ?? "{}");
+    const system = `${skinBlock}\n\nאת כרמן בתפקיד מנהלת SEO/GEO. הפרידי בין נתון שמופיע בהקשר לבין המלצה. אסור להמציא volume, difficulty, ranking או traffic. אם הנתון לא בהקשר — אל תזכירי אותו. כתבי בעברית. החזירי JSON תקין בלבד.`;
+    const schema = `{"strategy":{"objective":"","audience":"","market":"","currentState":"","opportunity":""},"clusters":[{"name":"","intent":"informational|commercial|transactional|navigational","pillarKeyword":"","supportingKeywords":[""],"priority":"high|medium|low","evidence":""}],"contentPlan":[{"title":"","contentType":"pillar|article|comparison|landing|faq|case_study","primaryKeyword":"","cluster":"","intent":"","angle":"","geoQuestions":[""],"priority":"high|medium|low","status":"idea"}],"geo":{"entities":[""],"questions":[""],"citationTargets":[""],"schemaRecommendations":[""]},"technicalPriorities":[{"issue":"","impact":"","action":"","priority":"high|medium|low"}],"dataNotes":[""]}`;
+    const requirements = `חובה מספרית:
+- לפחות ${minClusters} אשכולות נושא.
+- לפחות ${minKeywords} ביטויי מפתח ייחודיים בעברית (pillarKeyword + supportingKeywords).
+- לפחות ${minArticles} פריטי contentPlan ל-${months} חודשים: pillar אחד לכל אשכול, ואז מאמרי תמיכה, השוואה ו-FAQ.
+- לכל פריט: title, primaryKeyword, cluster, angle, ולפחות 2 geoQuestions.
+- dataNotes רק על מה שבאמת הגיע בהקשר.`;
+    const askModel = async (extra: string) => {
+      const user = `${modeInstruction}\n${requirements}\n${extra}\n\nהקשר:\n${JSON.stringify(context)}\n\nהחזירי בדיוק:\n${schema}`;
+      const ai = await fetch("https://api.openai.com/v1/chat/completions", {
+        method: "POST",
+        headers: { Authorization: `Bearer ${settings.openai_api_key}`, "Content-Type": "application/json" },
+        body: JSON.stringify({
+          model: "gpt-4o-mini",
+          response_format: { type: "json_object" },
+          temperature: 0.4,
+          max_tokens: 8000,
+          messages: [{ role: "system", content: system }, { role: "user", content: user }],
+        }),
+      });
+      if (!ai.ok) throw new Error(`SEO planning failed: ${ai.status} ${await ai.text()}`);
+      const data = await ai.json();
+      return JSON.parse(data.choices?.[0]?.message?.content ?? "{}") as Record<string, unknown>;
+    };
+    const keywordCount = (plan: Record<string, unknown>) => {
+      const seen = new Set<string>();
+      const clusters = Array.isArray(plan.clusters) ? plan.clusters : [];
+      for (const cluster of clusters) {
+        const row = cluster as Record<string, unknown>;
+        const pillar = String(row.pillarKeyword ?? "").trim();
+        if (pillar) seen.add(pillar);
+        const supporting = Array.isArray(row.supportingKeywords) ? row.supportingKeywords : [];
+        for (const keyword of supporting) {
+          const value = String(keyword ?? "").trim();
+          if (value) seen.add(value);
+        }
+      }
+      const articles = Array.isArray(plan.contentPlan) ? plan.contentPlan.length : 0;
+      return { keywords: seen.size, articles, clusters: clusters.length };
+    };
+    let plan = await askModel("");
+    let stats = keywordCount(plan);
+    if (stats.articles < minArticles || stats.keywords < minKeywords || stats.clusters < minClusters) {
+      plan = await askModel(`הטיוטה הקודמת קצרה מדי (${stats.clusters} אשכולות, ${stats.keywords} ביטויים, ${stats.articles} מאמרים). החזירי תוכנית חדשה שממלאת את המינימום, בלי לקצר.`);
+      stats = keywordCount(plan);
+    }
+    if (stats.articles < minArticles || stats.keywords < minKeywords) {
+      throw new Error(`התוכנית עדיין חלקית: ${stats.articles} מאמרים ו-${stats.keywords} ביטויים (נדרש ${minArticles} / ${minKeywords})`);
+    }
     const nextPayload = {
       ...payload,
       seo_plan: plan,
       seo_prompt: prompt,
-      seo_horizon_months: Math.max(1, Math.min(Number(horizon_months) || 3, 12)),
+      seo_horizon_months: months,
       seo_plan_status: mode === "fill" && payload.seo_plan_status === "approved" ? "approved" : "pending",
       department: "seo",
       last_skin_slug: "seo_geo",

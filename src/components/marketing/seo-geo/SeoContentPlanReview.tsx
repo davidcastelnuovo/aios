@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { supabase } from "@/integrations/supabase/client";
+import { materializeApprovedPlan, writePlannedArticles } from "@/lib/seoGeoExecutePlan";
 import { toast } from "sonner";
 import { CheckCircle2, Loader2, Pencil, Plus, Sparkles, Trash2 } from "lucide-react";
 
@@ -21,7 +22,8 @@ export type ContentPlanItem = {
   status?: string;
 };
 
-type SeoPlan = { contentPlan?: ContentPlanItem[]; clusters?: unknown[]; strategy?: Record<string, string> };
+type Cluster = { name?: string; pillarKeyword?: string; supportingKeywords?: string[]; priority?: string };
+type SeoPlan = { contentPlan?: ContentPlanItem[]; clusters?: Cluster[]; strategy?: Record<string, string> };
 
 interface Props {
   workItemId: string;
@@ -37,6 +39,7 @@ export function SeoContentPlanReview({ workItemId, payload, onUpdated, onApprove
   const [feedback, setFeedback] = useState("");
   const [saving, setSaving] = useState(false);
   const [revising, setRevising] = useState(false);
+  const [busyLabel, setBusyLabel] = useState<string | null>(null);
 
   useEffect(() => {
     setItems([...(plan?.contentPlan ?? [])]);
@@ -65,7 +68,28 @@ export function SeoContentPlanReview({ workItemId, payload, onUpdated, onApprove
     }
   };
 
-  const approve = () => savePlan(items, { seo_plan_status: "approved" }).then(() => onApproved?.());
+  const approve = async () => {
+    setBusyLabel("שומרת ומכניסה לגאנט");
+    setSaving(true);
+    try {
+      const nextPlan = { ...(plan ?? {}), contentPlan: items };
+      const { error } = await supabase.from("marketing_work_items").update({
+        payload: { ...(payload ?? {}), seo_plan: nextPlan, seo_plan_status: "approved" },
+      }).eq("id", workItemId);
+      if (error) throw error;
+      const stats = await materializeApprovedPlan(workItemId);
+      setBusyLabel("כותבת את המאמרים הראשונים");
+      const writing = await writePlannedArticles(workItemId, 2, (title) => setBusyLabel(`כותבת: ${title}`));
+      toast.success(`אושר: ${stats.keywords} ביטויים, ${stats.entries} בגאנט, נכתבו ${writing.written} מאמרים${writing.remaining ? ` · נשארו ${writing.remaining}` : ""}`);
+      onUpdated();
+      onApproved?.();
+    } catch (e: unknown) {
+      toast.error(e instanceof Error ? e.message : "אישור וגאנט נכשלו");
+    } finally {
+      setSaving(false);
+      setBusyLabel(null);
+    }
+  };
 
   const reviseWithCarmen = async () => {
     if (!feedback.trim()) {
@@ -120,11 +144,11 @@ export function SeoContentPlanReview({ workItemId, payload, onUpdated, onApprove
   }
 
   return (
-    <div className="space-y-4 p-4">
+    <div className="space-y-4 p-4" dir="rtl">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div>
-          <h3 className="text-sm font-bold">תוכנית תוכן — אישור לפני גאנט</h3>
-          <p className="text-[11px] text-muted-foreground">עריכה ידנית, הערות לכרמן, או אישור והמשך לגאנט וכתיבה</p>
+          <h3 className="text-sm font-bold">תוכנית תוכן — אישור, גאנט וכתיבה</h3>
+          <p className="text-[11px] text-muted-foreground">{items.length} מאמרים · אישור בונה גאנט וכותב את שני המאמרים הראשונים</p>
         </div>
         <Badge variant="outline" className={approved ? "border-emerald-500 text-emerald-800" : "border-amber-400 text-amber-800"}>
           {approved ? "אושרה" : "ממתינה לאישור"}
@@ -137,6 +161,25 @@ export function SeoContentPlanReview({ workItemId, payload, onUpdated, onApprove
           {research.seeds.length > 0 && <p className="mt-1">ביטויים: {research.seeds.slice(0, 12).join(" · ")}</p>}
           {research.competitors.length > 0 && <p className="mt-1 text-muted-foreground">מתחרים: {research.competitors.join(", ")}</p>}
         </Card>
+      )}
+
+      {(plan.clusters?.length ?? 0) > 0 && (
+        <div className="space-y-2">
+          <h4 className="text-xs font-bold">ביטויי מפתח לפי אשכול</h4>
+          {plan.clusters!.map((cluster, index) => (
+            <Card key={`${cluster.name}-${index}`} className="p-3">
+              <div className="flex items-center justify-between gap-2">
+                <div className="text-sm font-semibold">{cluster.name}</div>
+                <Badge variant="outline">{cluster.priority ?? "medium"}</Badge>
+              </div>
+              <div className="mt-2 flex flex-wrap gap-1">
+                {[cluster.pillarKeyword, ...(cluster.supportingKeywords ?? [])].filter(Boolean).map((keyword) => (
+                  <Badge key={keyword} variant="secondary" className="text-[10px]">{keyword}</Badge>
+                ))}
+              </div>
+            </Card>
+          ))}
+        </div>
       )}
 
       <div className="space-y-2">
@@ -185,7 +228,8 @@ export function SeoContentPlanReview({ workItemId, payload, onUpdated, onApprove
         </Button>
         {!approved && (
           <Button disabled={saving} className="w-full gap-1 bg-emerald-600 hover:bg-emerald-700 sm:w-auto" onClick={approve}>
-            <CheckCircle2 className="h-4 w-4" />אשר תוכנית תוכן
+            {busyLabel ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />}
+            {busyLabel ?? "אשרי, בנו גאנט וכתבו מאמרים"}
           </Button>
         )}
       </div>

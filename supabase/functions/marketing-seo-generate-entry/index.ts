@@ -24,11 +24,14 @@ type GeneratedArticle = {
 serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: cors });
   const admin = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
+  let entryIdForStatus: string | null = null;
   try {
     const auth = await requireAuth(req);
     if (!auth) return respond({ error: "Unauthorized" }, 401);
-    const { entry_id } = await req.json();
+    const body = await req.json();
+    const entry_id = body?.entry_id as string | undefined;
     if (!entry_id) return respond({ error: "entry_id required" }, 400);
+    entryIdForStatus = entry_id;
 
     const { data: entry } = await admin.from("seo_geo_calendar_entries").select("*").eq("id", entry_id).single();
     if (!entry) return respond({ error: "Entry not found" }, 404);
@@ -138,6 +141,10 @@ JSON:
     return respond({ ok: true, entry_id });
   } catch (error) {
     console.error("marketing-seo-generate-entry", error);
-    return respond({ error: error instanceof Error ? error.message : String(error) }, 500);
+    const message = error instanceof Error ? error.message : String(error);
+    if (entryIdForStatus) {
+      await admin.from("seo_geo_calendar_entries").update({ generation_status: "failed", publish_error: message }).eq("id", entryIdForStatus);
+    }
+    return respond({ error: message }, 500);
   }
 });
