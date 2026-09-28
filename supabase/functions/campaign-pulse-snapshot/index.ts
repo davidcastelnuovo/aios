@@ -37,6 +37,7 @@ import {
 } from '../_shared/pulse-campaign-goals.mjs'
 import { aiChatJSON } from '../_shared/ai.ts'
 import { loadPulseSettings } from '../_shared/pulse-settings.mjs'
+import { buildDailyRetentionBrief } from '../_shared/client-retention.ts'
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!
 const SERVICE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
@@ -106,6 +107,81 @@ async function queuePulseWhatsApp(
     p_chat_id: chatId,
   })
   return !delivery.error && delivery.data?.queued === true
+}
+
+async function runDailyClientRetention(supabase: any, tenantId?: string) {
+  const { data: settings, error: settingsError } = await loadPulseSettings(supabase, tenantId)
+  if (settingsError) return { error: settingsError.message }
+  const results: any[] = []
+  for (const setting of settings || []) {
+    const currentTenantId = setting.tenant_id
+    const { data: clients, error: clientError } = await supabase
+      .from('clients')
+      .select('id, name, mood_status')
+      .eq('tenant_id', currentTenantId)
+      .eq('status', 'active')
+    if (clientError) {
+      results.push({ tenant_id: currentTenantId, error: clientError.message })
+      continue
+    }
+    const clientIds = (clients || []).map((client: any) => client.id)
+    let pulses: any[] = []
+    if (clientIds.length) {
+      const loaded = await supabase
+        .from('campaign_pulse_snapshots')
+        .select('client_id, status, flags, last_client_call_at, calculated_at')
+        .eq('tenant_id', currentTenantId)
+        .in('client_id', clientIds)
+        .order('calculated_at', { ascending: false })
+      if (loaded.error) {
+        results.push({ tenant_id: currentTenantId, error: loaded.error.message })
+        continue
+      }
+      pulses = loaded.data || []
+    }
+    const freshest = new Map<string, any>()
+    for (const row of pulses) {
+      if (!freshest.has(row.client_id)) freshest.set(row.client_id, row)
+    }
+    const brief = buildDailyRetentionBrief((clients || []).map((client: any) => {
+      const pulse = freshest.get(client.id)
+      return {
+        client_id: client.id,
+        client_name: client.name || 'לקוח',
+        mood_status: client.mood_status,
+        pulse_status: pulse?.status || null,
+        last_client_call_at: pulse?.last_client_call_at || null,
+        flags: pulse?.flags || [],
+        has_campaign_snapshot: !!pulse,
+        call_known: true,
+      }
+    }))
+    const claim = await supabase.rpc('claim_client_retention_delivery', { p_tenant_id: currentTenantId })
+    const claimed = claim.data === true && !claim.error
+    let queued = false
+    if (claimed && setting.campaign_pulse_enabled && setting.campaign_pulse_phone) {
+      const { data: tenantRow } = await supabase.from('tenants').select('slug').eq('id', currentTenantId).maybeSingle()
+      queued = await queuePulseWhatsApp(
+        supabase,
+        currentTenantId,
+        tenantRow?.slug || currentTenantId,
+        brief.message,
+        setting.campaign_pulse_phone,
+      )
+    }
+    results.push({
+      tenant_id: currentTenantId,
+      scanned: brief.scanned,
+      serious_count: brief.serious_count,
+      call_gap_count: brief.call_gap_count,
+      watch_count: brief.watch_count,
+      claimed,
+      queued,
+      outbound_to_client: false,
+      claim_error: claim.error?.message || null,
+    })
+  }
+  return { mode: 'retention_daily', results }
 }
 
 async function loadTeamManagerDeliveryPlans(
@@ -212,6 +288,10 @@ Deno.serve(async (req) => {
   const supabase = createClient(SUPABASE_URL, SERVICE_KEY)
   let body: any = {}
   try { body = await req.json() } catch { /* empty cron body */ }
+  if (body.retention_daily === true) {
+    const retention = await runDailyClientRetention(supabase, body.tenant_id)
+    return json(retention, retention.error ? 500 : 200)
+  }
   // Only explicit deliver:true may send WhatsApp — sync crons refresh snapshots only.
   const deliveryRequested = body.deliver === true
   const manualDeliveryBypass =

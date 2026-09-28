@@ -24,6 +24,7 @@ on:
       - 'supabase/ops/apply_pulse_campaign_breakdown_staging.sql'
       - 'supabase/ops/apply_recurring_human_tasks_staging.sql'
       - 'supabase/ops/apply_marketing_assets_type_staging.sql'
+      - 'supabase/ops/apply_client_retention_daily_staging.sql'
 
 jobs:
   apply:

@@ -148,3 +148,36 @@ export function buildRetentionWhatsAppDigest(input: {
   lines.push('אין שליחה ללקוח — רק המלצה לצוות.')
   return lines.join('\n')
 }
+
+/** Morning alert: name only churn or a critical pulse. Call gaps stay a count. */
+export function buildDailyRetentionBrief(clients: RetentionClientInput[], nowMs = Date.now()) {
+  const ranked = clients
+    .map((client) => rankRetentionClient(client, nowMs))
+    .filter((item): item is RetentionItem => !!item)
+  const actNow = ranked.filter((item) => item.band === 'act_now')
+  const serious = actNow.filter((item) => item.reasons.some((reason) => reason.includes('קריטי') || reason.includes('נטישה')))
+  const callGapCount = actNow.filter((item) => item.reasons.every((reason) => reason.includes('שיחת'))).length
+  const watchCount = ranked.filter((item) => item.band === 'watch').length
+  const shown = serious.slice(0, RETENTION_DIGEST_NAME_LIMIT)
+  const extra = serious.length - shown.length
+  const lines = [
+    '*דופק שימור יומי*',
+    `נסרקו ${clients.length} לקוחות פעילים.`,
+    `דורש פעולה: ${serious.length}`,
+  ]
+  for (const item of shown) {
+    const why = item.reasons.filter((reason) => !reason.includes('שיחת')).join(' · ') || item.reasons[0]
+    lines.push(`• ${item.client_name}: ${why}. ${item.next_action}`)
+  }
+  if (extra > 0) lines.push(`ועוד ${extra} לקוחות באותה רמה.`)
+  lines.push(`פער שיחות 14 יום: ${callGapCount}. לתעד שיחה, בלי הודעה ללקוח.`)
+  lines.push(`למעקב: ${watchCount}.`)
+  lines.push('אין שליחה ללקוח — רק המלצה לצוות.')
+  return {
+    scanned: clients.length,
+    serious_count: serious.length,
+    call_gap_count: callGapCount,
+    watch_count: watchCount,
+    message: lines.join('\n'),
+  }
+}
