@@ -115,6 +115,19 @@ test('a task update names the author, the task, and the link', () => {
   assert.doesNotMatch(message, /הערות פנימיות/)
 })
 
+test('recurring reminder names today\'s occurrence instead of a still-open task', () => {
+  const message = formatTaskNotificationMessage(
+    'task_high_priority_reminder',
+    { ...task, recurrence_frequency: 'weekly', due_date: '2026-09-29' },
+    'משימה כללית',
+    'לאון',
+    'לאון',
+    'פליקס',
+  )
+  assert.match(message, /תזכורת למשימה החוזרת של היום/)
+  assert.doesNotMatch(message, /עדיין פתוחה/)
+})
+
 test('legacy unattributed assignment still has a useful fallback message', () => {
   const message = formatTaskNotificationMessage(
     'task_assigned',

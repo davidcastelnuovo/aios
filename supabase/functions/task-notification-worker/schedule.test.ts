@@ -29,6 +29,28 @@ test('high priority evening task waits until 08:30 the next morning', () => {
   assert.equal(reminder?.toISOString(), '2026-07-29T05:30:00.000Z')
 })
 
+test('recurring task is reminded at 08:30 Israel on its due date', () => {
+  const reminder = taskReminderAt({
+    priority: 5,
+    created_at: '2026-09-24T11:00:00.000Z',
+    due_date: '2026-09-29',
+    due_time: null,
+    recurrence_frequency: 'weekly',
+  })
+  assert.equal(reminder?.toISOString(), '2026-09-29T05:30:00.000Z')
+})
+
+test('high priority recurring task waits for the due morning, not five hours after creation', () => {
+  const reminder = taskReminderAt({
+    priority: 9,
+    created_at: '2026-09-24T11:00:00.000Z',
+    due_date: '2026-09-29',
+    due_time: '09:00:00',
+    recurrence_frequency: 'weekly',
+  })
+  assert.equal(reminder?.toISOString(), '2026-09-29T05:30:00.000Z')
+})
+
 test('normal priority task is reminded one day before its due time', () => {
   const reminder = taskReminderAt({
     priority: 5,

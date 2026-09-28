@@ -79,7 +79,16 @@ export function taskReminderAt(task: {
   created_at: string
   due_date: string | null
   due_time: string | null
+  recurrence_frequency?: string | null
 }): Date | null {
+  // The next occurrence is created when the previous one is marked done, and
+  // the board hides it until the due day. A day-before "still open" ping
+  // reads as a reminder for the task the assignee already completed.
+  if (task.recurrence_frequency && task.due_date) {
+    const [year, month, day] = task.due_date.split('-').map(Number)
+    return israelLocalToUtc({ year, month, day, hour: MORNING_HOUR, minute: MORNING_MINUTE })
+  }
+
   if (task.priority >= 8) {
     const fiveHoursLater = new Date(Date.parse(task.created_at) + 5 * 60 * 60 * 1000)
     const local = localParts(fiveHoursLater)
