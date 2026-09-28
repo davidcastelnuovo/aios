@@ -1,0 +1,227 @@
+/* Carmen layer — additive only; does not override Elementor/MC styles globally. */
+
+#carmen-layer {
+  --carmen-mc-navy: #0b1533;
+  --carmen-mc-blue: #1a3a6b;
+  --carmen-mc-accent: #00c2ff;
+  --carmen-mc-violet: #7b61ff;
+  --carmen-coat: #c41e3a;
+  font-family: assistant, "Assistant", sans-serif;
+  direction: rtl;
+  box-sizing: border-box;
+}
+
+#carmen-layer *,
+#carmen-layer *::before,
+#carmen-layer *::after {
+  box-sizing: border-box;
+}
+
+.carmen-block {
+  position: relative;
+  overflow: hidden;
+  color: #fff;
+  background: radial-gradient(ellipse 120% 80% at 100% 0%, rgba(123, 97, 255, 0.35), transparent 55%),
+    radial-gradient(ellipse 80% 60% at 0% 100%, rgba(0, 194, 255, 0.2), transparent 50%),
+    linear-gradient(165deg, var(--carmen-mc-navy) 0%, var(--carmen-mc-blue) 100%);
+}
+
+.carmen-block--compact {
+  padding: 2rem 1.25rem;
+}
+
+.carmen-block--hero {
+  padding: 2.5rem 1.25rem 3rem;
+}
+
+.carmen-inner {
+  max-width: 1140px;
+  margin: 0 auto;
+}
+
+.carmen-hero-grid {
+  display: grid;
+  gap: 2rem;
+  align-items: center;
+}
+
+@media (min-width: 900px) {
+  .carmen-hero-grid {
+    grid-template-columns: 1.05fr 0.95fr;
+    gap: 2.5rem;
+  }
+
+  .carmen-block--hero {
+    padding: 3.5rem 2rem 4rem;
+  }
+}
+
+.carmen-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.35rem 0.85rem;
+  border-radius: 999px;
+  border: 1px solid rgba(0, 194, 255, 0.45);
+  background: rgba(0, 194, 255, 0.12);
+  color: #b8ecff;
+  font-size: 0.875rem;
+  font-weight: 600;
+  margin-bottom: 1.25rem;
+}
+
+.carmen-badge-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--carmen-mc-accent);
+  box-shadow: 0 0 12px var(--carmen-mc-accent);
+}
+
+.carmen-title {
+  margin: 0 0 1rem;
+  font-size: clamp(1.85rem, 5vw, 3rem);
+  font-weight: 700;
+  line-height: 1.15;
+  letter-spacing: -0.02em;
+}
+
+.carmen-title em {
+  font-style: normal;
+  color: var(--carmen-mc-accent);
+}
+
+.carmen-lead {
+  margin: 0 0 1.25rem;
+  font-size: clamp(1.05rem, 2.5vw, 1.25rem);
+  line-height: 1.65;
+  color: rgba(255, 255, 255, 0.88);
+  max-width: 36rem;
+}
+
+.carmen-note {
+  margin: 0 0 1.75rem;
+  padding: 1rem 1.15rem;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.06);
+  font-size: 0.95rem;
+  line-height: 1.6;
+  color: rgba(255, 255, 255, 0.82);
+}
+
+.carmen-note strong {
+  color: #fff;
+  font-weight: 700;
+}
+
+.carmen-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  align-items: center;
+}
+
+.carmen-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.85rem 1.5rem;
+  border-radius: 999px;
+  font-size: 1rem;
+  font-weight: 700;
+  text-decoration: none !important;
+  transition: transform 0.2s ease, box-shadow 0.2s ease, background 0.2s ease;
+}
+
+.carmen-btn--primary {
+  color: #061022 !important;
+  background: linear-gradient(135deg, #5eead4, var(--carmen-mc-accent));
+  box-shadow: 0 8px 28px rgba(0, 194, 255, 0.35);
+}
+
+.carmen-btn--primary:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 12px 32px rgba(0, 194, 255, 0.45);
+}
+
+.carmen-btn--ghost {
+  color: #fff !important;
+  border: 1px solid rgba(255, 255, 255, 0.35);
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.carmen-btn--ghost:hover {
+  background: rgba(255, 255, 255, 0.14);
+}
+
+.carmen-visual {
+  position: relative;
+  margin: 0 auto;
+  max-width: 420px;
+}
+
+.carmen-visual-frame {
+  border-radius: 20px;
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.45);
+  background: rgba(0, 0, 0, 0.25);
+}
+
+.carmen-visual-frame img {
+  display: block;
+  width: 100%;
+  height: auto;
+  vertical-align: middle;
+}
+
+.carmen-visual-caption {
+  margin-top: 0.75rem;
+  text-align: center;
+  font-size: 0.85rem;
+  color: rgba(255, 255, 255, 0.55);
+}
+
+.carmen-steps {
+  display: grid;
+  gap: 1rem;
+  margin-top: 2rem;
+}
+
+@media (min-width: 768px) {
+  .carmen-steps {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+
+.carmen-step {
+  padding: 1.15rem 1.1rem;
+  border-radius: 14px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.carmen-step h3 {
+  margin: 0 0 0.5rem;
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: #fff;
+}
+
+.carmen-step p {
+  margin: 0;
+  font-size: 0.9rem;
+  line-height: 1.55;
+  color: rgba(255, 255, 255, 0.75);
+}
+
+.carmen-powered {
+  margin-top: 1.5rem;
+  font-size: 0.8rem;
+  color: rgba(255, 255, 255, 0.45);
+}
+
+.carmen-powered span {
+  color: rgba(255, 255, 255, 0.65);
+}
