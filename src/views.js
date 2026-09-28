@@ -150,15 +150,19 @@ export function renderHome({ site, posts }) {
       <div class="hero-carousel__slides">
         ${slides
           .map(
-            (slide, i) => `
+            (slide, i) => {
+              const payments =
+                slide.variant === "payments" || /payments/i.test(slide.image || "");
+              return `
           <div
-            class="hero-carousel__slide${i === 0 ? " is-active" : ""}"
+            class="hero-carousel__slide${i === 0 ? " is-active" : ""}${payments ? " hero-carousel__slide--payments" : ""}"
             data-hero-slide
             data-title="${slide.title.replace(/"/g, "&quot;")}"
             aria-hidden="${i === 0 ? "false" : "true"}"
           >
             <img src="${slide.image}" alt="${slide.title}" width="1920" height="700" decoding="async" />
-          </div>`,
+          </div>`;
+            },
           )
           .join("")}
       </div>

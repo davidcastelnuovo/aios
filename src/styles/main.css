@@ -20,6 +20,7 @@
 
 html {
   scroll-behavior: smooth;
+  overflow-x: clip;
 }
 
 body {
@@ -29,6 +30,7 @@ body {
   background: var(--bg);
   line-height: 1.7;
   font-size: 17px;
+  overflow-x: clip;
 }
 
 img {
@@ -253,6 +255,28 @@ a {
   aspect-ratio: 1920 / 700;
   background: #08356f;
   overflow: hidden;
+}
+
+.hero-carousel__slide--payments img {
+  object-position: center center;
+}
+
+@media (max-width: 900px) {
+  .hero-carousel__slide--payments img {
+    width: auto;
+    min-width: 320%;
+    max-width: none;
+    height: 100%;
+    object-fit: cover;
+    object-position: 76% center;
+  }
+}
+
+@media (max-width: 480px) {
+  .hero-carousel__slide--payments img {
+    min-width: 380%;
+    object-position: 82% center;
+  }
 }
 
 .hero-carousel__slides {
@@ -735,42 +759,97 @@ a {
   }
 }
 
+@media (max-width: 1024px) {
+  .site-nav {
+    flex-wrap: wrap;
+    justify-content: flex-start;
+    gap: 0;
+  }
+
+  .site-nav__link {
+    padding: 0.65rem 0.55rem;
+    font-size: 0.9rem;
+  }
+}
+
 @media (max-width: 900px) {
-  .nav-toggle {
-    display: inline-flex;
+  body {
+    font-size: 16px;
+  }
+
+  .container {
+    width: min(var(--container), calc(100% - 1rem));
+  }
+
+  .header-tagline {
+    font-size: 0.9rem;
+    line-height: 1.45;
+    text-align: center;
   }
 
   .header-main__inner {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem;
+    padding: 0.55rem 0;
+  }
+
+  .nav-toggle {
+    display: inline-flex;
+    position: static;
+    transform: none;
+    flex: 0 0 auto;
+    order: -1;
+    padding: 0.4rem 0.55rem;
+    min-height: 40px;
+  }
+
+  .nav-toggle__label {
+    display: none;
+  }
+
+  .brand {
+    flex: 1 1 auto;
     justify-content: center;
-    padding-inline: 3.25rem;
+    min-width: 0;
   }
 
   .brand-logo {
-    width: min(280px, 58vw);
-    max-height: 56px;
+    width: auto;
+    max-width: calc(100% - 3.25rem);
+    max-height: 48px;
   }
 
-  .site-nav {
+  .header-nav .site-nav {
     display: none;
     flex-direction: column;
     align-items: stretch;
     padding: 0.5rem 0 1rem;
+    max-height: min(70vh, 520px);
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
   }
 
-  .site-nav.is-open {
+  .header-nav .site-nav.is-open {
     display: flex;
   }
 
   .site-nav__link {
-    justify-content: center;
+    justify-content: flex-start;
+    padding-inline: 1rem;
     border-bottom: 0;
     border-inline-start: 3px solid transparent;
     margin-bottom: 0;
+    white-space: normal;
+    text-align: start;
   }
 
   .site-nav__link.is-active,
-  .site-nav__link:hover {
+  .site-nav__link:hover,
+  .site-nav__link:focus-visible {
     border-inline-start-color: var(--blue);
+    border-bottom-color: transparent;
   }
 
   .nav-dropdown {
@@ -778,7 +857,6 @@ a {
     display: none;
     box-shadow: none;
     border: 0;
-    border-top: 0;
     padding: 0;
     background: var(--bg-soft);
   }
@@ -788,11 +866,64 @@ a {
     display: block;
   }
 
-  .contact-grid {
-    grid-template-columns: 1fr;
+  .hero-carousel {
+    max-height: none;
+    aspect-ratio: 16 / 10;
+    min-height: 220px;
+  }
+
+  .hero-carousel__slide img {
+    object-fit: cover;
+    object-position: center 42%;
+  }
+
+  .hero-carousel__arrow {
+    width: 2.1rem;
+    height: 2.1rem;
+    font-size: 1.35rem;
+  }
+
+  .hero-carousel__arrow--prev {
+    right: 0.35rem;
+  }
+
+  .hero-carousel__arrow--next {
+    left: 0.35rem;
+  }
+
+  .hero-carousel__dots {
+    bottom: 0.45rem;
+  }
+
+  .section {
+    padding: 2rem 0;
   }
 
   .post-grid {
     grid-template-columns: 1fr;
+    gap: 1rem;
+  }
+
+  .contact-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .article-featured {
+    max-height: 220px;
+  }
+
+  .article-featured img {
+    max-height: 220px;
+  }
+}
+
+@media (max-width: 480px) {
+  .brand-logo {
+    max-height: 42px;
+  }
+
+  .hero-carousel {
+    aspect-ratio: 4 / 3;
+    min-height: 200px;
   }
 }
