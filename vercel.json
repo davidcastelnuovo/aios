@@ -1,7 +1,5 @@
 {
   "rewrites": [
-    { "source": "/woodhill", "destination": "/woodhill/index.html" },
-    { "source": "/woodhill/", "destination": "/woodhill/index.html" },
     { "source": "/(.*)", "destination": "/index.html" }
   ],
   "headers": [
