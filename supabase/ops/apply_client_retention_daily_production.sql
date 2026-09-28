@@ -1,7 +1,6 @@
--- Staging: daily client-retention alert. Once each morning, the stored pulse
--- and CRM mood are ranked and a short recommendation is queued to David only.
--- Clients, campaigners, and the tenant pulse phone are not recipients.
--- 05:00 UTC is 08:00 during IDT.
+-- Production: daily client-retention alert to David only.
+-- Same claim and 05:00 UTC schedule as Staging. The function queues WhatsApp
+-- to 972507677613 and does not use the tenant pulse phone.
 
 ALTER TABLE public.tenant_heartbeat_settings
   ADD COLUMN IF NOT EXISTS client_retention_last_sent_at timestamptz;

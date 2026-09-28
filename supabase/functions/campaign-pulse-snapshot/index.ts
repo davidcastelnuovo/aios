@@ -159,14 +159,16 @@ async function runDailyClientRetention(supabase: any, tenantId?: string) {
     const claim = await supabase.rpc('claim_client_retention_delivery', { p_tenant_id: currentTenantId })
     const claimed = claim.data === true && !claim.error
     let queued = false
-    if (claimed && setting.campaign_pulse_enabled && setting.campaign_pulse_phone) {
+    // Owner-only until David widens the audience. Do not use campaign_pulse_phone
+    // (on DMM that is Felix) and do not fan out to campaigners.
+    if (claimed && setting.campaign_pulse_enabled) {
       const { data: tenantRow } = await supabase.from('tenants').select('slug').eq('id', currentTenantId).maybeSingle()
       queued = await queuePulseWhatsApp(
         supabase,
         currentTenantId,
         tenantRow?.slug || currentTenantId,
         brief.message,
-        setting.campaign_pulse_phone,
+        '972507677613',
       )
     }
     results.push({
@@ -177,6 +179,7 @@ async function runDailyClientRetention(supabase: any, tenantId?: string) {
       watch_count: brief.watch_count,
       claimed,
       queued,
+      recipient: 'david',
       outbound_to_client: false,
       claim_error: claim.error?.message || null,
     })
