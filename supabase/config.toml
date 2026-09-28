@@ -27,6 +27,12 @@ verify_jwt = false
 [functions.cursor-generate-creative]
 verify_jwt = false
 
+[functions.cursor-build-web]
+verify_jwt = false
+
+[functions.web-design-serve]
+verify_jwt = false
+
 # Grok Bot MCP — custom bearer (GROK_MCP_BEARER, falls back to CURSOR_MCP_BEARER).
 [functions.grok-mcp]
 verify_jwt = false
