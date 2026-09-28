@@ -6,6 +6,47 @@ const stripTags = (html) =>
     .replace(/\s+/g, " ")
     .trim();
 
+function formatDate(iso) {
+  if (!iso) return "";
+  try {
+    return new Intl.DateTimeFormat("he-IL", {
+      day: "numeric",
+      month: "long",
+      year: "numeric",
+    }).format(new Date(iso));
+  } catch {
+    return "";
+  }
+}
+
+function contentWithoutDuplicateHero(entry) {
+  if (!entry.featuredImage || !entry.content) return entry.content || "";
+  const escaped = entry.featuredImage.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  return entry.content.replace(new RegExp(`<img[^>]*src="${escaped}"[^>]*>`, "i"), "");
+}
+
+function renderPostCard(post, { heading = "h3" } = {}) {
+  const media = post.featuredImage
+    ? `<div class="post-card__media"><img src="${post.featuredImage}" alt="" loading="lazy" decoding="async" /></div>`
+    : `<div class="post-card__media post-card__media--placeholder" aria-hidden="true"></div>`;
+
+  const TitleTag = heading;
+  const date = formatDate(post.date);
+
+  return `
+    <article class="post-card">
+      <a class="post-card__link" href="#${post.path}" data-nav="${post.path}">
+        ${media}
+        <div class="post-card__body">
+          ${date ? `<time class="post-card__date" datetime="${post.date || ""}">${date}</time>` : ""}
+          <${TitleTag} class="post-card__title">${post.title}</${TitleTag}>
+          <p class="post-card__excerpt">${stripTags(post.excerpt).slice(0, 140)}…</p>
+          <span class="post-card__more">קרא עוד</span>
+        </div>
+      </a>
+    </article>`;
+}
+
 export function renderLayout({ site, navigation, mainHtml, title }) {
   document.title = title
     ? `${stripTags(title)} | ${site.name}`
@@ -179,25 +220,15 @@ export function renderHome({ site, posts }) {
       </div>
     </section>
 
-    <section class="section posts">
+    <section class="section posts posts--home">
       <div class="container">
         <div class="section-head">
           <h2>מאמרים אחרונים</h2>
-          <a href="#/%d7%9e%d7%90%d7%9e%d7%a8%d7%99%d7%9d" data-nav="/%d7%9e%d7%90%d7%9e%d7%a8%d7%99%d7%9d">כל המאמרים</a>
+          <a class="section-head__link" href="#/%d7%9e%d7%90%d7%9e%d7%a8%d7%99%d7%9d" data-nav="/%d7%9e%d7%90%d7%9e%d7%a8%d7%99%d7%9d">כל המאמרים</a>
         </div>
-        <ul class="post-grid">
-          ${recent
-            .map(
-              (post) => `
-            <li>
-              <a href="#${post.path}" data-nav="${post.path}">
-                <h3>${post.title}</h3>
-                <p>${stripTags(post.excerpt).slice(0, 120)}…</p>
-              </a>
-            </li>`,
-            )
-            .join("")}
-        </ul>
+        <div class="post-grid">
+          ${recent.map((post) => renderPostCard(post)).join("")}
+        </div>
       </div>
     </section>
   `;
@@ -205,33 +236,41 @@ export function renderHome({ site, posts }) {
 
 export function renderArticlesIndex({ posts }) {
   return `
-    <section class="section page">
+    <section class="section page page--blog">
       <div class="container">
-        <h1>מאמרים</h1>
-        <ul class="post-list">
-          ${posts
-            .map(
-              (post) => `
-            <li>
-              <a href="#${post.path}" data-nav="${post.path}">
-                <h2>${post.title}</h2>
-                <p>${stripTags(post.excerpt).slice(0, 160)}…</p>
-              </a>
-            </li>`,
-            )
-            .join("")}
-        </ul>
+        <header class="page-header">
+          <h1>מאמרים</h1>
+          <p>מדריכים, טיפים וחדשות מעולם המכבסות והציוד התעשייתי.</p>
+        </header>
+        <div class="post-grid post-grid--archive">
+          ${posts.map((post) => renderPostCard(post, { heading: "h2" })).join("")}
+        </div>
       </div>
     </section>
   `;
 }
 
 export function renderContentPage(entry) {
+  const isPost = entry.type === "post";
+  const body = isPost ? contentWithoutDuplicateHero(entry) : entry.content;
+  const date = isPost ? formatDate(entry.date) : "";
+
   return `
-    <article class="section page prose">
-      <div class="container narrow">
+    <article class="section page ${isPost ? "page--article" : "page--content"}">
+      ${
+        entry.featuredImage
+          ? `<figure class="article-featured"><img src="${entry.featuredImage}" alt="" loading="eager" decoding="async" /></figure>`
+          : ""
+      }
+      <div class="container ${isPost ? "article-shell" : "narrow"}">
+        ${date ? `<time class="article-date" datetime="${entry.date || ""}">${date}</time>` : ""}
         <h1>${entry.title}</h1>
-        <div class="prose-body">${entry.content}</div>
+        <div class="prose-body">${body}</div>
+        ${
+          isPost
+            ? `<p class="article-back"><a href="#/%d7%9e%d7%90%d7%9e%d7%a8%d7%99%d7%9d" data-nav="/%d7%9e%d7%90%d7%9e%d7%a8%d7%99%d7%9d">← חזרה למאמרים</a></p>`
+            : ""
+        }
       </div>
     </article>
   `;

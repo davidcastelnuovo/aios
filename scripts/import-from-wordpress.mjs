@@ -5,15 +5,16 @@
  */
 import { writeFile, mkdir } from "node:fs/promises";
 import { dirname } from "node:path";
+import { improveContent, firstImageFromHtml } from "../src/content-format.js";
 
 const API = "https://www.woodhill.co.il/wp-json/wp/v2";
 const OUT = new URL("../public/data/site-content.json", import.meta.url);
 
-async function fetchAll(endpoint) {
+async function fetchAll(endpoint, { embed = false } = {}) {
   const items = [];
   let page = 1;
   for (;;) {
-    const url = `${API}/${endpoint}?per_page=100&page=${page}&_embed=0`;
+    const url = `${API}/${endpoint}?per_page=100&page=${page}&_embed=${embed ? 1 : 0}`;
     const res = await fetch(url);
     if (!res.ok) break;
     const batch = await res.json();
@@ -26,19 +27,10 @@ async function fetchAll(endpoint) {
   return items;
 }
 
-function stripHeavyMarkup(html) {
-  return html
-    .replace(/<script[\s\S]*?<\/script>/gi, "")
-    .replace(/<style[\s\S]*?<\/style>/gi, "")
-    .replace(/\sclass="[^"]*"/gi, "")
-    .replace(/\sstyle="[^"]*"/gi, "")
-    .replace(/<iframe[\s\S]*?<\/iframe>/gi, (block) => {
-      const src = block.match(/src="([^"]+)"/)?.[1];
-      if (src && src.includes("youtube.com")) {
-        return `<div class="video-embed"><iframe src="${src}" title="YouTube" loading="lazy" allowfullscreen></iframe></div>`;
-      }
-      return "";
-    });
+function featuredImageFromEntry(entry) {
+  const embedded = entry._embedded?.["wp:featuredmedia"]?.[0];
+  if (embedded?.source_url) return embedded.source_url;
+  return firstImageFromHtml(entry.content?.rendered || entry.excerpt?.rendered || "");
 }
 
 function mapEntry(entry, type) {
@@ -58,7 +50,9 @@ function mapEntry(entry, type) {
     path,
     title: entry.title?.rendered ?? "",
     excerpt: entry.excerpt?.rendered ?? "",
-    content: stripHeavyMarkup(entry.content?.rendered ?? ""),
+    content: improveContent(entry.content?.rendered ?? ""),
+    featuredImage: featuredImageFromEntry(entry),
+    date: entry.date ?? entry.modified,
     modified: entry.modified,
   };
 }
@@ -160,8 +154,11 @@ const pages = (await fetchAll("pages")).map((p) => mapEntry(p, "page"));
 console.log(`  ${pages.length} pages`);
 
 console.log("Fetching WordPress posts…");
-const posts = (await fetchAll("posts")).map((p) => mapEntry(p, "post"));
-console.log(`  ${posts.length} posts`);
+const postsRaw = await fetchAll("posts", { embed: true });
+const posts = postsRaw.map((p) => mapEntry(p, "post"));
+console.log(
+  `  ${posts.length} posts (${posts.filter((p) => p.featuredImage).length} with featured images)`,
+);
 
 const payload = {
   importedAt: new Date().toISOString(),
