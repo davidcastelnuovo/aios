@@ -92,9 +92,9 @@ export function rankRetentionClient(
 
   const next_action = band === 'act_now'
     ? (reasons.some((reason) => reason.includes('שיחת לקוח')) && pulse !== 'critical' && mood !== 'churn_risk'
-      ? 'לקבוע או לתעד שיחה. לא לשלוח הודעה ללקוח בלי אישור.'
-      : 'שיחת שימור היום ועדכון יומן. לא לשלוח הודעה ללקוח בלי אישור.')
-    : 'בדיקה עם הקמפיינר השבוע. לא לשלוח הודעה ללקוח בלי אישור.'
+      ? 'לקבוע או לתעד שיחה.'
+      : 'שיחת שימור היום ועדכון יומן.')
+    : 'בדיקה עם הקמפיינר השבוע.'
 
   return {
     client_id: client.client_id,
@@ -145,7 +145,6 @@ export function buildRetentionWhatsAppDigest(input: {
   if (names.length) {
     lines.push(`לטיפול: ${names.join(', ')}${extra > 0 ? ` ועוד ${extra}` : ''}`)
   }
-  lines.push('אין שליחה ללקוח — רק המלצה לצוות.')
   return lines.join('\n')
 }
 
@@ -170,9 +169,8 @@ export function buildDailyRetentionBrief(clients: RetentionClientInput[], nowMs 
     lines.push(`• ${item.client_name}: ${why}. ${item.next_action}`)
   }
   if (extra > 0) lines.push(`ועוד ${extra} לקוחות באותה רמה.`)
-  lines.push(`פער שיחות 14 יום: ${callGapCount}. לתעד שיחה, בלי הודעה ללקוח.`)
+  lines.push(`פער שיחות 14 יום: ${callGapCount}.`)
   lines.push(`למעקב: ${watchCount}.`)
-  lines.push('אין שליחה ללקוח — רק המלצה לצוות.')
   return {
     scanned: clients.length,
     serious_count: serious.length,
