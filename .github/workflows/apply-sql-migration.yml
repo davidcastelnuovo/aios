@@ -37,6 +37,7 @@ on:
       - 'supabase/ops/apply_pulse_twice_daily_cadence.sql'
       - 'supabase/ops/apply_pulse_weekly_sunday_cadence.sql'
       - 'supabase/ops/apply_pulse_refresh_and_instant_alerts.sql'
+      - 'supabase/ops/apply_client_retention_daily_production.sql'
       - 'supabase/ops/notify_felix_calendar_fix_ready.sql'
       - 'supabase/ops/apply_pulse_campaigner_delivery.sql'
       - 'supabase/ops/apply_pulse_sunday_0730_david_campaigners.sql'

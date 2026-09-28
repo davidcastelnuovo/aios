@@ -2,6 +2,7 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 
 import {
+  buildDailyRetentionBrief,
   buildRetentionScan,
   hasRetentionIntent,
   rankRetentionClient,
@@ -80,6 +81,23 @@ test('warning is watch and a fresh healthy client is steady', () => {
   assert.equal(scan.items[0].client_name, 'אורן')
   assert.match(scan.whatsapp_digest, /לטיפול עכשיו: 1/)
   assert.match(scan.whatsapp_digest, /אין שליחה ללקוח/)
+})
+
+test('daily brief names churn and critical clients and counts call gaps', () => {
+  const brief = buildDailyRetentionBrief([
+    { client_id: '1', client_name: 'אורן', mood_status: 'churn_risk', pulse_status: 'healthy', last_client_call_at: RECENT, has_campaign_snapshot: true },
+    { client_id: '2', client_name: 'בילבי', mood_status: 'happy', pulse_status: 'critical', last_client_call_at: RECENT, has_campaign_snapshot: true },
+    { client_id: '3', client_name: 'דני', mood_status: 'happy', pulse_status: 'healthy', last_client_call_at: STALE, has_campaign_snapshot: true },
+    { client_id: '4', client_name: 'גל', mood_status: 'happy', pulse_status: 'warning', last_client_call_at: RECENT, has_campaign_snapshot: true },
+  ], NOW)
+  assert.equal(brief.serious_count, 2)
+  assert.equal(brief.call_gap_count, 1)
+  assert.equal(brief.watch_count, 1)
+  assert.match(brief.message, /אורן/)
+  assert.match(brief.message, /בילבי/)
+  assert.doesNotMatch(brief.message, /דני/)
+  assert.match(brief.message, /פער שיחות 14 יום: 1/)
+  assert.match(brief.message, /אין שליחה ללקוח/)
 })
 
 test('retention phrasing does not require the word pulse', () => {
