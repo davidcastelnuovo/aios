@@ -1,30 +1,39 @@
 import type { SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
 
+async function safe<T>(label: string, run: () => Promise<{ data: T | null; error: unknown }>): Promise<T | null> {
+  const { data, error } = await run();
+  if (error) {
+    console.warn(`gatherSeoClientContext:${label}`, error);
+    return null;
+  }
+  return data;
+}
+
 export async function gatherSeoClientContext(
   admin: SupabaseClient,
   tenantId: string,
   clientId: string,
 ) {
   const [
-    { data: client },
-    { data: wpSites },
-    { data: priorBriefs },
-    { data: reports },
-    { data: projects },
-    { data: chats },
-    { data: recordings },
+    client,
+    wpSites,
+    priorBriefs,
+    reports,
+    projects,
+    chats,
+    recordings,
   ] = await Promise.all([
-    admin.from("clients").select("name,website,business_description,industry,ahrefs_domain,services,gsc_site_url,ga_property_id,whatsapp_group_id").eq("id", clientId).maybeSingle(),
-    admin.from("social_media_wordpress_sites").select("id,site_url,site_name,is_active").eq("tenant_id", tenantId).eq("client_id", clientId),
-    admin.from("marketing_work_items").select("id,title,payload,updated_at").eq("tenant_id", tenantId).eq("client_id", clientId).order("updated_at", { ascending: false }).limit(8),
-    admin.from("ahrefs_reports").select("report_type,report_date").eq("tenant_id", tenantId).eq("client_id", clientId).order("report_date", { ascending: false }).limit(6),
-    admin.from("rank_tracking_projects").select("id,domain").eq("tenant_id", tenantId).eq("client_id", clientId).eq("is_active", true),
-    admin.from("chat_messages").select("id,direction,message_text,created_at,provider,sender_name,group_id").eq("tenant_id", tenantId).eq("client_id", clientId).order("created_at", { ascending: false }).limit(40),
-    admin.from("zoom_recordings").select("meeting_topic,summary_md,transcription,start_time").eq("tenant_id", tenantId).eq("client_id", clientId).order("start_time", { ascending: false }).limit(5),
+    safe("client", () => admin.from("clients").select("name,website,business_description,industry,ahrefs_domain,services,gsc_site_url,ga_property_id,whatsapp_group_id").eq("id", clientId).maybeSingle()),
+    safe("wp", () => admin.from("social_media_wordpress_sites").select("id,site_url,site_name,is_active").eq("tenant_id", tenantId).eq("client_id", clientId)),
+    safe("briefs", () => admin.from("marketing_work_items").select("id,title,payload,updated_at").eq("tenant_id", tenantId).eq("client_id", clientId).order("updated_at", { ascending: false }).limit(8)),
+    safe("ahrefs", () => admin.from("ahrefs_reports").select("report_type,report_date").eq("tenant_id", tenantId).eq("client_id", clientId).order("report_date", { ascending: false }).limit(6)),
+    safe("rank", () => admin.from("rank_tracking_projects").select("id,domain").eq("tenant_id", tenantId).eq("client_id", clientId).eq("is_active", true)),
+    safe("chats", () => admin.from("chat_messages").select("id,direction,message_text,created_at,provider,sender_name,group_id").eq("tenant_id", tenantId).eq("client_id", clientId).order("created_at", { ascending: false }).limit(40)),
+    safe("zoom", () => admin.from("zoom_recordings").select("meeting_topic,summary_md,transcription,start_time").eq("tenant_id", tenantId).eq("client_id", clientId).order("start_time", { ascending: false }).limit(5)),
   ]);
 
   let chatsMerged = chats ?? [];
-  const linkedGroupId = client?.whatsapp_group_id as string | null | undefined;
+  const linkedGroupId = (client as { whatsapp_group_id?: string } | null)?.whatsapp_group_id ?? null;
   if (linkedGroupId) {
     const { data: groupChats } = await admin
       .from("chat_messages")
@@ -41,12 +50,12 @@ export async function gatherSeoClientContext(
     chatsMerged = chatsMerged.slice(0, 55);
   }
 
-  const projectIds = (projects ?? []).map((p) => p.id);
+  const projectIds = (Array.isArray(projects) ? projects : []).map((p) => p.id);
   const { data: trackedKeywords } = projectIds.length
     ? await admin.from("rank_tracking_keywords").select("keyword,current_position,search_volume").in("project_id", projectIds).eq("is_active", true).limit(80)
     : { data: [] };
 
-  const briefCandidates = (priorBriefs ?? [])
+  const briefCandidates = (Array.isArray(priorBriefs) ? priorBriefs : [])
     .map((row) => {
       const payload = (row.payload ?? {}) as Record<string, unknown>;
       const text = String(payload.brief_text ?? payload.brief ?? "").trim();
@@ -62,7 +71,7 @@ export async function gatherSeoClientContext(
     client,
     wordpress_sites: wpSites ?? [],
     prior_briefs: briefCandidates,
-    ahrefs_report_count: reports?.length ?? 0,
+    ahrefs_report_count: (reports ?? []).length,
     ahrefs_reports: (reports ?? []).map((r) => ({ type: r.report_type, date: r.report_date })),
     tracked_keywords: trackedKeywords ?? [],
     rank_domains: (projects ?? []).map((p) => p.domain),

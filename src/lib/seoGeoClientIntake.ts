@@ -1,4 +1,5 @@
 import { supabase } from "@/integrations/supabase/client";
+import { invokeEdgeFunction } from "@/lib/edgeFunctionInvoke";
 
 export const SEO_INTAKE_MANUAL_QUESTIONS = [
   "מי הלקוח / מה העסק?",
@@ -83,14 +84,11 @@ export async function runSeoProjectIntake(body: {
   run_research?: boolean;
   user_prompt?: string;
 }) {
-  const { data, error } = await supabase.functions.invoke("marketing-seo-intake", { body });
-  if (error) throw error;
-  if (data?.error) throw new Error(String(data.error));
-  return data as {
+  return invokeEdgeFunction<{
     ok: boolean;
     brief_length: number;
     website: string;
     wordpress_site_id: string | null;
     plan?: unknown;
-  };
+  }>("marketing-seo-intake", body);
 }

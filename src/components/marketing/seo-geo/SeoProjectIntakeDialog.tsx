@@ -18,6 +18,7 @@ import {
 import { ensurePipelineForClient } from "@/components/marketing/lib/ensurePipeline";
 import { ClientSelector } from "@/components/marketing/ClientSelector";
 import { supabase } from "@/integrations/supabase/client";
+import { invokeEdgeFunction } from "@/lib/edgeFunctionInvoke";
 import { CheckCircle2, Globe, Loader2, Plus, Sparkles, WandSparkles } from "lucide-react";
 
 type Path = "pick_brief" | "carmen" | "manual";
@@ -93,6 +94,7 @@ export function SeoProjectIntakeDialog({ open, onClose, tenantId, defaultClientI
   const createWorkItem = async () => {
     if (!clientId || !title.trim()) throw new Error("נדרש לקוח ושם תוכנית");
     const pipeline = await ensurePipelineForClient({ clientId, tenantId, track: "seo_geo" });
+    if (!pipeline?.id) throw new Error("לא ניתן לפתוח pipeline SEO/GEO ללקוח — נסה שוב או פנה לתמיכה");
     const { data: stages, error: stageError } = await supabase
       .from("marketing_pipeline_stages")
       .select("id,stage_type")
@@ -142,10 +144,11 @@ export function SeoProjectIntakeDialog({ open, onClose, tenantId, defaultClientI
     }
 
     setSaving(true);
+    let workItemId: string | null = null;
     try {
-      const workItemId = await createWorkItem();
+      workItemId = await createWorkItem();
       const mode = path === "pick_brief" ? "existing_brief" : path === "manual" ? "manual_five" : "carmen_full";
-      await runSeoProjectIntake({
+      const intake = await runSeoProjectIntake({
         work_item_id: workItemId,
         mode,
         website_override: websiteOverride.trim() || undefined,
@@ -155,24 +158,29 @@ export function SeoProjectIntakeDialog({ open, onClose, tenantId, defaultClientI
         user_prompt: path === "carmen" ? carmenPrompt.trim() : "",
       });
 
-      if (path === "manual" || path === "pick_brief") {
-        const { data, error } = await supabase.functions.invoke("marketing-seo-plan", {
-          body: {
-            item_id: workItemId,
-            mode: "brief",
-            prompt: path === "manual" ? "מחקר ביטויים ומתחרים מהתשובות הידניות" : "המשך מהבריף הקיים",
-            horizon_months: 3,
-          },
-        });
-        if (error) throw error;
-        if (data?.error) throw new Error(String(data.error));
+      const planError = (intake as { plan_error?: string }).plan_error;
+      if (planError) {
+        toast.warning(`הבריף נשמר, אבל בניית התוכנית נכשלה: ${planError}`);
       }
 
-      toast.success(path === "carmen" ? "כרמן בנתה בריף ומחקר מהנתונים המחוברים" : "הפרויקט נפתח והתוכנית נבנית");
+      if (path === "manual" || path === "pick_brief") {
+        await invokeEdgeFunction("marketing-seo-plan", {
+          item_id: workItemId,
+          mode: "brief",
+          prompt: path === "manual" ? "מחקר ביטויים ומתחרים מהתשובות הידניות" : "המשך מהבריף הקיים",
+          horizon_months: 3,
+        });
+      }
+
+      toast.success(path === "carmen" && !planError ? "כרמן בנתה בריף ומחקר מהנתונים המחוברים" : "הפרויקט נפתח");
       setTitle("");
       await onCreated(workItemId);
     } catch (error: unknown) {
-      toast.error(message(error, "פתיחת הפרויקט נכשלה"));
+      if (workItemId) {
+        await supabase.from("marketing_work_items").delete().eq("id", workItemId);
+      }
+      const msg = message(error, "פתיחת הפרויקט נכשלה");
+      toast.error(msg.includes("Failed to send") || msg.includes("404") ? `${msg} — ייתכן ש-marketing-seo-intake עדיין לא נפרס בסטייג'ינג` : msg);
     } finally {
       setSaving(false);
     }

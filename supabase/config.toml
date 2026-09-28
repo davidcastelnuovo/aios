@@ -336,6 +336,21 @@ verify_jwt = false
 [functions.marketing-seo-publish-due]
 verify_jwt = false
 
+[functions.marketing-seo-intake]
+verify_jwt = true
+
+[functions.marketing-seo-plan]
+verify_jwt = true
+
+[functions.marketing-seo-materialize]
+verify_jwt = true
+
+[functions.marketing-seo-generate-entry]
+verify_jwt = true
+
+[functions.marketing-seo-chat]
+verify_jwt = true
+
 [functions.cron-lead-alert-failure-watch]
 verify_jwt = false
 

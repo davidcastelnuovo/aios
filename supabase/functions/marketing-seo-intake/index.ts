@@ -154,6 +154,18 @@ serve(async (req) => {
         }),
       });
       planResult = await planRes.json();
+      if (!planRes.ok) {
+        const errMsg = (planResult as { error?: string })?.error ?? `Plan HTTP ${planRes.status}`;
+        return respond({
+          ok: true,
+          brief_length: briefText.length,
+          website,
+          wordpress_site_id: wpSite?.id ?? null,
+          prior_briefs: context.prior_briefs,
+          plan: null,
+          plan_error: errMsg,
+        });
+      }
     }
 
     return respond({
