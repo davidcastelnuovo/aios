@@ -3,7 +3,7 @@ type WorkItemLike = {
   current_stage_id?: string | null;
 };
 
-const otherDepartments = new Set(["creative", "seo", "campaigns"]);
+const otherDepartments = new Set(["creative", "seo", "campaigns", "web", "social"]);
 
 export function isCopyDepartmentItem(item: WorkItemLike, copyStageId?: string | null) {
   const payload = item.payload ?? {};
