@@ -15,8 +15,9 @@ Static mirror of Marketing Captain, deployed to Vercel project **marketing-capta
 rm -rf src && mkdir src && cd src
 wget -mk -np -nH -e robots=off https://marketing-captain-site.vercel.app/
 
-# 2) Apply overlay
+# 2) Fix wget filenames + apply overlay (required before every deploy)
 cd ..
+node fix-mirror.mjs src
 cp -r overlay/carmen src/carmen
 node patch-html.mjs src
 
