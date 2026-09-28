@@ -55,14 +55,6 @@ export function renderLayout({ site, navigation, mainHtml, title }) {
   return `
     <a class="skip-link" href="#main">דלג לתוכן</a>
     <header class="site-header">
-      <div class="header-top">
-        <div class="container header-top__inner">
-          <p class="header-tagline">
-            התקשרו עכשיו:
-            <a href="tel:${site.phoneTel}" class="header-tagline__phone">${site.phone}</a>
-          </p>
-        </div>
-      </div>
       <div class="header-main">
         <div class="container header-main__inner">
           <a class="brand" href="#/" data-nav="/">
@@ -74,10 +66,16 @@ export function renderLayout({ site, navigation, mainHtml, title }) {
               height="80"
             />
           </a>
-          <button type="button" class="nav-toggle" aria-expanded="false" aria-controls="site-nav">
-            <span class="nav-toggle__bars" aria-hidden="true"></span>
-            <span class="nav-toggle__label">תפריט</span>
-          </button>
+          <div class="header-main__side">
+            <p class="header-tagline">
+              התקשרו עכשיו:
+              <a href="tel:${site.phoneTel}" class="header-tagline__phone">${site.phone}</a>
+            </p>
+            <button type="button" class="nav-toggle" aria-expanded="false" aria-controls="site-nav">
+              <span class="nav-toggle__bars" aria-hidden="true"></span>
+              <span class="nav-toggle__label">תפריט</span>
+            </button>
+          </div>
         </div>
       </div>
       <div class="header-nav">

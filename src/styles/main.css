@@ -87,22 +87,12 @@ a {
   box-shadow: 0 2px 12px rgba(0, 0, 0, 0.06);
 }
 
-.header-top {
-  background: #f3f3f3;
-  border-bottom: 1px solid var(--border);
-}
-
-.header-top__inner {
-  display: flex;
-  justify-content: center;
-  padding: 0.55rem 0;
-}
-
 .header-tagline {
   margin: 0;
-  font-size: 1.05rem;
+  font-size: clamp(0.8rem, 2.2vw, 1.05rem);
   font-weight: 600;
   color: #444;
+  white-space: nowrap;
 }
 
 .header-tagline__phone {
@@ -117,16 +107,25 @@ a {
 }
 
 .header-main {
+  background: #f3f3f3;
   border-bottom: 1px solid var(--border);
 }
 
 .header-main__inner {
   display: flex;
   align-items: center;
-  justify-content: center;
+  justify-content: space-between;
   gap: 1rem;
-  padding: 0.85rem 0;
-  position: relative;
+  padding: 0.65rem 0;
+}
+
+.header-main__side {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.65rem;
+  flex: 0 1 auto;
+  min-width: 0;
 }
 
 .brand {
@@ -134,13 +133,16 @@ a {
   align-items: center;
   color: inherit;
   text-decoration: none;
+  flex: 0 1 auto;
+  min-width: 0;
 }
 
 .brand-logo {
-  width: min(420px, 72vw);
+  width: min(420px, 52vw);
   height: auto;
   max-height: 72px;
   object-fit: contain;
+  object-position: right center;
   display: block;
 }
 
@@ -181,10 +183,7 @@ a {
 
 .nav-toggle {
   display: none;
-  position: absolute;
-  inset-inline-start: 0;
-  top: 50%;
-  transform: translateY(-50%);
+  flex: 0 0 auto;
   border: 1px solid var(--border);
   background: #fff;
   border-radius: var(--radius);
@@ -782,25 +781,23 @@ a {
   }
 
   .header-tagline {
-    font-size: 0.9rem;
-    line-height: 1.45;
-    text-align: center;
+    font-size: clamp(0.72rem, 3.2vw, 0.9rem);
+    line-height: 1.35;
+    white-space: normal;
+    text-align: end;
   }
 
   .header-main__inner {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
     gap: 0.5rem;
-    padding: 0.55rem 0;
+    padding: 0.5rem 0;
+  }
+
+  .header-main__side {
+    gap: 0.4rem;
   }
 
   .nav-toggle {
     display: inline-flex;
-    position: static;
-    transform: none;
-    flex: 0 0 auto;
-    order: -1;
     padding: 0.4rem 0.55rem;
     min-height: 40px;
   }
@@ -809,15 +806,9 @@ a {
     display: none;
   }
 
-  .brand {
-    flex: 1 1 auto;
-    justify-content: center;
-    min-width: 0;
-  }
-
   .brand-logo {
     width: auto;
-    max-width: calc(100% - 3.25rem);
+    max-width: min(240px, 46vw);
     max-height: 48px;
   }
 
