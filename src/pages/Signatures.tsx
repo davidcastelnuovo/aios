@@ -91,6 +91,9 @@ export default function Signatures() {
   const skipDialogResetRef = useRef(false);
   const [searchParams, setSearchParams] = useSearchParams();
   const [editingDoc, setEditingDoc] = useState<any>(null);
+  const [renameDoc, setRenameDoc] = useState<{ id: string; title: string; content?: string | null; is_template?: boolean } | null>(null);
+  const [renameTitle, setRenameTitle] = useState("");
+  const [renameContent, setRenameContent] = useState("");
   const [sendDialogDoc, setSendDialogDoc] = useState<any>(null);
   const [sendDialogRecipient, setSendDialogRecipient] = useState<{
     name?: string;
@@ -350,6 +353,30 @@ export default function Signatures() {
     },
   });
 
+  const renameTemplateMutation = useMutation({
+    mutationFn: async () => {
+      if (!renameDoc || !renameTitle.trim()) throw new Error("נא למלא שם לתבנית");
+      const patch = {
+        title: renameTitle.trim(),
+        template_name: renameTitle.trim(),
+        content: renameContent,
+        updated_at: new Date().toISOString(),
+      };
+      let { error } = await supabase.from("signature_documents").update(patch).eq("id", renameDoc.id);
+      if (error?.message?.includes("template_name")) {
+        const { template_name: _name, ...withoutName } = patch;
+        ({ error } = await supabase.from("signature_documents").update(withoutName).eq("id", renameDoc.id));
+      }
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["signature-documents", tenantId] });
+      toast.success("התבנית עודכנה");
+      setRenameDoc(null);
+    },
+    onError: (err: Error) => toast.error(err.message || "שמירת התבנית נכשלה"),
+  });
+
   const saveAsTemplateMutation = useMutation({
     mutationFn: async (doc: {
       title: string;
@@ -396,7 +423,10 @@ export default function Signatures() {
       fields: DocumentField[];
       thenSend?: boolean;
     }) => {
-      const result = await updateSignatureDocumentFields(doc.id, fields);
+      const result = await updateSignatureDocumentFields(doc.id, fields, {
+        title: doc.title,
+        isTemplate: !!doc.is_template,
+      });
       return { doc, thenSend: !!thenSend, ...result };
     },
     onSuccess: async ({ doc, thenSend, savedDocumentFields }) => {
@@ -426,13 +456,13 @@ export default function Signatures() {
     onError: (err: Error) => toast.error(err.message || "שגיאה בשמירת שדות"),
   });
 
-  const handleEditSaveOnly = async (fields: DocumentField[]) => {
-    if (!editingDoc) return;
+  const handleEditSaveOnly = async (fields: DocumentField[], nextTitle: string) => {
+    if (!editingDoc || !nextTitle.trim()) return;
     try {
       await updateFieldsMutation.mutateAsync({
         doc: {
           id: editingDoc.id,
-          title: editingDoc.title,
+          title: nextTitle.trim(),
           is_template: editingDoc.is_template,
         },
         fields,
@@ -443,13 +473,13 @@ export default function Signatures() {
     }
   };
 
-  const handleEditSaveOrSend = async (fields: DocumentField[]) => {
-    if (!editingDoc) return;
+  const handleEditSaveOrSend = async (fields: DocumentField[], nextTitle: string) => {
+    if (!editingDoc || !nextTitle.trim()) return;
     try {
       await updateFieldsMutation.mutateAsync({
         doc: {
           id: editingDoc.id,
-          title: editingDoc.title,
+          title: nextTitle.trim(),
           is_template: editingDoc.is_template,
         },
         fields,
@@ -464,7 +494,7 @@ export default function Signatures() {
     const editId = searchParams.get("edit");
     if (!editId || !documents?.length) return;
     const doc = documents.find((d) => d.id === editId);
-    if (doc?.status === "draft" && doc.file_url) {
+    if (doc && canEditDocFields(doc)) {
       setEditingDoc(doc);
       setIsViewOpen(false);
     }
@@ -1034,13 +1064,29 @@ export default function Signatures() {
                           >
                             <Eye className="h-4 w-4" />
                           </Button>
-                          {canEditDocFields(doc) && (
+                          {doc.is_template && canEditDocFields(doc) && (
+                            <Button variant="outline" size="sm" title="ערוך את התבנית" onClick={() => openFieldEditor(doc)}>
+                              <Pencil className="h-4 w-4 text-primary" />
+                              <span className="mr-1">ערוך תבנית</span>
+                            </Button>
+                          )}
+                          {doc.is_template && !doc.file_url && (
                             <Button
-                              variant="ghost"
-                              size="icon"
-                              title="ערוך שדות"
-                              onClick={() => openFieldEditor(doc)}
+                              variant="outline"
+                              size="sm"
+                              title="ערוך שם ותוכן"
+                              onClick={() => {
+                                setRenameDoc(doc);
+                                setRenameTitle(doc.title);
+                                setRenameContent(doc.content || "");
+                              }}
                             >
+                              <Pencil className="h-4 w-4 text-primary" />
+                              <span className="mr-1">ערוך תבנית</span>
+                            </Button>
+                          )}
+                          {!doc.is_template && canEditDocFields(doc) && (
+                            <Button variant="ghost" size="icon" title="ערוך שדות" onClick={() => openFieldEditor(doc)}>
                               <Pencil className="h-4 w-4 text-primary" />
                             </Button>
                           )}
@@ -1249,7 +1295,19 @@ export default function Signatures() {
               </Card>
 
               <div className="flex flex-wrap justify-end gap-2">
-                {canEditDocFields(selectedDoc) && (
+                {selectedDoc.is_template && canEditDocFields(selectedDoc) && (
+                  <Button variant="secondary" onClick={() => openFieldEditor(selectedDoc)}>
+                    <Pencil className="h-4 w-4 ml-2" />
+                    ערוך תבנית
+                  </Button>
+                )}
+                {selectedDoc.is_template && !selectedDoc.file_url && (
+                  <Button variant="secondary" onClick={() => { setRenameDoc(selectedDoc); setRenameTitle(selectedDoc.title); setRenameContent(selectedDoc.content || ""); }}>
+                    <Pencil className="h-4 w-4 ml-2" />
+                    ערוך תבנית
+                  </Button>
+                )}
+                {!selectedDoc.is_template && canEditDocFields(selectedDoc) && (
                   <Button variant="secondary" onClick={() => openFieldEditor(selectedDoc)}>
                     <Pencil className="h-4 w-4 ml-2" />
                     ערוך שדות
@@ -1274,6 +1332,27 @@ export default function Signatures() {
               </div>
             </div>
           )}
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={!!renameDoc} onOpenChange={(open) => { if (!open) setRenameDoc(null); }}>
+        <DialogContent dir="rtl">
+          <DialogHeader>
+            <DialogTitle>עריכת תבנית</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3">
+            <div className="space-y-2">
+              <Label>שם התבנית</Label>
+              <Input value={renameTitle} onChange={(event) => setRenameTitle(event.target.value)} />
+            </div>
+            <div className="space-y-2">
+              <Label>תוכן המסמך</Label>
+              <Textarea value={renameContent} onChange={(event) => setRenameContent(event.target.value)} rows={8} />
+            </div>
+            <Button disabled={!renameTitle.trim() || renameTemplateMutation.isPending} onClick={() => renameTemplateMutation.mutate()}>
+              {renameTemplateMutation.isPending ? "שומר..." : "שמור תבנית"}
+            </Button>
+          </div>
         </DialogContent>
       </Dialog>
 

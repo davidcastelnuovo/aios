@@ -1,5 +1,7 @@
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import SignatureFieldPlacer, { getRecipientColor } from "@/components/signatures/SignatureFieldPlacer";
 import { type DocumentField } from "@/components/signatures/signatureFieldTypes";
 import { useSignatureDocumentUrl } from "@/hooks/useSignatureDocumentUrl";
@@ -11,8 +13,8 @@ interface SignatureDocumentFieldEditorProps {
   initialFields: DocumentField[];
   saving?: boolean;
   isTemplate?: boolean;
-  onSave: (fields: DocumentField[]) => void | Promise<void>;
-  onSaveAndSend?: (fields: DocumentField[]) => void | Promise<void>;
+  onSave: (fields: DocumentField[], title: string) => void | Promise<void>;
+  onSaveAndSend?: (fields: DocumentField[], title: string) => void | Promise<void>;
   onClose: () => void;
 }
 
@@ -27,6 +29,8 @@ export function SignatureDocumentFieldEditor({
   onClose,
 }: SignatureDocumentFieldEditorProps) {
   const [fields, setFields] = useState<DocumentField[]>(initialFields);
+  const [name, setName] = useState(title);
+  const canSave = !!name.trim() && !saving;
   const { resolvedUrl, loading, error } = useSignatureDocumentUrl(fileUrl);
 
   const recipients = [{ index: 0, name: "חותם", color: getRecipientColor(0) }];
@@ -34,8 +38,12 @@ export function SignatureDocumentFieldEditor({
   return (
     <div className="fixed inset-0 z-50 bg-background flex flex-col" dir="rtl">
       <div className="flex flex-wrap items-center justify-between gap-3 p-4 border-b border-border bg-background">
-        <div>
-          <h2 className="text-lg font-bold text-foreground">עריכת שדות — {title}</h2>
+        <div className="min-w-[220px] flex-1 space-y-2">
+          <h2 className="text-lg font-bold text-foreground">{isTemplate ? "עריכת תבנית" : "עריכת שדות"}</h2>
+          <div className="flex items-center gap-2 max-w-md">
+            <Label htmlFor="signature-doc-name" className="shrink-0 text-sm">{isTemplate ? "שם התבנית" : "שם המסמך"}</Label>
+            <Input id="signature-doc-name" value={name} onChange={(event) => setName(event.target.value)} className="h-9" />
+          </div>
           <p className="text-sm text-muted-foreground">הוסף, הסר, הזז והגדל שדות, וסמן שדה כחובה או לא חובה</p>
         </div>
         <div className="flex gap-2">
@@ -44,13 +52,13 @@ export function SignatureDocumentFieldEditor({
           </Button>
           <Button
             variant={isTemplate ? "default" : "secondary"}
-            onClick={() => onSave(fields)}
-            disabled={saving}
+            onClick={() => onSave(fields, name.trim())}
+            disabled={!canSave}
           >
             {saving ? "שומר..." : isTemplate ? "שמור תבנית" : "שמור מסמך"}
           </Button>
           {!isTemplate && onSaveAndSend && (
-            <Button onClick={() => onSaveAndSend(fields)} disabled={saving}>
+            <Button onClick={() => onSaveAndSend(fields, name.trim())} disabled={!canSave}>
               {saving ? "שומר..." : "שמור ושלח"}
             </Button>
           )}

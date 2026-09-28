@@ -1,7 +1,55 @@
-export interface SignatureEmailSettings {
+export interface SignatureEmailColors {
+  headerColor: string;
+  headerText: string;
+  buttonColor: string;
+  buttonText: string;
+  pageBackground: string;
+  cardBackground: string;
+  textColor: string;
+}
+
+export const DEFAULT_SIGNATURE_EMAIL_COLORS: SignatureEmailColors = {
+  headerColor: "#1d4ed8",
+  headerText: "#ffffff",
+  buttonColor: "#2563eb",
+  buttonText: "#ffffff",
+  pageBackground: "#f5f5f5",
+  cardBackground: "#ffffff",
+  textColor: "#333333",
+};
+
+export interface SignatureEmailSettings extends Partial<SignatureEmailColors> {
   logoUrl?: string | null;
   subject?: string | null;
   body?: string | null;
+}
+
+export function safeHexColor(value: unknown, fallback: string): string {
+  if (typeof value !== "string") return fallback;
+  const trimmed = value.trim();
+  const six = /^#([0-9a-fA-F]{6})$/.exec(trimmed);
+  if (six) return `#${six[1].toLowerCase()}`;
+  const three = /^#([0-9a-fA-F]{3})$/.exec(trimmed);
+  if (three) {
+    const [r, g, b] = three[1].split("");
+    return `#${r}${r}${g}${g}${b}${b}`.toLowerCase();
+  }
+  return fallback;
+}
+
+export function resolveSignatureEmailColors(
+  settings?: Partial<SignatureEmailColors> | null,
+): SignatureEmailColors {
+  const defaults = DEFAULT_SIGNATURE_EMAIL_COLORS;
+  return {
+    headerColor: safeHexColor(settings?.headerColor, defaults.headerColor),
+    headerText: safeHexColor(settings?.headerText, defaults.headerText),
+    buttonColor: safeHexColor(settings?.buttonColor, defaults.buttonColor),
+    buttonText: safeHexColor(settings?.buttonText, defaults.buttonText),
+    pageBackground: safeHexColor(settings?.pageBackground, defaults.pageBackground),
+    cardBackground: safeHexColor(settings?.cardBackground, defaults.cardBackground),
+    textColor: safeHexColor(settings?.textColor, defaults.textColor),
+  };
 }
 
 const DEFAULT_SUBJECT = "בקשה לחתימה: {{title}}";
