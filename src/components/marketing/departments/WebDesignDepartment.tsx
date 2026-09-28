@@ -20,8 +20,9 @@ import {
 import { ClientSelector } from "@/components/marketing/ClientSelector";
 import { isCopyDepartmentItem } from "@/components/marketing/departmentFilters";
 import {
-  previewUrl,
   publicWebDesignBucket,
+  resolveWebDesignPreviewHref,
+  resolveWebDesignPublishedHref,
   slugifyWebProject,
   type WebDesignProject,
   webDesignStoragePath,
@@ -215,15 +216,36 @@ export function WebDesignDepartment({ clientFilter, tenantId, onClientChange }: 
     }
   };
 
+  const supabaseUrl = (import.meta.env.VITE_SUPABASE_URL as string | undefined) ?? "";
+
   const publicBase = useMemo(() => {
     const fromEnv = import.meta.env.VITE_WEB_DESIGN_PUBLIC_BASE_URL as string | undefined;
     return (fromEnv || selected?.public_url?.replace(/\/[^/]+\/[^/]+\/?$/, "") || "").trim();
   }, [selected?.public_url]);
 
-  const previewLink =
-    selected?.preview_token && tenantSlug && selected.slug
-      ? previewUrl(publicBase, tenantSlug, selected.slug, selected.preview_token)
-      : "";
+  const previewHref = useMemo(() => {
+    if (!selected?.preview_token || !tenantSlug || !selected.slug) return "";
+    if (selected.status !== "preview" && selected.status !== "published") return "";
+    return resolveWebDesignPreviewHref({
+      publicBase,
+      supabaseUrl,
+      tenantSlug,
+      projectSlug: selected.slug,
+      previewToken: selected.preview_token,
+    });
+  }, [publicBase, selected, supabaseUrl, tenantSlug]);
+
+  const publishedHref = useMemo(() => {
+    if (!selected || !tenantSlug || !selected.slug) return "";
+    if (selected.status !== "published") return "";
+    return resolveWebDesignPublishedHref({
+      publicBase,
+      supabaseUrl,
+      tenantSlug,
+      projectSlug: selected.slug,
+      storedPublicUrl: selected.public_url,
+    });
+  }, [publicBase, selected, supabaseUrl, tenantSlug]);
 
   const website = clientRow?.website ?? null;
   const websiteHref =
@@ -305,7 +327,15 @@ export function WebDesignDepartment({ clientFilter, tenantId, onClientChange }: 
                 {building ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <WandSparkles className="h-3.5 w-3.5" />}
                 שלח לבנייה
               </Button>
-              {(selected.status === "preview" || selected.status === "published") && (
+              {previewHref && (
+                <Button size="sm" variant="secondary" className="gap-1" asChild>
+                  <a href={previewHref} target="_blank" rel="noreferrer">
+                    <ExternalLink className="h-3.5 w-3.5" />
+                    פתח פריוויו
+                  </a>
+                </Button>
+              )}
+              {selected.status === "preview" && (
                 <Button size="sm" variant="secondary" className="gap-1" onClick={publish}>
                   <Rocket className="h-3.5 w-3.5" />
                   פרסם
@@ -406,20 +436,29 @@ export function WebDesignDepartment({ clientFilter, tenantId, onClientChange }: 
           ) : (
             <p className="text-xs text-muted-foreground">אין אתר ב-CRM</p>
           )}
-          {previewLink && (
-            <a href={previewLink} target="_blank" rel="noreferrer" className="block text-xs text-primary hover:underline">
-              תצוגה מקדימה (לפני פרסום)
-            </a>
+          {previewHref && selected?.status === "preview" && (
+            <Button variant="outline" className="w-full gap-2 text-xs" asChild>
+              <a href={previewHref} target="_blank" rel="noreferrer">
+                <ExternalLink className="h-3.5 w-3.5" />
+                תצוגה מקדימה
+              </a>
+            </Button>
           )}
-          {selected?.public_url && selected.status === "published" && (
-            <a href={selected.public_url} target="_blank" rel="noreferrer" className="block text-xs font-medium text-primary hover:underline">
-              {selected.public_url}
-            </a>
+          {publishedHref && selected?.status === "published" && (
+            <Button variant="default" className="w-full gap-2 text-xs" asChild>
+              <a href={publishedHref} target="_blank" rel="noreferrer">
+                <ExternalLink className="h-3.5 w-3.5" />
+                דף חי
+              </a>
+            </Button>
           )}
-          {!publicBase && (
-            <Card className="p-3 text-[11px] text-muted-foreground">
-              הגדירו `WEB_DESIGN_PUBLIC_BASE_URL` ב-Supabase ו-`VITE_WEB_DESIGN_PUBLIC_BASE_URL` ב-Vercel CRM כדי להציג קישור ציבורי (ראו `apps/landing-studio/README.md`).
-            </Card>
+          {publishedHref && selected?.status === "published" && (
+            <p className="break-all text-[10px] text-muted-foreground" dir="ltr">{publishedHref}</p>
+          )}
+          {!publicBase && previewHref && (
+            <p className="text-[10px] text-muted-foreground">
+              הפריוויו עובר דרך Supabase. לכתובת קצרה — הגדירו landing-studio (README ב־apps/landing-studio).
+            </p>
           )}
         </div>
       </aside>
