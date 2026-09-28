@@ -860,6 +860,10 @@ a {
   padding: 1.35rem 1.25rem 1.15rem;
 }
 
+.contact-teaser .form-disclaimer {
+  display: none;
+}
+
 .prose-body form {
   max-width: 100%;
 }
