@@ -35,7 +35,7 @@ const DemoRequestDialog = ({ open, onOpenChange }: DemoRequestDialogProps) => {
     // Simulate sending (in production, this would call an edge function)
     await new Promise(resolve => setTimeout(resolve, 1000));
     
-    toast.success("נרשמתם לרשימת המתנה! ניצור איתכם קשר בהקדם");
+    toast.success("נרשמתם לבטא של כרמן! ניצור איתכם קשר בהקדם");
     setFormData({ name: "", phone: "", email: "", company: "", message: "" });
     onOpenChange(false);
     setIsSubmitting(false);
@@ -47,10 +47,10 @@ const DemoRequestDialog = ({ open, onOpenChange }: DemoRequestDialogProps) => {
         <DialogHeader>
           <DialogTitle className="text-2xl font-bold text-center flex items-center justify-center gap-2">
             <Users className="h-6 w-6 text-[#36d399]" />
-            הרשמה לרשימת המתנה
+            הרשמה לבטא של כרמן
           </DialogTitle>
           <DialogDescription className="text-center text-white/60">
-            השאירו פרטים ונעדכן אתכם כשהגישה תיפתח
+            השאירו פרטים ונעדכן אתכם כשהבטא נפתח
           </DialogDescription>
         </DialogHeader>
 
