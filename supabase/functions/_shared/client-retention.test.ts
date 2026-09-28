@@ -33,7 +33,8 @@ test('churn mood and critical pulse are act-now', () => {
     has_campaign_snapshot: true,
   }, NOW)
   assert.equal(critical?.band, 'act_now')
-  assert.match(critical?.next_action || '', /לא לשלוח הודעה/)
+  assert.equal(critical?.next_action, 'שיחת שימור היום ועדכון יומן.')
+  assert.doesNotMatch(critical?.next_action || '', /לא לשלוח הודעה/)
 })
 
 test('stale call is act-now only for a connected campaign client', () => {
@@ -80,7 +81,7 @@ test('warning is watch and a fresh healthy client is steady', () => {
   assert.equal(scan.steady_count, 1)
   assert.equal(scan.items[0].client_name, 'אורן')
   assert.match(scan.whatsapp_digest, /לטיפול עכשיו: 1/)
-  assert.match(scan.whatsapp_digest, /אין שליחה ללקוח/)
+  assert.doesNotMatch(scan.whatsapp_digest, /לא לשלוח הודעה|אין שליחה ללקוח/)
 })
 
 test('daily brief names churn and critical clients and counts call gaps', () => {
@@ -97,7 +98,7 @@ test('daily brief names churn and critical clients and counts call gaps', () => 
   assert.match(brief.message, /בילבי/)
   assert.doesNotMatch(brief.message, /דני/)
   assert.match(brief.message, /פער שיחות 14 יום: 1/)
-  assert.match(brief.message, /אין שליחה ללקוח/)
+  assert.doesNotMatch(brief.message, /לא לשלוח הודעה|אין שליחה ללקוח/)
 })
 
 test('retention phrasing does not require the word pulse', () => {
