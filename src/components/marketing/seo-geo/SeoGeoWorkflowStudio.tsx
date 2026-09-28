@@ -236,6 +236,7 @@ export function SeoGeoWorkflowStudio({
                 ))}
               </SelectContent>
             </Select>
+            <p className="text-[11px] leading-snug text-muted-foreground">המאמרים נצבעים לפי הצבעים והפונט של האתר שנבחר.</p>
           </div>
           <div className="flex w-full items-center justify-between gap-2 sm:w-auto sm:justify-start">
             <Switch
