@@ -5,7 +5,7 @@ let siteData = null;
 
 async function loadData() {
   if (siteData) return siteData;
-  const res = await fetch("/data/site-content.json");
+  const res = await fetch(`${import.meta.env.BASE_URL}data/site-content.json`);
   if (!res.ok) throw new Error("Failed to load site content");
   siteData = await res.json();
   return siteData;
