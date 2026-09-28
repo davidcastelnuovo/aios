@@ -7,6 +7,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { supabase } from "@/integrations/supabase/client";
 import { materializeApprovedPlan, writePlannedArticles } from "@/lib/seoGeoExecutePlan";
+import { heContentType, hePriority } from "@/lib/seoGeoLabels";
 import { toast } from "sonner";
 import { CheckCircle2, Loader2, Pencil, Plus, Sparkles, Trash2 } from "lucide-react";
 
@@ -35,6 +36,7 @@ interface Props {
 export function SeoContentPlanReview({ workItemId, payload, onUpdated, onApproved }: Props) {
   const plan = (payload?.seo_plan ?? null) as SeoPlan | null;
   const planStatus = String(payload?.seo_plan_status ?? "pending");
+  const [brief, setBrief] = useState(String(payload?.brief_text ?? ""));
   const [items, setItems] = useState<ContentPlanItem[]>([]);
   const [feedback, setFeedback] = useState("");
   const [saving, setSaving] = useState(false);
@@ -42,8 +44,9 @@ export function SeoContentPlanReview({ workItemId, payload, onUpdated, onApprove
   const [busyLabel, setBusyLabel] = useState<string | null>(null);
 
   useEffect(() => {
+    setBrief(String(payload?.brief_text ?? ""));
     setItems([...(plan?.contentPlan ?? [])]);
-  }, [plan?.contentPlan, workItemId]);
+  }, [payload?.brief_text, plan?.contentPlan, workItemId]);
 
   const approved = planStatus === "approved";
 
@@ -54,6 +57,7 @@ export function SeoContentPlanReview({ workItemId, payload, onUpdated, onApprove
       const { error } = await supabase.from("marketing_work_items").update({
         payload: {
           ...(payload ?? {}),
+          brief_text: brief.trim(),
           seo_plan: nextPlan,
           ...extraPayload,
         },
@@ -74,7 +78,7 @@ export function SeoContentPlanReview({ workItemId, payload, onUpdated, onApprove
     try {
       const nextPlan = { ...(plan ?? {}), contentPlan: items };
       const { error } = await supabase.from("marketing_work_items").update({
-        payload: { ...(payload ?? {}), seo_plan: nextPlan, seo_plan_status: "approved" },
+        payload: { ...(payload ?? {}), brief_text: brief.trim(), seo_plan: nextPlan, seo_plan_status: "approved" },
       }).eq("id", workItemId);
       if (error) throw error;
       const stats = await materializeApprovedPlan(workItemId);
@@ -138,28 +142,51 @@ export function SeoContentPlanReview({ workItemId, payload, onUpdated, onApprove
   if (!plan?.contentPlan?.length) {
     return (
       <Card className="m-4 p-6 text-center text-sm text-muted-foreground">
-        אין תוכנית תוכן עדיין — השלימי intake ומחקר, ואז כרמן תציע תוכנית כאן.
+        אין תוכנית תוכן עדיין. קודם משלימים בריף, ואז נבנית תוכנית.
       </Card>
     );
   }
 
+  const gaps = Array.isArray((payload?.seo_research as { data_gaps?: unknown } | undefined)?.data_gaps)
+    ? ((payload?.seo_research as { data_gaps: string[] }).data_gaps)
+    : [];
+  const website = String(payload?.client_website ?? "");
+
   return (
-    <div className="space-y-4 p-4" dir="rtl">
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <div>
-          <h3 className="text-sm font-bold">תוכנית תוכן — אישור, גאנט וכתיבה</h3>
-          <p className="text-[11px] text-muted-foreground">{items.length} מאמרים · אישור בונה גאנט וכותב את שני המאמרים הראשונים</p>
+    <div className="space-y-4 p-4 text-right" dir="rtl">
+      <ol className="flex flex-wrap gap-2 text-[11px]">
+        {["בריף", "ביטויים", "תוכנית", "גאנט ומאמר"].map((step, index) => (
+          <li key={step} className="rounded-full border bg-background px-3 py-1">
+            <span className="font-semibold text-emerald-700">{index + 1}.</span> {step}
+          </li>
+        ))}
+      </ol>
+
+      <Card className="space-y-3 p-4">
+        <div className="flex flex-wrap items-start justify-between gap-2">
+          <div>
+            <h3 className="text-sm font-bold">הבריף</h3>
+            <p className="text-[11px] text-muted-foreground">זה המסמך שכרמן והמאמרים נשענים עליו. מימין לשמאל, בעברית.</p>
+          </div>
+          <Badge variant="outline" className={approved ? "border-emerald-500 text-emerald-800" : "border-amber-400 text-amber-800"}>
+            {approved ? "התוכנית אושרה" : "ממתינה לאישור"}
+          </Badge>
         </div>
-        <Badge variant="outline" className={approved ? "border-emerald-500 text-emerald-800" : "border-amber-400 text-amber-800"}>
-          {approved ? "אושרה" : "ממתינה לאישור"}
-        </Badge>
-      </div>
+        {website ? <p className="text-xs text-muted-foreground">אתר: <span dir="ltr">{website}</span></p> : null}
+        <Textarea className="min-h-40 text-sm leading-7" dir="rtl" value={brief} onChange={(e) => setBrief(e.target.value)} />
+        {gaps.length > 0 && (
+          <div className="rounded-lg bg-amber-50 p-3 text-xs leading-relaxed text-amber-950">
+            <div className="font-semibold">מה חסר ואין להמציא</div>
+            <ul className="mt-1 list-disc ps-5">{gaps.map((gap) => <li key={gap}>{gap}</li>)}</ul>
+          </div>
+        )}
+      </Card>
 
       {research && (research.seeds.length > 0 || research.competitors.length > 0) && (
-        <Card className="p-3 text-xs">
-          <div className="font-semibold text-emerald-800">מחקר intake</div>
-          {research.seeds.length > 0 && <p className="mt-1">ביטויים: {research.seeds.slice(0, 12).join(" · ")}</p>}
-          {research.competitors.length > 0 && <p className="mt-1 text-muted-foreground">מתחרים: {research.competitors.join(", ")}</p>}
+        <Card className="p-3 text-xs leading-relaxed">
+          <div className="font-semibold">מהעלה מהמערכת</div>
+          {research.seeds.length > 0 && <p className="mt-1">ביטויי פתיחה: {research.seeds.slice(0, 12).join(" · ")}</p>}
+          {research.competitors.length > 0 && <p className="mt-1 text-muted-foreground">מתחרים שאומתו: {research.competitors.join(", ")}</p>}
         </Card>
       )}
 
@@ -170,7 +197,7 @@ export function SeoContentPlanReview({ workItemId, payload, onUpdated, onApprove
             <Card key={`${cluster.name}-${index}`} className="p-3">
               <div className="flex items-center justify-between gap-2">
                 <div className="text-sm font-semibold">{cluster.name}</div>
-                <Badge variant="outline">{cluster.priority ?? "medium"}</Badge>
+                <Badge variant="outline">{hePriority(cluster.priority)}</Badge>
               </div>
               <div className="mt-2 flex flex-wrap gap-1">
                 {[cluster.pillarKeyword, ...(cluster.supportingKeywords ?? [])].filter(Boolean).map((keyword) => (
@@ -197,11 +224,7 @@ export function SeoContentPlanReview({ workItemId, payload, onUpdated, onApprove
                   next[index] = { ...next[index], primaryKeyword: e.target.value };
                   setItems(next);
                 }} />
-                <Input value={item.contentType ?? ""} placeholder="סוג (pillar/article…)" onChange={(e) => {
-                  const next = [...items];
-                  next[index] = { ...next[index], contentType: e.target.value };
-                  setItems(next);
-                }} />
+                <div className="flex h-10 items-center rounded-md border bg-muted/30 px-3 text-sm">{heContentType(item.contentType)}</div>
               </div>
               <Textarea className="min-h-14 text-xs" value={item.angle ?? ""} placeholder="זווית / GEO" onChange={(e) => {
                 const next = [...items];
@@ -213,7 +236,7 @@ export function SeoContentPlanReview({ workItemId, payload, onUpdated, onApprove
               <Button type="button" variant="ghost" size="icon" className="self-end" onClick={() => setItems(items.filter((_, i) => i !== index))}>
                 <Trash2 className="h-4 w-4 text-destructive" />
               </Button>
-              <Badge variant="secondary">{item.priority ?? "medium"}</Badge>
+              <Badge variant="secondary">{hePriority(item.priority)}</Badge>
             </div>
           </Card>
         ))}
@@ -229,7 +252,7 @@ export function SeoContentPlanReview({ workItemId, payload, onUpdated, onApprove
         {!approved && (
           <Button disabled={saving} className="w-full gap-1 bg-emerald-600 hover:bg-emerald-700 sm:w-auto" onClick={approve}>
             {busyLabel ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />}
-            {busyLabel ?? "אשרי, בנו גאנט וכתבו מאמרים"}
+            {busyLabel ?? "אשר, בנה גאנט וכתוב מאמרים"}
           </Button>
         )}
       </div>
@@ -238,7 +261,7 @@ export function SeoContentPlanReview({ workItemId, payload, onUpdated, onApprove
         <Label className="text-xs">הערות לכרמן — תיקון תוכנית</Label>
         <Textarea className="mt-1 min-h-20 text-sm" value={feedback} onChange={(e) => setFeedback(e.target.value)} placeholder="לדוגמה: פחות מאמרים informational, יותר commercial, הוסף cluster ל…" />
         <Button className="mt-2 gap-1" variant="outline" disabled={revising} onClick={reviseWithCarmen}>
-          {revising ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}כרמן — עדכן לפי ההערות
+          {revising ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}עדכון לפי ההערות
         </Button>
       </div>
     </div>

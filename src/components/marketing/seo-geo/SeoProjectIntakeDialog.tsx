@@ -194,8 +194,9 @@ export function SeoProjectIntakeDialog({ open, onClose, tenantId, defaultClientI
             <Globe className="h-5 w-5 text-emerald-600" />
             פרויקט SEO / GEO חדש
           </DialogTitle>
+          <p className="text-right text-xs text-muted-foreground">1. לקוח ואתר · 2. בריף · 3. תוכנית ביטויים ומאמרים</p>
         </DialogHeader>
-        <ScrollArea className="max-h-[70vh] pr-3">
+        <ScrollArea className="max-h-[70vh] pe-3">
           <div className="grid gap-4 py-2">
             <div>
               <Label>לקוח</Label>
