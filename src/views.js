@@ -159,6 +159,7 @@ export function renderHome({ site, posts }) {
             aria-hidden="${i === 0 ? "false" : "true"}"
           >
             <img src="${slide.image}" alt="${slide.title}" width="1920" height="700" decoding="async" />
+            <p class="hero-carousel__caption" aria-hidden="true">${slide.title}</p>
           </div>`;
             },
           )

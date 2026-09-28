@@ -305,6 +305,14 @@ a {
   display: block;
 }
 
+.hero-carousel__caption {
+  display: none;
+}
+
+.hero-carousel__slide::after {
+  content: none;
+}
+
 .hero-carousel__chrome {
   position: absolute;
   inset: 0;
@@ -380,12 +388,23 @@ a {
   text-align: center;
 }
 
-.intro-logo {
-  margin-bottom: 0.5rem;
+.intro h1 {
+  font-size: clamp(1.35rem, 5vw, 2rem);
+  line-height: 1.25;
+  margin-top: 0.5rem;
 }
 
-.intro h1 {
-  margin-top: 0.5rem;
+.intro p {
+  font-size: clamp(0.95rem, 3.6vw, 1.05rem);
+  line-height: 1.65;
+  margin: 0.75rem 0 0;
+  overflow-wrap: anywhere;
+}
+
+.intro-logo {
+  margin-bottom: 0.5rem;
+  width: min(120px, 28vw);
+  height: auto;
 }
 
 .btn {
@@ -859,13 +878,45 @@ a {
 
   .hero-carousel {
     max-height: none;
-    aspect-ratio: 16 / 10;
-    min-height: 220px;
+    aspect-ratio: 16 / 11;
+    min-height: 240px;
+  }
+
+  .hero-carousel__slide::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(to top, rgba(8, 53, 111, 0.88) 0%, rgba(8, 53, 111, 0.35) 38%, transparent 62%);
+    pointer-events: none;
+    z-index: 1;
+  }
+
+  .hero-carousel__caption {
+    display: block;
+    position: absolute;
+    inset-inline: 0.75rem;
+    bottom: 2.35rem;
+    margin: 0;
+    padding: 0;
+    text-align: center;
+    font-size: clamp(1rem, 4.8vw, 1.2rem);
+    font-weight: 700;
+    line-height: 1.35;
+    color: #fff;
+    text-shadow: 0 1px 3px rgba(0, 0, 0, 0.45);
+    z-index: 2;
+    pointer-events: none;
   }
 
   .hero-carousel__slide img {
     object-fit: cover;
-    object-position: center 42%;
+    object-position: center 38%;
+  }
+
+  .hero-carousel__slide--payments .hero-carousel__caption {
+    font-size: clamp(0.88rem, 3.8vw, 1.05rem);
+    line-height: 1.45;
+    bottom: 2.25rem;
   }
 
   .hero-carousel__arrow {
@@ -914,7 +965,21 @@ a {
   }
 
   .hero-carousel {
-    aspect-ratio: 4 / 3;
-    min-height: 200px;
+    aspect-ratio: 3 / 4;
+    min-height: 260px;
+  }
+
+  .hero-carousel__caption {
+    inset-inline: 0.5rem;
+    bottom: 2.1rem;
+    font-size: clamp(0.95rem, 4.2vw, 1.1rem);
+  }
+
+  .section.intro {
+    padding-top: 1.5rem;
+  }
+
+  .section.intro .narrow {
+    width: min(760px, calc(100% - 1.25rem));
   }
 }
