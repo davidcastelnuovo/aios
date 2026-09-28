@@ -201,6 +201,7 @@ export function SeoGeoWorkflowStudio({
   };
 
   const hasPlan = !!(workItem.payload?.seo_plan);
+  const planApproved = String(workItem.payload?.seo_plan_status ?? "") === "approved";
 
   return (
     <div className="grid min-h-0 flex-1 grid-cols-[minmax(0,1fr)_300px]">
@@ -228,11 +229,42 @@ export function SeoGeoWorkflowStudio({
             />
             <Label className="text-xs">אישור אוטומטי (כרמן)</Label>
           </div>
-          <Button size="sm" variant="outline" disabled={!hasPlan || materialize.isPending} onClick={() => materialize.mutate()} className="gap-1">
+          <Button
+            size="sm"
+            variant="outline"
+            disabled={!hasPlan || !planApproved || materialize.isPending}
+            onClick={() => {
+              if (!planApproved) {
+                toast.error("אשר תוכנית תוכן בלשונית אסטרטגיה לפני הגאנט");
+                return;
+              }
+              materialize.mutate();
+            }}
+            className="gap-1"
+          >
             {materialize.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <CalendarDays className="h-3.5 w-3.5" />}
             הכנס תוכנית לגאנט
           </Button>
-          <Button size="sm" variant="outline" onClick={() => publishDue()} className="gap-1"><Rocket className="h-3.5 w-3.5" />פרסם מוכנים</Button>
+          <Button
+            size="sm"
+            variant="outline"
+            disabled={!entries.some((e) => isEntryApproved(e.approval_status) && e.generation_status === "planned")}
+            onClick={async () => {
+              const targets = entries.filter((e) => isEntryApproved(e.approval_status) && e.generation_status === "planned");
+              for (const row of targets) {
+                try {
+                  await generateEntry(row.id);
+                } catch (e: unknown) {
+                  toast.error(e instanceof Error ? e.message : "כתיבה נכשלה");
+                  break;
+                }
+              }
+            }}
+            className="gap-1"
+          >
+            <WandSparkles className="h-3.5 w-3.5" />כתבי כל המאושרים
+          </Button>
+          <Button size="sm" variant="outline" onClick={() => publishDue()} className="gap-1"><Rocket className="h-3.5 w-3.5" />פרסם מוכנים ל-WP</Button>
         </div>
 
         <Tabs defaultValue="gantt" className="flex min-h-0 flex-1 flex-col">

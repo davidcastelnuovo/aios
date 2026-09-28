@@ -136,6 +136,10 @@ export function SeoProjectIntakeDialog({ open, onClose, tenantId, defaultClientI
       toast.error("בחר בריף קיים");
       return;
     }
+    if (path === "carmen" && !websiteOverride.trim() && !preview?.website) {
+      toast.error("הזן קישור לאתר — כרמן תבנה מהאתר ומהמערכת");
+      return;
+    }
 
     setSaving(true);
     try {

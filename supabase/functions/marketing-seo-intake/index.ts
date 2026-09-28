@@ -66,7 +66,7 @@ serve(async (req) => {
       intakeSource = "manual_five";
     } else if (mode === "carmen_full") {
       const websiteSnippet = website ? await fetchPublicWebsiteSnippet(website) : null;
-      const skinBlock = await buildSkillsBlockBySlug(["seo"], item.tenant_id);
+      const skinBlock = await buildSkillsBlockBySlug(["seo_geo", "seo"], item.tenant_id);
       const { data: integration } = await admin.from("tenant_integrations").select("settings,shared_from_integration_id").eq("tenant_id", item.tenant_id).eq("integration_type", "llm").eq("is_active", true).limit(1).maybeSingle();
       let settings = (integration?.settings ?? {}) as Record<string, string>;
       if (integration?.shared_from_integration_id && !settings.openai_api_key) {
