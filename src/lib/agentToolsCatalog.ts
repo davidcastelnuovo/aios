@@ -21,6 +21,8 @@ export const AGENT_TOOLS_CATALOG: AgentToolEntry[] = [
   { name: "get_client_info", label: "מידע על לקוח", group: "לקוחות" },
   { name: "add_client_update", label: "הוספת עדכון ללקוח", group: "לקוחות" },
   { name: "update_client_health", label: "עדכון Health Score", group: "לקוחות" },
+  { name: "get_client_retention_scan", label: "דופק שימור", group: "לקוחות" },
+  { name: "batch_update_client_health", label: "עדכון בריאות מרוכז", group: "לקוחות" },
   { name: "send_message", label: "שליחת WhatsApp", group: "תקשורת" },
   { name: "search_entities", label: "חיפוש כללי", group: "כללי" },
   { name: "create_social_post", label: "יצירת פוסט", group: "סושיאל" },
