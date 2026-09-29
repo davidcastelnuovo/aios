@@ -2,8 +2,9 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.75.0';
 import { PDFDocument, rgb, StandardFonts } from 'https://esm.sh/pdf-lib@1.17.1';
 import fontkit from 'https://esm.sh/@pdf-lib/fontkit@1.0.0';
 import { signatureStoragePath } from '../_shared/signature-storage.ts';
+import { formatSignatureDateValue } from '../_shared/signature-field-text.ts';
 import { corsHeaders } from '../_shared/cors.ts';
-import { saveSignedPdfToEntity } from '../_shared/signature-automation.ts';
+import { emailSignedDocumentCopies, saveSignedPdfToEntity } from '../_shared/signature-automation.ts';
 import {
   buildCertificateId,
   renderAiosStampPng,
@@ -307,7 +308,8 @@ async function buildSignedPdf(doc: {
             businessStampPng,
           );
         } else {
-          await drawTextOnPage(pdfDoc, pageIndex, value, field.position, textFont);
+          const printed = field.type === 'date' ? formatSignatureDateValue(value) : value;
+          await drawTextOnPage(pdfDoc, pageIndex, printed, field.position, textFont);
         }
       }
     }
@@ -423,7 +425,7 @@ Deno.serve(async (req) => {
 
     const { data: doc, error: docError } = await supabase
       .from('signature_documents')
-      .select('id, title, content, file_url, document_type, tenant_id, status, document_fields, lead_id, client_id, saved_to_entity_at, business_stamp_name, business_stamp_company_id')
+      .select('id, title, content, file_url, document_type, tenant_id, status, document_fields, lead_id, client_id, saved_to_entity_at, business_stamp_name, business_stamp_company_id, created_by')
       .eq('id', documentId)
       .maybeSingle();
 
@@ -469,6 +471,18 @@ Deno.serve(async (req) => {
       _ip: null,
       _metadata: { path: storagePath },
     });
+
+    try {
+      await emailSignedDocumentCopies(supabase, {
+        tenantId: doc.tenant_id,
+        title: doc.title,
+        createdBy: doc.created_by,
+        pdfBytes,
+        recipients: recipients.map((recipient) => ({ name: recipient.name, email: recipient.email })),
+      });
+    } catch (mailErr) {
+      console.error('[generate-signed-pdf] signed copy email failed', mailErr);
+    }
 
     if (!doc.saved_to_entity_at && (doc.lead_id || doc.client_id)) {
       try {

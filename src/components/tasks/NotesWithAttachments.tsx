@@ -6,7 +6,7 @@ import { useCurrentTenant } from "@/hooks/useCurrentTenant";
 import { toast } from "sonner";
 import { Paperclip, X, Loader2, FileText, Image as ImageIcon, MessageSquare } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { claimClipboardPaste, filesFromClipboardData, isClipboardTypingTarget } from "@/lib/clipboardFiles";
+import { claimClipboardPaste, filesFromClipboardData, shouldUploadClipboardPaste } from "@/lib/clipboardFiles";
 
 export interface TaskAttachment {
   name: string;
@@ -76,6 +76,7 @@ export function NotesWithAttachments({
   const [dragOver, setDragOver] = useState(false);
   const [signed, setSigned] = useState<Record<string, string>>({});
   const fileRef = useRef<HTMLInputElement>(null);
+  const pasteRef = useRef<HTMLTextAreaElement>(null);
 
   const upload = useCallback(
     async (files: FileList | File[] | null) => {
@@ -144,9 +145,7 @@ export function NotesWithAttachments({
     if (!listenForPagePaste) return;
     const onPaste = (event: ClipboardEvent) => {
       const files = filesFromClipboardData(event.clipboardData);
-      if (!files.length) return;
-      const hasImage = files.some((file) => file.type.startsWith("image/"));
-      if (isClipboardTypingTarget(event.target) && !hasImage) return;
+      if (!shouldUploadClipboardPaste(event.target, files)) return;
       takeClipboardFiles(event.clipboardData, () => event.preventDefault());
     };
     document.addEventListener("paste", onPaste);
@@ -302,9 +301,20 @@ export function NotesWithAttachments({
     </div>
   );
 
+  const focusPasteField = () => {
+    const field = pasteRef.current;
+    if (!field || document.activeElement === field) return;
+    field.focus({ preventScroll: true });
+  };
+
+  const handlePasteField = (e: React.ClipboardEvent<HTMLTextAreaElement>) => {
+    e.preventDefault();
+    e.currentTarget.value = "";
+    takeClipboardFiles(e.clipboardData, () => {});
+  };
+
   const filesCube = (
     <div
-      tabIndex={0}
       onDragOver={(e) => {
         e.preventDefault();
         setDragOver(true);
@@ -317,7 +327,7 @@ export function NotesWithAttachments({
       }}
       onPaste={handlePaste}
       className={cn(
-        "rounded-xl border border-border/60 bg-card p-3 flex flex-col shadow-sm text-right outline-none focus-visible:ring-2 focus-visible:ring-ring",
+        "rounded-xl border border-border/60 bg-card p-3 flex flex-col shadow-sm text-right",
         largeThumbs ? "min-h-[200px]" : "min-h-[180px]",
         dragOver && "border-primary bg-primary/5",
       )}
@@ -339,31 +349,41 @@ export function NotesWithAttachments({
           צרף
         </Button>
       </div>
-      {attachments.length > 0 ? (
-        <div className="flex-1">{thumbs}</div>
-      ) : (
+      {attachments.length > 0 ? <div className="flex-1">{thumbs}</div> : null}
+      <div
+        data-file-paste="true"
+        onMouseEnter={focusPasteField}
+        className={cn(
+          "flex flex-col rounded-lg border border-dashed border-muted-foreground/30 hover:bg-muted/20 transition-colors focus-within:border-primary focus-within:bg-primary/5 focus-within:ring-2 focus-within:ring-ring",
+          attachments.length > 0 ? "mt-3 min-h-[88px]" : "flex-1 min-h-[140px]",
+        )}
+      >
+        <div className="relative min-h-[64px] flex-1">
+          <textarea
+            ref={pasteRef}
+            data-file-paste="true"
+            aria-label="הדבקת תמונה"
+            className="absolute inset-0 h-full w-full resize-none bg-transparent p-0 text-transparent caret-transparent outline-none"
+            onPaste={handlePasteField}
+            onInput={(e) => {
+              e.currentTarget.value = "";
+            }}
+          />
+          <div className="pointer-events-none absolute inset-0 flex items-center justify-center px-3 py-4 text-center text-xs text-muted-foreground">
+            {attachments.length > 0
+              ? "שימו את העכבר כאן והדביקו Ctrl+V"
+              : "שימו את העכבר כאן והדביקו Ctrl+V, או גררו קובץ"}
+          </div>
+        </div>
         <button
           type="button"
+          onMouseDown={(e) => e.preventDefault()}
           onClick={() => fileRef.current?.click()}
-          onPaste={handlePaste}
-          className={cn(
-            "flex-1 rounded-lg border border-dashed border-muted-foreground/30 text-xs text-muted-foreground px-3 py-4 text-center hover:bg-muted/20 transition-colors",
-            largeThumbs && "min-h-[140px]",
-          )}
+          className="relative z-10 pb-3 text-xs text-muted-foreground hover:text-foreground"
         >
-          גרור לכאן, Ctrl+V, או לחץ לבחירה
+          או לחץ לבחירה
         </button>
-      )}
-      {attachments.length > 0 && (
-        <button
-          type="button"
-          onClick={() => fileRef.current?.click()}
-          onPaste={handlePaste}
-          className="mt-3 rounded-lg border border-dashed border-muted-foreground/30 text-xs text-muted-foreground px-3 py-2 text-center hover:bg-muted/20 transition-colors"
-        >
-          גרור, Ctrl+V, או לחץ להוספה
-        </button>
-      )}
+      </div>
       {fileInput}
     </div>
   );

@@ -1,3 +1,10 @@
+/** Native date inputs store yyyy-mm-dd. Contracts print day/month/year. */
+export function formatSignatureDateValue(value: string): string {
+  const iso = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value.trim());
+  if (!iso) return value;
+  return `${iso[3]}/${iso[2]}/${iso[1]}`;
+}
+
 /** Hebrew form fields start at the right edge of the placed box. */
 export function signatureFieldTextLayout(
   width: number,

@@ -37,6 +37,7 @@ on:
       - 'supabase/ops/apply_pulse_twice_daily_cadence.sql'
       - 'supabase/ops/apply_pulse_weekly_sunday_cadence.sql'
       - 'supabase/ops/apply_pulse_refresh_and_instant_alerts.sql'
+      - 'supabase/ops/apply_client_retention_daily_production.sql'
       - 'supabase/ops/notify_felix_calendar_fix_ready.sql'
       - 'supabase/ops/apply_pulse_campaigner_delivery.sql'
       - 'supabase/ops/apply_pulse_production_reconcile.sql'
@@ -97,7 +98,10 @@ jobs:
             echo "$CHANGED" | grep '^supabase/ops/' || true
 
             # Prefer the newest ops migration that triggered this push.
-            if echo "$CHANGED" | grep -qx 'supabase/ops/apply_recurring_human_tasks_production.sql'; then
+            if echo "$CHANGED" | grep -qx 'supabase/ops/apply_fix_duplicate_task_reminder_notifications_production.sql'; then
+              FILE="supabase/ops/apply_fix_duplicate_task_reminder_notifications_production.sql"
+              NAME="apply_fix_duplicate_task_reminder_notifications_production"
+            elif echo "$CHANGED" | grep -qx 'supabase/ops/apply_recurring_human_tasks_production.sql'; then
               FILE="supabase/ops/apply_recurring_human_tasks_production.sql"
               NAME="apply_recurring_human_tasks_production"
             elif echo "$CHANGED" | grep -qx 'supabase/ops/apply_pulse_campaign_breakdown_production.sql'; then

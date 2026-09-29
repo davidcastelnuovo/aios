@@ -653,7 +653,8 @@ export function AIOSDialog({ open, onOpenChange, onWorkingChange }: AIOSDialogPr
     delegate_to_background: "מעביר לריצה ברקע",
     delegate_to_subagent: "פותחת משימת רקע",
     get_subagent_result: "בודקת תוצאת רקע",
-    batch_update_client_health: "מעדכן בריאות לקוחות",
+    get_client_retention_scan: "סורקת שימור לקוחות",
+    batch_update_client_health: "מעדכנת בריאות לקוחות",
     analyze_campaign_performance: "מנתח ביצועי קמפיינים",
     delegate_to_manus: "מנסה לשלוח ל-Manus (חיצוני)",
   };

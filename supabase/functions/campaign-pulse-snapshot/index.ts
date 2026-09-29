@@ -37,7 +37,6 @@ import {
 } from '../_shared/pulse-campaign-goals.mjs'
 import { aiChatJSON } from '../_shared/ai.ts'
 import { loadPulseSettings } from '../_shared/pulse-settings.mjs'
-
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!
 const SERVICE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
 const json = (body: unknown, status = 200) =>
@@ -106,6 +105,11 @@ async function queuePulseWhatsApp(
     p_chat_id: chatId,
   })
   return !delivery.error && delivery.data?.queued === true
+}
+
+async function runDailyClientRetention(_supabase: any, _tenantId?: string) {
+  // Paused until David defines the situations. Do not queue WhatsApp.
+  return { mode: 'retention_daily', enabled: false, sent: false, queued: false }
 }
 
 async function loadTeamManagerDeliveryPlans(
@@ -212,6 +216,10 @@ Deno.serve(async (req) => {
   const supabase = createClient(SUPABASE_URL, SERVICE_KEY)
   let body: any = {}
   try { body = await req.json() } catch { /* empty cron body */ }
+  if (body.retention_daily === true) {
+    const retention = await runDailyClientRetention(supabase, body.tenant_id)
+    return json(retention, retention.error ? 500 : 200)
+  }
   // Only explicit deliver:true may send WhatsApp — sync crons refresh snapshots only.
   const deliveryRequested = body.deliver === true
   const manualDeliveryBypass =
