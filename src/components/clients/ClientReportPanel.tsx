@@ -140,6 +140,21 @@ export function ClientReportPanel({ table, clientId, tenantId }: ClientReportPan
   const [emailRecipients, setEmailRecipients] = useState<string[]>([]);
   const [emailSubject, setEmailSubject] = useState("");
   const [emailSender, setEmailSender] = useState<ReportEmailSender | null>(null);
+
+  // Fetch the user's connected Gmail address (for display in sender select)
+  const { data: gmailToken } = useQuery({
+    queryKey: ["gmail-token-email"],
+    queryFn: async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return null;
+      const { data } = await supabase
+        .from("gmail_tokens" as any)
+        .select("google_email")
+        .eq("user_id", user.id)
+        .maybeSingle();
+      return (data as any)?.google_email as string | null ?? null;
+    },
+  });
   const [messageText, setMessageText] = useState("");
   const [isSending, setIsSending] = useState(false);
   const [screenshotBlob, setScreenshotBlob] = useState<Blob | null>(null);
@@ -528,7 +543,7 @@ export function ClientReportPanel({ table, clientId, tenantId }: ClientReportPan
           inlineImageAlt: `דוח ${table.name}`,
         });
 
-        if (emailSender) {
+        if (emailSender?.type === "resend") {
           // Chosen a verified sending domain → send via Resend (same backend as broadcast).
           const { data, error } = await supabase.functions.invoke("send-resend-email", {
             body: {
@@ -568,7 +583,16 @@ export function ClientReportPanel({ table, clientId, tenantId }: ClientReportPan
               ],
             },
           });
-          if (error) throw new Error(error.message || "שגיאה בשליחה");
+          if (error) {
+            // Extract the real error message from the edge function response body
+            let errorMsg = error.message;
+            try {
+              const body = await (error as any).context?.json?.();
+              if (body?.error) errorMsg = body.error;
+              else if (body?.message) errorMsg = body.message;
+            } catch { /* ignore parse errors */ }
+            throw new Error(errorMsg);
+          }
           if (data?.error) throw new Error(data.error);
         }
         toast.success("הדוח נשלח באימייל בהצלחה");
@@ -787,7 +811,7 @@ export function ClientReportPanel({ table, clientId, tenantId }: ClientReportPan
 
         {sendEmail && (
           <div className="space-y-2">
-            <ReportEmailSenderSelect value={emailSender} onChange={setEmailSender} />
+            <ReportEmailSenderSelect value={emailSender} onChange={setEmailSender} gmailEmail={gmailToken} />
             <EmailRecipientsSelector
               options={buildReportEmailOptions({
                 clientEmail: client?.email,
