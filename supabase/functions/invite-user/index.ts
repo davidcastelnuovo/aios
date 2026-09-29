@@ -553,6 +553,19 @@ serve(async (req: Request) => {
       throw new Error("No invitation link generated");
     }
 
+    // generateLink(invite) leaves the address unconfirmed, so email+password
+    // login fails until the invite link is opened. Confirm immediately.
+    if (newUserId) {
+      const { error: confirmError } = await supabaseAdmin.auth.admin.updateUserById(
+        newUserId,
+        { email_confirm: true },
+      );
+      if (confirmError) {
+        console.error("email confirm error:", confirmError);
+        throw new Error(confirmError.message || "Failed to confirm user email");
+      }
+    }
+
     if (newUserId) {
       await supabaseAdmin
         .from("profiles")
