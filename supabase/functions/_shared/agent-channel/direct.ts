@@ -90,18 +90,21 @@ export async function launchCloudDirect(
     conversationId: ctx.conversationId,
     tenantId: ctx.tenantId,
   });
+  const callback = buildCallbackInstructions({
+    origin: provider,
+    conversationId: ctx.conversationId,
+    sessionId: session.id,
+    tenantId: ctx.tenantId,
+    token,
+    parliamentRound: parliament?.round,
+    readOnly: !!parliament,
+    callbackIntent: options?.callbackIntent,
+  });
   const prompt =
-    (extraPrompt || wrapDirectPrompt({ origin: provider, userText: ctx.content, history: ctx.history, attachments: ctx.attachments })) +
-    buildCallbackInstructions({
-      origin: provider,
-      conversationId: ctx.conversationId,
-      sessionId: session.id,
-      tenantId: ctx.tenantId,
-      token,
-      parliamentRound: parliament?.round,
-      readOnly: !!parliament || options?.callbackIntent === "meeting_summary",
-      callbackIntent: options?.callbackIntent,
-    });
+    clip(
+      extraPrompt || wrapDirectPrompt({ origin: provider, userText: ctx.content, history: ctx.history, attachments: ctx.attachments }),
+      MAX_TEXT - callback.length,
+    ) + callback;
 
   const modelId = modelIdFor(provider);
   const name = `AIOS ${provider} · ${ctx.content.slice(0, 40)}`;

@@ -78,6 +78,27 @@ Deno.serve(async (req) => {
 
   if (!isIngestEvent) return json({ received: true });
   if (session.status === "done") return json({ received: true, skipped: "already done" });
+  // bot.done, recording.done and transcript.done arrive together. One of them
+  // owns the ingest; the others must not each open a summary agent.
+  if (session.status === "processing" && session.status_detail === "ingesting") {
+    return json({ received: true, skipped: "already ingesting" });
+  }
+
+  const claimedAt = new Date().toISOString();
+  const { data: claimed, error: claimError } = await admin
+    .from("meeting_bot_sessions")
+    .update({
+      status: "processing",
+      status_detail: "ingesting",
+      ended_at: session.ended_at ?? claimedAt,
+      updated_at: claimedAt,
+    })
+    .eq("id", session.id)
+    .eq("updated_at", session.updated_at)
+    .neq("status", "done")
+    .select("id")
+    .maybeSingle();
+  if (claimError || !claimed) return json({ received: true, skipped: "already claimed" });
 
   const background = (async () => {
     try {
@@ -94,6 +115,7 @@ Deno.serve(async (req) => {
       // Leave it recoverable — meeting-bot-reconcile retries `processing` rows.
       await admin.from("meeting_bot_sessions").update({
         status: "processing",
+        status_detail: "ingest_error",
         error: msg,
         updated_at: new Date().toISOString(),
       }).eq("id", session.id);

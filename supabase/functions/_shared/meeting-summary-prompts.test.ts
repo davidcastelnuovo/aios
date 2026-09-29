@@ -6,6 +6,7 @@ import {
   buildSummaryUserPrompt,
   LONG_TRANSCRIPT_THRESHOLD,
   MEETING_SUMMARY_SYSTEM_PROMPT,
+  meetingSummaryIdempotencyKey,
   meetingSummaryJobFromMetadata,
   prepareDetailedSummarySource,
   splitTranscript,
@@ -52,9 +53,16 @@ test("extraction and synthesis prompts preserve source context and user focus", 
 
 test("cursor summary task keeps the source and forbids mixing clients", () => {
   const task = buildMeetingSummaryCursorTask("בינת: 20 שקל לליד", "נושא: בינת", "");
+  assert.match(task, /write one Hebrew Markdown meeting summary/);
   assert.match(task, /אל תערוך קוד/);
   assert.match(task, /בינת: 20 שקל לליד/);
   assert.match(task, /אל תערבב החלטות בין הלקוחות/);
+});
+
+test("automatic summary sends share one key and a manual resend uses another", () => {
+  assert.equal(meetingSummaryIdempotencyKey("rec-1"), "meeting-summary:rec-1");
+  assert.equal(meetingSummaryIdempotencyKey("rec-1"), meetingSummaryIdempotencyKey("rec-1"));
+  assert.notEqual(meetingSummaryIdempotencyKey("rec-1", true), meetingSummaryIdempotencyKey("rec-1"));
 });
 
 test("meeting summary jobs are recognized only with a complete target", () => {
