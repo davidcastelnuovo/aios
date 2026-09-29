@@ -64,6 +64,7 @@ export function useRegenerateRecordingSummary({
       });
       if (error) throw error;
       if (data?.error) throw new Error(data.error);
+      if (data?.pending) return null;
       if (!data?.summary) throw new Error("לא התקבל סיכום חדש");
 
       // The edge function writes onto the row it was given; the other rows of
@@ -81,6 +82,10 @@ export function useRegenerateRecordingSummary({
     onSuccess: (summaryMd) => {
       queryClient.invalidateQueries({ queryKey: ["recordings"] });
       queryClient.invalidateQueries({ queryKey: ["client-recordings"] });
+      if (!summaryMd) {
+        toast.success("הסיכום נשלח לקרסר ישיר. הוא יישמר על ההקלטה כשיחזור.");
+        return;
+      }
       onRegenerated?.(summaryMd);
       toast.success("נוצר סיכום מפורט מחדש מהתמלול");
     },

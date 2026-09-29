@@ -2,9 +2,11 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   buildExtractionSystemPrompt,
+  buildMeetingSummaryCursorTask,
   buildSummaryUserPrompt,
   LONG_TRANSCRIPT_THRESHOLD,
   MEETING_SUMMARY_SYSTEM_PROMPT,
+  meetingSummaryJobFromMetadata,
   prepareDetailedSummarySource,
   splitTranscript,
   TRANSCRIPT_CHUNK_SIZE,
@@ -46,6 +48,38 @@ test("extraction and synthesis prompts preserve source context and user focus", 
   assert.match(userPrompt, /נושא הפגישה: קמפיינים/);
   assert.match(userPrompt, /דוד: לבדוק את מקור הלידים/);
   assert.match(userPrompt, /דגש: משימות/);
+});
+
+test("cursor summary task keeps the source and forbids mixing clients", () => {
+  const task = buildMeetingSummaryCursorTask("בינת: 20 שקל לליד", "נושא: בינת", "");
+  assert.match(task, /אל תערוך קוד/);
+  assert.match(task, /בינת: 20 שקל לליד/);
+  assert.match(task, /אל תערבב החלטות בין הלקוחות/);
+});
+
+test("meeting summary jobs are recognized only with a complete target", () => {
+  assert.equal(meetingSummaryJobFromMetadata({ purpose: "other" }), null);
+  assert.equal(meetingSummaryJobFromMetadata({
+    purpose: "meeting_summary",
+    recording_id: "rec",
+    target_type: "client",
+    target_id: "",
+    target_name: "בינת",
+    tenant_id: "ten",
+  }), null);
+  const job = meetingSummaryJobFromMetadata({
+    purpose: "meeting_summary",
+    recording_id: "rec",
+    target_type: "client",
+    target_id: "client",
+    target_name: "בינת הופמן",
+    tenant_id: "ten",
+    created_by: "user",
+    client_id: "client",
+    brief_source: "meeting_bot",
+  });
+  assert.equal(job?.target_name, "בינת הופמן");
+  assert.equal(job?.brief_source, "meeting_bot");
 });
 
 test("long meetings run a complete extraction pass before final synthesis", async () => {
