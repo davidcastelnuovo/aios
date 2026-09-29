@@ -145,6 +145,153 @@
     return section;
   }
 
+  function osChip(text) {
+    const li = document.createElement("li");
+    li.textContent = text;
+    return li;
+  }
+
+  function osArea(index, title, items) {
+    const article = document.createElement("article");
+    article.className = "carmen-os-area";
+    const head = document.createElement("div");
+    head.className = "carmen-os-area-head";
+    const num = document.createElement("span");
+    num.className = "carmen-os-num";
+    num.textContent = index;
+    const heading = document.createElement("h3");
+    heading.textContent = title;
+    head.appendChild(num);
+    head.appendChild(heading);
+    const list = document.createElement("ul");
+    items.forEach(function (item) {
+      list.appendChild(osChip(item));
+    });
+    article.appendChild(head);
+    article.appendChild(list);
+    return article;
+  }
+
+  function departmentCell(name, line, latin) {
+    const cell = document.createElement("div");
+    cell.className = latin ? "carmen-dept is-latin" : "carmen-dept";
+    const strong = document.createElement("strong");
+    strong.textContent = name;
+    const span = document.createElement("span");
+    span.textContent = line;
+    cell.appendChild(strong);
+    cell.appendChild(span);
+    return cell;
+  }
+
+  function marketingArea() {
+    const article = document.createElement("article");
+    article.className = "carmen-os-area carmen-os-area--dept";
+    const head = document.createElement("div");
+    head.className = "carmen-os-area-head";
+    const num = document.createElement("span");
+    num.className = "carmen-os-num";
+    num.textContent = "04";
+    const heading = document.createElement("h3");
+    heading.textContent = "מחלקת השיווק";
+    head.appendChild(num);
+    head.appendChild(heading);
+    const grid = document.createElement("div");
+    grid.className = "carmen-dept-grid";
+    [
+      ["קופי", "פרויקטים, צ'אט ועורך", false],
+      ["קריאייטיב", "בריף, וריאציות ואישור", false],
+      ["seo / geo", "מחקר, תוכן ונראות", true],
+      ["קמפיינים", "קהלים, מודעות ותקציב", false],
+      ["אנליטיקה", "דשבורדים ודוחות", false],
+    ].forEach(function (row) {
+      grid.appendChild(departmentCell(row[0], row[1], row[2]));
+    });
+    article.appendChild(head);
+    article.appendChild(grid);
+    return article;
+  }
+
+  function systemSection() {
+    const section = document.createElement("section");
+    section.className = "carmen-system";
+    section.setAttribute("aria-labelledby", "carmen-system-title");
+
+    const layout = document.createElement("div");
+    layout.className = "carmen-system-layout";
+
+    const figure = document.createElement("img");
+    figure.className = "carmen-system-figure";
+    figure.src = "/carmen/carmen-solid.webp";
+    figure.alt = "";
+    figure.width = 720;
+    figure.height = 1180;
+    figure.decoding = "async";
+
+    const panel = document.createElement("div");
+    panel.className = "carmen-system-panel";
+    const title = document.createElement("h2");
+    title.className = "carmen-title";
+    title.id = "carmen-system-title";
+    title.textContent = "המערכת";
+
+    const os = document.createElement("div");
+    os.className = "carmen-os";
+    const bar = document.createElement("div");
+    bar.className = "carmen-os-bar";
+    bar.innerHTML = "carmen marketing <span>os</span>";
+    const body = document.createElement("div");
+    body.className = "carmen-os-body";
+    body.appendChild(
+      osArea("01", "ניהול שיווק ומכירות", [
+        "דשבורד מכירות",
+        "פייפליין וסטטוסים",
+        "קמפיינרים",
+        "דוחות ביצועים",
+      ])
+    );
+    body.appendChild(
+      osArea("02", "אוטומציות ופולואפים", [
+        "טריגרים אוטומטיים",
+        "פולואפים אוטומטיים",
+        "תזכורות והתראות",
+        "זימון פגישות",
+      ])
+    );
+    body.appendChild(
+      osArea("03", "ניהול לידים", [
+        "פייפליין מכירות",
+        "יבוא מפייסבוק",
+        "תמלול שיחות",
+        "סיכום ועזרה במכירה",
+      ])
+    );
+    body.appendChild(marketingArea());
+    body.appendChild(
+      osArea("05", "לקוחות, משימות ופרויקטים", [
+        "כרטיס לקוח והיסטוריה",
+        "צוותי עבודה",
+        "קנבן, טבלה ויומן",
+        "פרויקטים לכל לקוח",
+      ])
+    );
+    os.appendChild(bar);
+    os.appendChild(body);
+    panel.appendChild(title);
+    panel.appendChild(os);
+    layout.appendChild(figure);
+    layout.appendChild(panel);
+    section.appendChild(layout);
+    return section;
+  }
+
+  function homeLayer() {
+    const wrap = document.createElement("div");
+    wrap.appendChild(hero());
+    wrap.appendChild(systemSection());
+    return wrap;
+  }
+
   function compact(id, title, lead) {
     return (
       '<section class="carmen-block carmen-block--compact" aria-labelledby="' +
@@ -162,7 +309,7 @@
   }
 
   const blocks = {
-    home: hero,
+    home: homeLayer,
     packages: function () {
       const wrap = document.createElement("div");
       wrap.innerHTML = compact(
