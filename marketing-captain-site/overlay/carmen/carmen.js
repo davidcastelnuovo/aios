@@ -1,15 +1,20 @@
 (function () {
-  const pieces = ["ppc", "seo", "geo", "ai"].map(function (name) {
-    return "/carmen/pieces/" + name + ".webp";
-  });
+  const pieces = [
+    "/wp-content/uploads/MarketingCaptain_GraphicElement_4.png",
+    "/wp-content/uploads/MarketingCaptain_GraphicElement_2.png",
+    "/wp-content/uploads/MarketingCaptain_GraphicElement_4-1.svg",
+    "/wp-content/uploads/MarketingCaptain_GraphicElement_2-1.svg",
+    "/wp-content/uploads/MarketingCaptain_GraphicElement_1.png",
+  ];
 
-  const baseAngles = [0.4, 2.0, 3.5, 5.1];
-  const radii = [1, 0.86, 0.94, 0.78];
+  const baseAngles = [0.2, 1.45, 2.7, 3.95, 5.2];
+  const radii = [1, 0.9, 0.82, 0.94, 0.76];
   const united = [
-    { x: -0.05, y: -0.03, r: -18 },
-    { x: 0.06, y: -0.01, r: 11 },
-    { x: -0.02, y: 0.05, r: 16 },
-    { x: 0.04, y: 0.045, r: -9 },
+    { x: -0.1, y: -0.04, r: -16 },
+    { x: 0.08, y: -0.05, r: 12 },
+    { x: 0.01, y: 0.08, r: 8 },
+    { x: 0.09, y: 0.04, r: -11 },
+    { x: -0.07, y: 0.05, r: 15 },
   ];
 
   function pageKey() {
@@ -92,9 +97,7 @@
       const img = document.createElement("img");
       img.className = "carmen-orbit";
       img.src = src;
-      img.alt = src.split("/").pop().replace(".webp", "");
-      img.width = 540;
-      img.height = 540;
+      img.alt = "";
       img.decoding = "async";
       return img;
     });
@@ -354,13 +357,20 @@
           other.setAttribute("aria-selected", on ? "true" : "false");
           other.tabIndex = on ? 0 : -1;
           const panel = document.getElementById(other.getAttribute("aria-controls"));
-          if (panel) panel.classList.toggle("e-active", on);
+          if (!panel) return;
+          panel.classList.toggle("e-active", on);
+          panel.style.display = on ? "flex" : "none";
+          panel.querySelectorAll("img").forEach(function (img) {
+            img.loading = "eager";
+            img.decoding = "sync";
+          });
         });
       }
       buttons.forEach(function (button, index) {
         const label = button.querySelector(".e-n-tab-title-text");
         if (label && label.textContent.replace(/\s+/g, "") === "PCC") label.textContent = "PPC";
-        button.addEventListener("click", function () {
+        button.addEventListener("click", function (event) {
+          event.preventDefault();
           activate(button);
         });
         button.addEventListener("keydown", function (event) {
@@ -372,6 +382,10 @@
           activate(next);
         });
       });
+      const selected = buttons.filter(function (button) {
+        return button.getAttribute("aria-selected") === "true";
+      })[0];
+      if (selected) activate(selected);
     });
   }
 

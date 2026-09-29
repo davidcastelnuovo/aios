@@ -17,6 +17,14 @@ body.carmen-home video {
   display: none !important;
 }
 
+body.carmen-home .elementor-element-31ca28a .e-n-tabs-content > .e-con:not(.e-active) {
+  display: none !important;
+}
+
+body.carmen-home .elementor-element-31ca28a .e-n-tabs-content > .e-con.e-active {
+  display: flex !important;
+}
+
 body.carmen-home .elementor-element-ae19790 {
   justify-content: center !important;
   align-items: center !important;
@@ -150,7 +158,7 @@ body.carmen-home .elementor-element-ae19790 .logos-section-img img {
   position: absolute;
   left: 50%;
   top: 50%;
-  width: min(220px, 28vw);
+  width: min(190px, 24vw);
   height: auto;
   z-index: 1;
   pointer-events: none;
