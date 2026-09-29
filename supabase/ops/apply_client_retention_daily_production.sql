@@ -1,4 +1,5 @@
 -- Production: the daily client-retention WhatsApp is paused.
+-- Re-apply: the first main push skipped this file because the workflow resolver did not list it.
 -- David rejected the alert. Do not schedule client-retention-daily-0800.
 -- claim_client_retention_delivery stays false so an old function deploy
 -- cannot queue the message even if a leftover cron still fires.
