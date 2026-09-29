@@ -8,6 +8,7 @@ import { buildCallbackInstructions, wrapDirectPrompt } from "./prompts.ts";
 import {
   allowCreateNewCloudAgent,
   collectOpenChatIds,
+  busyOpenChatMessage,
   missingOpenChatMessage,
   type OpenChatProvider,
 } from "./sticky-agent.ts";
@@ -52,6 +53,12 @@ export async function launchCloudDirect(
   provider: CloudDirectProvider,
   extraPrompt?: string,
   parliament?: { runId: string; round: number },
+  options?: {
+    sessionMetadata?: Record<string, unknown>;
+    callbackIntent?: "default" | "meeting_summary";
+    allowCreate?: boolean;
+    autoCreatePR?: boolean;
+  },
 ): Promise<SendResult> {
   if (provider === "codex" && codexOpenAiApiEnabled(runtimeEnv()) && !parliament) {
     return launchCodexViaOpenAiApi(ctx);
@@ -75,6 +82,7 @@ export async function launchCloudDirect(
     status: "running",
     parliament_run_id: parliament?.runId ?? null,
     parliament_round: parliament?.round ?? null,
+    metadata: options?.sessionMetadata,
   });
 
   const token = await mintCallbackToken({
@@ -91,7 +99,8 @@ export async function launchCloudDirect(
       tenantId: ctx.tenantId,
       token,
       parliamentRound: parliament?.round,
-      readOnly: !!parliament,
+      readOnly: !!parliament || options?.callbackIntent === "meeting_summary",
+      callbackIntent: options?.callbackIntent,
     });
 
   const modelId = modelIdFor(provider);
@@ -119,6 +128,8 @@ export async function launchCloudDirect(
       name,
       modelId,
       envName,
+      allowCreate: options?.allowCreate,
+      autoCreatePR: options?.autoCreatePR,
     });
   } else {
     fired = await createCloudAgent({ apiKey, promptText: clip(prompt), name, modelId: modelId || undefined, envName });
@@ -134,7 +145,7 @@ export async function launchCloudDirect(
     status: "running",
     parliament_run_id: parliament?.runId ?? null,
     parliament_round: parliament?.round ?? null,
-    metadata: { reused: fired.reused },
+    metadata: { reused: fired.reused, ...(options?.sessionMetadata || {}) },
   });
 
   await logChannelAction(sb, {
@@ -167,6 +178,8 @@ async function deliverToOpenCloudChat(args: {
   name: string;
   modelId: string;
   envName?: string;
+  allowCreate?: boolean;
+  autoCreatePR?: boolean;
 }): Promise<{ url: string; id: string; reused: boolean }> {
   const env = runtimeEnv();
   const candidates = await collectOpenChatIds(args.sb, {
@@ -176,24 +189,28 @@ async function deliverToOpenCloudChat(args: {
     env,
   });
 
+  let sawBusy: { id: string; url: string } | null = null;
   for (const agentId of candidates) {
     const outcome = await followUpCloudAgent(args.apiKey, agentId, args.prompt);
     if (outcome.kind === "ok") {
       return { id: outcome.id, url: outcome.url, reused: true };
     }
-    // Busy chat — try next candidate, or fall through to a fresh parallel agent.
+    if (outcome.kind === "busy") sawBusy = outcome;
   }
 
-  if (allowCreateNewCloudAgent(env)) {
+  const mayCreate = args.allowCreate ?? allowCreateNewCloudAgent(env);
+  if (mayCreate) {
     return await createCloudAgent({
       apiKey: args.apiKey,
       promptText: args.prompt,
       name: args.name,
       modelId: args.modelId || undefined,
       envName: args.envName,
+      autoCreatePR: args.autoCreatePR,
     });
   }
 
+  if (sawBusy) throw new Error(busyOpenChatMessage(args.provider, sawBusy.url));
   throw new Error(missingOpenChatMessage(args.provider));
 }
 

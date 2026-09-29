@@ -87,11 +87,12 @@ export async function createCloudAgent(args: {
   modelId?: string;
   startingRef?: string;
   envName?: string;
+  autoCreatePR?: boolean;
 }): Promise<CloudAgentResult> {
   const repoUrl = Deno.env.get("CURSOR_REPO_URL") || DEFAULT_REPO;
   const startingRef = args.startingRef || Deno.env.get("CURSOR_STARTING_REF") || "main";
   const envName = args.envName || Deno.env.get("CURSOR_CLOUD_ENV_NAME") || "";
-  const autoCreatePR = (Deno.env.get("CURSOR_AUTO_CREATE_PR") || "true").toLowerCase() !== "false";
+  const autoCreatePR = args.autoCreatePR ?? ((Deno.env.get("CURSOR_AUTO_CREATE_PR") || "true").toLowerCase() !== "false");
   const body: Record<string, unknown> = {
     prompt: { text: args.promptText },
     autoCreatePR,
