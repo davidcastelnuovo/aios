@@ -40,6 +40,7 @@ on:
       - 'supabase/ops/apply_client_retention_daily_production.sql'
       - 'supabase/ops/notify_felix_calendar_fix_ready.sql'
       - 'supabase/ops/apply_pulse_campaigner_delivery.sql'
+      - 'supabase/ops/apply_pulse_production_reconcile.sql'
       - 'supabase/ops/apply_pulse_sunday_0730_david_campaigners.sql'
       - 'supabase/ops/apply_pulse_sunday_0900_dmm_delivery.sql'
       - 'supabase/ops/apply_pulse_dmm_felix_mc_david.sql'
@@ -169,6 +170,9 @@ jobs:
             elif echo "$CHANGED" | grep -qx 'supabase/ops/apply_pulse_campaigner_delivery.sql'; then
               FILE="supabase/ops/apply_pulse_campaigner_delivery.sql"
               NAME="apply_pulse_campaigner_delivery"
+            elif echo "$CHANGED" | grep -qx 'supabase/ops/apply_pulse_production_reconcile.sql'; then
+              FILE="supabase/ops/apply_pulse_production_reconcile.sql"
+              NAME="apply_pulse_production_reconcile"
             elif echo "$CHANGED" | grep -qx 'supabase/ops/apply_pulse_sunday_0730_david_campaigners.sql'; then
               FILE="supabase/ops/apply_pulse_sunday_0730_david_campaigners.sql"
               NAME="apply_pulse_sunday_0730_david_campaigners"

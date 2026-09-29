@@ -1,0 +1,160 @@
+-- Production reconcile: single source of truth for pulse + health WA cadence (2026-09-29).
+-- Fixes drift between manual ops (#651 live), failed main apply (#650), and daily health claim on main.
+
+-- Weekly health digest WA: Sunday 07:30 Israel only (carmen-health-probe every 10m; claim gates send).
+CREATE OR REPLACE FUNCTION public.claim_health_digest_delivery(p_tenant_id uuid)
+RETURNS boolean
+LANGUAGE plpgsql
+SECURITY INVOKER
+SET search_path = public
+AS $$
+DECLARE
+  local_now timestamp := timezone('Asia/Jerusalem', now());
+  current_slot timestamp;
+  affected_rows integer := 0;
+BEGIN
+  IF EXTRACT(ISODOW FROM local_now) <> 7 THEN
+    RETURN false;
+  END IF;
+
+  IF local_now::time < time '07:20' OR local_now::time >= time '07:50' THEN
+    RETURN false;
+  END IF;
+
+  current_slot := date_trunc('day', local_now) + interval '7 hours 30 minutes';
+
+  UPDATE public.tenant_heartbeat_settings
+  SET health_digest_last_sent_at = now()
+  WHERE tenant_id = p_tenant_id
+    AND campaign_pulse_enabled = true
+    AND (
+      health_digest_last_sent_at IS NULL
+      OR timezone('Asia/Jerusalem', health_digest_last_sent_at) < current_slot
+    );
+  GET DIAGNOSTICS affected_rows = ROW_COUNT;
+  RETURN affected_rows > 0;
+END;
+$$;
+
+REVOKE ALL ON FUNCTION public.claim_health_digest_delivery(uuid) FROM PUBLIC, anon, authenticated;
+GRANT EXECUTE ON FUNCTION public.claim_health_digest_delivery(uuid) TO service_role;
+
+-- Weekly pulse WA: Sunday 07:30 Israel (David + scoped campaigners per tenant Carmen).
+CREATE OR REPLACE FUNCTION public.claim_campaign_pulse_delivery(p_tenant_id uuid)
+RETURNS boolean
+LANGUAGE plpgsql
+SECURITY INVOKER
+SET search_path = public
+AS $$
+DECLARE
+  local_now timestamp := timezone('Asia/Jerusalem', now());
+  current_slot timestamp;
+  affected_rows integer := 0;
+BEGIN
+  IF EXTRACT(ISODOW FROM local_now) <> 7 THEN
+    RETURN false;
+  END IF;
+
+  IF local_now::time < time '07:20' OR local_now::time >= time '07:40' THEN
+    RETURN false;
+  END IF;
+
+  current_slot := date_trunc('day', local_now) + interval '7 hours 30 minutes';
+
+  UPDATE public.tenant_heartbeat_settings
+  SET campaign_pulse_last_sent_at = now()
+  WHERE tenant_id = p_tenant_id
+    AND campaign_pulse_enabled = true
+    AND (
+      campaign_pulse_last_sent_at IS NULL
+      OR timezone('Asia/Jerusalem', campaign_pulse_last_sent_at) < current_slot
+    );
+  GET DIAGNOSTICS affected_rows = ROW_COUNT;
+  RETURN affected_rows > 0;
+END;
+$$;
+
+REVOKE ALL ON FUNCTION public.claim_campaign_pulse_delivery(uuid) FROM PUBLIC, anon, authenticated;
+GRANT EXECUTE ON FUNCTION public.claim_campaign_pulse_delivery(uuid) TO service_role;
+
+DO $pulse_crons$
+DECLARE
+  worker_secret text;
+  existing_job bigint;
+BEGIN
+  SELECT decrypted_secret
+  INTO worker_secret
+  FROM vault.decrypted_secrets
+  WHERE name IN ('CAMPAIGN_PULSE_CRON_SECRET', 'service_role_key', 'SUPABASE_SERVICE_ROLE_KEY')
+  ORDER BY CASE name
+    WHEN 'CAMPAIGN_PULSE_CRON_SECRET' THEN 0
+    WHEN 'service_role_key' THEN 1
+    ELSE 2
+  END
+  LIMIT 1;
+
+  IF worker_secret IS NULL OR worker_secret = '' THEN
+    RAISE EXCEPTION 'No pulse cron secret in Vault; cannot schedule pulse deliver cron';
+  END IF;
+
+  FOR existing_job IN
+    SELECT jobid FROM cron.job
+    WHERE jobname IN (
+      'campaign-pulse-morning-0730',
+      'campaign-pulse-morning-0700',
+      'campaign-pulse-afternoon-1600',
+      'campaign-pulse-sunday-0700',
+      'campaign-pulse-sunday-0900',
+      'campaign-pulse-sunday-0730'
+    )
+  LOOP
+    PERFORM cron.unschedule(existing_job);
+  END LOOP;
+
+  PERFORM cron.schedule(
+    'campaign-pulse-sunday-0730',
+    '30 4 * * 0',
+    format(
+      $cron$
+      SELECT net.http_post(
+        url := 'https://zvoijyneresvkadpprel.supabase.co/functions/v1/campaign-pulse-snapshot',
+        headers := jsonb_build_object(
+          'Content-Type', 'application/json',
+          'Authorization', 'Bearer %s'
+        ),
+        body := jsonb_build_object(
+          'deliver', true,
+          'source', 'sunday_cron'
+        ),
+        timeout_milliseconds := 120000
+      );
+      $cron$,
+      worker_secret
+    )
+  );
+END;
+$pulse_crons$;
+
+UPDATE public.tenant_heartbeat_settings ths
+SET
+  campaign_pulse_enabled = true,
+  campaign_pulse_deliver_to_campaigners = true,
+  campaign_pulse_deliver_to_team_managers = false,
+  campaign_pulse_preview_phone = NULL,
+  updated_at = now()
+FROM public.tenants t
+WHERE ths.tenant_id = t.id
+  AND t.slug IN ('dmm', 'marketingcaptain');
+
+UPDATE public.tenant_heartbeat_settings ths
+SET campaign_pulse_phone = '972507677613', updated_at = now()
+FROM public.tenants t
+WHERE ths.tenant_id = t.id AND t.slug = 'dmm';
+
+SELECT 'claim_health_digest' AS check, left(pg_get_functiondef('public.claim_health_digest_delivery(uuid)'::regprocedure), 200) AS snippet;
+SELECT 'claim_campaign_pulse' AS check, left(pg_get_functiondef('public.claim_campaign_pulse_delivery(uuid)'::regprocedure), 200) AS snippet;
+SELECT jobname, schedule, active FROM cron.job WHERE jobname ILIKE '%pulse%' ORDER BY jobname;
+SELECT t.slug, ths.campaign_pulse_phone, ths.campaign_pulse_deliver_to_campaigners,
+  ths.campaign_pulse_deliver_to_team_managers, ths.campaign_pulse_last_sent_at, ths.health_digest_last_sent_at
+FROM tenant_heartbeat_settings ths JOIN tenants t ON t.id = ths.tenant_id
+WHERE t.slug IN ('dmm', 'marketingcaptain');

@@ -927,7 +927,7 @@ export default function AgentTasksPage() {
                                 <div>
                                   <Label className="text-xs font-medium">בדיקת דופק שבועית + קישור לדשבורד (ראשון 07:30)</Label>
                                   <p className="text-[11px] text-muted-foreground mt-0.5">
-                                    נתוני הדשבורד מתרעננים פעמיים ביום (07:00, 16:00). שליחת WA בראשון 07:30 — לבעלים + לכל קמפיינר (scoped, מכרמן הארגון).
+                                    נתוני הדשבורד מתרעננים פעמיים ביום (07:00, 16:00) **בלי WA**. בראשון 07:30 — דופק (WA) + תקינות (WA); קמפיינרים scoped מכרמן הארגון.
                                   </p>
                                 </div>
                                 <Switch
