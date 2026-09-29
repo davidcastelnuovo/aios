@@ -245,6 +245,9 @@ jobs:
             elif echo "$CHANGED" | grep -qx 'supabase/ops/apply_seo_monthly_shares.sql'; then
               FILE="supabase/ops/apply_seo_monthly_shares.sql"
               NAME="apply_seo_monthly_shares"
+            elif echo "$CHANGED" | grep -qx 'supabase/ops/apply_client_retention_daily_production.sql'; then
+              FILE="supabase/ops/apply_client_retention_daily_production.sql"
+              NAME="pause_client_retention_daily_production"
             else
               echo "No matching supabase/ops SQL file in push; skipping apply."
               echo "skip=true" >> "$GITHUB_OUTPUT"
