@@ -7,7 +7,9 @@
 }
 
 /* Replaces the old Marketing Captain hero. The rest of the page stays. */
-body.carmen-home .elementor-element-62efa8c {
+body.carmen-home .elementor-element-62efa8c,
+body.carmen-home .elementor-element-f8be55b,
+body.carmen-home .elementor-element-d0c0ff6 {
   display: none !important;
 }
 
