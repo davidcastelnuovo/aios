@@ -1,6 +1,6 @@
 (function () {
-  const pieces = [1, 2, 3, 4].map(function (n) {
-    return "/wp-content/uploads/MarketingCaptain_GraphicElement_" + n + ".png";
+  const pieces = ["ppc", "seo", "geo", "ai"].map(function (name) {
+    return "/carmen/pieces/" + name + ".webp";
   });
 
   const baseAngles = [0.4, 2.0, 3.5, 5.1];
@@ -82,17 +82,17 @@
 
     const figure = document.createElement("img");
     figure.className = "carmen-figure";
-    figure.src = "/carmen/carmen.webp";
+    figure.src = "/carmen/carmen-solid.webp";
     figure.alt = "";
     figure.width = 720;
-    figure.height = 1279;
+    figure.height = 1180;
     figure.decoding = "async";
 
     const nodes = pieces.map(function (src) {
       const img = document.createElement("img");
       img.className = "carmen-orbit";
       img.src = src;
-      img.alt = "";
+      img.alt = src.split("/").pop().replace(".webp", "");
       img.width = 540;
       img.height = 540;
       img.decoding = "async";
