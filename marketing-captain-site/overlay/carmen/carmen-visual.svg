@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 400" role="img" aria-hidden="true">
+  <defs>
+    <radialGradient id="glow" cx="50%" cy="35%" r="65%">
+      <stop offset="0%" stop-color="#E3FAE0" stop-opacity="0.35"/>
+      <stop offset="100%" stop-color="#0A1526" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="ring" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#08F467"/>
+      <stop offset="100%" stop-color="#E3FAE0"/>
+    </linearGradient>
+  </defs>
+  <rect width="400" height="400" fill="#0A1526"/>
+  <circle cx="200" cy="200" r="160" fill="url(#glow)"/>
+  <circle cx="200" cy="200" r="130" fill="none" stroke="url(#ring)" stroke-width="2" opacity="0.85"/>
+  <circle cx="200" cy="200" r="95" fill="none" stroke="#08F467" stroke-width="1" opacity="0.35"/>
+  <path fill="#08F467" d="M118 168h164l-18 28H136l-18-28zm22-38 60-32 60 32v18H140v-18z"/>
+  <ellipse cx="200" cy="228" rx="52" ry="58" fill="#162741" stroke="#08F467" stroke-width="2"/>
+  <path fill="#EFEFEF" d="M168 220c6-18 28-28 32-28s26 10 32 28c-10 8-22 12-32 12s-22-4-32-12z"/>
+  <circle cx="182" cy="224" r="5" fill="#08F467"/>
+  <circle cx="218" cy="224" r="5" fill="#08F467"/>
+  <path fill="none" stroke="#08F467" stroke-width="2" stroke-linecap="round" d="M188 248c8 8 16 12 24 12s16-4 24-12"/>
+  <text x="200" y="340" text-anchor="middle" fill="#08F467" font-family="Assistant, sans-serif" font-size="18" font-weight="700">????? ?? ?????? ???</text>
+</svg>
