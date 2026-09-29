@@ -1,17 +1,23 @@
-/* Carmen layer — Marketing Captain design tokens (Elementor kit 10) */
+@font-face {
+  font-family: "Outfit";
+  src: url("/carmen/outfit-500.ttf") format("truetype");
+  font-weight: 500;
+  font-style: normal;
+  font-display: swap;
+}
+
+/* Replaces the old Marketing Captain hero. The rest of the page stays. */
+body.carmen-home .elementor-element-62efa8c {
+  display: none !important;
+}
 
 #carmen-layer {
   --mc-primary: #08f467;
   --mc-bg: #0a1526;
-  --mc-bg-alt: #162741;
   --mc-text: #efefef;
-  --mc-text-muted: rgba(239, 239, 239, 0.75);
   --mc-tint: #e3fae0;
-  --mc-border: rgba(8, 244, 103, 0.35);
-
   font-family: assistant, "Assistant", sans-serif;
   direction: rtl;
-  box-sizing: border-box;
   color: var(--mc-text);
 }
 
@@ -21,270 +27,172 @@
   box-sizing: border-box;
 }
 
-.carmen-block {
+.carmen-hero {
+  background: var(--mc-bg);
+  min-height: 210vh;
+}
+
+.carmen-hero-copy {
+  max-width: 980px;
+  margin: 0 auto;
+  padding: 3.25rem 1.25rem 0;
+  text-align: center;
+}
+
+.carmen-wordmark {
+  margin: 0 0 1.1rem;
+  font-family: Outfit, sans-serif;
+  font-weight: 500;
+  font-size: clamp(2.5rem, 7.2vw, 5.4rem);
+  letter-spacing: -0.045em;
+  line-height: 0.92;
+  color: #ffffff;
+  text-transform: lowercase;
+}
+
+.carmen-wordmark span {
+  color: var(--mc-primary);
+}
+
+.carmen-title {
+  margin: 0 0 0.65rem;
+  font-size: clamp(1.65rem, 3.6vw, 2.7rem);
+  font-weight: 700;
+  line-height: 1.2;
+  color: #ffffff;
+}
+
+.carmen-sub {
+  margin: 0 auto;
+  max-width: 38rem;
+  font-size: clamp(1.05rem, 2.1vw, 1.35rem);
+  line-height: 1.55;
+  color: var(--mc-tint);
+}
+
+.carmen-pin {
+  position: sticky;
+  top: 76px;
+  height: min(74vh, 760px);
+  margin-top: 1.25rem;
+}
+
+.carmen-stage {
   position: relative;
-  overflow: hidden;
-  background-color: var(--mc-bg);
-  background-image: radial-gradient(
-      ellipse 90% 70% at 85% 10%,
-      rgba(227, 250, 224, 0.12) 0%,
-      transparent 55%
-    ),
-    linear-gradient(180deg, var(--mc-tint) 0%, var(--mc-bg) 42%);
+  width: min(980px, 100%);
+  height: 100%;
+  margin: 0 auto;
+}
+
+.carmen-field {
+  position: absolute;
+  left: 50%;
+  top: 52%;
+  width: min(420px, 70%);
+  aspect-ratio: 1;
+  transform: translate(-50%, -50%);
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(8, 244, 103, 0.45) 0%, transparent 68%);
+  filter: blur(10px);
+  opacity: 0;
+  pointer-events: none;
+  z-index: 0;
+}
+
+.carmen-figure {
+  position: absolute;
+  left: 50%;
+  top: 54%;
+  width: min(230px, 30vw);
+  height: auto;
+  transform: translate(-50%, -50%);
+  z-index: 2;
+  pointer-events: none;
+  user-select: none;
+}
+
+.carmen-orbit {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: min(220px, 28vw);
+  height: auto;
+  z-index: 1;
+  pointer-events: none;
+  user-select: none;
+  will-change: transform;
 }
 
 .carmen-block--compact {
   padding: 2rem 1.25rem;
+  background: var(--mc-bg);
   border-bottom: 1px solid rgba(8, 244, 103, 0.15);
 }
 
-.carmen-block--hero {
-  padding: 2.25rem 1.25rem 3rem;
-}
-
 .carmen-inner {
-  max-width: 1140px;
+  max-width: 980px;
   margin: 0 auto;
 }
 
-.carmen-hero-grid {
-  display: grid;
-  gap: 2rem;
-  align-items: center;
+.carmen-block--compact .carmen-title {
+  font-size: clamp(1.45rem, 3vw, 2.1rem);
 }
 
-@media (min-width: 900px) {
-  .carmen-hero-grid {
-    grid-template-columns: 1.05fr 0.92fr;
-    gap: 2.5rem;
-  }
-
-  .carmen-block--hero {
-    padding: 3rem 2rem 3.5rem;
-  }
-}
-
-.carmen-logo-row {
-  margin-bottom: 1.25rem;
-}
-
-.carmen-logo-row img {
-  display: block;
-  height: auto;
-  width: min(260px, 88vw);
-}
-
-.carmen-badge {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.5rem;
-  padding: 0.35rem 0.85rem;
-  border-radius: 999px;
-  border: 1px solid var(--mc-border);
-  background: rgba(8, 244, 103, 0.08);
-  color: var(--mc-primary);
-  font-size: 0.875rem;
-  font-weight: 600;
-  margin-bottom: 1rem;
-}
-
-.carmen-badge-dot {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  background: var(--mc-primary);
-  box-shadow: 0 0 10px var(--mc-primary);
-}
-
-.carmen-title {
-  margin: 0 0 1rem;
-  font-size: clamp(1.75rem, 5vw, 2.75rem);
-  font-weight: 700;
-  line-height: 1.15;
-  color: var(--mc-text);
-}
-
-.carmen-title em {
-  font-style: normal;
-  color: var(--mc-primary);
-}
-
-.carmen-lead {
-  margin: 0 0 1.25rem;
-  font-size: clamp(1.05rem, 2.5vw, 1.2rem);
-  line-height: 1.65;
-  color: var(--mc-text-muted);
-  max-width: 36rem;
-}
-
-.carmen-note {
-  margin: 0 0 1.75rem;
-  padding: 1rem 1.15rem;
-  border-radius: 12px;
-  border: 2px solid rgba(8, 244, 103, 0.25);
-  background: linear-gradient(
-    180deg,
-    rgba(227, 250, 224, 0.08) 0%,
-    rgba(10, 21, 38, 0.95) 58%
-  );
-  font-size: 0.95rem;
-  line-height: 1.6;
-  color: var(--mc-text-muted);
-}
-
-.carmen-note strong {
-  color: var(--mc-text);
-}
-
-.carmen-actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.75rem;
-  align-items: center;
-}
-
-.carmen-btn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  padding: 12px 28px;
-  border-radius: 999px;
-  font-size: 1rem;
-  font-weight: 700;
-  text-decoration: none !important;
-  transition: background 0.2s ease, color 0.2s ease, transform 0.15s ease;
-}
-
-.carmen-btn--primary {
-  color: var(--mc-bg) !important;
-  background-color: var(--mc-primary);
-}
-
-.carmen-btn--primary:hover {
-  background-color: var(--mc-bg);
-  color: var(--mc-primary) !important;
-  transform: translateY(-1px);
-}
-
-.carmen-btn--ghost {
-  color: var(--mc-bg) !important;
-  background-color: var(--mc-text);
-}
-
-.carmen-btn--ghost:hover {
-  background-color: var(--mc-bg);
-  color: var(--mc-text) !important;
-}
-
-.carmen-visual {
-  position: relative;
-  margin: 0 auto;
-  max-width: 380px;
-}
-
-.carmen-visual-frame {
-  border-radius: 16px;
-  overflow: hidden;
-  border: 2px solid rgba(8, 244, 103, 0.2);
-  background: var(--mc-bg-alt);
-  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.35);
-}
-
-.carmen-visual-frame img {
-  display: block;
-  width: 100%;
-  height: auto;
-}
-
-.carmen-visual-deco {
-  position: absolute;
-  width: 42%;
-  opacity: 0.9;
-  pointer-events: none;
-}
-
-.carmen-visual-deco--tl {
-  top: -8%;
-  left: -6%;
-}
-
-.carmen-visual-deco--br {
-  bottom: -6%;
-  right: -8%;
-}
-
-.carmen-visual-caption {
-  margin-top: 0.75rem;
-  text-align: center;
-  font-size: 0.85rem;
-  color: rgba(239, 239, 239, 0.55);
-}
-
-.carmen-steps {
-  display: grid;
-  gap: 1rem;
-  margin-top: 2rem;
-}
-
-@media (min-width: 768px) {
-  .carmen-steps {
-    grid-template-columns: repeat(3, 1fr);
-  }
-}
-
-.carmen-step {
-  padding: 1.15rem 1.1rem;
-  border-radius: 12px;
-  border: 2px solid rgba(8, 244, 103, 0.2);
-  background: linear-gradient(
-    180deg,
-    rgba(227, 250, 224, 0.06) -80px,
-    var(--mc-bg) 58%
-  );
-}
-
-.carmen-step h3 {
-  margin: 0 0 0.5rem;
-  font-size: 1.05rem;
-  font-weight: 700;
-  color: var(--mc-primary);
-}
-
-.carmen-step p {
+.carmen-block--compact .carmen-sub {
   margin: 0;
-  font-size: 0.9rem;
-  line-height: 1.55;
-  color: var(--mc-text-muted);
 }
 
-.carmen-powered {
-  margin-top: 1.25rem;
-  font-size: 0.8rem;
-  color: rgba(239, 239, 239, 0.45);
-}
-
-.carmen-powered span {
-  color: var(--mc-primary);
-}
-
-.carmen-accent {
-  color: var(--mc-primary);
-}
-
-/* Header logo swap (additive — hides MC wordmark SVG only) */
 header.elementor-location-header .elementor-element-b95edfe a.elementor-icon svg {
   display: none !important;
 }
 
-header.elementor-location-header .carmen-site-logo {
-  display: block;
-  height: 22px;
+header.elementor-location-header .elementor-element-b95edfe .elementor-icon {
   width: auto;
-  max-width: min(240px, 70vw);
+  height: auto;
+  font-size: inherit;
 }
 
-@media (min-width: 768px) {
-  header.elementor-location-header .carmen-site-logo {
-    height: 26px;
+.carmen-site-wordmark {
+  display: block;
+  font-family: Outfit, sans-serif;
+  font-weight: 500;
+  font-size: 18px;
+  letter-spacing: -0.04em;
+  line-height: 1;
+  color: inherit;
+  text-transform: lowercase;
+  white-space: nowrap;
+}
+
+.carmen-site-wordmark span {
+  color: var(--mc-primary);
+}
+
+@media (max-width: 640px) {
+  .carmen-hero {
+    min-height: 180vh;
+  }
+
+  .carmen-pin {
+    top: 64px;
+    height: 68vh;
+  }
+
+  .carmen-figure {
+    width: 38vw;
+  }
+
+  .carmen-orbit {
+    width: 34vw;
+  }
+
+  .carmen-site-wordmark {
+    font-size: 15px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .carmen-orbit {
+    will-change: auto;
   }
 }
