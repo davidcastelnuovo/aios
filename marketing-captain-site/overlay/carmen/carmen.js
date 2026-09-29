@@ -204,7 +204,13 @@
     const key = pageKey();
     const build = blocks[key];
     if (!build) return;
-    if (key === "home") document.body.classList.add("carmen-home");
+    if (key === "home") {
+      document.body.classList.add("carmen-home");
+      document.querySelectorAll(".logos-section-img img").forEach(function (img) {
+        img.loading = "eager";
+        img.decoding = "sync";
+      });
+    }
     const layer = document.createElement("div");
     layer.id = "carmen-layer";
     layer.appendChild(build());
