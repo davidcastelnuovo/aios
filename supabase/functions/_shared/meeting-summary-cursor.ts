@@ -4,6 +4,8 @@ import { launchCloudDirect } from "./agent-channel/direct.ts";
 import { cursorApiKey } from "./agent-channel/cursor-api.ts";
 import {
   ensureConversation,
+  findMessageByIdempotency,
+  insertMessage,
   loadRoute,
   resolveCarmenAgent,
 } from "./agent-channel/store.ts";
@@ -14,6 +16,7 @@ import {
 } from "./meeting-summary.ts";
 import {
   buildMeetingSummaryCursorTask,
+  meetingSummaryIdempotencyKey,
   meetingSummaryJobFromMetadata,
   type MeetingSummaryJob,
   type MeetingSummaryTargetType,
@@ -39,6 +42,8 @@ export async function dispatchMeetingSummaryToCursor(
     clientId?: string | null;
     briefSource?: string;
     createdBy?: string | null;
+    /** A person asked again. Automatic ingest stays one send per recording. */
+    manual?: boolean;
   },
 ): Promise<SummaryDispatch> {
   if (!cursorApiKey()) return { ok: false, reason: "not_configured" };
@@ -70,6 +75,24 @@ export async function dispatchMeetingSummaryToCursor(
     brief_source: args.briefSource || "zoom_meeting",
   };
 
+  const claimKey = meetingSummaryIdempotencyKey(args.recordingId, !!args.manual);
+  const claimed = await claimSummarySend(admin, {
+    tenantId: args.tenantId,
+    conversationId: conversation.id,
+    recordingId: args.recordingId,
+    claimKey,
+    manual: !!args.manual,
+  });
+  if (!claimed) {
+    console.log("[meeting-summary] skipped duplicate cursor dispatch", args.recordingId);
+    return {
+      ok: true,
+      conversation_id: conversation.id,
+      session_id: "",
+      external_url: null,
+    };
+  }
+
   try {
     const result = await launchCloudDirect(
       {
@@ -80,7 +103,7 @@ export async function dispatchMeetingSummaryToCursor(
         route,
         content: `סכם את הפגישה: ${args.targetName}`,
         inputMode: "external_channel_callback",
-        idempotencyKey: `meeting-summary:${args.recordingId}:${Date.now()}`,
+        idempotencyKey: claimKey,
         history: [],
       },
       "cursor",
@@ -100,11 +123,53 @@ export async function dispatchMeetingSummaryToCursor(
       external_url: result.external_url ?? null,
     };
   } catch (error) {
+    await admin
+      .from("ai_conversation_messages")
+      .update({ idempotency_key: null })
+      .eq("tenant_id", args.tenantId)
+      .eq("idempotency_key", claimKey);
     const detail = error instanceof Error ? error.message : String(error);
     const busy = /עדיין רץ|busy|409/i.test(detail);
     console.error("[meeting-summary] cursor direct dispatch failed:", detail);
     return { ok: false, reason: busy ? "busy" : "error", detail };
   }
+}
+
+const MANUAL_RESEND_WINDOW_MS = 90_000;
+
+async function claimSummarySend(
+  // deno-lint-ignore no-explicit-any
+  admin: any,
+  args: {
+    tenantId: string;
+    conversationId: string;
+    recordingId: string;
+    claimKey: string;
+    manual: boolean;
+  },
+): Promise<boolean> {
+  if (args.manual) {
+    const existing = await findMessageByIdempotency(admin, args.tenantId, args.claimKey);
+    if (existing) {
+      const age = Date.now() - new Date(existing.created_at).getTime();
+      if (age < MANUAL_RESEND_WINDOW_MS) return false;
+      await admin
+        .from("ai_conversation_messages")
+        .update({ idempotency_key: `${args.claimKey}:spent:${existing.id}` })
+        .eq("id", existing.id);
+    }
+  }
+
+  const { duplicate } = await insertMessage(admin, {
+    tenant_id: args.tenantId,
+    conversation_id: args.conversationId,
+    role: "system",
+    content: "סיכום פגישה נשלח לקרסר ישיר",
+    event_type: "system",
+    idempotency_key: args.claimKey,
+    metadata: { purpose: "meeting_summary_claim", recording_id: args.recordingId },
+  });
+  return !duplicate;
 }
 
 export async function persistMeetingSummaryReply(
