@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
-import { emailsCompatible, pickExistingTeamMember } from "./teamMemberMatch.ts";
+import { pickExistingTeamMember } from "./teamMemberMatch.ts";
 
 const original = {
   id: "old",
@@ -18,15 +18,15 @@ const duplicate = {
   created_at: "2026-09-24T00:00:00.000Z",
 };
 
-test("reuses the existing team member when only the name matches and that row has no email", () => {
+test("does not reuse a team member only because the name matches", () => {
   const match = pickExistingTeamMember([original], {
     email: "raya@example.com",
     fullName: "  רעיה   כהן ",
   });
-  assert.equal(match?.id, "old");
+  assert.equal(match, null);
 });
 
-test("email match wins over a different name", () => {
+test("reuses the card that already has this user's email even when the name differs", () => {
   const match = pickExistingTeamMember(
     [original, { ...duplicate, full_name: "מישהו אחר", email: "raya@example.com" }],
     { email: "Raya@Example.com", fullName: "רעיה כהן" },
@@ -42,17 +42,12 @@ test("does not merge two people who share a name but have different emails", () 
   assert.equal(match?.id, "new");
 });
 
-test("ignores placeholder names", () => {
+test("does not treat a placeholder name as a match", () => {
   const match = pickExistingTeamMember(
     [{ id: "blank", full_name: "קמפיינר", email: null, active: true, created_at: "2020-01-01T00:00:00.000Z" }],
     { email: "raya@example.com", fullName: "קמפיינר" },
   );
   assert.equal(match, null);
-});
-
-test("compatible emails treat a blank address as the same person", () => {
-  assert.equal(emailsCompatible(null, "raya@example.com"), true);
-  assert.equal(emailsCompatible("a@example.com", "b@example.com"), false);
 });
 
 test("app and edge matcher stay the same implementation", () => {
