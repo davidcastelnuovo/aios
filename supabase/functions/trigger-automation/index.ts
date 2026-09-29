@@ -674,11 +674,21 @@ async function sendTaskNotificationFromTenantCarmen(supabase: any, requestBody: 
 
   const { data: task, error: taskError } = await supabase
     .from('tasks')
-    .select('id, title, notes, due_date, due_time, client_id, campaigner_id, sales_person_id, tenant_id, created_by, priority, status')
+    .select('id, title, notes, due_date, due_time, client_id, campaigner_id, sales_person_id, tenant_id, created_by, priority, status, recurrence_frequency')
     .eq('id', taskId)
     .maybeSingle()
   if (taskError) throw taskError
   if (!task) return { handled: true, sent: false, reason: 'task not found' }
+
+  if (notificationType === 'task_high_priority_reminder' && task.status !== 'open') {
+    return { handled: true, sent: false, reason: 'task is not open', task_id: task.id }
+  }
+  if (
+    (notificationType === 'task_assigned' || notificationType === 'task_self_reminder' || notificationType === 'task_overdue')
+    && task.status === 'done'
+  ) {
+    return { handled: true, sent: false, reason: 'task already completed', task_id: task.id }
+  }
 
   const overrideCampaignerId = String(requestBody?.data?.notify_campaigner_id || '').trim()
   if (notificationType === 'task_update_added' && !overrideCampaignerId) {

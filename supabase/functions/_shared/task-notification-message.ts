@@ -72,9 +72,11 @@ export function formatTaskNotificationMessage(
     )
   } else if (notificationType === 'task_high_priority_reminder') {
     details.push(
-      task.priority >= 8
-        ? 'תזכורת למשימה בדחיפות גבוהה שעדיין פתוחה:'
-        : 'תזכורת: המשימה עדיין פתוחה ומועד הביצוע שלה מתקרב:',
+      task.recurrence_frequency
+        ? 'תזכורת למשימה החוזרת של היום:'
+        : task.priority >= 8
+          ? 'תזכורת למשימה בדחיפות גבוהה שעדיין פתוחה:'
+          : 'תזכורת: המשימה עדיין פתוחה ומועד הביצוע שלה מתקרב:',
       `*${task.title}*`,
       `לקוח: ${clientName}`,
     )
