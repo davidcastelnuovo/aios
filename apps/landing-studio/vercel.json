@@ -1,0 +1,16 @@
+{
+  "rewrites": [
+    {
+      "source": "/:tenant/:project",
+      "destination": "/api/serve?tenant_slug=:tenant&project_slug=:project&file=index.html"
+    },
+    {
+      "source": "/:tenant/:project/",
+      "destination": "/api/serve?tenant_slug=:tenant&project_slug=:project&file=index.html"
+    },
+    {
+      "source": "/:tenant/:project/:file*",
+      "destination": "/api/serve?tenant_slug=:tenant&project_slug=:project&file=:file*"
+    }
+  ]
+}
