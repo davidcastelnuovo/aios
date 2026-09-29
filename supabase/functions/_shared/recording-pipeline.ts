@@ -4,6 +4,7 @@ import {
   maybeCreateMarketingBrief,
   saveSummaryForTarget,
 } from "./meeting-summary.ts";
+import { dispatchMeetingSummaryToCursor } from "./meeting-summary-cursor.ts";
 import { matchRecordingToClient } from "./recording-match.ts";
 import { enrichRecordingFromCalendar } from "./calendar-recording-match.ts";
 import { resolveOpenAIKey } from "./ai.ts";
@@ -159,8 +160,6 @@ export async function runRecordingPipeline(admin: any, opts: RunRecordingPipelin
 משך: ${recording.duration ? recording.duration + " דקות" : "לא צוין"}
 מארח: ${recording.host_email || "לא צוין"}`;
 
-  const summary = await generateMeetingSummary(OPENAI_API_KEY, transcription, recordingInfo, "");
-
   let targetType: "client" | "lead" | "campaigner" | "agency";
   let targetId: string;
   let targetName: string;
@@ -206,6 +205,30 @@ export async function runRecordingPipeline(admin: any, opts: RunRecordingPipelin
     targetId = agencyId;
     targetName = agency?.name || "סוכנות";
   }
+
+  const dispatched = await dispatchMeetingSummaryToCursor(admin, {
+    tenantId: recording.tenant_id,
+    userId: createdByUserId,
+    recordingId: recording_id,
+    transcript: transcription,
+    recordingInfo,
+    targetType,
+    targetId,
+    targetName,
+    clientId,
+    briefSource,
+    createdBy: createdByUserId,
+  });
+  if (dispatched.ok) {
+    console.log("[recording-pipeline] summary sent to Cursor Direct", dispatched.external_url);
+    return;
+  }
+  if (dispatched.reason !== "not_configured") {
+    console.error("[recording-pipeline] Cursor Direct summary was not sent:", dispatched.reason, dispatched.detail || "");
+    return;
+  }
+
+  const summary = await generateMeetingSummary(OPENAI_API_KEY, transcription, recordingInfo, "");
 
   const { fileUrl } = await saveSummaryForTarget(admin, {
     tenant_id: recording.tenant_id,
