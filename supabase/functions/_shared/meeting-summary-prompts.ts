@@ -55,6 +55,60 @@ ${source}${focusPrompt}
 כתוב סיכום מקצועי ומפורט. העדף שלמות ודיוק על פני קיצור, אך אל תחזור על אותו פרט בכמה סעיפים.`;
 }
 
+export function buildMeetingSummaryCursorTask(
+  source: string,
+  recordingInfo: string,
+  focusPrompt: string,
+): string {
+  return `אתה מסכם פגישה עסקית עבור AIOS. אל תערוך קוד, אל תפתח PR ואל תשנה קבצים.
+החזר רק את סיכום ה-Markdown בעברית, בלי הקדמה ובלי קישור.
+
+${MEETING_SUMMARY_SYSTEM_PROMPT}
+
+${buildSummaryUserPrompt(source, recordingInfo, focusPrompt)}
+
+אם התמלול נפתח בשיחת חימום על לקוח אחר לפני שהלקוח של הפגישה מצטרף, רשום את זה בהערה קצרה ואל תערבב החלטות בין הלקוחות.
+שמור כל מספר, תאריך, שם, מחיר ויעד כפי שנאמרו. הבחן בין החלטה שהתקבלה, הצעה, ושאלה שעוד פתוחה.`;
+}
+
+export type MeetingSummaryTargetType = "client" | "lead" | "campaigner" | "agency";
+
+export interface MeetingSummaryJob {
+  recording_id: string;
+  target_type: MeetingSummaryTargetType;
+  target_id: string;
+  target_name: string;
+  tenant_id: string;
+  created_by: string | null;
+  client_id: string | null;
+  brief_source: string;
+}
+
+const SUMMARY_TARGET_TYPES = new Set<MeetingSummaryTargetType>(["client", "lead", "campaigner", "agency"]);
+
+export function meetingSummaryJobFromMetadata(metadata: unknown): MeetingSummaryJob | null {
+  if (!metadata || typeof metadata !== "object") return null;
+  const meta = metadata as Record<string, unknown>;
+  if (meta.purpose !== "meeting_summary") return null;
+  const targetType = String(meta.target_type || "");
+  if (!SUMMARY_TARGET_TYPES.has(targetType as MeetingSummaryTargetType)) return null;
+  const recordingId = String(meta.recording_id || "").trim();
+  const targetId = String(meta.target_id || "").trim();
+  const tenantId = String(meta.tenant_id || "").trim();
+  const targetName = String(meta.target_name || "").trim();
+  if (!recordingId || !targetId || !tenantId || !targetName) return null;
+  return {
+    recording_id: recordingId,
+    target_type: targetType as MeetingSummaryTargetType,
+    target_id: targetId,
+    target_name: targetName,
+    tenant_id: tenantId,
+    created_by: meta.created_by ? String(meta.created_by) : null,
+    client_id: meta.client_id ? String(meta.client_id) : null,
+    brief_source: meta.brief_source ? String(meta.brief_source) : "zoom_meeting",
+  };
+}
+
 export function buildExtractionSystemPrompt(chunkNumber: number, totalChunks: number): string {
   return `אתה מבצע שלב חילוץ עובדות מתוך חלק ${chunkNumber} מתוך ${totalChunks} של תמלול פגישה. אל תסכם באופן כללי ואל תדלג על פרטים אופרטיביים.
 

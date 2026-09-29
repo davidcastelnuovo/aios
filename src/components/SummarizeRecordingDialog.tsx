@@ -367,6 +367,11 @@ export default function SummarizeRecordingDialog({
 
       if (error) throw error;
       if (data?.error) throw new Error(data.error);
+      if (data?.pending) {
+        queryClient.invalidateQueries({ queryKey: ['recordings', currentTenantId] });
+        toast({ title: "הסיכום נשלח לקרסר ישיר", description: "הוא יישמר על ההקלטה כשיחזור" });
+        return;
+      }
 
       setResult({
         summary: data.summary,
