@@ -1,4 +1,5 @@
 -- Production reconcile: single source of truth for pulse + health WA cadence (2026-09-29).
+-- Re-applied 2026-09-29 (David: ensure Production synced).
 -- Fixes drift between manual ops (#651 live), failed main apply (#650), and daily health claim on main.
 
 -- Weekly health digest WA: Sunday 07:30 Israel only (carmen-health-probe every 10m; claim gates send).
