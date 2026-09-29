@@ -38,16 +38,28 @@ export function useAutoCreateTeamMember() {
     mutationFn: async (params: CreateCampaignerParams) => {
       if (!tenantId) throw new Error("לא נמצא tenant_id");
 
+      const { data: profileRow, error: profileReadError } = await supabase
+        .from("profiles")
+        .select("campaigner_id")
+        .eq("id", params.userId)
+        .maybeSingle();
+      if (profileReadError) throw profileReadError;
+
       const { data: existingCampaigners, error: listError } = await supabase
         .from("campaigners")
         .select("id, full_name, email, active, created_at")
         .eq("tenant_id", tenantId);
       if (listError) throw listError;
 
-      const existing = pickExistingTeamMember(existingCampaigners || [], {
-        email: params.email,
-        fullName: params.fullName,
-      });
+      const assigned = (existingCampaigners || []).find(
+        (row) => row.id === profileRow?.campaigner_id,
+      );
+      const existing = assigned
+        ? assigned
+        : pickExistingTeamMember(existingCampaigners || [], {
+            email: params.email,
+            fullName: params.fullName,
+          });
 
       let campaigner = existing
         ? { id: existing.id, reused: true as const }
@@ -121,16 +133,28 @@ export function useAutoCreateTeamMember() {
     mutationFn: async (params: CreateSalesPersonParams) => {
       if (!tenantId) throw new Error("לא נמצא tenant_id");
 
+      const { data: profileRow, error: profileReadError } = await supabase
+        .from("profiles")
+        .select("sales_person_id")
+        .eq("id", params.userId)
+        .maybeSingle();
+      if (profileReadError) throw profileReadError;
+
       const { data: existingSalesPeople, error: listError } = await supabase
         .from("sales_people")
         .select("id, full_name, email, active, created_at")
         .eq("tenant_id", tenantId);
       if (listError) throw listError;
 
-      const existing = pickExistingTeamMember(existingSalesPeople || [], {
-        email: params.email,
-        fullName: params.fullName,
-      });
+      const assigned = (existingSalesPeople || []).find(
+        (row) => row.id === profileRow?.sales_person_id,
+      );
+      const existing = assigned
+        ? assigned
+        : pickExistingTeamMember(existingSalesPeople || [], {
+            email: params.email,
+            fullName: params.fullName,
+          });
 
       let salesPerson = existing
         ? { id: existing.id, reused: true as const }

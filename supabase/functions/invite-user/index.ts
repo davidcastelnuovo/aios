@@ -248,6 +248,33 @@ async function findOrCreateStaff(
   return created.id;
 }
 
+async function absorbEmailCardIntoAssigned(
+  supabaseAdmin: ReturnType<typeof createClient>,
+  tenantId: string,
+  email: string,
+  assignedCampaignerId?: string,
+) {
+  if (!assignedCampaignerId) return;
+  const { data: rows, error } = await supabaseAdmin
+    .from("campaigners")
+    .select("id, email")
+    .eq("tenant_id", tenantId);
+  if (error || !rows) {
+    console.error("Error loading campaigners for assignment merge:", error);
+    return;
+  }
+  const normalized = email.trim().toLowerCase();
+  for (const row of rows) {
+    if (row.id === assignedCampaignerId) continue;
+    if ((row.email || "").trim().toLowerCase() !== normalized) continue;
+    const { error: mergeError } = await supabaseAdmin.rpc("merge_assigned_campaigner_duplicate", {
+      p_canonical: assignedCampaignerId,
+      p_duplicate: row.id,
+    });
+    if (mergeError) console.error("Error merging assigned campaigner duplicate:", mergeError);
+  }
+}
+
 serve(async (req: Request) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
@@ -402,9 +429,8 @@ serve(async (req: Request) => {
       }
     }
 
-    // Link an existing team member by email or name. Create one only when
-    // this person is not already in the team module, so the assignment dialog
-    // does not gain a second card for the same person.
+    // The selected team member is the assignment. Without one, reuse a card
+    // that already has this email, otherwise create a card. Never match by name.
     // Secondary organizations pass updateProfileTeamLinks=false and must not
     // overwrite the single profile link or mint another team card.
     let effectiveCampaignerId = updateProfileTeamLinks ? campaignerId : undefined;
@@ -456,6 +482,12 @@ serve(async (req: Request) => {
           .from("profiles")
           .update({ campaigner_id: effectiveCampaignerId })
           .eq("id", userId);
+        await absorbEmailCardIntoAssigned(
+          supabaseAdmin,
+          tenantIdFinal,
+          email,
+          effectiveCampaignerId,
+        );
       }
 
       if (updateProfileTeamLinks && effectiveSalesPersonId) {
@@ -658,6 +690,12 @@ serve(async (req: Request) => {
           .from("profiles")
           .update({ campaigner_id: effectiveCampaignerId })
           .eq("id", newUserId);
+        await absorbEmailCardIntoAssigned(
+          supabaseAdmin,
+          tenantIdFinal,
+          email,
+          effectiveCampaignerId,
+        );
       }
 
       if (updateProfileTeamLinks && effectiveSalesPersonId) {
