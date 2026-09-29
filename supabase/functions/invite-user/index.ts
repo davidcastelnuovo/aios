@@ -1,5 +1,9 @@
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
+import {
+  pickExistingTeamMember,
+  type TeamMemberCandidate,
+} from "../_shared/team-member-match.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -148,74 +152,100 @@ async function generateAuthLink(
   return actionLink;
 }
 
-async function autoCreateCampaigner(
+async function linkStaffAgencies(
   supabaseAdmin: ReturnType<typeof createClient>,
-  tenantId: string,
-  email: string,
-  fullName?: string,
+  table: "campaigner_agencies" | "sales_person_agencies",
+  idColumn: "campaigner_id" | "sales_person_id",
+  staffId: string,
   agencyIds?: string[],
-): Promise<string | undefined> {
-  const displayName = fullName?.trim() || email.split("@")[0] || "קמפיינר";
-  const { data: newCampaigner, error } = await supabaseAdmin
-    .from("campaigners")
-    .insert({
-      full_name: displayName,
-      email: email,
-      active: true,
-      tenant_id: tenantId,
-    })
-    .select()
-    .single();
-
-  if (error) {
-    console.error("Error creating campaigner:", error);
-    return undefined;
-  }
-
-  if (agencyIds && agencyIds.length > 0) {
-    const rows = agencyIds.map((agencyId) => ({
-      campaigner_id: newCampaigner.id,
-      agency_id: agencyId,
-    }));
-    await supabaseAdmin.from("campaigner_agencies").insert(rows);
-  }
-
-  return newCampaigner.id;
+) {
+  if (!agencyIds || agencyIds.length === 0) return;
+  const rows = agencyIds.map((agencyId) => ({
+    [idColumn]: staffId,
+    agency_id: agencyId,
+  }));
+  const { error } = await supabaseAdmin
+    .from(table)
+    .upsert(rows, { onConflict: `${idColumn},agency_id`, ignoreDuplicates: true });
+  if (error) console.error(`Error linking ${table}:`, error);
 }
 
-async function autoCreateSalesPerson(
+async function findOrCreateStaff(
   supabaseAdmin: ReturnType<typeof createClient>,
-  tenantId: string,
-  email: string,
-  fullName?: string,
-  agencyIds?: string[],
+  options: {
+    table: "campaigners" | "sales_people";
+    agencyTable: "campaigner_agencies" | "sales_person_agencies";
+    idColumn: "campaigner_id" | "sales_person_id";
+    tenantId: string;
+    email: string;
+    fullName?: string;
+    agencyIds?: string[];
+    createIfMissing: boolean;
+    fallbackName: string;
+  },
 ): Promise<string | undefined> {
-  const displayName = fullName?.trim() || email.split("@")[0] || "איש מכירות";
-  const { data: newSalesPerson, error } = await supabaseAdmin
-    .from("sales_people")
+  const { data: existing, error: listError } = await supabaseAdmin
+    .from(options.table)
+    .select("id, email, full_name, active, created_at")
+    .eq("tenant_id", options.tenantId);
+  if (listError) console.error(`Error loading ${options.table}:`, listError);
+
+  const match = pickExistingTeamMember((existing || []) as TeamMemberCandidate[], {
+    email: options.email,
+    fullName: options.fullName,
+  });
+
+  if (match) {
+    const patch: Record<string, unknown> = {};
+    if (!(match.email || "").trim()) patch.email = options.email;
+    const currentName = (match.full_name || "").trim();
+    if (
+      options.fullName?.trim() &&
+      (!currentName || currentName === "קמפיינר" || currentName === "איש מכירות")
+    ) {
+      patch.full_name = options.fullName.trim();
+    }
+    if (match.active === false) patch.active = true;
+    if (Object.keys(patch).length > 0) {
+      await supabaseAdmin.from(options.table).update(patch).eq("id", match.id);
+    }
+    await linkStaffAgencies(
+      supabaseAdmin,
+      options.agencyTable,
+      options.idColumn,
+      match.id,
+      options.agencyIds,
+    );
+    return match.id;
+  }
+
+  if (!options.createIfMissing) return undefined;
+
+  const displayName = options.fullName?.trim() || options.email.split("@")[0] || options.fallbackName;
+  const { data: created, error } = await supabaseAdmin
+    .from(options.table)
     .insert({
       full_name: displayName,
-      email: email,
+      email: options.email,
       active: true,
-      tenant_id: tenantId,
+      tenant_id: options.tenantId,
     })
-    .select()
+    .select("id")
     .single();
 
-  if (error) {
-    console.error("Error creating sales_people record:", error);
+  if (error || !created) {
+    console.error(`Error creating ${options.table}:`, error);
     return undefined;
   }
 
-  if (agencyIds && agencyIds.length > 0) {
-    const rows = agencyIds.map((agencyId) => ({
-      sales_person_id: newSalesPerson.id,
-      agency_id: agencyId,
-    }));
-    await supabaseAdmin.from("sales_person_agencies").insert(rows);
-  }
-
-  return newSalesPerson.id;
+  await linkStaffAgencies(
+    supabaseAdmin,
+    options.agencyTable,
+    options.idColumn,
+    created.id,
+    options.agencyIds,
+  );
+  return created.id;
 }
 
 serve(async (req: Request) => {
@@ -347,30 +377,65 @@ serve(async (req: Request) => {
       );
     }
 
-    // Auto-create team member records when role requires them
-    let effectiveCampaignerId = campaignerId;
-    if (role === "campaigner" && !campaignerId) {
-      effectiveCampaignerId = await autoCreateCampaigner(
-        supabaseAdmin,
-        tenantIdFinal,
-        email,
-        fullName,
-        agencyIds,
-      );
-    }
-
-    let effectiveSalesPersonId = salesPersonId;
-    if (role === "sales_person" && !salesPersonId) {
-      effectiveSalesPersonId = await autoCreateSalesPerson(
-        supabaseAdmin,
-        tenantIdFinal,
-        email,
-        fullName,
-        agencyIds,
-      );
-    }
-
     const existingUserId = await findUserIdByEmail(supabaseAdmin, email);
+
+    if (existingUserId) {
+      const { data: alreadyInTenant } = await supabaseAdmin
+        .from("tenant_users")
+        .select("id")
+        .eq("user_id", existingUserId)
+        .eq("tenant_id", tenantIdFinal)
+        .maybeSingle();
+
+      if (alreadyInTenant) {
+        return new Response(
+          JSON.stringify({
+            success: false,
+            error: "EMAIL_EXISTS_IN_TENANT",
+            message: "המשתמש כבר קיים בארגון זה",
+          }),
+          {
+            status: 200,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          },
+        );
+      }
+    }
+
+    // Link an existing team member by email or name. Create one only when
+    // this person is not already in the team module, so the assignment dialog
+    // does not gain a second card for the same person.
+    // Secondary organizations pass updateProfileTeamLinks=false and must not
+    // overwrite the single profile link or mint another team card.
+    let effectiveCampaignerId = updateProfileTeamLinks ? campaignerId : undefined;
+    if (updateProfileTeamLinks && !effectiveCampaignerId) {
+      effectiveCampaignerId = await findOrCreateStaff(supabaseAdmin, {
+        table: "campaigners",
+        agencyTable: "campaigner_agencies",
+        idColumn: "campaigner_id",
+        tenantId: tenantIdFinal,
+        email,
+        fullName,
+        agencyIds,
+        createIfMissing: role !== "sales_person",
+        fallbackName: "קמפיינר",
+      });
+    }
+
+    let effectiveSalesPersonId = updateProfileTeamLinks ? salesPersonId : undefined;
+    if (updateProfileTeamLinks && role === "sales_person" && !effectiveSalesPersonId) {
+      effectiveSalesPersonId = await findOrCreateStaff(supabaseAdmin, {
+        table: "sales_people",
+        agencyTable: "sales_person_agencies",
+        idColumn: "sales_person_id",
+        tenantId: tenantIdFinal,
+        email,
+        fullName,
+        agencyIds,
+        createIfMissing: true,
+        fallbackName: "איש מכירות",
+      });
+    }
 
     if (existingUserId) {
       const userId = existingUserId;
@@ -422,29 +487,20 @@ serve(async (req: Request) => {
         await supabaseAdmin.from("user_permissions").insert(permissionsToInsert);
       }
 
-      if (effectiveCampaignerId && agencyIds && agencyIds.length > 0) {
-        await supabaseAdmin
-          .from("campaigner_agencies")
-          .delete()
-          .eq("campaigner_id", effectiveCampaignerId);
-        const rows = agencyIds.map((agencyId) => ({
-          campaigner_id: effectiveCampaignerId,
-          agency_id: agencyId,
-        }));
-        await supabaseAdmin.from("campaigner_agencies").insert(rows);
-      }
-
-      if (effectiveSalesPersonId && agencyIds && agencyIds.length > 0) {
-        await supabaseAdmin
-          .from("sales_person_agencies")
-          .delete()
-          .eq("sales_person_id", effectiveSalesPersonId);
-        const rows = agencyIds.map((agencyId) => ({
-          sales_person_id: effectiveSalesPersonId,
-          agency_id: agencyId,
-        }));
-        await supabaseAdmin.from("sales_person_agencies").insert(rows);
-      }
+      await linkStaffAgencies(
+        supabaseAdmin,
+        "campaigner_agencies",
+        "campaigner_id",
+        effectiveCampaignerId || "",
+        effectiveCampaignerId ? agencyIds : [],
+      );
+      await linkStaffAgencies(
+        supabaseAdmin,
+        "sales_person_agencies",
+        "sales_person_id",
+        effectiveSalesPersonId || "",
+        effectiveSalesPersonId ? agencyIds : [],
+      );
 
       const { data: tenantUser } = await supabaseAdmin
         .from("tenant_users")
@@ -597,39 +653,34 @@ serve(async (req: Request) => {
         if (permError) console.error("Error inserting permissions:", permError);
       }
 
-      if (effectiveCampaignerId) {
+      if (updateProfileTeamLinks && effectiveCampaignerId) {
         await supabaseAdmin
           .from("profiles")
           .update({ campaigner_id: effectiveCampaignerId })
           .eq("id", newUserId);
       }
 
-      if (effectiveSalesPersonId) {
+      if (updateProfileTeamLinks && effectiveSalesPersonId) {
         await supabaseAdmin
           .from("profiles")
           .update({ sales_person_id: effectiveSalesPersonId })
           .eq("id", newUserId);
       }
 
-      if (effectiveCampaignerId && agencyIds && agencyIds.length > 0) {
-        const rows = agencyIds.map((agencyId) => ({
-          campaigner_id: effectiveCampaignerId,
-          agency_id: agencyId,
-        }));
-        await supabaseAdmin
-          .from("campaigner_agencies")
-          .upsert(rows, { onConflict: "campaigner_id,agency_id" });
-      }
-
-      if (effectiveSalesPersonId && agencyIds && agencyIds.length > 0) {
-        const rows = agencyIds.map((agencyId) => ({
-          sales_person_id: effectiveSalesPersonId,
-          agency_id: agencyId,
-        }));
-        await supabaseAdmin
-          .from("sales_person_agencies")
-          .upsert(rows, { onConflict: "sales_person_id,agency_id" });
-      }
+      await linkStaffAgencies(
+        supabaseAdmin,
+        "campaigner_agencies",
+        "campaigner_id",
+        effectiveCampaignerId || "",
+        effectiveCampaignerId ? agencyIds : [],
+      );
+      await linkStaffAgencies(
+        supabaseAdmin,
+        "sales_person_agencies",
+        "sales_person_id",
+        effectiveSalesPersonId || "",
+        effectiveSalesPersonId ? agencyIds : [],
+      );
     }
 
     if (!skipEmail) {
