@@ -195,6 +195,9 @@ export function applyToolForceIncludes(userText: string, picked: Set<string>, he
   if (hasPulseIntent(userText)) {
     promote(['get_latest_campaign_pulse'])
   }
+  if (/(מתחר|גליש|תגלל|תגלשי|browse|אתר\s|research_competitors|browse_web)/i.test(userText)) {
+    promote(['browse_web', 'research_competitors'])
+  }
   if (hasRetentionIntent(userText)) {
     promote(['get_client_retention_scan', 'batch_update_client_health', 'update_client_health'])
   }

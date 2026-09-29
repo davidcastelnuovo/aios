@@ -72,7 +72,7 @@ export function SeoGeoArticlePreviewDialog({
             <div className="mb-2 text-xs font-semibold text-muted-foreground">תצוגה</div>
             <h1 className="text-xl font-bold">{title}</h1>
             {excerpt ? <p className="mt-2 text-sm text-muted-foreground">{excerpt}</p> : null}
-            <div className="prose prose-sm mt-4 max-w-none dark:prose-invert" dangerouslySetInnerHTML={{ __html: html || "<p>—</p>" }} />
+            <div className="prose prose-sm mt-4 max-w-none dark:prose-invert" dir="rtl" dangerouslySetInnerHTML={{ __html: html || "<p>—</p>" }} />
           </div>
         </div>
       </DialogContent>

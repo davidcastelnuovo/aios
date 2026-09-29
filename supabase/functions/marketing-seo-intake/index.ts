@@ -3,6 +3,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { requireAuth } from "../_shared/security.ts";
 import { buildSkillsBlockBySlug } from "../_shared/skills/registry.ts";
 import { fetchPublicWebsiteSnippet, gatherSeoClientContext } from "../_shared/gather-seo-client-context.ts";
+import { researchCompetitors } from "../_shared/web-research.ts";
 
 const cors = {
   "Access-Control-Allow-Origin": "*",
@@ -75,9 +76,15 @@ serve(async (req) => {
       }
       if (!settings.openai_api_key) throw new Error("OpenAI API key missing");
 
-      const system = `${skinBlock}\n\nאת כרמן — מנהלת SEO/GEO. בני בריף עבודה מנתונים אמיתיים בלבד; סמני מה חסר. החזירי JSON:
+      const webResearch = await researchCompetitors({
+        website: website || undefined,
+        query: String(user_prompt || context.client?.name || website || "מתחרים"),
+        ahrefsApiKey: Deno.env.get("AHREFS_API_KEY") ?? "",
+      });
+      const system = `${skinBlock}\n\nאת כרמן — מנהלת SEO/GEO. בני בריף עבודה מנתונים אמיתיים בלבד; סמני מה חסר. competitors רק מהרשימה web_research.competitors — אם היא ריקה החזירי []. החזירי JSON:
 {"brief_text":"","competitors":[""],"keyword_seeds":[""],"ai_visibility_notes":[""],"data_gaps":[""]}`;
       const user = JSON.stringify({
+        web_research: webResearch,
         client: context.client,
         website,
         website_snippet: websiteSnippet,
@@ -104,11 +111,13 @@ serve(async (req) => {
       if (!ai.ok) throw new Error(`Intake AI failed: ${ai.status}`);
       const parsed = JSON.parse((await ai.json()).choices?.[0]?.message?.content ?? "{}");
       briefText = String(parsed.brief_text ?? "").trim();
+      const verified = webResearch.competitors.map((hit) => `${hit.name} — ${hit.url}`);
       seoResearch = {
-        competitors: parsed.competitors ?? [],
+        competitors: verified,
         keyword_seeds: parsed.keyword_seeds ?? [],
         ai_visibility_notes: parsed.ai_visibility_notes ?? [],
-        data_gaps: parsed.data_gaps ?? [],
+        data_gaps: [...(Array.isArray(parsed.data_gaps) ? parsed.data_gaps : []), ...(webResearch.gap ? [webResearch.gap] : [])],
+        competitor_sources: webResearch.competitors,
       };
       intakeSource = "carmen_full";
     } else {
@@ -143,7 +152,7 @@ serve(async (req) => {
         method: "POST",
         headers: {
           Authorization: `Bearer ${serviceKey}`,
-          apikey: Deno.env.get("SUPABASE_ANON_KEY") ?? "",
+          apikey: serviceKey,
           "Content-Type": "application/json",
         },
         body: JSON.stringify({

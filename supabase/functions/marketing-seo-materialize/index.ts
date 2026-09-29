@@ -17,7 +17,7 @@ serve(async (req) => {
   try {
     const auth = await requireAuth(req);
     if (!auth) return respond({ error: "Unauthorized" }, 401);
-    const { work_item_id, replace_existing = true, sync_tracked = true } = await req.json();
+    const { work_item_id, replace_existing = true, sync_tracked = true, mark_approved = false } = await req.json();
     if (!work_item_id) return respond({ error: "work_item_id required" }, 400);
 
     const { data: item } = await admin.from("marketing_work_items").select("*").eq("id", work_item_id).single();
@@ -50,7 +50,7 @@ serve(async (req) => {
       tenantId: item.tenant_id,
       clientId: item.client_id,
       plan: plan as { clusters?: unknown[]; contentPlan?: unknown[] },
-      autoApprove: !!program.auto_approve,
+      autoApprove: !!program.auto_approve || !!mark_approved,
       horizonMonths: program.horizon_months ?? 3,
       replaceExisting: !!replace_existing,
     });
