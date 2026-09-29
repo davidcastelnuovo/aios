@@ -342,9 +342,43 @@
     },
   };
 
+  function wireServiceTabs() {
+    document.querySelectorAll(".e-n-tabs").forEach(function (tabs) {
+      if (tabs.dataset.carmenTabs === "1") return;
+      tabs.dataset.carmenTabs = "1";
+      tabs.classList.add("e-activated");
+      const buttons = Array.prototype.slice.call(tabs.querySelectorAll(":scope > .e-n-tabs-heading > .e-n-tab-title"));
+      function activate(button) {
+        buttons.forEach(function (other) {
+          const on = other === button;
+          other.setAttribute("aria-selected", on ? "true" : "false");
+          other.tabIndex = on ? 0 : -1;
+          const panel = document.getElementById(other.getAttribute("aria-controls"));
+          if (panel) panel.classList.toggle("e-active", on);
+        });
+      }
+      buttons.forEach(function (button, index) {
+        const label = button.querySelector(".e-n-tab-title-text");
+        if (label && label.textContent.replace(/\s+/g, "") === "PCC") label.textContent = "PPC";
+        button.addEventListener("click", function () {
+          activate(button);
+        });
+        button.addEventListener("keydown", function (event) {
+          if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") return;
+          event.preventDefault();
+          const step = event.key === "ArrowLeft" ? 1 : -1;
+          const next = buttons[(index + step + buttons.length) % buttons.length];
+          next.focus();
+          activate(next);
+        });
+      });
+    });
+  }
+
   function mount() {
     applyHeaderLogo();
     renameBrand();
+    wireServiceTabs();
     if (document.getElementById("carmen-layer")) return;
     const header = document.querySelector("header.elementor-location-header");
     if (!header) return;
