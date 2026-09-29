@@ -7,6 +7,7 @@ import {
   maybeCreateMarketingBrief,
   saveSummaryForTarget,
 } from "../_shared/meeting-summary.ts";
+import { dispatchMeetingSummaryToCursor } from "../_shared/meeting-summary-cursor.ts";
 import { resolveOpenAIKey } from "../_shared/ai.ts";
 
 const corsHeaders = {
@@ -87,23 +88,6 @@ serve(async (req) => {
       focusPrompt += `\nדגשים נוספים מהמשתמש: ${custom_focus}`;
     }
 
-    // Generate summary using OpenAI
-    const OPENAI_API_KEY = await resolveOpenAIKey();
-    if (!OPENAI_API_KEY) throw new Error("OPENAI_API_KEY not configured");
-
-    let summary: string;
-    try {
-      summary = await generateMeetingSummary(OPENAI_API_KEY, transcript, recordingInfo, focusPrompt);
-    } catch (err) {
-      if (err instanceof AiHttpError) {
-        return new Response(
-          JSON.stringify({ error: err.message }),
-          { status: err.status, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-        );
-      }
-      throw err;
-    }
-
     // Get target name for the filename
     let targetName = "";
     let targetAgencyId: string | null = null;
@@ -142,11 +126,64 @@ serve(async (req) => {
     }
     if (!targetName) throw new Error("יעד הסיכום לא נמצא או אינו נגיש");
 
-    // Save to storage + attachments + summary_file_url
     const admin = createClient(
       Deno.env.get("SUPABASE_URL")!,
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
     );
+
+    const dispatched = recording_id
+      ? await dispatchMeetingSummaryToCursor(admin, {
+      tenantId: tenant_id,
+      userId: user.id,
+      recordingId: recording_id,
+      transcript,
+      recordingInfo,
+      focusPrompt,
+      targetType: target_type,
+      targetId: target_id,
+      targetName,
+      clientId: target_type === "client" ? target_id : null,
+      briefSource: "zoom_meeting",
+      createdBy: user.id,
+    })
+      : { ok: false as const, reason: "not_configured" as const };
+    if (dispatched.ok) {
+      return new Response(
+        JSON.stringify({
+          success: true,
+          pending: true,
+          channel: "cursor",
+          conversation_id: dispatched.conversation_id,
+          external_url: dispatched.external_url,
+        }),
+        { headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      );
+    }
+    if (dispatched.reason !== "not_configured") {
+      const message = dispatched.reason === "busy"
+        ? "קרסר ישיר עסוק כרגע. נסה שוב בעוד דקה."
+        : "לא הצלחתי לשלוח את הסיכום לקרסר ישיר.";
+      return new Response(
+        JSON.stringify({ error: message }),
+        { status: 503, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      );
+    }
+
+    const OPENAI_API_KEY = await resolveOpenAIKey();
+    if (!OPENAI_API_KEY) throw new Error("OPENAI_API_KEY not configured");
+
+    let summary: string;
+    try {
+      summary = await generateMeetingSummary(OPENAI_API_KEY, transcript, recordingInfo, focusPrompt);
+    } catch (err) {
+      if (err instanceof AiHttpError) {
+        return new Response(
+          JSON.stringify({ error: err.message }),
+          { status: err.status, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+        );
+      }
+      throw err;
+    }
 
     const { fileUrl, fileName } = await saveSummaryForTarget(admin, {
       tenant_id,

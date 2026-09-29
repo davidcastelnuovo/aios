@@ -17,6 +17,7 @@ export function buildCallbackInstructions(args: {
   token: string;
   parliamentRound?: number;
   readOnly?: boolean;
+  callbackIntent?: "default" | "meeting_summary";
 }): string {
   const supabaseUrl = Deno.env.get("SUPABASE_URL") || "https://zvoijyneresvkadpprel.supabase.co";
   const roundLine = args.parliamentRound
@@ -41,8 +42,11 @@ export function buildCallbackInstructions(args: {
     `session_id: ${args.sessionId}\n` +
     `origin: ${args.origin}\n` +
     `tenant_id: ${args.tenantId}\n\n` +
-    `Your answer MUST include the Vercel Preview URL for this branch and the PR (or merge) link ` +
-    `so David/Carmen can verify before production publish.\n\n` +
+    (args.callbackIntent === "meeting_summary"
+      ? `MEETING SUMMARY: do not edit the repository, do not open a pull request, and do not add a preview URL. ` +
+        `The content you send back must be only the Hebrew Markdown meeting summary.\n\n`
+      : `Your answer MUST include the Vercel Preview URL for this branch and the PR (or merge) link ` +
+        `so David/Carmen can verify before production publish.\n\n`) +
     `Preferred: call MCP tool reply_to_aios_session with those ids and content=<your full answer>, ` +
     `plus a one-time idempotency_key.\n\n` +
     `Fallback HTTP POST ${supabaseUrl}/functions/v1/agent-channel-callback\n` +
