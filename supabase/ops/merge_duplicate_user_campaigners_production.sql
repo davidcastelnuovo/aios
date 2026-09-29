@@ -3,7 +3,7 @@
 -- (equal, or one side blank). Placeholder names are left alone.
 -- The kept row is the one with more client assignments, otherwise the older row.
 -- Two different login users are never folded together.
--- Applied on Staging first (merge_duplicate_user_campaigners_staging.sql), then Production.
+-- Production apply. Same merge already applied on Staging.
 
 CREATE OR REPLACE FUNCTION public.merge_duplicate_campaigner_pair(p_left uuid, p_right uuid)
 RETURNS uuid
