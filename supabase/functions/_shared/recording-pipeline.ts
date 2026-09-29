@@ -225,7 +225,6 @@ export async function runRecordingPipeline(admin: any, opts: RunRecordingPipelin
   }
   if (dispatched.reason !== "not_configured") {
     console.error("[recording-pipeline] Cursor Direct summary was not sent:", dispatched.reason, dispatched.detail || "");
-    return;
   }
 
   const summary = await generateMeetingSummary(OPENAI_API_KEY, transcription, recordingInfo, "");
