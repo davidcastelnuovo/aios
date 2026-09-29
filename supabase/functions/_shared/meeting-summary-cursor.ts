@@ -88,7 +88,8 @@ export async function dispatchMeetingSummaryToCursor(
       undefined,
       {
         callbackIntent: "meeting_summary",
-        allowCreate: false,
+        allowCreate: true,
+        autoCreatePR: false,
         sessionMetadata: { purpose: "meeting_summary", ...job },
       },
     );

@@ -57,6 +57,7 @@ export async function launchCloudDirect(
     sessionMetadata?: Record<string, unknown>;
     callbackIntent?: "default" | "meeting_summary";
     allowCreate?: boolean;
+    autoCreatePR?: boolean;
   },
 ): Promise<SendResult> {
   if (provider === "codex" && codexOpenAiApiEnabled(runtimeEnv()) && !parliament) {
@@ -128,6 +129,7 @@ export async function launchCloudDirect(
       modelId,
       envName,
       allowCreate: options?.allowCreate,
+      autoCreatePR: options?.autoCreatePR,
     });
   } else {
     fired = await createCloudAgent({ apiKey, promptText: clip(prompt), name, modelId: modelId || undefined, envName });
@@ -177,6 +179,7 @@ async function deliverToOpenCloudChat(args: {
   modelId: string;
   envName?: string;
   allowCreate?: boolean;
+  autoCreatePR?: boolean;
 }): Promise<{ url: string; id: string; reused: boolean }> {
   const env = runtimeEnv();
   const candidates = await collectOpenChatIds(args.sb, {
@@ -203,6 +206,7 @@ async function deliverToOpenCloudChat(args: {
       name: args.name,
       modelId: args.modelId || undefined,
       envName: args.envName,
+      autoCreatePR: args.autoCreatePR,
     });
   }
 
