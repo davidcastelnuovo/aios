@@ -73,13 +73,21 @@ body.carmen-home .elementor-element-ae19790 .logos-section-img img {
 .carmen-hero {
   background: var(--mc-bg);
   min-height: 210vh;
+  display: grid;
+  grid-template-columns: minmax(280px, 0.82fr) minmax(340px, 1.18fr);
+  align-items: start;
+  gap: 1rem 2.5rem;
+  padding: 4.5rem 5vw 0;
 }
 
 .carmen-hero-copy {
-  max-width: 980px;
-  margin: 0 auto;
-  padding: 3.25rem 1.25rem 0;
-  text-align: center;
+  position: sticky;
+  top: 22vh;
+  max-width: 36rem;
+  margin: 0;
+  padding: 0;
+  text-align: right;
+  justify-self: end;
 }
 
 .carmen-wordmark {
@@ -106,25 +114,52 @@ body.carmen-home .elementor-element-ae19790 .logos-section-img img {
 }
 
 .carmen-sub {
-  margin: 0 auto;
-  max-width: 38rem;
+  margin: 0;
+  max-width: 34rem;
   font-size: clamp(1.05rem, 2.1vw, 1.35rem);
   line-height: 1.55;
   color: var(--mc-tint);
 }
 
+.carmen-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  margin-top: 1.6rem;
+}
+
+.carmen-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 46px;
+  padding: 0.55rem 1.35rem;
+  border-radius: 999px;
+  background: var(--mc-primary);
+  color: var(--mc-bg);
+  font-weight: 700;
+  font-size: 1rem;
+  text-decoration: none;
+}
+
+.carmen-btn--ghost {
+  background: transparent;
+  color: #ffffff;
+  border: 1px solid rgba(255, 255, 255, 0.45);
+}
+
 .carmen-pin {
   position: sticky;
   top: 76px;
-  height: min(74vh, 760px);
-  margin-top: 1.25rem;
+  height: min(78vh, 820px);
+  margin: 0;
 }
 
 .carmen-stage {
   position: relative;
-  width: min(980px, 100%);
+  width: 100%;
   height: 100%;
-  margin: 0 auto;
+  margin: 0;
 }
 
 .carmen-field {
@@ -211,176 +246,456 @@ header.elementor-location-header .elementor-element-b95edfe .elementor-icon {
   color: var(--mc-primary);
 }
 
-.carmen-system {
+.carmen-aios {
   background: var(--mc-bg);
-  padding: 0.5rem 1.25rem 5rem;
+  padding: 1rem 0 4.5rem;
 }
 
-.carmen-system-layout {
-  max-width: 1080px;
+.carmen-wrap {
+  width: min(1120px, calc(100% - 2.5rem));
   margin: 0 auto;
-  display: grid;
-  grid-template-columns: 132px minmax(0, 1fr);
-  gap: 1.25rem 1.75rem;
-  align-items: start;
 }
 
-.carmen-system-figure {
-  width: 132px;
-  height: auto;
-  display: block;
-  margin-top: 4.6rem;
+.carmen-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.55rem;
+  margin-bottom: 1.1rem;
+  padding: 0.45rem 0.9rem;
+  border-radius: 999px;
+  border: 1px solid rgba(8, 244, 103, 0.35);
+  background: rgba(8, 244, 103, 0.1);
+  color: var(--mc-primary);
+  font-size: 0.95rem;
 }
 
-.carmen-system .carmen-title {
-  margin-bottom: 1rem;
+.carmen-badge strong {
+  font-weight: 700;
 }
 
-.carmen-os {
-  background: #ffffff;
-  color: var(--mc-bg);
-  border-radius: 22px;
-  overflow: hidden;
-  box-shadow: 0 22px 50px rgba(0, 0, 0, 0.28);
+.carmen-aios-hero {
+  padding: 3.5rem 0 1rem;
+  text-align: center;
 }
 
-.carmen-os-bar {
-  padding: 0.8rem 1.15rem;
-  background: var(--mc-bg);
-  border-bottom: 1px solid rgba(8, 244, 103, 0.35);
-  font-family: Outfit, sans-serif;
-  font-weight: 500;
-  font-size: 1rem;
-  letter-spacing: -0.04em;
-  line-height: 1;
-  color: #ffffff;
-  text-transform: lowercase;
+.carmen-aios-hero h2 {
+  margin: 0 0 0.8rem;
+  font-size: clamp(2.2rem, 5vw, 4.2rem);
+  line-height: 1.1;
 }
 
-.carmen-os-bar span {
+.carmen-aios-hero h2 span,
+.carmen-split h2 span {
   color: var(--mc-primary);
 }
 
-.carmen-os-area {
-  display: grid;
-  grid-template-columns: minmax(180px, 230px) minmax(0, 1fr);
-  gap: 0.7rem 1.1rem;
-  align-items: center;
-  padding: 0.95rem 1.1rem;
-  border-top: 1px solid #efefef;
-  border-right: 3px solid var(--mc-primary);
+.carmen-lead {
+  margin: 0 auto 1.4rem;
+  max-width: 40rem;
+  color: rgba(255, 255, 255, 0.62);
+  font-size: clamp(1.15rem, 2vw, 1.5rem);
+  line-height: 1.5;
 }
 
-.carmen-os-area:first-child {
-  border-top: 0;
+.carmen-lead span {
+  display: block;
+  color: rgba(255, 255, 255, 0.4);
 }
 
-.carmen-os-area-head {
-  display: flex;
-  align-items: baseline;
-  gap: 0.5rem;
+.carmen-story {
+  max-width: 42rem;
+  margin: 0 auto 1.6rem;
+  padding: 1.2rem 1.3rem;
+  border-radius: 18px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.05);
+  text-align: right;
+  color: rgba(255, 255, 255, 0.72);
+  font-size: 1.05rem;
+  line-height: 1.7;
 }
 
-.carmen-os-num {
-  font-family: Outfit, sans-serif;
-  font-weight: 500;
-  font-size: 0.82rem;
-  letter-spacing: 0.02em;
-  color: rgba(10, 21, 38, 0.4);
+.carmen-story strong {
+  color: var(--mc-primary);
 }
 
-.carmen-os-area h3 {
-  margin: 0;
-  font-size: 1.02rem;
-  font-weight: 700;
-  line-height: 1.3;
-  color: var(--mc-bg);
-}
-
-.carmen-os-area ul {
+.carmen-cta-row {
   display: flex;
   flex-wrap: wrap;
+  justify-content: center;
+  gap: 0.8rem;
+}
+
+.carmen-stats {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 1rem;
+  max-width: 34rem;
+  margin: 3rem auto 0;
+}
+
+.carmen-stats strong {
+  display: block;
+  color: var(--mc-primary);
+  font-size: 1.8rem;
+}
+
+.carmen-stats span {
+  color: rgba(255, 255, 255, 0.42);
+  font-size: 0.9rem;
+}
+
+.carmen-split {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 3rem;
+  align-items: center;
+  padding: 4.5rem 0;
+}
+
+.carmen-kicker {
+  display: inline-flex;
   gap: 0.45rem;
+  align-items: center;
+  margin-bottom: 1rem;
+  padding: 0.3rem 0.7rem;
+  border-radius: 999px;
+  background: rgba(8, 244, 103, 0.1);
+  border: 1px solid rgba(8, 244, 103, 0.25);
+  color: rgba(255, 255, 255, 0.72);
+  font-size: 0.9rem;
+}
+
+.carmen-kicker b {
+  color: var(--mc-primary);
+  font-weight: 700;
+}
+
+.carmen-split h2 {
+  margin: 0 0 0.8rem;
+  font-size: clamp(1.8rem, 3vw, 2.5rem);
+  line-height: 1.2;
+}
+
+.carmen-split p {
+  margin: 0 0 1.3rem;
+  color: rgba(255, 255, 255, 0.55);
+  font-size: 1.1rem;
+  line-height: 1.65;
+}
+
+.carmen-benefits {
+  display: grid;
+  gap: 0.85rem;
   margin: 0;
   padding: 0;
   list-style: none;
 }
 
-.carmen-os-area li {
-  padding: 0.32rem 0.7rem;
-  border-radius: 999px;
-  background: var(--mc-tint);
-  color: var(--mc-bg);
-  font-size: 0.9rem;
-  line-height: 1.35;
+.carmen-benefits li {
+  display: flex;
+  align-items: center;
+  gap: 0.8rem;
+  color: rgba(255, 255, 255, 0.75);
 }
 
-.carmen-os-area--dept {
-  align-items: start;
-}
-
-.carmen-dept-grid {
+.carmen-benefits i {
   display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
-  gap: 0.5rem;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  flex: none;
+  border-radius: 10px;
+  background: rgba(8, 244, 103, 0.1);
+  color: var(--mc-primary);
 }
 
-.carmen-dept {
-  min-height: 100%;
-  padding: 0.7rem 0.65rem;
-  border-radius: 12px;
-  background: var(--mc-tint);
+.carmen-benefits svg,
+.carmen-option svg,
+.carmen-pick svg {
+  width: 22px;
+  height: 22px;
 }
 
-.carmen-dept strong {
+.carmen-orgs {
+  position: relative;
+  padding: 1.6rem;
+  border-radius: 28px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: linear-gradient(145deg, rgba(255, 255, 255, 0.1), rgba(255, 255, 255, 0.04));
+}
+
+.carmen-org {
+  display: flex;
+  align-items: center;
+  gap: 0.8rem;
+  margin-bottom: 0.75rem;
+  padding: 0.9rem 1rem;
+  border-radius: 14px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.carmen-org:last-child {
+  margin-bottom: 0;
+}
+
+.carmen-org b {
   display: block;
-  font-size: 0.92rem;
+  font-size: 0.95rem;
+}
+
+.carmen-org span {
+  color: rgba(255, 255, 255, 0.42);
+  font-size: 0.78rem;
+}
+
+.carmen-org i {
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.1);
+  color: rgba(255, 255, 255, 0.55);
+}
+
+.carmen-org.is-main i {
+  background: var(--mc-primary);
+  color: var(--mc-bg);
+}
+
+.carmen-org.is-main b {
+  color: #ffffff;
+}
+
+.carmen-options {
+  display: flex;
+  gap: 0.7rem;
+  height: 320px;
+  margin: 0 auto 0.9rem;
+}
+
+.carmen-option {
+  position: relative;
+  flex: 1 1 52px;
+  min-width: 52px;
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 30px;
+  color: #ffffff;
+  cursor: pointer;
+  padding: 0;
+}
+
+.carmen-option.is-active {
+  flex: 8 1 280px;
+  border-radius: 40px;
+}
+
+.carmen-option-mark {
+  position: absolute;
+  left: 50%;
+  top: 42%;
+  color: rgba(255, 255, 255, 0.22);
+  transform: translate(-50%, -50%) scale(0.5);
+  opacity: 0;
+}
+
+.carmen-option-mark svg {
+  width: 140px;
+  height: 140px;
+}
+
+.carmen-option.is-active .carmen-option-mark {
+  opacity: 1;
+  transform: translate(-50%, -50%) scale(1);
+}
+
+.carmen-option-badge {
+  position: absolute;
+  top: 1rem;
+  left: 1rem;
+  display: none;
+  padding: 0.25rem 0.7rem;
+  border-radius: 999px;
+  background: var(--mc-primary);
+  color: var(--mc-bg);
+  font-size: 0.85rem;
   font-weight: 700;
-  line-height: 1.25;
 }
 
-.carmen-dept.is-latin strong {
-  font-family: Outfit, sans-serif;
-  font-weight: 500;
-  letter-spacing: -0.03em;
-  text-transform: lowercase;
+.carmen-option.is-active .carmen-option-badge {
+  display: inline-block;
 }
 
-.carmen-dept span {
+.carmen-option-foot {
+  position: absolute;
+  right: 0.7rem;
+  bottom: 0.7rem;
+  left: 0.7rem;
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+}
+
+.carmen-option.is-active .carmen-option-foot {
+  right: 1rem;
+  bottom: 1.4rem;
+  left: 1rem;
+  flex-direction: column;
+  text-align: center;
+}
+
+.carmen-option-icon {
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  flex: none;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.carmen-option.is-active .carmen-option-icon {
+  width: 58px;
+  height: 58px;
+}
+
+.carmen-option-copy strong,
+.carmen-option-copy span {
   display: block;
-  margin-top: 0.28rem;
-  font-size: 0.75rem;
-  line-height: 1.35;
-  color: rgba(10, 21, 38, 0.72);
+}
+
+.carmen-option-copy strong {
+  font-size: 1.05rem;
+  opacity: 0;
+}
+
+.carmen-option-copy span {
+  color: rgba(255, 255, 255, 0.7);
+  font-size: 0.92rem;
+  opacity: 0;
+}
+
+.carmen-option.is-active .carmen-option-copy strong,
+.carmen-option.is-active .carmen-option-copy span {
+  opacity: 1;
+}
+
+.carmen-option.is-active .carmen-option-copy strong {
+  font-size: 1.45rem;
+}
+
+.carmen-mobile-options {
+  display: none;
+}
+
+.carmen-join {
+  margin: 2rem 0 0;
+  padding: 3rem 1.5rem;
+  border-radius: 28px;
+  border: 1px solid rgba(8, 244, 103, 0.25);
+  background: linear-gradient(160deg, rgba(8, 244, 103, 0.2), rgba(8, 244, 103, 0.05));
+  text-align: center;
+}
+
+.carmen-join h2 {
+  margin: 0 0 0.6rem;
+  font-size: clamp(1.8rem, 3vw, 2.4rem);
+}
+
+.carmen-join p {
+  margin: 0 0 1.2rem;
+  color: rgba(255, 255, 255, 0.65);
+  font-size: 1.1rem;
 }
 
 @media (max-width: 860px) {
-  .carmen-system-layout {
+  .carmen-hero {
+    grid-template-columns: 1fr;
+    min-height: 0;
+    padding: 2.2rem 1.25rem 0;
+  }
+
+  .carmen-hero-copy,
+  .carmen-pin {
+    position: relative;
+    top: auto;
+  }
+
+  .carmen-hero-copy {
+    max-width: none;
+    justify-self: stretch;
+  }
+
+  .carmen-pin {
+    height: 72vh;
+  }
+
+  .carmen-split,
+  .carmen-stats {
     grid-template-columns: 1fr;
   }
 
-  .carmen-system-figure {
-    width: 92px;
-    margin: 0 auto 0.25rem;
+  .carmen-options {
+    display: none;
   }
 
-  .carmen-os-area {
-    grid-template-columns: 1fr;
+  .carmen-mobile-options {
+    display: block;
   }
 
-  .carmen-dept-grid {
-    grid-template-columns: 1fr 1fr;
+  .carmen-mobile-card {
+    position: relative;
+    min-height: 240px;
+    margin-bottom: 0.8rem;
+    padding: 1.2rem;
+    overflow: hidden;
+    border-radius: 28px;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+  }
+
+  .carmen-mobile-card .carmen-option-foot {
+    position: static;
+    flex-direction: column;
+    text-align: center;
+  }
+
+  .carmen-mobile-card .carmen-option-copy strong,
+  .carmen-mobile-card .carmen-option-copy span {
+    opacity: 1;
+  }
+
+  .carmen-picks {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 0.45rem;
+  }
+
+  .carmen-pick {
+    display: grid;
+    place-items: center;
+    width: 44px;
+    height: 44px;
+    border: 0;
+    border-radius: 999px;
+    color: #ffffff;
+    opacity: 0.6;
+  }
+
+  .carmen-pick.is-active {
+    opacity: 1;
+    outline: 2px solid #ffffff;
+    outline-offset: 2px;
   }
 }
 
 @media (max-width: 640px) {
-  .carmen-hero {
-    min-height: 180vh;
-  }
-
   .carmen-pin {
-    top: 64px;
-    height: 68vh;
+    height: 62vh;
   }
 
   .carmen-figure {

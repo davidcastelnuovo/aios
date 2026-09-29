@@ -72,9 +72,15 @@
     const sub = document.createElement("p");
     sub.className = "carmen-sub";
     sub.textContent = "מערכת הפעלה לסוכנויות שיווק מבוססת בינה מלאכותית";
+    const actions = document.createElement("div");
+    actions.className = "carmen-actions";
+    actions.innerHTML =
+      '<a class="carmen-btn" href="/contact/">צור קשר</a>' +
+      '<a class="carmen-btn carmen-btn--ghost" href="/packages/">החבילות שלנו</a>';
     copy.appendChild(logo);
     copy.appendChild(title);
     copy.appendChild(sub);
+    copy.appendChild(actions);
 
     const pin = document.createElement("div");
     pin.className = "carmen-pin";
@@ -148,144 +154,181 @@
     return section;
   }
 
-  function osChip(text) {
-    const li = document.createElement("li");
-    li.textContent = text;
-    return li;
+  function svg(body) {
+    return (
+      '<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">' +
+      body +
+      "</svg>"
+    );
   }
 
-  function osArea(index, title, items) {
-    const article = document.createElement("article");
-    article.className = "carmen-os-area";
-    const head = document.createElement("div");
-    head.className = "carmen-os-area-head";
-    const num = document.createElement("span");
-    num.className = "carmen-os-num";
-    num.textContent = index;
-    const heading = document.createElement("h3");
-    heading.textContent = title;
-    head.appendChild(num);
-    head.appendChild(heading);
-    const list = document.createElement("ul");
-    items.forEach(function (item) {
-      list.appendChild(osChip(item));
-    });
-    article.appendChild(head);
-    article.appendChild(list);
-    return article;
-  }
+  const glyphs = {
+    target: svg('<circle cx="12" cy="12" r="7"/><circle cx="12" cy="12" r="3"/><circle cx="12" cy="12" r="0.8" fill="currentColor"/>'),
+    check: svg('<path d="M20 6L9 17l-5-5"/>'),
+    zap: svg('<polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>'),
+    users: svg('<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="3"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>'),
+    dollar: svg('<line x1="12" y1="2" x2="12" y2="22"/><path d="M17 6H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>'),
+    message: svg('<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>'),
+    clock: svg('<circle cx="12" cy="12" r="8"/><polyline points="12 7 12 12 15 14"/>'),
+    pie: svg('<path d="M21.21 15.89A10 10 0 1 1 8 2.83"/><path d="M22 12A10 10 0 0 0 12 2v10z"/>'),
+    spark: svg('<path d="M12 3l1.5 4.5L18 9l-4.5 1.5L12 15l-1.5-4.5L6 9l4.5-1.5z"/>'),
+    refresh: svg('<polyline points="23 4 23 10 17 10"/><path d="M20.5 15A9 9 0 1 1 19 6.3L23 10"/>'),
+    calendar: svg('<rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>'),
+    building: svg('<rect x="4" y="3" width="16" height="18" rx="1"/><path d="M9 21v-5h6v5M8 8h.01M12 8h.01M16 8h.01M8 12h.01M12 12h.01M16 12h.01"/>'),
+    shield: svg('<path d="M12 3l8 3v6c0 5-3.4 7.6-8 9-4.6-1.4-8-4-8-9V6z"/>'),
+    chart: svg('<line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/>'),
+  };
 
-  function departmentCell(name, line, latin) {
-    const cell = document.createElement("div");
-    cell.className = latin ? "carmen-dept is-latin" : "carmen-dept";
-    const strong = document.createElement("strong");
-    strong.textContent = name;
-    const span = document.createElement("span");
-    span.textContent = line;
-    cell.appendChild(strong);
-    cell.appendChild(span);
-    return cell;
-  }
+  const modules = [
+    { main: "ניהול לידים", sub: "פייפליין מכירות, סטטוסים דינמיים", icon: "target", color: "#08F467" },
+    { main: "ניהול משימות", sub: "קנבן, טבלה, לוח שנה", icon: "check", color: "#22c55e" },
+    { main: "אוטומציות", sub: "טריגרים אוטומטיים, פולואפים", icon: "zap", color: "#eab308" },
+    { main: "ניהול לקוחות", sub: "כרטיס לקוח מפורט, היסטוריה", icon: "users", color: "#3b82f6" },
+    { main: "ניהול כספים", sub: "מעקב תשלומים, דוחות", icon: "dollar", color: "#10b981" },
+    { main: "אינטגרציית WhatsApp", sub: "Green API, ManyChat, צ'אט מובנה", icon: "message", color: "#4ade80" },
+    { main: "זימון פגישות", sub: "Google Calendar, שליחת זימונים", icon: "clock", color: "#0ea5e9", isNew: true },
+    { main: "דוחות אוטומטיים", sub: "דוחות ביצועים בזמן אמת", icon: "pie", color: "#ec4899", isNew: true },
+    { main: "בינה מלאכותית", sub: "עוזר AI חכם לתמיכה וניהול", icon: "spark", color: "#a855f7", isNew: true },
+    { main: "פולואפים אוטומטיים", sub: "מעקב אוטומטי, תזכורות", icon: "refresh", color: "#f97316" },
+    { main: "אינטגרציית יומן", sub: "Google Calendar, קביעת פגישות", icon: "calendar", color: "#ef4444" },
+  ];
 
-  function marketingArea() {
-    const article = document.createElement("article");
-    article.className = "carmen-os-area carmen-os-area--dept";
-    const head = document.createElement("div");
-    head.className = "carmen-os-area-head";
-    const num = document.createElement("span");
-    num.className = "carmen-os-num";
-    num.textContent = "04";
-    const heading = document.createElement("h3");
-    heading.textContent = "מחלקת השיווק";
-    head.appendChild(num);
-    head.appendChild(heading);
-    const grid = document.createElement("div");
-    grid.className = "carmen-dept-grid";
-    [
-      ["קופי", "פרויקטים, צ'אט ועורך", false],
-      ["קריאייטיב", "בריף, וריאציות ואישור", false],
-      ["seo / geo", "מחקר, תוכן ונראות", true],
-      ["קמפיינים", "קהלים, מודעות ותקציב", false],
-      ["אנליטיקה", "דשבורדים ודוחות", false],
-    ].forEach(function (row) {
-      grid.appendChild(departmentCell(row[0], row[1], row[2]));
-    });
-    article.appendChild(head);
-    article.appendChild(grid);
-    return article;
+  function optionButton(item, index) {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "carmen-option";
+    button.dataset.index = String(index);
+    button.style.background = "linear-gradient(145deg, " + item.color + "55, " + item.color + "18)";
+    button.innerHTML =
+      '<span class="carmen-option-mark">' +
+      glyphs[item.icon] +
+      "</span>" +
+      (item.isNew ? '<span class="carmen-option-badge">חדש</span>' : "") +
+      '<span class="carmen-option-foot"><span class="carmen-option-icon">' +
+      glyphs[item.icon] +
+      '</span><span class="carmen-option-copy"><strong>' +
+      item.main +
+      "</strong><span>" +
+      item.sub +
+      "</span></span></span>";
+    return button;
   }
 
   function systemSection() {
-    const section = document.createElement("section");
-    section.className = "carmen-system";
-    section.setAttribute("aria-labelledby", "carmen-system-title");
+    const root = document.createElement("div");
+    root.className = "carmen-aios";
 
-    const layout = document.createElement("div");
-    layout.className = "carmen-system-layout";
+    const intro = document.createElement("section");
+    intro.className = "carmen-aios-hero";
+    intro.innerHTML =
+      '<div class="carmen-wrap">' +
+      '<div class="carmen-badge"><strong>carmen marketing os</strong><span>מערכת הפעלה מבוססת בינה מלאכותית</span></div>' +
+      "<h2>השותפים שלך <span>לצמיחה</span></h2>" +
+      '<p class="carmen-lead">ניהול לידים לעסק שלך וללקוחות שלך<span>בנוי במיוחד עבור סוכנויות שיווק.</span></p>' +
+      '<div class="carmen-story"><strong>carmen marketing os</strong> היא לא סתם תוכנת CRM — היא מערכת הפעלה חכמה לעסק שלך. במקום לנהל כלים נפרדים, היא מרכזת הכל במקום אחד: לידים, לקוחות, משימות, אוטומציות, ואינטגרציות — ומניעה אותם עם בינה מלאכותית שעובדת בשבילך ברקע, 24/7.</div>' +
+      '<div class="carmen-cta-row"><a class="carmen-btn" href="/contact/">הרשמה לרשימת המתנה</a><a class="carmen-btn carmen-btn--ghost" href="https://aios.co.il/auth">יש לי חשבון</a></div>' +
+      '<div class="carmen-stats"><div><strong>50+</strong><span>ארגונים פעילים</span></div><div><strong>10K+</strong><span>לידים מנוהלים</span></div><div><strong>99%</strong><span>שביעות רצון</span></div></div>' +
+      "</div>";
 
-    const figure = document.createElement("img");
-    figure.className = "carmen-system-figure";
-    figure.src = "/carmen/carmen-solid.webp";
-    figure.alt = "";
-    figure.width = 720;
-    figure.height = 1180;
-    figure.decoding = "async";
+    const split = document.createElement("section");
+    split.className = "carmen-wrap";
+    split.innerHTML =
+      '<div class="carmen-split">' +
+      "<div>" +
+      '<div class="carmen-kicker"><b>חדש!</b><span>Multi-Tenant</span></div>' +
+      "<h2>פתח חשבונות<br><span>ללקוחות שלך</span></h2>" +
+      "<p>אפשר ללקוחות שלך לנהל את העסק שלהם דרך המערכת שלך. כל לקוח מקבל גישה מותאמת אישית לנתונים שלו בלבד.</p>" +
+      '<ul class="carmen-benefits">' +
+      "<li><i>" + glyphs.building + "</i><span>כל לקוח מקבל חשבון נפרד ומאובטח</span></li>" +
+      "<li><i>" + glyphs.shield + "</i><span>בידוד מלא בין ארגונים</span></li>" +
+      "<li><i>" + glyphs.chart + "</i><span>צפייה בכל הארגונים ממקום אחד</span></li>" +
+      "<li><i>" + glyphs.users + "</i><span>ניהול הרשאות מתקדם</span></li>" +
+      "</ul></div>" +
+      '<div class="carmen-orgs">' +
+      '<div class="carmen-org is-main" style="transform:translateX(0)"><i>' + glyphs.building + '</i><div><b>סוכנות שיווק ראשית</b><span>מנהל</span></div></div>' +
+      '<div class="carmen-org" style="transform:translateX(-10px)"><i>' + glyphs.building + '</i><div><b>לקוח - חברת טכנולוגיה</b><span>לקוח</span></div></div>' +
+      '<div class="carmen-org" style="transform:translateX(-20px)"><i>' + glyphs.building + '</i><div><b>לקוח - מסעדה</b><span>לקוח</span></div></div>' +
+      "</div></div>";
 
-    const panel = document.createElement("div");
-    panel.className = "carmen-system-panel";
-    const title = document.createElement("h2");
-    title.className = "carmen-title";
-    title.id = "carmen-system-title";
-    title.textContent = "המערכת";
+    const picker = document.createElement("section");
+    picker.className = "carmen-wrap";
+    const rowA = document.createElement("div");
+    rowA.className = "carmen-options";
+    const rowB = document.createElement("div");
+    rowB.className = "carmen-options";
+    const mobile = document.createElement("div");
+    mobile.className = "carmen-mobile-options";
+    const buttons = modules.map(optionButton);
+    buttons.forEach(function (button, index) {
+      (index < 6 ? rowA : rowB).appendChild(button);
+    });
+    const mobileCard = document.createElement("div");
+    mobileCard.className = "carmen-mobile-card";
+    const picks = document.createElement("div");
+    picks.className = "carmen-picks";
+    const pickButtons = modules.map(function (item, index) {
+      const pick = document.createElement("button");
+      pick.type = "button";
+      pick.className = "carmen-pick";
+      pick.dataset.index = String(index);
+      pick.style.background = item.color;
+      pick.innerHTML = glyphs[item.icon];
+      pick.setAttribute("aria-label", item.main);
+      picks.appendChild(pick);
+      return pick;
+    });
+    mobile.appendChild(mobileCard);
+    mobile.appendChild(picks);
 
-    const os = document.createElement("div");
-    os.className = "carmen-os";
-    const bar = document.createElement("div");
-    bar.className = "carmen-os-bar";
-    bar.innerHTML = "carmen marketing <span>os</span>";
-    const body = document.createElement("div");
-    body.className = "carmen-os-body";
-    body.appendChild(
-      osArea("01", "ניהול שיווק ומכירות", [
-        "דשבורד מכירות",
-        "פייפליין וסטטוסים",
-        "קמפיינרים",
-        "דוחות ביצועים",
-      ])
-    );
-    body.appendChild(
-      osArea("02", "אוטומציות ופולואפים", [
-        "טריגרים אוטומטיים",
-        "פולואפים אוטומטיים",
-        "תזכורות והתראות",
-        "זימון פגישות",
-      ])
-    );
-    body.appendChild(
-      osArea("03", "ניהול לידים", [
-        "פייפליין מכירות",
-        "יבוא מפייסבוק",
-        "תמלול שיחות",
-        "סיכום ועזרה במכירה",
-      ])
-    );
-    body.appendChild(marketingArea());
-    body.appendChild(
-      osArea("05", "לקוחות, משימות ופרויקטים", [
-        "כרטיס לקוח והיסטוריה",
-        "צוותי עבודה",
-        "קנבן, טבלה ויומן",
-        "פרויקטים לכל לקוח",
-      ])
-    );
-    os.appendChild(bar);
-    os.appendChild(body);
-    panel.appendChild(title);
-    panel.appendChild(os);
-    layout.appendChild(figure);
-    layout.appendChild(panel);
-    section.appendChild(layout);
-    return section;
+    function paint(active) {
+      buttons.forEach(function (button, index) {
+        button.classList.toggle("is-active", index === active);
+      });
+      pickButtons.forEach(function (button, index) {
+        button.classList.toggle("is-active", index === active);
+      });
+      const item = modules[active];
+      mobileCard.style.background = "linear-gradient(145deg, " + item.color + "55, " + item.color + "18)";
+      mobileCard.innerHTML =
+        (item.isNew ? '<span class="carmen-option-badge" style="display:inline-block">חדש</span>' : "") +
+        '<span class="carmen-option-foot"><span class="carmen-option-icon">' +
+        glyphs[item.icon] +
+        '</span><span class="carmen-option-copy"><strong>' +
+        item.main +
+        "</strong><span>" +
+        item.sub +
+        "</span></span></span>";
+    }
+
+    function choose(index) {
+      paint(index);
+    }
+
+    buttons.forEach(function (button, index) {
+      button.addEventListener("click", function () {
+        choose(index);
+      });
+    });
+    pickButtons.forEach(function (button, index) {
+      button.addEventListener("click", function () {
+        choose(index);
+      });
+    });
+    paint(0);
+    picker.appendChild(rowA);
+    picker.appendChild(rowB);
+    picker.appendChild(mobile);
+
+    const join = document.createElement("section");
+    join.className = "carmen-wrap";
+    join.innerHTML =
+      '<div class="carmen-join"><h2>רוצים להצטרף?</h2><p>הירשמו לרשימת המתנה ונעדכן אתכם כשהגישה תיפתח</p><a class="carmen-btn" href="/contact/">הרשמה לרשימת המתנה</a></div>';
+
+    root.appendChild(intro);
+    root.appendChild(split);
+    root.appendChild(picker);
+    root.appendChild(join);
+    return root;
   }
 
   function homeLayer() {
