@@ -12,11 +12,13 @@ import {
   fetchLastMetaCampaignActivity,
   latestCampaignUpdatedTime,
 } from '../_shared/fbInsights.ts';
+import { kickNextBatch } from '../_shared/kick-next-batch.ts';
 import {
+  jerusalemToday,
+  planScheduledSyncWindows,
   replacedRecordsFilter,
-  resolveAdsSyncWindow,
   resolvePruneStart,
-  toDateString,
+  type SyncWindow,
 } from '../_shared/report-sync-window.ts';
 
 
@@ -25,7 +27,7 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-const BATCH_SIZE = 8;
+const BATCH_SIZE = 4;
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
@@ -85,7 +87,6 @@ Deno.serve(async (req) => {
         const adAccountId = rawAdAccountId && !String(rawAdAccountId).startsWith('act_')
           ? `act_${rawAdAccountId}`
           : rawAdAccountId;
-        const dateRange = settings.date_range || 'last_30_days';
         const previousAccountStatus: string | null = settings.account_status || null;
 
         if (!adAccountId) {
@@ -144,80 +145,12 @@ Deno.serve(async (req) => {
 
         const accessToken = integration.api_key;
 
-        // Calculate date range
-        const now = new Date();
-        const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-        let since: Date;
-        let until = new Date(today);
-        
-        switch (dateRange) {
-          case 'today':
-            since = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-            break;
-          case 'yesterday':
-            since = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1);
-            until = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1);
-            break;
-          case 'this_week':
-            const dayOfWeek = now.getDay();
-            since = new Date(now.getFullYear(), now.getMonth(), now.getDate() - dayOfWeek);
-            break;
-          case 'last_week': {
-            const dow = now.getDay();
-            const startOfThisWeek = new Date(now.getFullYear(), now.getMonth(), now.getDate() - dow);
-            since = new Date(startOfThisWeek);
-            since.setDate(startOfThisWeek.getDate() - 7);
-            until = new Date(startOfThisWeek);
-            until.setDate(startOfThisWeek.getDate() - 1);
-            break;
-          }
-          case 'last_7_days':
-            since = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 6);
-            until = today;
-            break;
-          case 'last_14_days':
-            since = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 14);
-            until = today;
-            break;
-          case 'this_month':
-            since = new Date(now.getFullYear(), now.getMonth(), 1);
-            break;
-          case 'last_30_days':
-            since = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 30);
-            until = today;
-            break;
-          case 'last_60_days':
-            since = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 60);
-            until = today;
-            break;
-          case 'last_90_days':
-            since = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 90);
-            until = today;
-            break;
-          case 'last_120_days':
-            since = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 120);
-            until = today;
-            break;
-          case 'last_180_days':
-            since = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 180);
-            until = today;
-            break;
-          case 'last_365_days':
-            since = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 365);
-            until = today;
-            break;
-          default:
-            since = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 30);
-            until = today;
-        }
-
-        const syncWindow = resolveAdsSyncWindow(
-          { startDate: toDateString(since), endDate: toDateString(until) },
-          toDateString(now),
+        // Morning cron refreshes recent days plus one older slice. A full 120-day
+        // pull on every account timed the run out before later clients were reached.
+        const plan = planScheduledSyncWindows(
+          jerusalemToday(),
+          typeof settings.scheduled_history_from === 'string' ? settings.scheduled_history_from : null,
         );
-        const sinceStr = syncWindow.startDate;
-        const untilStr = syncWindow.endDate;
-
 
         // First, fetch campaign statuses to detect real blocks
         const campaignsUrl = `https://graph.facebook.com/v21.0/${adAccountId}/campaigns?fields=id,name,effective_status,configured_status,objective,updated_time&limit=500&access_token=${accessToken}`;
@@ -278,19 +211,6 @@ Deno.serve(async (req) => {
           accountDisableReason = accountData.disable_reason || null;
         }
 
-        const { records: insights, levelCounts } = await buildAllLevelInsightRecords(
-          adAccountId,
-          sinceStr,
-          untilStr,
-          accessToken,
-          campaignStatuses,
-          resultLeadTypes,
-          optimizationGoals,
-        );
-        const campaignInsights = insights.filter((row) => (row.entity_level || 'campaign') === 'campaign');
-        console.log(`[cron-sync-facebook-insights] ${table.name}: synced ${insights.length} rows`, levelCounts);
-
-
         // Ensure fields exist (shared schema, identical to the manual sync)
         const fieldKeys = FB_INSIGHTS_FIELD_KEYS;
         const fieldNames = FB_INSIGHTS_FIELD_NAMES;
@@ -309,7 +229,18 @@ Deno.serve(async (req) => {
           await supabase.from('crm_fields').insert(fieldsToInsert);
         }
 
-        if (insights.length > 0) {
+        const writeWindow = async (syncWindow: SyncWindow) => {
+          const { records: insights, levelCounts } = await buildAllLevelInsightRecords(
+            adAccountId,
+            syncWindow.startDate,
+            syncWindow.endDate,
+            accessToken,
+            campaignStatuses,
+            resultLeadTypes,
+            optimizationGoals,
+          );
+          console.log(`[cron-sync-facebook-insights] ${table.name}: synced ${insights.length} rows ${syncWindow.startDate}..${syncWindow.endDate}`, levelCounts);
+          if (insights.length === 0) return insights;
           const { error: deleteError } = await supabase
             .from('crm_records')
             .delete()
@@ -317,7 +248,6 @@ Deno.serve(async (req) => {
             .or(replacedRecordsFilter(resolvePruneStart(syncWindow, insights.map((row) => row.date))));
           if (deleteError) throw deleteError;
 
-          // Bulk insert new records (one round-trip per chunk instead of one per row)
           const recordRows = insights.map((insight) => ({
             table_id: table.id,
             tenant_id: table.tenant_id,
@@ -330,18 +260,37 @@ Deno.serve(async (req) => {
               .insert(recordRows.slice(i, i + INSERT_CHUNK));
             if (insertError) throw insertError;
           }
+          return insights;
+        };
+
+        let historyFrom = plan.historyFrom;
+        if (plan.catchup) {
+          try {
+            await writeWindow(plan.catchup);
+          } catch (catchupError: any) {
+            historyFrom = typeof settings.scheduled_history_from === 'string'
+              ? settings.scheduled_history_from
+              : plan.refresh.startDate;
+            console.error(`[cron-sync-facebook-insights] ${table.name}: catch-up failed:`, catchupError.message);
+          }
         }
+        const insights = await writeWindow(plan.refresh);
+        const campaignInsights = insights.filter((row) => (row.entity_level || 'campaign') === 'campaign');
+        const untilStr = plan.refresh.endDate;
 
         const lastCampaignUpdatedAt = latestCampaignUpdatedTime(campaignStatuses);
         const lastMetaActivity = await fetchLastMetaCampaignActivity(accessToken, adAccountId);
 
-        // Update last_sync_at and account status
+        const syncedAt = new Date().toISOString();
+        // Update last_sync_at on the column and in settings. Health reads the freshest of the two.
         await supabase
           .from('crm_tables')
           .update({
+            last_sync_at: syncedAt,
             integration_settings: {
               ...settings,
-              last_sync_at: new Date().toISOString(),
+              last_sync_at: syncedAt,
+              scheduled_history_from: historyFrom,
               last_insights_until: untilStr,
               last_campaign_updated_at: lastCampaignUpdatedAt,
               last_meta_activity: lastMetaActivity,
@@ -708,16 +657,7 @@ Deno.serve(async (req) => {
     if (hasMore && !tableIds) {
       const nextOffset = batchOffset + BATCH_SIZE;
       console.log(`🔄 Triggering next batch at offset ${nextOffset}...`);
-      const supabaseUrl = Deno.env.get('SUPABASE_URL') ?? '';
-      const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '';
-      fetch(`${supabaseUrl}/functions/v1/cron-sync-facebook-insights`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${serviceKey}`,
-        },
-        body: JSON.stringify({ batch_offset: nextOffset }),
-      }).catch(err => console.error('Failed to trigger next batch:', err));
+      await kickNextBatch(supabase, 'cron-sync-facebook-insights', { batch_offset: nextOffset });
     } else if (!tableIds) {
       // The twice-daily sync has finished. Calculate and optionally deliver the
       // pulse from the CRM rows we just stored. This performs no extra Meta API

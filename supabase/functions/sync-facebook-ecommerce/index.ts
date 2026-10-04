@@ -41,7 +41,7 @@ Deno.serve(async (req) => {
     );
 
     const requestBody = await req.json();
-    const { table_id, _internal_cron } = requestBody;
+    const { table_id, _internal_cron, start_date, end_date, scheduled_history_from, update_last_sync = true } = requestBody;
 
     // Auth: skip user check when called internally by cron
     let userId: string | null = null;
@@ -217,10 +217,14 @@ Deno.serve(async (req) => {
 
     // `date_range` is the table's display default; reports can look back further than
     // that, so always pull (and keep) at least the deepest report window.
-    const syncWindow = resolveAdsSyncWindow(
+    let syncWindow = resolveAdsSyncWindow(
       { startDate: toDateString(since), endDate: toDateString(until) },
       toDateString(now),
     );
+    const isoDate = /^\d{4}-\d{2}-\d{2}$/;
+    if (typeof start_date === 'string' && typeof end_date === 'string' && isoDate.test(start_date) && isoDate.test(end_date)) {
+      syncWindow = { startDate: start_date, endDate: end_date };
+    }
     const sinceStr = syncWindow.startDate;
     const untilStr = syncWindow.endDate;
 
@@ -339,14 +343,18 @@ Deno.serve(async (req) => {
       .maybeSingle();
     const currentSettings = (freshTable?.integration_settings || settings || {}) as Record<string, unknown>;
     const lastCampaignUpdatedAt = latestCampaignUpdatedTime(campaignStatuses);
+    const touchLastSync = update_last_sync !== false;
     await supabaseAdmin
       .from('crm_tables')
       .update({
-        last_sync_at: syncedAt,
+        ...(touchLastSync ? { last_sync_at: syncedAt } : {}),
         integration_settings: {
           ...currentSettings,
-          last_sync_at: syncedAt,
+          ...(touchLastSync ? { last_sync_at: syncedAt } : {}),
           last_campaign_updated_at: lastCampaignUpdatedAt,
+          ...(typeof scheduled_history_from === 'string' && isoDate.test(scheduled_history_from)
+            ? { scheduled_history_from }
+            : {}),
         }
       })
       .eq('id', table_id);

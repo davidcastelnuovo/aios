@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { kickNextBatch } from "../_shared/kick-next-batch.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -40,14 +41,12 @@ serve(async (req) => {
     const hasMore = (allTables || []).length > batchOffset + BATCH_SIZE;
     console.log(`[cron-ga] batch offset=${batchOffset} size=${tables.length} of ${(allTables || []).length} (hasMore=${hasMore})`);
 
-    // Kick off the next batch immediately (fire-and-forget) so batches run in
-    // parallel-ish and the whole set finishes well within limits.
+    // Queue the next batch before this one does its work. pg_net keeps the
+    // request alive after this invocation returns.
     if (hasMore) {
-      fetch(`${supabaseUrl}/functions/v1/cron-sync-google-analytics`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${serviceKey}` },
-        body: JSON.stringify({ batch_offset: batchOffset + BATCH_SIZE }),
-      }).catch((e) => console.error('[cron-ga] next batch trigger failed:', e?.message));
+      await kickNextBatch(supabase, 'cron-sync-google-analytics', {
+        batch_offset: batchOffset + BATCH_SIZE,
+      });
     }
 
     // Compute 90-day window (per project rule).
