@@ -91,6 +91,20 @@ Deno.serve(async (req) => {
 
     if (hasMore) {
       await kickNextBatch(supabaseAdmin, 'cron-sync-facebook-ecommerce', { batch_offset: batchOffset + BATCH_SIZE });
+    } else {
+      // Pulse reads these rows. Refresh the snapshot after the chain finishes;
+      // do not send WhatsApp from the sync.
+      const pulseResponse = await fetch(`${supabaseUrl}/functions/v1/campaign-pulse-snapshot`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${serviceKey}`,
+        },
+        body: JSON.stringify({ deliver: false, source: 'post_facebook_ecommerce_sync' }),
+      });
+      if (!pulseResponse.ok) {
+        console.error('[cron-sync-facebook-ecommerce] pulse calculation failed:', await pulseResponse.text());
+      }
     }
 
     return new Response(JSON.stringify({ success: true, total: allTables?.length || 0, batch_offset: batchOffset, results }), {
