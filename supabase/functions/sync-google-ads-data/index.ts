@@ -122,7 +122,14 @@ Deno.serve(async (req) => {
       user = authedUser;
     }
 
-    const { table_id, operational_only = false } = await req.json();
+    const {
+      table_id,
+      operational_only = false,
+      start_date,
+      end_date,
+      scheduled_history_from,
+      update_last_sync = true,
+    } = await req.json();
     
     if (!table_id) {
       return new Response(JSON.stringify({ error: 'table_id required' }), {
@@ -392,10 +399,15 @@ Deno.serve(async (req) => {
 
     // `date_range` is the table's display default; reports can look back further than
     // that, so always pull (and keep) at least the deepest report window.
-    const syncWindow = resolveAdsSyncWindow(
+    let syncWindow = resolveAdsSyncWindow(
       { startDate: toDateString(startDate), endDate: toDateString(endDate) },
       toDateString(now),
     );
+    // Morning cron passes an explicit short window. Manual sync keeps the full history pull.
+    const isoDate = /^\d{4}-\d{2}-\d{2}$/;
+    if (typeof start_date === 'string' && typeof end_date === 'string' && isoDate.test(start_date) && isoDate.test(end_date)) {
+      syncWindow = { startDate: start_date, endDate: end_date };
+    }
     const startIso = syncWindow.startDate;
     const endIso = syncWindow.endDate;
 
@@ -1094,18 +1106,27 @@ Deno.serve(async (req) => {
     // the freshest of the two; older writers only patched settings and left a
     // stale column that looked like "sync missing".
     const syncedAt = new Date().toISOString();
-    await patchIntegrationSettings(
-      supabaseAdmin,
-      table_id,
-      { last_sync_at: syncedAt },
-      settings,
-    );
-    const { error: lastSyncColErr } = await supabaseAdmin
-      .from('crm_tables')
-      .update({ last_sync_at: syncedAt })
-      .eq('id', table_id);
-    if (lastSyncColErr) {
-      console.error('[sync-google-ads] last_sync_at column update failed:', lastSyncColErr.message);
+    const settingsPatch: Record<string, unknown> = {};
+    if (update_last_sync !== false) settingsPatch.last_sync_at = syncedAt;
+    if (typeof scheduled_history_from === 'string' && isoDate.test(scheduled_history_from)) {
+      settingsPatch.scheduled_history_from = scheduled_history_from;
+    }
+    if (Object.keys(settingsPatch).length > 0) {
+      await patchIntegrationSettings(
+        supabaseAdmin,
+        table_id,
+        settingsPatch,
+        settings,
+      );
+    }
+    if (update_last_sync !== false) {
+      const { error: lastSyncColErr } = await supabaseAdmin
+        .from('crm_tables')
+        .update({ last_sync_at: syncedAt })
+        .eq('id', table_id);
+      if (lastSyncColErr) {
+        console.error('[sync-google-ads] last_sync_at column update failed:', lastSyncColErr.message);
+      }
     }
 
     const byLevel = {
