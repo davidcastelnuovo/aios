@@ -1,9 +1,8 @@
--- Morning report syncs were dying after the first batch: the edge function
--- fired the next batch with an un-awaited fetch, and the isolate exited before
--- the request left. Later clients stayed stale until a manual sync.
--- The cron command also baked a bearer token, so a later key rotation 401'd
--- the whole morning run. Reschedule from the current Vault secret at run time,
--- and let a finished batch queue the next one through pg_net.
+-- Report syncs feed בדיקת הדופק, which refreshes at 04:00 and 13:00 UTC.
+-- Google Ads was once a day and Facebook's second run was after the afternoon
+-- pulse, so the dashboard was calculated on stale rows.
+-- Runs are twice daily and finish before each pulse refresh. The next batch is
+-- queued through pg_net, and the cron bearer is read from Vault at run time.
 
 CREATE OR REPLACE FUNCTION public.kick_internal_function(p_function text, p_body jsonb)
 RETURNS bigint
@@ -91,11 +90,16 @@ BEGIN
     RETURN;
   END IF;
 
+  -- Twice a day, before the pulse refreshes at 04:00 and 13:00 UTC
+  -- (07:00 and 16:00 Israel during IDT). Staggered so the ads APIs are not
+  -- hit by every provider in the same minute. Existing jobs are retimed;
+  -- a once-daily Google Ads job would leave the afternoon pulse stale.
   FOR job_name, job_schedule, fn IN
     SELECT * FROM (VALUES
-      ('daily-google-ads-sync'::text, '0 4 * * *'::text, 'cron-sync-google-ads'::text),
-      ('sync-facebook-insights-twice-daily'::text, '0 5,14 * * *'::text, 'cron-sync-facebook-insights'::text),
-      ('daily-ga-sync'::text, '0 4 * * *'::text, 'cron-sync-google-analytics'::text)
+      ('daily-google-ads-sync'::text, '40 2,11 * * *'::text, 'cron-sync-google-ads'::text),
+      ('sync-facebook-insights-twice-daily'::text, '45 2,11 * * *'::text, 'cron-sync-facebook-insights'::text),
+      ('cron-sync-facebook-ecommerce-daily'::text, '50 2,11 * * *'::text, 'cron-sync-facebook-ecommerce'::text),
+      ('daily-ga-sync'::text, '55 2,11 * * *'::text, 'cron-sync-google-analytics'::text)
     ) AS jobs(jobname, schedule, fn)
   LOOP
     cmd := format(
@@ -122,7 +126,7 @@ BEGIN
     IF existing_job IS NULL THEN
       PERFORM cron.schedule(job_name, job_schedule, cmd);
     ELSE
-      PERFORM cron.alter_job(job_id := existing_job, command := cmd);
+      PERFORM cron.alter_job(job_id := existing_job, schedule := job_schedule, command := cmd);
     END IF;
   END LOOP;
 EXCEPTION
