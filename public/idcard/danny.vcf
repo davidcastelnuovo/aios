@@ -1,9 +1,9 @@
 BEGIN:VCARD
 VERSION:3.0
-FN:דני פיק
-N:פיק;דני;;;
-ORG:פ.ד. נכסים
-TEL;TYPE=CELL:052-375155
-EMAIL:danny@pdpsagot.co.il
+FN;CHARSET=UTF-8:דני פיק
+N;CHARSET=UTF-8:פיק;דני;;;
+ORG;CHARSET=UTF-8:פ.ד. נכסים
+TEL;TYPE=CELL,VOICE:052-375155
+EMAIL;TYPE=INTERNET:danny@pdpsagot.co.il
 URL:https://www.pdpsagot.co.il
 END:VCARD

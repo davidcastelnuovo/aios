@@ -1,9 +1,8 @@
 <!--
-  Elementor → ווידג'ט HTML — הדבק את כל התוכן של הקובץ (כולל style ו-link).
+  Elementor → ווידג'ט HTML — הדבק את כל התוכן (link, div, style, script).
 
-  לפני פרסום: ודא שקובץ danny.vcf זמין בכתובת:
-  https://www.pdpsagot.co.il/idcard/danny.vcf
-  (או עדכן את href בשורת "שמירה באנשי קשר" למיקום שבו תעלה את הקובץ)
+  «שמירה באנשי קשר» מורידה vCard מהדף — לא צריך להעלות קובץ לשרת.
+  אופציונלי: public/idcard/danny.vcf להעלאה ידנית אם מעדיפים קישור ישיר.
 -->
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -62,7 +61,7 @@
             </a>
           </li>
           <li>
-            <a href="https://www.pdpsagot.co.il/idcard/danny.vcf" download="danny-pik.vcf">
+            <a href="#" data-vcard-download="danny-pik">
               <span class="icon-ring" aria-hidden="true">
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75">
                   <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
@@ -256,3 +255,39 @@
     }
   }
 </style>
+
+<script>
+(function () {
+  var VCARD =
+    "BEGIN:VCARD\r\n" +
+    "VERSION:3.0\r\n" +
+    "FN;CHARSET=UTF-8:דני פיק\r\n" +
+    "N;CHARSET=UTF-8:פיק;דני;;;\r\n" +
+    "ORG;CHARSET=UTF-8:פ.ד. נכסים\r\n" +
+    "TEL;TYPE=CELL,VOICE:052-375155\r\n" +
+    "EMAIL;TYPE=INTERNET:danny@pdpsagot.co.il\r\n" +
+    "URL:https://www.pdpsagot.co.il\r\n" +
+    "END:VCARD\r\n";
+
+  function downloadVcard() {
+    var blob = new Blob([VCARD], { type: "text/vcard;charset=utf-8" });
+    var url = URL.createObjectURL(blob);
+    var link = document.createElement("a");
+    link.href = url;
+    link.download = "danny-pik.vcf";
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    URL.revokeObjectURL(url);
+  }
+
+  var root = document.querySelector(".danny-pik-vcard");
+  if (!root) return;
+  var btn = root.querySelector("[data-vcard-download]");
+  if (!btn) return;
+  btn.addEventListener("click", function (event) {
+    event.preventDefault();
+    downloadVcard();
+  });
+})();
+</script>
