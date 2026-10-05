@@ -1,5 +1,19 @@
 (function () {
-  var SHARE_TEXT = "דני פיק\nDanny Pick\n052-375155\ndanny@pdpsagot.co.il";
+  var VCARD_URL = "https://pdpsagot.co.il/wp-content/uploads/danny-pik.vcf";
+
+  function shareText() {
+    var page = window.location.href.split("#")[0].split("?")[0];
+    return (
+      "דני פיק\n" +
+      "052-375155\n" +
+      "danny@pdpsagot.co.il\n\n" +
+      "שמירה באנשי קשר:\n" +
+      VCARD_URL +
+      "\n\n" +
+      "פתיחת הכרטיס:\n" +
+      page
+    );
+  }
 
   document.querySelectorAll(".js-save-contact").forEach(function (link) {
     link.addEventListener("click", function (event) {
@@ -48,14 +62,11 @@
     ctx.fillText("דני פיק", 1140, 210);
     ctx.fillStyle = "#c4a574";
     ctx.fillRect(1068, 236, 72, 3);
-    ctx.fillStyle = "#2a6a9b";
-    ctx.font = "500 28px Heebo, sans-serif";
-    ctx.direction = "ltr";
-    ctx.fillText("Danny Pick", 1140, 290);
     ctx.fillStyle = "#0f4c81";
+    ctx.direction = "ltr";
     ctx.font = "600 32px Heebo, sans-serif";
-    ctx.fillText("052-375155", 1140, 390);
-    ctx.fillText("danny@pdpsagot.co.il", 1140, 450);
+    ctx.fillText("052-375155", 1140, 330);
+    ctx.fillText("danny@pdpsagot.co.il", 1140, 390);
     var blob = await new Promise(function (resolve) {
       canvas.toBlob(resolve, "image/jpeg", 0.9);
     });
@@ -71,7 +82,8 @@
       } catch (err) {
         file = null;
       }
-      var payload = { title: "דני פיק", text: SHARE_TEXT, files: file ? [file] : undefined };
+      var text = shareText();
+      var payload = { title: "דני פיק", text: text, files: file ? [file] : undefined };
       if (file && navigator.canShare && navigator.canShare(payload)) {
         try {
           await navigator.share(payload);
@@ -81,7 +93,7 @@
         }
       }
       window.open(
-        "https://wa.me/972523795155?text=" + encodeURIComponent(SHARE_TEXT),
+        "https://wa.me/972523795155?text=" + encodeURIComponent(shareText()),
         "_blank",
         "noopener"
       );
