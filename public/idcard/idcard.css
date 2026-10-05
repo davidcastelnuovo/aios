@@ -197,12 +197,12 @@ body {
 
 .share-fab {
   position: absolute !important;
-  right: 18px !important;
-  left: auto !important;
+  left: 18px !important;
+  right: auto !important;
   bottom: 16px !important;
   z-index: 2;
   display: inline-flex !important;
-  direction: rtl !important;
+  direction: ltr !important;
   align-items: center;
   gap: 8px;
   width: auto !important;
@@ -225,14 +225,6 @@ body {
   opacity: 0.75;
 }
 
-@media (min-width: 768px) {
-  .share-fab {
-    left: 18px !important;
-    right: auto !important;
-    direction: ltr !important;
-  }
-}
-
 @media (max-width: 560px) {
   .biz-card {
     aspect-ratio: auto;
@@ -243,7 +235,7 @@ body {
     position: relative;
     width: 100%;
     max-width: none;
-    padding: 32px 22px 28px;
+    padding: 32px 22px 72px;
   }
 
   .contacts li {
