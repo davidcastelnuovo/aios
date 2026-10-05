@@ -195,6 +195,34 @@ body {
   text-align: right;
 }
 
+.share-fab {
+  position: absolute;
+  left: 18px !important;
+  right: auto !important;
+  bottom: 16px;
+  z-index: 2;
+  display: inline-flex !important;
+  direction: ltr !important;
+  align-items: center;
+  gap: 8px;
+  width: auto !important;
+  margin: 0 !important;
+  color: var(--ink);
+  text-decoration: none;
+  font-family: "Heebo", sans-serif;
+  font-size: 0.9rem;
+  font-weight: 600;
+}
+
+.share-fab__label {
+  direction: rtl;
+  white-space: nowrap;
+}
+
+.share-fab:hover {
+  opacity: 0.75;
+}
+
 @media (max-width: 560px) {
   .biz-card {
     aspect-ratio: auto;
