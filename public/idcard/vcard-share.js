@@ -58,14 +58,21 @@
   }
 
   function pinShareButton() {
+    document.querySelectorAll(".share-dock").forEach(function (dock) {
+      dock.style.setProperty("position", "relative", "important");
+      dock.style.setProperty("width", "46%", "important");
+      dock.style.setProperty("margin-left", "0", "important");
+      dock.style.setProperty("margin-right", "auto", "important");
+      dock.style.setProperty("text-align", "left", "important");
+      dock.style.setProperty("float", "none", "important");
+    });
     document.querySelectorAll(".js-share-card").forEach(function (link) {
-      link.style.setProperty("position", "absolute", "important");
-      link.style.setProperty("bottom", "16px", "important");
-      link.style.setProperty("margin", "0", "important");
-      link.style.setProperty("float", "none", "important");
-      link.style.setProperty("left", "18px", "important");
+      link.style.setProperty("position", "static", "important");
+      link.style.setProperty("left", "auto", "important");
       link.style.setProperty("right", "auto", "important");
-      link.style.setProperty("direction", "ltr", "important");
+      link.style.setProperty("bottom", "auto", "important");
+      link.style.setProperty("float", "none", "important");
+      link.style.setProperty("margin", "0", "important");
     });
   }
 
