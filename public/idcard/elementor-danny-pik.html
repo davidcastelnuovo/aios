@@ -342,8 +342,14 @@
 (function () {
   var VCARD_URL = "https://pdpsagot.co.il/wp-content/uploads/danny-pik.vcf";
 
+  function cardPageUrl() {
+    var link = document.querySelector(".js-share-card");
+    var explicit = link && link.getAttribute("data-card-url");
+    if (explicit) return explicit;
+    return window.location.href.split("#")[0].split("?")[0];
+  }
+
   function shareText() {
-    var page = window.location.href.split("#")[0].split("?")[0];
     return (
       "דני פיק\n" +
       "052-375155\n" +
@@ -352,8 +358,46 @@
       VCARD_URL +
       "\n\n" +
       "פתיחת הכרטיס:\n" +
-      page
+      cardPageUrl()
     );
+  }
+
+  function openWhatsAppText(text) {
+    var url = "https://wa.me/?text=" + encodeURIComponent(text);
+    try {
+      if (window.top && window.top !== window) {
+        window.top.location.href = url;
+        return;
+      }
+    } catch (err) {}
+    window.location.href = url;
+  }
+
+  function whenBackFromShare() {
+    return new Promise(function (resolve) {
+      var sawHidden = document.visibilityState === "hidden";
+      var settled = false;
+      var earlyTimer = 0;
+      function finish() {
+        if (settled) return;
+        settled = true;
+        document.removeEventListener("visibilitychange", onChange);
+        window.clearTimeout(earlyTimer);
+        window.setTimeout(resolve, 200);
+      }
+      function onChange() {
+        if (document.visibilityState === "hidden") {
+          sawHidden = true;
+          window.clearTimeout(earlyTimer);
+          return;
+        }
+        if (sawHidden) finish();
+      }
+      document.addEventListener("visibilitychange", onChange);
+      earlyTimer = window.setTimeout(function () {
+        if (!sawHidden && document.visibilityState === "visible") finish();
+      }, 800);
+    });
   }
 
   document.querySelectorAll(".js-save-contact").forEach(function (link) {
@@ -416,16 +460,20 @@
       var file;
       try { file = await cardFile(); } catch (err) { file = null; }
       var text = shareText();
-      var payload = { title: "דני פיק", text: text, files: file ? [file] : undefined };
-      if (file && navigator.canShare && navigator.canShare(payload)) {
+      var android = /Android/i.test(navigator.userAgent || "");
+      if (file && navigator.canShare && navigator.canShare({ files: [file] })) {
         try {
-          await navigator.share(payload);
+          await navigator.share({ files: [file], text: text });
+          if (android) {
+            await whenBackFromShare();
+            openWhatsAppText(text);
+          }
           return;
         } catch (err) {
           if (err && err.name === "AbortError") return;
         }
       }
-      window.open("https://wa.me/972523795155?text=" + encodeURIComponent(shareText()), "_blank", "noopener");
+      openWhatsAppText(text);
     });
   });
 })();
