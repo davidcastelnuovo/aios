@@ -63,10 +63,7 @@
               </a>
             </li>
             <li>
-            <a
-              href="https://pdpsagot.co.il/wp-content/uploads/danny-pik.vcf"
-              download="danny-pik.vcf"
-            >
+            <a class="js-save-contact" href="https://pdpsagot.co.il/wp-content/uploads/danny-pik.vcf">
                 <span class="icon-ring" aria-hidden="true">
                   <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75">
                     <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
@@ -76,12 +73,24 @@
                   </svg>
                 </span>
                 <span class="sep" aria-hidden="true"></span>
-                <span class="contact-value contact-label-he">שמירה באנשי קשר</span>
+                <span class="contact-value contact-value--he">שמירה באנשי קשר</span>
               </a>
             </li>
           </ul>
         </div>
       </article>
     </main>
+    <script>
+      (function () {
+        var links = document.querySelectorAll(".js-save-contact");
+        for (var i = 0; i < links.length; i++) {
+          links[i].addEventListener("click", function (event) {
+            event.preventDefault();
+            var base = this.getAttribute("href").split("?")[0];
+            window.location.assign(base + "?v=" + Date.now());
+          });
+        }
+      })();
+    </script>
   </body>
 </html>
