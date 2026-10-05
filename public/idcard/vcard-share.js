@@ -1,10 +1,5 @@
 (function () {
   var VCARD_URL = "https://pdpsagot.co.il/wp-content/uploads/danny-pik.vcf";
-  var CARD_PAGE_URL = "https://pdpsagot.co.il/business-card/";
-
-  function cardPageUrl() {
-    return CARD_PAGE_URL;
-  }
 
   function shareText() {
     return (
@@ -12,10 +7,7 @@
       "052-3795155\n" +
       "danny@pdpsagot.co.il\n\n" +
       "שמירה באנשי קשר:\n" +
-      VCARD_URL +
-      "\n\n" +
-      "פתיחת הכרטיס:\n" +
-      cardPageUrl()
+      VCARD_URL
     );
   }
 
@@ -107,8 +99,9 @@
 
   async function cardFile() {
     if (document.fonts && document.fonts.load) {
-      await document.fonts.load("800 72px Heebo");
-      await document.fonts.load("500 28px Heebo");
+      await document.fonts.load("800 112px Heebo");
+      await document.fonts.load("800 58px Heebo");
+      await document.fonts.load("800 48px Heebo");
     }
     var img = await loadImage(bgUrl());
     var canvas = document.createElement("canvas");
@@ -122,15 +115,16 @@
     ctx.fillStyle = "#0f4c81";
     ctx.textAlign = "right";
     ctx.direction = "rtl";
-    ctx.font = "800 72px Heebo, sans-serif";
+    ctx.font = "800 112px Heebo, sans-serif";
     ctx.fillText("דני פיק", 1140, 210);
     ctx.fillStyle = "#c4a574";
-    ctx.fillRect(1068, 236, 72, 3);
+    ctx.fillRect(1028, 242, 112, 5);
     ctx.fillStyle = "#0f4c81";
     ctx.direction = "ltr";
-    ctx.font = "600 32px Heebo, sans-serif";
-    ctx.fillText("052-3795155", 1140, 330);
-    ctx.fillText("danny@pdpsagot.co.il", 1140, 390);
+    ctx.font = "800 58px Heebo, sans-serif";
+    ctx.fillText("052-3795155", 1140, 350);
+    ctx.font = "800 48px Heebo, sans-serif";
+    ctx.fillText("danny@pdpsagot.co.il", 1140, 430);
     var blob = await new Promise(function (resolve) {
       canvas.toBlob(resolve, "image/jpeg", 0.9);
     });
