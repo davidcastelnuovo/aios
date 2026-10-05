@@ -1,9 +1,8 @@
--- Merge a user-linked campaigner into the existing team member of the same person.
--- A duplicate is the same tenant, the same normalized name, and compatible emails
--- (equal, or one side blank). Placeholder names are left alone.
--- The kept row is the one with more client assignments, otherwise the older row.
--- Two different login users are never folded together.
--- Applied on Staging first (merge_duplicate_user_campaigners_staging.sql), then Production.
+-- Production apply. Same person, two team-member cards: identical email, different display names
+-- (for example אוהד and אוהד טל). The earlier name-only merge skipped these
+-- because the names were not equal and neither card had a login link.
+-- Keep the row with more client assignments, otherwise the older row, and
+-- keep the longer name when it extends the shorter one.
 
 CREATE OR REPLACE FUNCTION public.merge_duplicate_campaigner_pair(p_left uuid, p_right uuid)
 RETURNS uuid
@@ -20,6 +19,10 @@ DECLARE
   right_team integer;
   left_name text;
   right_name text;
+  left_email text;
+  right_email text;
+  same_email boolean;
+  same_name boolean;
 BEGIN
   SELECT * INTO left_row FROM public.campaigners WHERE id = p_left;
   SELECT * INTO right_row FROM public.campaigners WHERE id = p_right;
@@ -30,17 +33,18 @@ BEGIN
     RETURN NULL;
   END IF;
 
-  left_name := lower(regexp_replace(btrim(left_row.full_name), '\s+', ' ', 'g'));
-  right_name := lower(regexp_replace(btrim(right_row.full_name), '\s+', ' ', 'g'));
-  IF left_name = '' OR left_name IS DISTINCT FROM right_name THEN
+  left_name := lower(regexp_replace(btrim(coalesce(left_row.full_name, '')), '\s+', ' ', 'g'));
+  right_name := lower(regexp_replace(btrim(coalesce(right_row.full_name, '')), '\s+', ' ', 'g'));
+  left_email := NULLIF(lower(btrim(coalesce(left_row.email, ''))), '');
+  right_email := NULLIF(lower(btrim(coalesce(right_row.email, ''))), '');
+  same_email := left_email IS NOT NULL AND left_email = right_email;
+  same_name := left_name <> '' AND left_name = right_name
+    AND left_name NOT IN ('קמפיינר', 'איש מכירות', 'איש צוות');
+
+  IF NOT same_name AND NOT same_email THEN
     RETURN NULL;
   END IF;
-  IF left_name IN ('קמפיינר', 'איש מכירות', 'איש צוות') THEN
-    RETURN NULL;
-  END IF;
-  IF NULLIF(btrim(left_row.email), '') IS NOT NULL
-     AND NULLIF(btrim(right_row.email), '') IS NOT NULL
-     AND lower(btrim(left_row.email)) IS DISTINCT FROM lower(btrim(right_row.email)) THEN
+  IF same_name AND NOT same_email AND left_email IS NOT NULL AND right_email IS NOT NULL THEN
     RETURN NULL;
   END IF;
 
@@ -54,7 +58,7 @@ BEGIN
     RETURN NULL;
   END IF;
 
-  IF NOT EXISTS (
+  IF NOT same_email AND NOT EXISTS (
     SELECT 1 FROM public.profiles WHERE campaigner_id IN (left_row.id, right_row.id)
   ) THEN
     RETURN NULL;
@@ -73,8 +77,20 @@ BEGIN
 
   UPDATE public.campaigners AS kept
   SET
+    full_name = CASE
+      WHEN length(regexp_replace(btrim(dup.full_name), '\s+', ' ', 'g'))
+           > length(regexp_replace(btrim(kept.full_name), '\s+', ' ', 'g'))
+       AND lower(regexp_replace(btrim(dup.full_name), '\s+', ' ', 'g'))
+           LIKE lower(regexp_replace(btrim(kept.full_name), '\s+', ' ', 'g')) || '%'
+      THEN regexp_replace(btrim(dup.full_name), '\s+', ' ', 'g')
+      ELSE kept.full_name
+    END,
     email = COALESCE(NULLIF(btrim(kept.email), ''), NULLIF(btrim(dup.email), '')),
     phone = COALESCE(NULLIF(btrim(kept.phone), ''), NULLIF(btrim(dup.phone), '')),
+    role = CASE
+      WHEN kept.role IS NULL OR cardinality(kept.role) = 0 THEN dup.role
+      ELSE kept.role
+    END,
     notes = COALESCE(kept.notes, dup.notes),
     active = kept.active OR dup.active,
     updated_at = now()
@@ -159,37 +175,17 @@ DECLARE
   merged uuid;
 BEGIN
   FOR pair IN
-    WITH named AS (
-      SELECT
-        c.id,
-        c.tenant_id,
-        lower(regexp_replace(btrim(c.full_name), '\s+', ' ', 'g')) AS name_key,
-        c.email
-      FROM public.campaigners c
-      WHERE c.full_name IS NOT NULL
-        AND btrim(c.full_name) <> ''
-        AND lower(regexp_replace(btrim(c.full_name), '\s+', ' ', 'g'))
-            NOT IN ('קמפיינר', 'איש מכירות', 'איש צוות')
-    )
     SELECT a.id AS left_id, b.id AS right_id
-    FROM named a
-    JOIN named b
+    FROM public.campaigners a
+    JOIN public.campaigners b
       ON a.tenant_id = b.tenant_id
-     AND a.name_key = b.name_key
      AND a.id < b.id
-    WHERE (
-        NULLIF(btrim(a.email), '') IS NULL
-        OR NULLIF(btrim(b.email), '') IS NULL
-        OR lower(btrim(a.email)) = lower(btrim(b.email))
-      )
-      AND (
-        EXISTS (SELECT 1 FROM public.profiles p WHERE p.campaigner_id = a.id)
-        OR EXISTS (SELECT 1 FROM public.profiles p WHERE p.campaigner_id = b.id)
-      )
+     AND NULLIF(lower(btrim(coalesce(a.email, ''))), '') IS NOT NULL
+     AND lower(btrim(a.email)) = lower(btrim(b.email))
   LOOP
     merged := public.merge_duplicate_campaigner_pair(pair.left_id, pair.right_id);
     IF merged IS NOT NULL THEN
-      RAISE NOTICE 'merged duplicate campaigner into %', merged;
+      RAISE NOTICE 'merged same-email campaigner into %', merged;
     END IF;
   END LOOP;
 END $$;

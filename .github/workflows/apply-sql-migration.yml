@@ -63,6 +63,10 @@ on:
       - 'supabase/ops/apply_pulse_campaign_breakdown_production.sql'
       - 'supabase/ops/apply_recurring_human_tasks_production.sql'
       - 'supabase/ops/apply_fix_duplicate_task_reminder_notifications_production.sql'
+      - 'supabase/ops/merge_duplicate_user_campaigners_production.sql'
+      - 'supabase/ops/merge_same_email_campaigners_production.sql'
+      - 'supabase/ops/merge_assigned_campaigner_production.sql'
+      - 'supabase/ops/apply_morning_report_sync_production.sql'
 
 jobs:
   apply:
@@ -98,7 +102,19 @@ jobs:
             echo "$CHANGED" | grep '^supabase/ops/' || true
 
             # Prefer the newest ops migration that triggered this push.
-            if echo "$CHANGED" | grep -qx 'supabase/ops/apply_fix_duplicate_task_reminder_notifications_production.sql'; then
+            if echo "$CHANGED" | grep -qx 'supabase/ops/apply_morning_report_sync_production.sql'; then
+              FILE="supabase/ops/apply_morning_report_sync_production.sql"
+              NAME="apply_morning_report_sync_production"
+            elif echo "$CHANGED" | grep -qx 'supabase/ops/merge_assigned_campaigner_production.sql'; then
+              FILE="supabase/ops/merge_assigned_campaigner_production.sql"
+              NAME="merge_assigned_campaigner_production"
+            elif echo "$CHANGED" | grep -qx 'supabase/ops/merge_same_email_campaigners_production.sql'; then
+              FILE="supabase/ops/merge_same_email_campaigners_production.sql"
+              NAME="merge_same_email_campaigners_production"
+            elif echo "$CHANGED" | grep -qx 'supabase/ops/merge_duplicate_user_campaigners_production.sql'; then
+              FILE="supabase/ops/merge_duplicate_user_campaigners_production.sql"
+              NAME="merge_duplicate_user_campaigners_production"
+            elif echo "$CHANGED" | grep -qx 'supabase/ops/apply_fix_duplicate_task_reminder_notifications_production.sql'; then
               FILE="supabase/ops/apply_fix_duplicate_task_reminder_notifications_production.sql"
               NAME="apply_fix_duplicate_task_reminder_notifications_production"
             elif echo "$CHANGED" | grep -qx 'supabase/ops/apply_recurring_human_tasks_production.sql'; then
@@ -245,6 +261,9 @@ jobs:
             elif echo "$CHANGED" | grep -qx 'supabase/ops/apply_seo_monthly_shares.sql'; then
               FILE="supabase/ops/apply_seo_monthly_shares.sql"
               NAME="apply_seo_monthly_shares"
+            elif echo "$CHANGED" | grep -qx 'supabase/ops/apply_client_retention_daily_production.sql'; then
+              FILE="supabase/ops/apply_client_retention_daily_production.sql"
+              NAME="pause_client_retention_daily_production"
             else
               echo "No matching supabase/ops SQL file in push; skipping apply."
               echo "skip=true" >> "$GITHUB_OUTPUT"
