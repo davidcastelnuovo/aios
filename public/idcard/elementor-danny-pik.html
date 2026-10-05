@@ -1,6 +1,6 @@
 <!--
   Elementor → ווידג'ט HTML — הדבק את כל הקובץ (link, div, style, script).
-  הרקע מוטמע בקוד; vCard נשמר מהדף בלחיצה על «שמירה באנשי קשר».
+  הרקע מוטמע בקוד. vCard: https://pdpsagot.co.il/wp-content/uploads/danny-pik.vcf
 -->
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -59,7 +59,10 @@
             </a>
           </li>
           <li>
-            <a href="#" data-vcard-download="danny-pik" data-vcard-download-filename="danny-pik.vcf">
+            <a
+              href="https://pdpsagot.co.il/wp-content/uploads/danny-pik.vcf"
+              download="danny-pik.vcf"
+            >
               <span class="icon-ring" aria-hidden="true">
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75">
                   <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
@@ -256,40 +259,3 @@
     }
   }
 </style>
-
-<script>
-(function () {
-  var VCARD =
-    "BEGIN:VCARD\r\n" +
-    "VERSION:3.0\r\n" +
-    "PRODID:-//PD Psagot//Contact//HE\r\n" +
-    "N;CHARSET=UTF-8:פיק;דני;;;\r\n" +
-    "FN;CHARSET=UTF-8:דני פיק\r\n" +
-    "ORG;CHARSET=UTF-8:פ.ד. נכסים\r\n" +
-    "TEL;TYPE=CELL,VOICE:+97252375155\r\n" +
-    "EMAIL;TYPE=INTERNET,WORK:danny@pdpsagot.co.il\r\n" +
-    "URL;TYPE=WORK:https://www.pdpsagot.co.il\r\n" +
-    "END:VCARD\r\n" 
-
-  function downloadVcard() {
-    var blob = new Blob([VCARD], { type: "text/vcard;charset=utf-8" });
-    var url = URL.createObjectURL(blob);
-    var link = document.createElement("a");
-    link.href = url;
-    link.download = "danny-pik.vcf";
-    document.body.appendChild(link);
-    link.click();
-    link.remove();
-    URL.revokeObjectURL(url);
-  }
-
-  var root = document.querySelector(".danny-pik-vcard");
-  if (!root) return;
-  var btn = root.querySelector("[data-vcard-download]");
-  if (!btn) return;
-  btn.addEventListener("click", function (event) {
-    event.preventDefault();
-    downloadVcard();
-  });
-})();
-</script>
