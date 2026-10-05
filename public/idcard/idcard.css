@@ -1,11 +1,11 @@
 :root {
-  --ink: #1c2a38;
-  --ink-muted: #4a5568;
+  --ink: #0f4c81;
+  --ink-muted: #2a6a9b;
   --gold: #c4a574;
   --white-soft: rgba(255, 255, 255, 0.78);
   --card-radius: 28px;
   --icon-size: 46px;
-  --font: "Heebo", "Assistant", Arial, sans-serif;
+  --font: "Heebo", sans-serif;
 }
 
 *,
@@ -42,10 +42,6 @@ body {
   min-height: 260px;
   border-radius: var(--card-radius);
   background-color: #f3eee6;
-  background-image: url("/idcard/card-bg.png");
-  background-size: cover;
-  background-position: center right;
-  background-repeat: no-repeat;
   box-shadow:
     0 28px 60px rgba(28, 42, 56, 0.14),
     0 2px 0 rgba(255, 255, 255, 0.65) inset;
@@ -56,7 +52,11 @@ body {
   position: absolute;
   inset: 0;
   pointer-events: none;
-  background: linear-gradient(90deg, rgba(255, 255, 255, 0.12) 0%, transparent 38%);
+  background-image: url("/idcard/card-bg.png");
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+  transform: scaleX(-1);
   z-index: 0;
 }
 
@@ -79,7 +79,10 @@ body {
   max-width: 58%;
   height: 100%;
   min-height: 260px;
-  padding: 36px 32px 32px 28px;
+  margin-inline-start: auto;
+  padding: 36px 32px 36px 28px;
+  font-family: "Heebo", sans-serif;
+  color: var(--ink);
 }
 
 .name-block h1 {
@@ -151,7 +154,7 @@ body {
 .sep {
   width: 1px;
   height: 22px;
-  background: rgba(28, 42, 56, 0.18);
+  background: rgba(15, 76, 129, 0.22);
   flex-shrink: 0;
 }
 
