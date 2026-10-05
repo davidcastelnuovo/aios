@@ -20,6 +20,24 @@
 export const REPORT_MIN_SYNC_DAYS = 120;
 
 /**
+ * Days a morning run re-fetches so late conversions still move.
+ * Older stored rows are left in place.
+ */
+export const SCHEDULED_REFRESH_DAYS = 14;
+
+/** How far one morning run walks backward into history it has not covered yet. */
+export const SCHEDULED_CATCHUP_DAYS = 21;
+
+export type ScheduledSyncPlan = {
+  /** Recent days, written on every morning run. */
+  refresh: SyncWindow;
+  /** Older slice still missing from scheduled coverage, or null once 120 days are covered. */
+  catchup: SyncWindow | null;
+  /** Oldest day covered after a successful catch-up (or the existing marker when already complete). */
+  historyFrom: string;
+};
+
+/**
  * Blank or malformed `date` values sort below every real report date, so the prune
  * filter has to sweep them explicitly or they duplicate on every sync.
  */
@@ -76,6 +94,62 @@ export function resolvePruneStart(
     if (date < startDate) startDate = date;
   }
   return startDate;
+}
+
+/** Calendar date in Asia/Jerusalem, `yyyy-mm-dd`. Morning crons are scheduled in UTC. */
+export function jerusalemToday(now: Date = new Date()): string {
+  return new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Asia/Jerusalem',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).format(now);
+}
+
+/**
+ * A morning run must finish every account. Re-downloading the full 120-day
+ * history for every table timed the cron out after the first batch, so the
+ * rest (for example a client synced by hand later) never moved.
+ *
+ * Each run refreshes the last {@link SCHEDULED_REFRESH_DAYS} and, until
+ * `historyFrom` reaches the 120-day floor, also pulls one older slice.
+ * Rows outside those slices are not deleted.
+ */
+export function planScheduledSyncWindows(
+  today: string,
+  historyFrom: string | null | undefined,
+  minHistoryDays: number = REPORT_MIN_SYNC_DAYS,
+  refreshDays: number = SCHEDULED_REFRESH_DAYS,
+  catchupDays: number = SCHEDULED_CATCHUP_DAYS,
+): ScheduledSyncPlan {
+  const target = shiftDateString(today, -minHistoryDays);
+  const refresh: SyncWindow = {
+    startDate: shiftDateString(today, -refreshDays),
+    endDate: today,
+  };
+  const covered = typeof historyFrom === 'string' && ISO_DATE.test(historyFrom.slice(0, 10))
+    ? historyFrom.slice(0, 10)
+    : null;
+  if (covered && covered <= target) {
+    return { refresh, catchup: null, historyFrom: covered };
+  }
+
+  const frontier = covered && covered < refresh.startDate ? covered : refresh.startDate;
+  let chunkStart = shiftDateString(frontier, -catchupDays);
+  if (chunkStart < target) chunkStart = target;
+  const chunkEnd = shiftDateString(frontier, -1);
+  if (chunkEnd < chunkStart) {
+    return {
+      refresh,
+      catchup: null,
+      historyFrom: covered && covered < refresh.startDate ? covered : refresh.startDate,
+    };
+  }
+  return {
+    refresh,
+    catchup: { startDate: chunkStart, endDate: chunkEnd },
+    historyFrom: chunkStart,
+  };
 }
 
 /**
