@@ -2,12 +2,13 @@
   var VCARD =
     "BEGIN:VCARD\r\n" +
     "VERSION:3.0\r\n" +
-    "FN;CHARSET=UTF-8:דני פיק\r\n" +
+    "PRODID:-//PD Psagot//Contact//HE\r\n" +
     "N;CHARSET=UTF-8:פיק;דני;;;\r\n" +
+    "FN;CHARSET=UTF-8:דני פיק\r\n" +
     "ORG;CHARSET=UTF-8:פ.ד. נכסים\r\n" +
-    "TEL;TYPE=CELL,VOICE:052-375155\r\n" +
-    "EMAIL;TYPE=INTERNET:danny@pdpsagot.co.il\r\n" +
-    "URL:https://www.pdpsagot.co.il\r\n" +
+    "TEL;TYPE=CELL,VOICE:+97252375155\r\n" +
+    "EMAIL;TYPE=INTERNET,WORK:danny@pdpsagot.co.il\r\n" +
+    "URL;TYPE=WORK:https://www.pdpsagot.co.il\r\n" +
     "END:VCARD\r\n";
 
   function downloadVcard(filename) {
