@@ -185,6 +185,7 @@ body {
   word-break: break-word;
 }
 
+@media (max-width: 560px) {
   .biz-card {
     flex-direction: column-reverse;
     min-height: auto;
