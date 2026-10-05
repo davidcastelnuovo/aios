@@ -26,7 +26,7 @@ serve(async (req) => {
       admin.from("clients").select("name,website,business_description,industry,ahrefs_domain").eq("id", item.client_id).maybeSingle(),
       admin.from("ahrefs_reports").select("report_type,report_data,comparison_data,report_date").eq("tenant_id", item.tenant_id).eq("client_id", item.client_id).order("report_date", { ascending: false }).limit(8),
       admin.from("rank_tracking_projects").select("id,domain,country,language").eq("tenant_id", item.tenant_id).eq("client_id", item.client_id).eq("is_active", true),
-      buildSkillsBlockBySlug(["seo"], item.tenant_id),
+      buildSkillsBlockBySlug(["seo_geo", "seo"], item.tenant_id),
     ]);
     const projectIds = (projects ?? []).map((project) => project.id);
     const { data: trackedKeywords } = projectIds.length ? await admin.from("rank_tracking_keywords").select("keyword,current_position,position_change,search_volume,found_url").in("project_id", projectIds).eq("is_active", true).limit(150) : { data: [] };
@@ -58,7 +58,15 @@ serve(async (req) => {
     if (!ai.ok) throw new Error(`SEO planning failed: ${ai.status} ${await ai.text()}`);
     const data = await ai.json();
     const plan = JSON.parse(data.choices?.[0]?.message?.content ?? "{}");
-    const nextPayload = { ...payload, seo_plan: plan, seo_prompt: prompt, department: "seo", last_skin_slug: "seo" };
+    const nextPayload = {
+      ...payload,
+      seo_plan: plan,
+      seo_prompt: prompt,
+      seo_horizon_months: Math.max(1, Math.min(Number(horizon_months) || 3, 12)),
+      seo_plan_status: mode === "fill" && payload.seo_plan_status === "approved" ? "approved" : "pending",
+      department: "seo",
+      last_skin_slug: "seo_geo",
+    };
     await admin.from("marketing_work_items").update({ payload: nextPayload, status: "draft" }).eq("id", item.id);
     await admin.from("marketing_assets").insert({ tenant_id: item.tenant_id, item_id: item.id, stage_id: item.current_stage_id, type: "seo_plan", content: JSON.stringify(plan), meta: { source: `carmen_${mode}`, skin_slug: "seo", horizon_months } });
     return respond({ plan, skin_slug: "seo", data_sources: { ahrefs_reports: reports?.length ?? 0, tracked_keywords: trackedKeywords?.length ?? 0 } });
