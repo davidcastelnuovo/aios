@@ -74,7 +74,7 @@
           </li>
         </ul>
       </div>
-      <a class="js-share-card share-fab" href="https://wa.me/972523795155">
+      <a class="js-share-card share-fab" href="https://wa.me/972523795155" data-card-url="https://pdpsagot.co.il/business-card/">
         <span class="icon-ring" aria-hidden="true">
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75">
             <circle cx="18" cy="5" r="3" />
@@ -336,12 +336,10 @@
 <script>
 (function () {
   var VCARD_URL = "https://pdpsagot.co.il/wp-content/uploads/danny-pik.vcf";
+  var CARD_PAGE_URL = "https://pdpsagot.co.il/business-card/";
 
   function cardPageUrl() {
-    var link = document.querySelector(".js-share-card");
-    var explicit = link && link.getAttribute("data-card-url");
-    if (explicit) return explicit;
-    return window.location.href.split("#")[0].split("?")[0];
+    return CARD_PAGE_URL;
   }
 
   function shareText() {

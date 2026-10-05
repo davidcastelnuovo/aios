@@ -1,11 +1,9 @@
 (function () {
   var VCARD_URL = "https://pdpsagot.co.il/wp-content/uploads/danny-pik.vcf";
+  var CARD_PAGE_URL = "https://pdpsagot.co.il/business-card/";
 
   function cardPageUrl() {
-    var link = document.querySelector(".js-share-card");
-    var explicit = link && link.getAttribute("data-card-url");
-    if (explicit) return explicit;
-    return window.location.href.split("#")[0].split("?")[0];
+    return CARD_PAGE_URL;
   }
 
   function shareText() {
