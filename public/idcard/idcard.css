@@ -70,21 +70,26 @@ body {
 }
 
 .biz-card__content {
-  position: relative;
+  position: absolute;
   z-index: 1;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: min(52%, 400px);
   display: flex;
   flex-direction: column;
   justify-content: center;
-  max-width: 58%;
-  height: 100%;
-  min-height: 260px;
-  margin-inline-start: 0;
-  margin-inline-end: auto;
-  padding-inline-start: 22px;
-  padding-inline-end: 38px;
+  align-items: stretch;
+  margin: 0;
+  padding: 34px 26px 34px 16px;
   text-align: right;
   font-family: "Heebo", sans-serif;
   color: var(--ink);
+}
+
+.name-block {
+  width: 100%;
+  text-align: right;
 }
 
 .name-block h1 {
@@ -108,7 +113,7 @@ body {
   margin: 0 0 28px;
   font-size: 0.78rem;
   font-weight: 500;
-  letter-spacing: 0.28em;
+  letter-spacing: 0.12em;
   color: var(--ink-muted);
   direction: ltr;
   text-align: right;
@@ -120,18 +125,27 @@ body {
   padding: 0;
   display: flex;
   flex-direction: column;
+  align-items: flex-end;
   gap: 16px;
+  width: 100%;
+}
+
+.contacts li {
+  width: 100%;
+  display: flex;
+  justify-content: flex-end;
 }
 
 .contacts a {
-  display: flex;
+  display: inline-flex;
   align-items: center;
-  gap: 14px;
+  gap: 12px;
   color: var(--ink);
   text-decoration: none;
   font-size: 0.92rem;
   font-weight: 500;
   transition: opacity 0.15s ease;
+  direction: rtl;
 }
 
 .contacts a:hover {
@@ -161,11 +175,16 @@ body {
 }
 
 .contact-value {
-  direction: ltr;
-  text-align: right;
-  flex: 1;
+  flex: 0 1 auto;
   min-width: 0;
   word-break: break-word;
+  text-align: right;
+}
+
+.contact-value--ltr {
+  direction: ltr;
+  unicode-bidi: plaintext;
+  text-align: right;
 }
 
 @media (max-width: 560px) {
@@ -175,9 +194,14 @@ body {
   }
 
   .biz-card__content {
-    max-width: 100%;
-    min-height: 320px;
-    padding: 32px 24px 28px;
+    position: relative;
+    width: 100%;
+    max-width: none;
+    padding: 32px 22px 28px;
+  }
+
+  .contacts li {
+    justify-content: flex-end;
   }
 
   .name-en {
