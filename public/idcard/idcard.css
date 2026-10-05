@@ -37,51 +37,37 @@ body {
 .biz-card {
   position: relative;
   overflow: hidden;
-  min-height: 300px;
+  width: 100%;
+  aspect-ratio: 680 / 320;
+  min-height: 260px;
   border-radius: var(--card-radius);
-  background-color: #ebe6de;
-  background-image:
-    radial-gradient(ellipse 95% 75% at 12% 88%, rgba(108, 138, 165, 0.62), transparent 58%),
-    radial-gradient(ellipse 80% 55% at 78% 22%, rgba(255, 255, 255, 0.85), transparent 52%),
-    linear-gradient(135deg, #f6f2ea 0%, #eef3f7 45%, #d5dfe8 100%);
+  background-color: #f3eee6;
+  background-image: url("/idcard/card-bg.svg");
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
   box-shadow:
     0 28px 60px rgba(28, 42, 56, 0.14),
     0 2px 0 rgba(255, 255, 255, 0.65) inset;
 }
 
-.biz-card::before,
+.biz-card::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: linear-gradient(90deg, rgba(243, 238, 230, 0.35) 0%, transparent 42%);
+  z-index: 0;
+}
+
 .biz-card::after {
   content: "";
   position: absolute;
-  inset: -35% -25%;
+  inset: 0;
   pointer-events: none;
-  border-radius: 42%;
-}
-
-.biz-card::before {
-  background: linear-gradient(
-    118deg,
-    transparent 22%,
-    rgba(255, 255, 255, 0.62) 36%,
-    rgba(210, 185, 145, 0.42) 46%,
-    rgba(175, 198, 218, 0.48) 56%,
-    transparent 72%
-  );
-  transform: rotate(-16deg) translate(6%, 4%);
-  opacity: 0.92;
-}
-
-.biz-card::after {
-  background: linear-gradient(
-    128deg,
-    transparent 28%,
-    rgba(235, 225, 205, 0.55) 42%,
-    rgba(145, 170, 195, 0.42) 54%,
-    rgba(255, 255, 255, 0.28) 64%,
-    transparent 78%
-  );
-  transform: rotate(-9deg) translate(-4%, 12%);
-  opacity: 0.88;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.45);
+  border-radius: inherit;
+  z-index: 0;
 }
 
 .biz-card__content {
@@ -90,9 +76,10 @@ body {
   display: flex;
   flex-direction: column;
   justify-content: center;
-  max-width: 62%;
-  min-height: 300px;
-  padding: 40px 36px 36px 28px;
+  max-width: 58%;
+  height: 100%;
+  min-height: 260px;
+  padding: 36px 32px 32px 28px;
 }
 
 .name-block h1 {
@@ -177,9 +164,14 @@ body {
 }
 
 @media (max-width: 560px) {
+  .biz-card {
+    aspect-ratio: auto;
+    min-height: 320px;
+  }
+
   .biz-card__content {
     max-width: 100%;
-    min-height: auto;
+    min-height: 320px;
     padding: 32px 24px 28px;
   }
 
