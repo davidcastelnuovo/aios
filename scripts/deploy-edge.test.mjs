@@ -19,7 +19,7 @@ function fixture(t) {
 
 test('failed Staging deployment restores source; Production never receives wrapper', t => {
   const f = fixture(t);
-  const opts = { root: f.root, names: ['report'], productionProject: 'p'.repeat(20) };
+  const opts = { root: f.root, names: ['report'], productionProject: 'p'.repeat(20), pause: () => {} };
   const run = (_, args) => {
     if (args.includes('--help')) return { status: 0, stdout: '--use-api' };
     assert.ok(args.includes('--use-api'));
@@ -40,10 +40,30 @@ test('failed Staging deployment restores source; Production never receives wrapp
 
 test('target mix-ups and existing saved sources fail without changing files', t => {
   const f = fixture(t);
-  const opts = { root: f.root, names: ['report'], environment: 'staging', project: 'p'.repeat(20), productionProject: 'p'.repeat(20) };
+  const opts = { root: f.root, names: ['report'], environment: 'staging', project: 'p'.repeat(20), productionProject: 'p'.repeat(20), pause: () => {} };
   assert.throws(() => deployFunctions(opts), /Invalid target/);
   writeFileSync(f.saved, 'existing backup');
   assert.throws(() => deployFunctions({ ...opts, project: 's'.repeat(20), run: () => ({ status: 0, stdout: '--use-api' }) }), /Saved source already exists/);
   assert.equal(readFileSync(f.entry, 'utf8'), f.source);
   assert.equal(readFileSync(f.saved, 'utf8'), 'existing backup');
+});
+
+test('a platform failure is retried, then later functions still deploy', t => {
+  const f = fixture(t);
+  mkdirSync(join(f.root, 'supabase/functions/sync'), { recursive: true });
+  writeFileSync(join(f.root, 'supabase/functions/sync/index.ts'), 'Deno.serve(() => new Response("sync"));\n');
+  const calls = [];
+  const run = (_, args) => {
+    if (args.includes('--help')) return { status: 0, stdout: '--use-api' };
+    const name = args[2];
+    calls.push(name);
+    if (name === 'report') return { status: 1 };
+    return { status: 0 };
+  };
+  assert.throws(() => deployFunctions({
+    root: f.root, names: ['report', 'sync'], environment: 'production', project: 'p'.repeat(20),
+    productionProject: 'p'.repeat(20), attempts: 2, pause: () => {}, run,
+  }), /Deployment failed: report/);
+  assert.deepEqual(calls, ['report', 'report', 'sync']);
+  assert.equal(readFileSync(f.entry, 'utf8'), f.source);
 });
