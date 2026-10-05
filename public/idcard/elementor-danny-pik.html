@@ -55,7 +55,7 @@
                 </svg>
               </span>
               <span class="sep" aria-hidden="true"></span>
-              <span class="contact-value">וואטסאפ</span>
+              <span class="contact-value contact-value--he">וואטסאפ</span>
             </a>
           </li>
           <li>
@@ -72,7 +72,7 @@
                 </svg>
               </span>
               <span class="sep" aria-hidden="true"></span>
-              <span class="contact-value">שמירה באנשי קשר</span>
+              <span class="contact-value contact-value--he">שמירה באנשי קשר</span>
             </a>
           </li>
         </ul>
@@ -152,15 +152,16 @@
     position: absolute;
     z-index: 1;
     top: 0;
-    right: 0;
+    right: 0 !important;
+    left: auto !important;
     bottom: 0;
-    width: min(52%, 400px);
+    width: min(50%, 420px);
     display: flex;
     flex-direction: column;
     justify-content: center;
     align-items: stretch;
     margin: 0;
-    padding: 34px 26px 34px 16px;
+    padding: 34px 22px 34px 10px;
     text-align: right;
     font-family: "Heebo", sans-serif;
     color: var(--ink);
@@ -204,27 +205,30 @@
     padding: 0;
     display: flex;
     flex-direction: column;
-    align-items: flex-end;
-    gap: 16px;
+    gap: 14px;
     width: 100%;
   }
 
   .danny-pik-vcard .contacts li {
     width: 100%;
-    display: flex;
-    justify-content: flex-end;
+    display: block;
+    text-align: right;
   }
 
   .danny-pik-vcard .contacts a {
     display: inline-flex;
+    flex-direction: row;
+    direction: ltr;
     align-items: center;
     gap: 12px;
+    margin-left: auto !important;
+    margin-right: 0 !important;
+    max-width: 100%;
     color: var(--ink);
     text-decoration: none;
     font-size: 0.92rem;
     font-weight: 500;
     transition: opacity 0.15s ease;
-    direction: rtl;
   }
 
   .danny-pik-vcard .contacts a:hover {
@@ -257,12 +261,16 @@
     flex: 0 1 auto;
     min-width: 0;
     word-break: break-word;
-    text-align: right;
+    text-align: left;
   }
 
   .danny-pik-vcard .contact-value--ltr {
     direction: ltr;
     unicode-bidi: plaintext;
+  }
+
+  .danny-pik-vcard .contact-value--he {
+    direction: rtl;
     text-align: right;
   }
 
@@ -279,9 +287,7 @@
       padding: 32px 22px 28px;
     }
 
-    .danny-pik-vcard .contacts li {
-      justify-content: flex-end;
-    }
+
 
     .danny-pik-vcard .name-en {
       margin-bottom: 22px;
