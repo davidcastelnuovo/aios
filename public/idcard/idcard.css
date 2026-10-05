@@ -196,17 +196,19 @@ body {
 }
 
 .share-fab {
-  position: absolute;
-  left: 18px !important;
-  right: auto !important;
-  bottom: 16px;
+  position: absolute !important;
+  right: 18px !important;
+  left: auto !important;
+  bottom: 16px !important;
   z-index: 2;
   display: inline-flex !important;
-  direction: ltr !important;
+  direction: rtl !important;
   align-items: center;
   gap: 8px;
   width: auto !important;
+  max-width: calc(100% - 36px);
   margin: 0 !important;
+  float: none !important;
   color: var(--ink);
   text-decoration: none;
   font-family: "Heebo", sans-serif;
@@ -223,10 +225,11 @@ body {
   opacity: 0.75;
 }
 
-@media (max-width: 767px) {
+@media (min-width: 768px) {
   .share-fab {
-    left: auto !important;
-    right: 18px !important;
+    left: 18px !important;
+    right: auto !important;
+    direction: ltr !important;
   }
 }
 

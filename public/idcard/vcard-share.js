@@ -59,6 +59,28 @@
     });
   }
 
+  function pinShareButton() {
+    var mobile = window.matchMedia("(max-width: 767px)").matches;
+    document.querySelectorAll(".js-share-card").forEach(function (link) {
+      link.style.setProperty("position", "absolute", "important");
+      link.style.setProperty("bottom", "16px", "important");
+      link.style.setProperty("margin", "0", "important");
+      link.style.setProperty("float", "none", "important");
+      if (mobile) {
+        link.style.setProperty("left", "auto", "important");
+        link.style.setProperty("right", "18px", "important");
+        link.style.setProperty("direction", "rtl", "important");
+      } else {
+        link.style.setProperty("left", "18px", "important");
+        link.style.setProperty("right", "auto", "important");
+        link.style.setProperty("direction", "ltr", "important");
+      }
+    });
+  }
+
+  pinShareButton();
+  window.addEventListener("resize", pinShareButton);
+
   document.querySelectorAll(".js-save-contact").forEach(function (link) {
     link.addEventListener("click", function (event) {
       event.preventDefault();

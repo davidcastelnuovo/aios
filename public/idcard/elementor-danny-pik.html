@@ -284,17 +284,19 @@
   }
 
   .danny-pik-vcard .share-fab {
-    position: absolute;
-    left: 18px !important;
-    right: auto !important;
-    bottom: 16px;
+    position: absolute !important;
+    right: 18px !important;
+    left: auto !important;
+    bottom: 16px !important;
     z-index: 2;
     display: inline-flex !important;
-    direction: ltr !important;
+    direction: rtl !important;
     align-items: center;
     gap: 8px;
     width: auto !important;
+    max-width: calc(100% - 36px);
     margin: 0 !important;
+    float: none !important;
     color: var(--ink);
     text-decoration: none;
     font-family: "Heebo", sans-serif;
@@ -311,10 +313,11 @@
     opacity: 0.75;
   }
 
-  @media (max-width: 767px) {
+  @media (min-width: 768px) {
     .danny-pik-vcard .share-fab {
-      left: auto !important;
-      right: 18px !important;
+      left: 18px !important;
+      right: auto !important;
+      direction: ltr !important;
     }
   }
 
@@ -399,6 +402,28 @@
       }, 800);
     });
   }
+
+  function pinShareButton() {
+    var mobile = window.matchMedia("(max-width: 767px)").matches;
+    document.querySelectorAll(".js-share-card").forEach(function (link) {
+      link.style.setProperty("position", "absolute", "important");
+      link.style.setProperty("bottom", "16px", "important");
+      link.style.setProperty("margin", "0", "important");
+      link.style.setProperty("float", "none", "important");
+      if (mobile) {
+        link.style.setProperty("left", "auto", "important");
+        link.style.setProperty("right", "18px", "important");
+        link.style.setProperty("direction", "rtl", "important");
+      } else {
+        link.style.setProperty("left", "18px", "important");
+        link.style.setProperty("right", "auto", "important");
+        link.style.setProperty("direction", "ltr", "important");
+      }
+    });
+  }
+
+  pinShareButton();
+  window.addEventListener("resize", pinShareButton);
 
   document.querySelectorAll(".js-save-contact").forEach(function (link) {
     link.addEventListener("click", function (event) {
