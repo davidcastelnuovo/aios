@@ -9,7 +9,7 @@
   function shareText() {
     return (
       "דני פיק\n" +
-      "052-375155\n" +
+      "052-3795155\n" +
       "danny@pdpsagot.co.il\n\n" +
       "שמירה באנשי קשר:\n" +
       VCARD_URL +
@@ -129,7 +129,7 @@
     ctx.fillStyle = "#0f4c81";
     ctx.direction = "ltr";
     ctx.font = "600 32px Heebo, sans-serif";
-    ctx.fillText("052-375155", 1140, 330);
+    ctx.fillText("052-3795155", 1140, 330);
     ctx.fillText("danny@pdpsagot.co.il", 1140, 390);
     var blob = await new Promise(function (resolve) {
       canvas.toBlob(resolve, "image/jpeg", 0.9);

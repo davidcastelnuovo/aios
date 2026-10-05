@@ -6,7 +6,7 @@
     "N;CHARSET=UTF-8:פיק;דני;;;\r\n" +
     "FN;CHARSET=UTF-8:דני פיק\r\n" +
     "ORG;CHARSET=UTF-8:פ.ד. נכסים\r\n" +
-    "TEL;TYPE=CELL,VOICE:+97252375155\r\n" +
+    "TEL;TYPE=CELL,VOICE:+972523795155\r\n" +
     "EMAIL;TYPE=INTERNET,WORK:danny@pdpsagot.co.il\r\n" +
     "URL;TYPE=WORK:https://www.pdpsagot.co.il\r\n" +
     "END:VCARD\r\n";
