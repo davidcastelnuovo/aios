@@ -145,6 +145,7 @@ serve(async (req) => {
       clientId: target_type === "client" ? target_id : null,
       briefSource: "zoom_meeting",
       createdBy: user.id,
+      manual: true,
     })
       : { ok: false as const, reason: "not_configured" as const };
     if (dispatched.ok) {

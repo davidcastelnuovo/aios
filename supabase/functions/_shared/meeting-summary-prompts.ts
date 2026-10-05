@@ -55,12 +55,17 @@ ${source}${focusPrompt}
 כתוב סיכום מקצועי ומפורט. העדף שלמות ודיוק על פני קיצור, אך אל תחזור על אותו פרט בכמה סעיפים.`;
 }
 
+export function meetingSummaryIdempotencyKey(recordingId: string, manual = false): string {
+  return manual ? `meeting-summary:${recordingId}:manual` : `meeting-summary:${recordingId}`;
+}
+
 export function buildMeetingSummaryCursorTask(
   source: string,
   recordingInfo: string,
   focusPrompt: string,
 ): string {
-  return `אתה מסכם פגישה עסקית עבור AIOS. אל תערוך קוד, אל תפתח PR ואל תשנה קבצים.
+  return `Task: write one Hebrew Markdown meeting summary for this recording and send only that summary back to AIOS. Do not edit files, do not open a pull request, and do not create another agent.
+אתה מסכם פגישה עסקית עבור AIOS. אל תערוך קוד, אל תפתח PR ואל תשנה קבצים.
 החזר רק את סיכום ה-Markdown בעברית, בלי הקדמה ובלי קישור.
 
 ${MEETING_SUMMARY_SYSTEM_PROMPT}
