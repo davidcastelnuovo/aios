@@ -431,39 +431,33 @@
   pinShareButton();
   window.addEventListener("resize", pinShareButton);
 
-  function androidInsertUrl(fallback) {
-    function field(key, value) {
-      return "S." + key + "=" + encodeURIComponent(value) + ";";
-    }
-    return (
-      "intent:#Intent;" +
-      "action=android.intent.action.INSERT;" +
-      "type=vnd.android.cursor.dir/raw_contact;" +
-      field("name", "דני פיק") +
-      field("phone", "+972523795155") +
-      field("email", "danny@pdpsagot.co.il") +
-      field("company", "פ.ד. נכסים") +
-      "B.finishActivityOnSaveCompleted=true;" +
-      "S.browser_fallback_url=" + encodeURIComponent(fallback) + ";" +
-      "end"
-    );
-  }
+  var VCARD_FILE =
+    "BEGIN:VCARD\r\n" +
+    "VERSION:3.0\r\n" +
+    "PRODID:-//PD Psagot//Contact//HE\r\n" +
+    "N;CHARSET=UTF-8:פיק;דני;;;\r\n" +
+    "FN;CHARSET=UTF-8:דני פיק\r\n" +
+    "ORG;CHARSET=UTF-8:פ.ד. נכסים\r\n" +
+    "TEL;TYPE=CELL,VOICE:+972523795155\r\n" +
+    "EMAIL;TYPE=INTERNET,WORK:danny@pdpsagot.co.il\r\n" +
+    "URL;TYPE=WORK:https://www.pdpsagot.co.il\r\n" +
+    "END:VCARD\r\n";
 
-  function armSaveContact() {
-    if (!/Android/i.test(navigator.userAgent || "")) return;
-    document.querySelectorAll(".js-save-contact").forEach(function (link) {
-      var fallback = link.getAttribute("data-vcard-url");
-      if (!fallback || fallback.indexOf("intent:") === 0) {
-        fallback = "https://pdpsagot.co.il/wp-content/uploads/danny-pik.vcf";
-      }
-      link.setAttribute("data-vcard-url", fallback);
-      link.setAttribute("href", androidInsertUrl(fallback));
-    });
-  }
-
-  armSaveContact();
   document.querySelectorAll(".js-save-contact").forEach(function (link) {
-    link.addEventListener("click", armSaveContact);
+    link.addEventListener("click", function (event) {
+      event.preventDefault();
+      var blob = new Blob([VCARD_FILE], { type: "text/vcard;charset=utf-8" });
+      var url = URL.createObjectURL(blob);
+      var saver = document.createElement("a");
+      saver.href = url;
+      saver.download = "danny-pik.vcf";
+      document.body.appendChild(saver);
+      saver.click();
+      saver.remove();
+      window.setTimeout(function () {
+        URL.revokeObjectURL(url);
+      }, 2000);
+    });
   });
 
   function bgUrl() {
