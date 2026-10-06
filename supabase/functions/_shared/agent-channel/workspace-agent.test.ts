@@ -1,9 +1,12 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
+  assertWorkspaceAccessToken,
   missingWorkspaceMessage,
+  normalizeWorkspaceTriggerId,
   validateWorkspaceTriggerId,
   workspaceAgentCreds,
+  workspaceAgentTriggerUrl,
   workspaceConversationKey,
 } from "./workspace-agent.ts";
 
@@ -41,6 +44,19 @@ test("each Codex chat keeps its own workspace thread key", () => {
 test("validateWorkspaceTriggerId rejects About-tab agent id", () => {
   assert.match(validateWorkspaceTriggerId("agt_6a944e6a25c881918c4c0ab") || "", /agtch_/);
   assert.equal(validateWorkspaceTriggerId("agtch_abc123"), null);
+});
+
+test("normalize trigger id and build official trigger URL", () => {
+  assert.equal(normalizeWorkspaceTriggerId('"agtch_demo"'), "agtch_demo");
+  assert.equal(
+    workspaceAgentTriggerUrl("agtch_complaints_123"),
+    "https://api.chatgpt.com/v1/workspace_agents/agtch_complaints_123/trigger",
+  );
+});
+
+test("assertWorkspaceAccessToken rejects OpenAI Platform sk- keys", () => {
+  assert.match(assertWorkspaceAccessToken("sk-proj-abc") || "", /Workspace Agent/);
+  assert.equal(assertWorkspaceAccessToken("wstok_abc"), null);
 });
 
 test("missing Codex workspace copy says Work Mode, not Carmen OpenAI API", () => {

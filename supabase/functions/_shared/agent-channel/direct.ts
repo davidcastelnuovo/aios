@@ -13,8 +13,9 @@ import {
   type OpenChatProvider,
 } from "./sticky-agent.ts";
 import {
-  formatWorkspaceTriggerError,
+  assertWorkspaceAccessToken,
   missingWorkspaceMessage,
+  triggerWorkspaceAgentRun,
   validateWorkspaceTriggerId,
   workspaceAgentCreds,
   workspaceConversationKey,
@@ -333,12 +334,6 @@ export async function launchWorkspaceAgent(
     parliament_round: parliament?.round ?? null,
   });
 
-  const triggerProblem = validateWorkspaceTriggerId(triggerId);
-  if (triggerProblem) {
-    await completeSession(sb, session.id, "failed");
-    throw new Error(triggerProblem);
-  }
-
   if (!triggerId || !accessToken) {
     await logChannelAction(sb, {
       tenantId: ctx.tenantId,
@@ -361,6 +356,17 @@ export async function launchWorkspaceAgent(
     };
   }
 
+  const triggerProblem = validateWorkspaceTriggerId(triggerId);
+  if (triggerProblem) {
+    await completeSession(sb, session.id, "failed");
+    throw new Error(triggerProblem);
+  }
+  const tokenProblem = assertWorkspaceAccessToken(accessToken);
+  if (tokenProblem) {
+    await completeSession(sb, session.id, "failed");
+    throw new Error(tokenProblem);
+  }
+
   const token = await mintCallbackToken({
     sessionId: session.id,
     conversationId: ctx.conversationId,
@@ -378,25 +384,19 @@ export async function launchWorkspaceAgent(
       readOnly: !!parliament,
     });
 
-  const resp = await fetch(`https://api.chatgpt.com/v1/workspace_agents/${encodeURIComponent(triggerId)}/trigger`, {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${accessToken}`,
-      "Content-Type": "application/json",
-      "Idempotency-Key": ctx.idempotencyKey,
-      "OpenAI-Beta": "workspace_agent_runs=v1",
-    },
-    body: JSON.stringify({ conversation_key: conversationKey, input: clip(input, 32_000) }),
+  const triggered = await triggerWorkspaceAgentRun({
+    triggerId,
+    accessToken,
+    conversationKey,
+    input: clip(input, 32_000),
+    idempotencyKey: ctx.idempotencyKey,
   });
-  const raw = await resp.text();
-  if (!resp.ok) {
+  if (!triggered.ok) {
     await completeSession(sb, session.id, "failed");
-    throw new Error(formatWorkspaceTriggerError(resp.status, raw));
+    throw new Error(triggered.error);
   }
-  let data: any = {};
-  try { data = JSON.parse(raw); } catch { /* ignore */ }
-  const runId = String(data?.agent_trigger_run_id || data?.id || "");
-  const url = String(data?.url || data?.conversation_url || "");
+  const runId = triggered.runId || "";
+  const url = triggered.conversationUrl || "";
   await upsertRunningSession(sb, {
     tenant_id: ctx.tenantId,
     conversation_id: ctx.conversationId,
