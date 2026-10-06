@@ -367,12 +367,12 @@ const updateMutation = useMutation({
 
       // Run lead update and sales people assignments in PARALLEL
       const [leadResult] = await Promise.all([
-        supabase.from("leads").update(submitData).eq("id", lead.id).select().single(),
+        supabase.from("leads").update(submitData).eq("id", lead.id).select(),
         updateSalesPeopleAssignments(),
       ]);
 
       if (leadResult.error) throw leadResult.error;
-      const data = leadResult.data;
+      const data = leadResult.data?.[0] ?? { ...lead, ...submitData, id: lead.id };
 
       if (data && tenantId && userId) {
         await ensureLeadOriginTags({

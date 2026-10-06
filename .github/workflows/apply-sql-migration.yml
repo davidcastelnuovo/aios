@@ -67,6 +67,7 @@ on:
       - 'supabase/ops/merge_same_email_campaigners_production.sql'
       - 'supabase/ops/merge_assigned_campaigner_production.sql'
       - 'supabase/ops/apply_morning_report_sync_production.sql'
+      - 'supabase/ops/apply_lead_status_updates_production.sql'
 
 jobs:
   apply:
