@@ -6,7 +6,7 @@
       "Danny Pick\n" +
       "+972 52-379-5155\n" +
       "danny@pdpsagot.co.il\n\n" +
-      "שמירה באנשי קשר:\n" +
+      "Save contact:\n" +
       VCARD_URL
     );
   }
