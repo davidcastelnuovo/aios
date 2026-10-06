@@ -21,6 +21,37 @@ export function workspaceConversationKey(provider: WorkspaceProvider, conversati
   return `aios:${provider}:${conversationId}`;
 }
 
+/** Public API trigger id from the agent's **API channel** (`agtch_…`), not About-tab `agt_…`. */
+export function validateWorkspaceTriggerId(triggerId: string): string | null {
+  const id = String(triggerId || "").trim();
+  if (!id) return "חסר Trigger ID.";
+  if (id.startsWith("agt_") && !id.startsWith("agtch_")) {
+    return (
+      "שמת Agent ID (agt_…) במקום Trigger ID. בבuilder של הסוכן: Add channel → API, שמור ו-Publish, והעתק agtch_… ל-CHATGPT_WORK_AGENT_TRIGGER_ID."
+    );
+  }
+  if (!id.startsWith("agtch_")) {
+    return "Trigger ID חייב להתחיל ב-agtch_ (ערוץ API של Workspace Agent).";
+  }
+  return null;
+}
+
+export function formatWorkspaceTriggerError(status: number, raw: string): string {
+  const detail = raw.slice(0, 280);
+  if (status === 404 || /not_found|not found/i.test(detail)) {
+    return (
+      "ChatGPT לא מוצא את ה-trigger (404). בדוק: (1) ערוץ API עם agtch_… בבuilder, (2) הסוכן Published, (3) TRIGGER_ID + TOKEN ב-Supabase תואמים לסוכן הזה, (4) הטוקן עם scope Workspace Agents."
+    );
+  }
+  if (status === 401 || status === 403) {
+    return "טוקן Workspace Agents לא תקף או בלי הרשאה לסוכן הזה. צור token חדש ב-Admin → Access tokens.";
+  }
+  if (status === 409) {
+    return "הסוכן לא במצב runnable (409). נסה שוב או בדוק שהסוכן Published.";
+  }
+  return `ChatGPT Workspace trigger ${status}: ${detail}`;
+}
+
 export async function probeWorkspaceAgent(
   provider: WorkspaceProvider,
   env: Record<string, string | undefined> = {},

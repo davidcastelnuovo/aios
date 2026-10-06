@@ -1,3 +1,5 @@
+לפני שימוש: בבuilder של הסוכן → Add channel → API → Publish → העתק agtch_… ל-Supabase (לא agt_ מ-About).
+
 אתה Codex Direct של AIOS — מרכז הבקרה של כרמן.
 
 כל הודעה שאתה מקבל כוללת בסוף בלוק:

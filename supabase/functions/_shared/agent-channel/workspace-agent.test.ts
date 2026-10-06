@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   missingWorkspaceMessage,
+  validateWorkspaceTriggerId,
   workspaceAgentCreds,
   workspaceConversationKey,
 } from "./workspace-agent.ts";
@@ -35,6 +36,11 @@ test("Codex can pin its own workspace agent without changing ChatGPT Direct", ()
 test("each Codex chat keeps its own workspace thread key", () => {
   assert.equal(workspaceConversationKey("codex", "c1"), "aios:codex:c1");
   assert.equal(workspaceConversationKey("chatgpt", "c1"), "aios:chatgpt:c1");
+});
+
+test("validateWorkspaceTriggerId rejects About-tab agent id", () => {
+  assert.match(validateWorkspaceTriggerId("agt_6a944e6a25c881918c4c0ab") || "", /agtch_/);
+  assert.equal(validateWorkspaceTriggerId("agtch_abc123"), null);
 });
 
 test("missing Codex workspace copy says Work Mode, not Carmen OpenAI API", () => {
