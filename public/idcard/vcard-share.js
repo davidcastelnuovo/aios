@@ -71,6 +71,41 @@
   pinShareButton();
   window.addEventListener("resize", pinShareButton);
 
+  function androidInsertUrl(fallback) {
+    function field(key, value) {
+      return "S." + key + "=" + encodeURIComponent(value) + ";";
+    }
+    return (
+      "intent:#Intent;" +
+      "action=android.intent.action.INSERT;" +
+      "type=vnd.android.cursor.dir/raw_contact;" +
+      field("name", "דני פיק") +
+      field("phone", "+972523795155") +
+      field("email", "danny@pdpsagot.co.il") +
+      field("company", "פ.ד. נכסים") +
+      "B.finishActivityOnSaveCompleted=true;" +
+      "S.browser_fallback_url=" + encodeURIComponent(fallback) + ";" +
+      "end"
+    );
+  }
+
+  function armSaveContact() {
+    if (!/Android/i.test(navigator.userAgent || "")) return;
+    document.querySelectorAll(".js-save-contact").forEach(function (link) {
+      var fallback = link.getAttribute("data-vcard-url");
+      if (!fallback || fallback.indexOf("intent:") === 0) {
+        fallback = "https://pdpsagot.co.il/wp-content/uploads/danny-pik.vcf";
+      }
+      link.setAttribute("data-vcard-url", fallback);
+      link.setAttribute("href", androidInsertUrl(fallback));
+    });
+  }
+
+  armSaveContact();
+  document.querySelectorAll(".js-save-contact").forEach(function (link) {
+    link.addEventListener("click", armSaveContact);
+  });
+
   function bgUrl() {
     var root = document.querySelector(".danny-pik-vcard");
     var raw = root ? getComputedStyle(root).getPropertyValue("--card-bg-url") : "";
