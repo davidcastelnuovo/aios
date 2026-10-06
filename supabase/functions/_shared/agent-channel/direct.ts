@@ -4,7 +4,7 @@ import { grokUsesExistingWebhook } from "./cloud-errors.ts";
 import { createCloudAgent, followUpCloudAgent, cursorApiKey } from "./cursor-api.ts";
 import { fireGrokBotWebhook } from "./grok-webhook.ts";
 import { mintCallbackToken } from "./hmac.ts";
-import { buildCallbackInstructions, wrapDirectPrompt } from "./prompts.ts";
+import { buildCallbackInstructions, buildCodexWorkspaceAgentInput, wrapDirectPrompt } from "./prompts.ts";
 import {
   allowCreateNewCloudAgent,
   collectOpenChatIds,
@@ -367,22 +367,33 @@ export async function launchWorkspaceAgent(
     throw new Error(tokenProblem);
   }
 
-  const token = await mintCallbackToken({
-    sessionId: session.id,
-    conversationId: ctx.conversationId,
-    tenantId: ctx.tenantId,
-  });
-  const input =
-    (extraPrompt || wrapDirectPrompt({ origin: provider, userText: ctx.content, history: ctx.history, attachments: ctx.attachments })) +
-    buildCallbackInstructions({
-      origin: provider,
+  let input: string;
+  if (provider === "codex" && !extraPrompt) {
+    input = buildCodexWorkspaceAgentInput({
+      userText: ctx.content,
       conversationId: ctx.conversationId,
       sessionId: session.id,
       tenantId: ctx.tenantId,
-      token,
-      parliamentRound: parliament?.round,
-      readOnly: !!parliament,
+      parliamentRound: parliament?.round ?? null,
     });
+  } else {
+    const token = await mintCallbackToken({
+      sessionId: session.id,
+      conversationId: ctx.conversationId,
+      tenantId: ctx.tenantId,
+    });
+    input =
+      (extraPrompt || wrapDirectPrompt({ origin: provider, userText: ctx.content, history: ctx.history, attachments: ctx.attachments })) +
+      buildCallbackInstructions({
+        origin: provider,
+        conversationId: ctx.conversationId,
+        sessionId: session.id,
+        tenantId: ctx.tenantId,
+        token,
+        parliamentRound: parliament?.round,
+        readOnly: !!parliament,
+      });
+  }
 
   const triggered = await triggerWorkspaceAgentRun({
     triggerId,
