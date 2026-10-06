@@ -60,6 +60,14 @@ JSONB ב-`ai_conversations.messages` נשמר בתקופת המעבר.
 
 בלי סודות ChatGPT הערוץ נשאר בבורר ומחזיר הודעת "לא מחובר" במקום להעמיד פני מוח פנימי.
 
+### חיבור Codex (Work Mode) — צד ChatGPT
+
+1. **Workspace Agent פעיל (Published)** ב-ChatGPT — אם הסוכן היה Draft / לא פעיל, ה-trigger מחזיר שגיאה ולא רץ.
+2. **Trigger + Token** מההגדרות של הסוכן → Edge secrets (`CHATGPT_WORK_AGENT_*` או `CODEX_WORK_AGENT_*`).
+3. **MCP** על הסוכן: URL `{SUPABASE_URL}/functions/v1/agent-channel-mcp`, Bearer = `AGENT_CHANNEL_MCP_BEARER` (אותו ערך ב-Edge). כלי חובה: `reply_to_aios_session`.
+4. **Staging:** להעתיק סודות עם `copy-edge-secrets-to-staging` (allowlist כולל `CHATGPT_WORK_*`) — הסקריפט `scripts/sync-agent-credentials.py` מסנכרן גם אותם.
+5. **בדיקה:** Command Center → `channel_health` — `seats.codex.open_chat` / `codex.probe.ok` (GET על ה-trigger id).
+
 ## קול
 
 OpenAI Realtime הוא מעטפת שמע בלבד. `ask_carmen` ב-Live עובר דרך `agent-channel-send` לפי הערוץ שנבחר. כש-callback חוזר וה-session החי עדיין פתוח, התשובה מוקראת.

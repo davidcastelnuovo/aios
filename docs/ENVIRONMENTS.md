@@ -143,8 +143,9 @@ Vercel Preview is the development environment. It talks to **AIOS Staging**, nev
 | Seat | Works on Preview today? | Why |
 | --- | --- | --- |
 | Carmen (internal / `run-ai-agent`) | Yes | Staging has the tenant, agent, and OpenAI path |
-| Cursor / Grok / Codex Cloud seats | Only if Staging `CURSOR_API_KEY` is a **valid Cursor User key** | All three launch via `api.cursor.com` with that secret |
-| Knights Round Table | Same as Cloud seats | Parliament fans out to those three |
+| Cursor / Grok Cloud seats | Only if Staging `CURSOR_API_KEY` is a **valid Cursor User key** | Launch via `api.cursor.com` |
+| Codex Direct | Only if Staging has **ChatGPT Workspace** secrets | `CHATGPT_WORK_AGENT_TRIGGER_ID` + `CHATGPT_WORK_AGENT_TOKEN` (or `CODEX_WORK_AGENT_*`) — `api.chatgpt.com/v1/workspace_agents/.../trigger` |
+| Knights Round Table | Cursor + Grok (Cloud) + Codex (Workspace) | Parliament fans out to configured seats |
 
 How we keep them working:
 
