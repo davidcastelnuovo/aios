@@ -23,7 +23,63 @@ export function outboundAllowed(url, method, ownOrigin) {
     'api.x.ai': /^\/v1\/(chat\/completions|responses|embeddings)\/?$/,
   };
   if (verb === 'POST' && inference[target.hostname]?.test(target.pathname)) return true;
-  if (verb === 'POST' && target.hostname === 'api.chatgpt.com' && /^\/v1\/workspace_agents\/agtch_[a-z0-9]+\/trigger$/.test(target.pathname)) return true;
+  const workspaceAgentId = '(?:agtch_[a-z0-9]+|[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12})';
+  const workspaceTriggerPath = new RegExp(`^/v1/workspace_agents/${workspaceAgentId}/trigger/** Installed before an Edge entrypoint loads, only by the Staging deployer.
+ * Independent of APP_ENV and copied database data. No production opt-out flag.
+ */
+export function outboundAllowed(url, method, ownOrigin) {
+  const target = new URL(url);
+  if (target.protocol !== 'https:') return false;
+  if (target.origin === ownOrigin) {
+    // Automated Supabase Auth invitations also send real email.
+    return !/^\/auth\/v1\/(invite|recover|signup|resend|otp)(\/|$)/.test(target.pathname);
+  }
+  // Copied integration URLs must never invoke Production services, even with GET.
+  if (target.hostname.endsWith('.supabase.co')) return false;
+  const verb = method.toUpperCase();
+  // Google report connections must be able to refresh their existing tokens.
+  // The subsequent API call is still checked separately by this guard.
+  if (verb === 'POST' && target.hostname === 'oauth2.googleapis.com' && target.pathname === '/token') return true;
+  if (verb === 'POST' && ['www.googleapis.com', 'searchconsole.googleapis.com'].includes(target.hostname) &&
+    /^\/webmasters\/v3\/sites\/[^/]+\/searchAnalytics\/query$/.test(target.pathname)) return true;
+  // Carmen can think and read reports; messaging, publishing and management stay blocked.
+  const inference = {
+    'api.openai.com': /^\/v1\/(responses|chat\/completions|embeddings|audio\/transcriptions|audio\/speech|images\/generations|images\/edits)\/?$/,
+    'api.anthropic.com': /^\/v1\/messages\/?$/,
+    'api.x.ai': /^\/v1\/(chat\/completions|responses|embeddings)\/?$/,
+  };
+  if (verb === 'POST' && inference[target.hostname]?.test(target.pathname)) return true;
+, 'i');
+  const workspaceProbePath = new RegExp(`^/v1/workspace_agents/${workspaceAgentId}/?/** Installed before an Edge entrypoint loads, only by the Staging deployer.
+ * Independent of APP_ENV and copied database data. No production opt-out flag.
+ */
+export function outboundAllowed(url, method, ownOrigin) {
+  const target = new URL(url);
+  if (target.protocol !== 'https:') return false;
+  if (target.origin === ownOrigin) {
+    // Automated Supabase Auth invitations also send real email.
+    return !/^\/auth\/v1\/(invite|recover|signup|resend|otp)(\/|$)/.test(target.pathname);
+  }
+  // Copied integration URLs must never invoke Production services, even with GET.
+  if (target.hostname.endsWith('.supabase.co')) return false;
+  const verb = method.toUpperCase();
+  // Google report connections must be able to refresh their existing tokens.
+  // The subsequent API call is still checked separately by this guard.
+  if (verb === 'POST' && target.hostname === 'oauth2.googleapis.com' && target.pathname === '/token') return true;
+  if (verb === 'POST' && ['www.googleapis.com', 'searchconsole.googleapis.com'].includes(target.hostname) &&
+    /^\/webmasters\/v3\/sites\/[^/]+\/searchAnalytics\/query$/.test(target.pathname)) return true;
+  // Carmen can think and read reports; messaging, publishing and management stay blocked.
+  const inference = {
+    'api.openai.com': /^\/v1\/(responses|chat\/completions|embeddings|audio\/transcriptions|audio\/speech|images\/generations|images\/edits)\/?$/,
+    'api.anthropic.com': /^\/v1\/messages\/?$/,
+    'api.x.ai': /^\/v1\/(chat\/completions|responses|embeddings)\/?$/,
+  };
+  if (verb === 'POST' && inference[target.hostname]?.test(target.pathname)) return true;
+, 'i');
+  if (target.hostname === 'api.chatgpt.com' && (
+    (verb === 'POST' && workspaceTriggerPath.test(target.pathname)) ||
+    (['GET', 'HEAD'].includes(verb) && workspaceProbePath.test(target.pathname))
+  )) return true;
   if (verb === 'POST' && target.hostname === 'api.cursor.com' && /^\/v0\/agents(?:\/[^/]+\/followup)?$/.test(target.pathname)) return true;
   if (verb === 'POST' && target.hostname === 'googleads.googleapis.com' && /\/googleAds:search(Stream)?$/.test(target.pathname)) return true;
   if (verb === 'POST' && target.hostname === 'analyticsdata.googleapis.com' && /:(runReport|batchRunReports|runRealtimeReport)$/.test(target.pathname)) return true;
