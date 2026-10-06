@@ -145,11 +145,10 @@ Deno.serve(async (req) => {
 
         const accessToken = integration.api_key;
 
-        // Morning cron refreshes recent days plus one older slice. A full 120-day
-        // pull on every account timed the run out before later clients were reached.
         const plan = planScheduledSyncWindows(
           jerusalemToday(),
           typeof settings.scheduled_history_from === 'string' ? settings.scheduled_history_from : null,
+          typeof settings.scheduled_synced_through === 'string' ? settings.scheduled_synced_through : null,
         );
 
         // First, fetch campaign statuses to detect real blocks
@@ -291,6 +290,7 @@ Deno.serve(async (req) => {
               ...settings,
               last_sync_at: syncedAt,
               scheduled_history_from: historyFrom,
+              scheduled_synced_through: plan.syncedThrough,
               last_insights_until: untilStr,
               last_campaign_updated_at: lastCampaignUpdatedAt,
               last_meta_activity: lastMetaActivity,
