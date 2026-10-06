@@ -5,9 +5,39 @@
 
 import {
   isMcpAuthError,
+  isMcpTimeoutError,
   mcpJsonRpc,
   resyncInternalMcpBearer,
 } from "./mcp-bearer.ts";
+
+/** Coding-agent dispatch tools that often outlive a short HTTP wait. */
+function isCodingAgentDispatchTool(remoteName: string): boolean {
+  const n = String(remoteName || "").toLowerCase();
+  return (
+    n === "request_dev_task" ||
+    n === "ask_cursor" ||
+    n === "ask_claude" ||
+    n === "ask_grok" ||
+    n === "ask_manus"
+  );
+}
+
+/** Soft result so Carmen does not tell David "Cursor didn't receive" on client abort. */
+export function codingAgentDispatchTimeoutResult(connName: string, remoteName: string): Record<string, unknown> {
+  return {
+    ok: false,
+    timeout: true,
+    delivery_unconfirmed: true,
+    // Explicit machine-readable flag for prompts / future reconcile.
+    do_not_claim_not_received: true,
+    message:
+      `MCP ${connName}/${remoteName} timed out waiting for the tool reply. ` +
+      `The coding agent may still have received the request and opened a bc- session. ` +
+      `Do NOT tell David that Cursor/Claude/Grok "didn't receive" the request. ` +
+      `Say delivery could not be confirmed yet; check list_dev_tasks / recent sessions, ` +
+      `or use attach_dev_task_session if a bc- URL appears.`,
+  };
+}
 
 export interface McpLoaded {
   toolDefs: Array<{ name: string; description?: string; parameters: any }>
@@ -134,20 +164,30 @@ export async function loadMcpTools(
       })
       const remoteName = t.name as string
       executors.set(prefixed, async (args: any) => {
-        const { resp } = await callMcpWithResync(supabase, conn, tenantId, 'tools/call', {
-          name: remoteName,
-          arguments: args ?? {},
-        })
-        if (resp?.error) {
-          throw new Error(`MCP ${conn.name}/${remoteName}: ${resp.error.message || JSON.stringify(resp.error)}`)
+        try {
+          const { resp } = await callMcpWithResync(supabase, conn, tenantId, 'tools/call', {
+            name: remoteName,
+            arguments: args ?? {},
+          })
+          if (resp?.error) {
+            throw new Error(`MCP ${conn.name}/${remoteName}: ${resp.error.message || JSON.stringify(resp.error)}`)
+          }
+          const content = resp?.result?.content
+          // Flatten common content shapes to plain text/json for the model.
+          if (Array.isArray(content)) {
+            const parts = content.map((c: any) => c?.text ?? c?.data ?? c).filter(Boolean)
+            return parts.length === 1 ? parts[0] : parts
+          }
+          return resp?.result ?? resp
+        } catch (e) {
+          if (isMcpTimeoutError(e) && isCodingAgentDispatchTool(remoteName)) {
+            console.warn(
+              `[mcp-tools] ${conn.name}/${remoteName} timed out — returning soft delivery_unconfirmed (agent may still be running)`,
+            )
+            return codingAgentDispatchTimeoutResult(conn.name, remoteName)
+          }
+          throw e
         }
-        const content = resp?.result?.content
-        // Flatten common content shapes to plain text/json for the model.
-        if (Array.isArray(content)) {
-          const parts = content.map((c: any) => c?.text ?? c?.data ?? c).filter(Boolean)
-          return parts.length === 1 ? parts[0] : parts
-        }
-        return resp?.result ?? resp
       })
     }
   }

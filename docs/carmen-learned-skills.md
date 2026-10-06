@@ -44,9 +44,15 @@ logged.
 - **How:** `create_dev_task` שומר `source_conversation_id`; `completeDevTaskFromAgentReply` ב-ingest; אופציונלי `mcp_Cursor__complete_dev_task`.
 - **Origin:** David — משימה מכרמן צריכה להתעדכן שבוצעה בסיום.
 
+### 2026-10-06 — איסור דיווח שווא "Cursor לא קיבל" אחרי timeout של MCP
+- **Skin slug:** n/a (`mcp-bearer` / `mcp-tools` / `dispatch_dev_task`)
+- **What Carmen can now do:** לא לדווח לדוד שקרסר לא קיבל בקשה כשכלי MCP מחזיר timeout / `delivery_unconfirmed` / `verificationFailed`. לדווח "לא אומתה הגעה" ולבדוק `list_dev_tasks` או `attach_dev_task_session`.
+- **How:** `tools/call` timeout 90s (לא 12s); soft result עם `do_not_claim_not_received`; `mcpRequestDevTask` 90s + reconcile ארוך יותר; כלל ב-prompt.
+- **Origin:** David — כרמן דיווחה שקרסר לא קיבל למרות שסשני bc- נפתחו.
+
 ### 2026-09-22 — אימות משלוח dev task ל-Cursor אחרי שגיאת dispatch
 - **Skin slug:** n/a (שינוי ב-`dispatch_dev_task` / `dev-tasks.ts`)
-- **What Carmen can now do:** אחרי `dispatch_dev_task`, אם `delivered=true` — לדווח שנשלח ל-Cursor (כולל `sessionUrl`) גם כשיש `dispatchToolError` / `reconciled`. רק אם `verificationFailed=true` — לדווח כשלון ולציין את שגיאת הכלי.
+- **What Carmen can now do:** אחרי `dispatch_dev_task`, אם `delivered=true` — לדווח שנשלח ל-Cursor (כולל `sessionUrl`) גם כשיש `dispatchToolError` / `reconciled`. אם `verificationFailed=true` — לדווח שלא אומתה הגעה (לא "לא קיבל") ולציין את שגיאת הכלי.
 - **How:** `dispatch_dev_task` → שדות `delivered`, `userStatus`, `reconciled`; reconcile מ-`cursor_dispatches` / `cursor_task_sessions` לפי `dev_task_id` בקונטקסט.
 - **Origin:** Carmen → Cursor DEV TASK — false failure when Cursor actually received the task after MCP timeout.
 
