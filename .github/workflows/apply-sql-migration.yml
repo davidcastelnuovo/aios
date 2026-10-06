@@ -68,6 +68,7 @@ on:
       - 'supabase/ops/merge_assigned_campaigner_production.sql'
       - 'supabase/ops/apply_morning_report_sync_production.sql'
       - 'supabase/ops/apply_lead_status_updates_production.sql'
+      - 'supabase/ops/recover_promo_eyal_lead_updates_production.sql'
 
 jobs:
   apply:
