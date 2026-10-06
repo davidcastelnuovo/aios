@@ -1395,7 +1395,10 @@ export function ClientsChatView({
                 </TabsContent>
 
                 <TabsContent value="credentials" className="mt-0">
-                  <ClientCredentialsTab clientId={selectedClient.id} tenantId={tenantId || ""} />
+                  <ClientCredentialsTab
+                    clientId={selectedClient.id}
+                    tenantId={resolveClientChildTenantId(selectedClient, tenantId)}
+                  />
                 </TabsContent>
 
                 <TabsContent value="meeting" className="mt-0">

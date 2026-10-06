@@ -89,8 +89,9 @@ export function ClientCredentialsTab({ clientId, tenantId }: ClientCredentialsTa
       setAdding(false);
       setNewCred(emptyCred);
       queryClient.invalidateQueries({ queryKey: ["client-credentials", clientId] });
-    } catch {
-      toast.error("שגיאה בשמירה");
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : "שגיאה בשמירה";
+      toast.error(`שגיאה בשמירה: ${message}`);
     }
   };
 
@@ -120,8 +121,9 @@ export function ClientCredentialsTab({ clientId, tenantId }: ClientCredentialsTa
       setEditingId(null);
       setEditCred(emptyCred);
       queryClient.invalidateQueries({ queryKey: ["client-credentials", clientId] });
-    } catch {
-      toast.error("שגיאה בעדכון");
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : "שגיאה בעדכון";
+      toast.error(`שגיאה בעדכון: ${message}`);
     }
   };
 
