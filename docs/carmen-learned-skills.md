@@ -32,6 +32,12 @@ logged.
 ## Log
 
 <!-- New entries go below this line, newest first. -->
+### 2026-10-06 — עדכון פגישה קיימת ל-Meet/Zoom + הזמנת כרמן
+- **Skin slug:** `calendar_conference_and_carmen_attendee` (tenant: `2dcdaac6-41bf-42cc-86bf-9a0b4b2e6019`)
+- **What Carmen can now do:** `update_calendar_invite` / `send_calendar_invite` מוסיפים Google Meet (או Zoom אם `tenant_integrations.zoom` מוגדר), ומוזמנים חדשים **בלי למחוק** קיימים. מחזיר `conference_url`, `attendees`, `zoom_available`. כרמן כמוזמנת מייל (`add_carmen`) או כבוט תמלול אחרי הקישור (`join_meeting_for_client`).
+- **How:** Helpers `_shared/calendar-conference.mjs`; Google `conferenceDataVersion=1` + Meet `createRequest`; Zoom Server-to-Server `POST /users/me/meetings` when configured, else Meet + explicit `zoom_available=false`.
+- **Origin:** Carmen → Cursor DEV TASK (`d4070920`) — דוד ביקש להפוך פגישה קיימת לזום ולהזמין את כרמן.
+
 ### 2026-09-22 — סימון משימת פיתוח כבוצעה כש-Cursor מחזיר תשובה לכרמן
 - **Skin slug:** n/a (`agent-channel/ingest` + `complete_dev_task`)
 - **What Carmen can now do:** כש-Cursor/Claude מסיים ו-`reply_to_aios_session` מגיע לשיחת Command Center — משימת `dev_tasks` הפעילה (לפי `source_conversation_id` / `dev_task_id`) עוברת ל-`done` ו-PR נשמר אם בטקסט.

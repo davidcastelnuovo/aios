@@ -180,6 +180,20 @@ function buildAdOpsCapabilities(): string {
 ✅ תמונה + "תקימי קמפיין" → save_media_from_chat → fb_create_creative_from_media [אישור] → fb_create_campaign [אישור] → fb_create_adset [אישור] → fb_create_ad [אישור]. כל שלב בנפרד.`;
 }
 
+function buildCalendarConferenceCapabilities(): string {
+  return `
+=== יומן — Meet / Zoom / מוזמנים ===
+
+כשמבקשים להפוך פגישה קיימת לשיחת וידאו, להוסיף קישור Zoom/Meet, או להוסיף את כרמן כמוזמנת:
+1. list_calendar_events (search=שם/תאריך) → קחי event_id.
+2. update_calendar_invite עם event_id + add_conference=true.
+   • Zoom מפורש: conference_type="zoom". אם Zoom לא מוגדר בטננט — הכלי יוצר Google Meet ומחזיר zoom_available=false.
+   • אחרת: Google Meet.
+3. מוזמנים נוספים: add_attendee_emails=["a@x.com"] — **לא מוחקים** מוזמנים קיימים.
+4. "תזמיני את כרמן": add_carmen=true (ו-carmen_email אם יודעים). כבוט תמלול בזמן הפגישה: join_meeting_for_client עם conference_url שחזר.
+5. הכלי מחזיר event_link, conference_url, attendees, zoom_available. אסור לומר שהעדכון הצליח בלי conference_url כשמבקשים וידאו.`;
+}
+
 function buildMeetingBotCapabilities(): string {
   return `
 === בוט פגישות (Zoom / Google Meet / Teams) ===
@@ -726,6 +740,7 @@ export function buildCarmenV2SystemPrompt(ctx: PromptBuildContext): string {
   sections.push(buildSocialContentRules());
   // 7b. Ad-Ops capabilities (Meta + Google) + approval flow
   sections.push(buildAdOpsCapabilities());
+  sections.push(buildCalendarConferenceCapabilities());
   sections.push(buildMeetingBotCapabilities());
 
   // 7c. Broadcast (דיוור) capabilities
