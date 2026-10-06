@@ -41,14 +41,14 @@ jobs:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.BASE_ACCESS_TOKEN }}
           SUPABASE_STAGING_PROJECT_ID: ${{ secrets.SUPABASE_STAGING_PROJECT_ID }}
 
-      - name: Environment and report regression tests
-        run: node --test scripts/edge-deploy-plan.test.mjs scripts/deploy-edge.test.mjs supabase/functions/_shared/staging-outbound.test.mjs supabase/functions/_shared/meeting-summary-prompts.test.ts supabase/functions/_shared/signature-field-text.test.ts supabase/functions/_shared/signature-email-template.test.ts supabase/functions/_shared/report-sync-window.test.ts src/lib/carmenLoaderSignal.test.ts src/lib/clipboardFiles.test.ts src/lib/reportRecords.test.ts src/lib/reportCoverage.test.ts src/lib/reportSyncCadence.test.ts src/lib/dashboardDateFilters.test.ts src/lib/weeklyAdsComparison.test.ts src/lib/leadTableLayout.test.ts src/lib/leadTableColumns.test.ts src/lib/leadViewMode.test.ts src/lib/recordingSummaryTarget.test.ts src/lib/sharedReportTabs.test.ts src/lib/signatureFieldGuide.test.ts src/lib/signatureDate.test.ts src/lib/teamMemberMatch.test.ts
+      - name: Lint and typecheck (no new errors vs baseline)
+        run: pnpm quality:check
+
+      - name: Unit tests (all tracked test files)
+        run: pnpm test:unit
 
       - name: Mirror contract tests
         run: python3 -m unittest discover -s scripts -p 'test_staging_mirror.py'
-
-      - name: Carmen pulse regression tests
-        run: node --experimental-strip-types --test supabase/functions/_shared/pulse-foundation.test.mjs supabase/functions/_shared/client-retention.test.ts
 
       - name: Build frontend
         run: pnpm build

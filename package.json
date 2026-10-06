@@ -9,6 +9,9 @@
     "build:dev": "vite build --mode development",
     "lint": "eslint .",
     "preview": "vite preview",
+    "quality:check": "node scripts/check-quality-baseline.mjs",
+    "quality:update": "node scripts/check-quality-baseline.mjs --update",
+    "test:unit": "node scripts/run-node-tests.mjs",
     "test:guards": "node scripts/check-shared-agency-dashboards.mjs && node scripts/check-permission-personas.mjs && node scripts/check-edge-function-syntax.mjs"
   },
   "dependencies": {
