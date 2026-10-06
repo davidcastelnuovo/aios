@@ -1,5 +1,5 @@
 (function () {
-  var VCARD_URL = "https://pdpsagot.co.il/wp-content/uploads/danny-pik.vcf";
+  var VCARD_URL = "https://pdpsagot.co.il/wp-content/uploads/danny-pik-3795155.vcf";
 
   function shareText() {
     return (
@@ -70,35 +70,6 @@
 
   pinShareButton();
   window.addEventListener("resize", pinShareButton);
-
-  var VCARD_FILE =
-    "BEGIN:VCARD\r\n" +
-    "VERSION:3.0\r\n" +
-    "PRODID:-//PD Psagot//Contact//HE\r\n" +
-    "N;CHARSET=UTF-8:פיק;דני;;;\r\n" +
-    "FN;CHARSET=UTF-8:דני פיק\r\n" +
-    "ORG;CHARSET=UTF-8:פ.ד. נכסים\r\n" +
-    "TEL;TYPE=CELL,VOICE:+972523795155\r\n" +
-    "EMAIL;TYPE=INTERNET,WORK:danny@pdpsagot.co.il\r\n" +
-    "URL;TYPE=WORK:https://www.pdpsagot.co.il\r\n" +
-    "END:VCARD\r\n";
-
-  document.querySelectorAll(".js-save-contact").forEach(function (link) {
-    link.addEventListener("click", function (event) {
-      event.preventDefault();
-      var blob = new Blob([VCARD_FILE], { type: "text/vcard;charset=utf-8" });
-      var url = URL.createObjectURL(blob);
-      var saver = document.createElement("a");
-      saver.href = url;
-      saver.download = "danny-pik.vcf";
-      document.body.appendChild(saver);
-      saver.click();
-      saver.remove();
-      window.setTimeout(function () {
-        URL.revokeObjectURL(url);
-      }, 2000);
-    });
-  });
 
   function bgUrl() {
     var root = document.querySelector(".danny-pik-vcard");
