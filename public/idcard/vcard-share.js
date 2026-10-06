@@ -71,14 +71,6 @@
   pinShareButton();
   window.addEventListener("resize", pinShareButton);
 
-  document.querySelectorAll(".js-save-contact").forEach(function (link) {
-    link.addEventListener("click", function (event) {
-      event.preventDefault();
-      var base = this.getAttribute("href").split("?")[0];
-      window.location.assign(base + "?v=" + Date.now());
-    });
-  });
-
   function bgUrl() {
     var root = document.querySelector(".danny-pik-vcard");
     var raw = root ? getComputedStyle(root).getPropertyValue("--card-bg-url") : "";
