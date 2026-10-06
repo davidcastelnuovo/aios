@@ -3,8 +3,8 @@
 
   function shareText() {
     return (
-      "דני פיק\n" +
-      "052-3795155\n" +
+      "Danny Pick\n" +
+      "+972 52-379-5155\n" +
       "danny@pdpsagot.co.il\n\n" +
       "שמירה באנשי קשר:\n" +
       VCARD_URL
@@ -99,7 +99,7 @@
 
   async function cardFile() {
     if (document.fonts && document.fonts.load) {
-      await document.fonts.load("800 112px Heebo");
+      await document.fonts.load("800 96px Heebo");
       await document.fonts.load("800 58px Heebo");
       await document.fonts.load("800 48px Heebo");
     }
@@ -114,15 +114,15 @@
     ctx.drawImage(img, (canvas.width - w) / 2, (canvas.height - h) / 2, w, h);
     ctx.fillStyle = "#0f4c81";
     ctx.textAlign = "right";
-    ctx.direction = "rtl";
-    ctx.font = "800 112px Heebo, sans-serif";
-    ctx.fillText("דני פיק", 1140, 210);
+    ctx.direction = "ltr";
+    ctx.font = "800 96px Heebo, sans-serif";
+    ctx.fillText("Danny Pick", 1140, 210);
     ctx.fillStyle = "#c4a574";
     ctx.fillRect(1028, 242, 112, 5);
     ctx.fillStyle = "#0f4c81";
     ctx.direction = "ltr";
     ctx.font = "800 58px Heebo, sans-serif";
-    ctx.fillText("052-3795155", 1140, 350);
+    ctx.fillText("+972 52-379-5155", 1140, 350);
     ctx.font = "800 48px Heebo, sans-serif";
     ctx.fillText("danny@pdpsagot.co.il", 1140, 430);
     var blob = await new Promise(function (resolve) {

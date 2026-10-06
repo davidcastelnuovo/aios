@@ -102,12 +102,14 @@ body {
   font-weight: 800;
   letter-spacing: -0.02em;
   line-height: 1.1;
+  direction: ltr;
+  text-align: right;
 }
 
 .gold-line {
   width: 72px;
   height: 2px;
-  margin: 14px 0 12px auto;
+  margin: 14px 0 28px auto;
   border: none;
   background: linear-gradient(90deg, var(--gold), rgba(196, 165, 116, 0.35));
   border-radius: 2px;

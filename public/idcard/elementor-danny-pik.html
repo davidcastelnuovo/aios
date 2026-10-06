@@ -14,14 +14,13 @@
     <article class="biz-card">
       <div class="biz-card__content">
         <header class="name-block">
-          <h1>דני פיק</h1>
+          <h1>Danny Pick</h1>
           <hr class="gold-line" />
-          <p class="name-en">Danny Pick</p>
         </header>
 
         <ul class="contacts">
           <li>
-            <a href="tel:0523795155">
+            <a href="tel:+972523795155">
               <span class="icon-ring" aria-hidden="true">
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75">
                   <path
@@ -30,7 +29,7 @@
                 </svg>
               </span>
               <span class="sep" aria-hidden="true"></span>
-              <span class="contact-value contact-value--ltr">052-3795155</span>
+              <span class="contact-value contact-value--ltr">+972 52-379-5155</span>
             </a>
           </li>
           <li>
@@ -192,12 +191,14 @@
     font-weight: 800;
     letter-spacing: -0.02em;
     line-height: 1.1;
+    direction: ltr;
+    text-align: right;
   }
 
   .danny-pik-vcard .gold-line {
     width: 72px;
     height: 2px;
-    margin: 14px 0 12px auto;
+    margin: 14px 0 28px auto;
     border: none;
     background: linear-gradient(90deg, var(--gold), rgba(196, 165, 116, 0.35));
     border-radius: 2px;
@@ -363,8 +364,8 @@
 
   function shareText() {
     return (
-      "דני פיק\n" +
-      "052-3795155\n" +
+      "Danny Pick\n" +
+      "+972 52-379-5155\n" +
       "danny@pdpsagot.co.il\n\n" +
       "שמירה באנשי קשר:\n" +
       VCARD_URL
@@ -457,7 +458,7 @@
 
   async function cardFile() {
     if (document.fonts && document.fonts.load) {
-      await document.fonts.load("800 112px Heebo");
+      await document.fonts.load("800 96px Heebo");
       await document.fonts.load("800 58px Heebo");
       await document.fonts.load("800 48px Heebo");
     }
@@ -472,15 +473,15 @@
     ctx.drawImage(img, (canvas.width - w) / 2, (canvas.height - h) / 2, w, h);
     ctx.fillStyle = "#0f4c81";
     ctx.textAlign = "right";
-    ctx.direction = "rtl";
-    ctx.font = "800 112px Heebo, sans-serif";
-    ctx.fillText("דני פיק", 1140, 210);
+    ctx.direction = "ltr";
+    ctx.font = "800 96px Heebo, sans-serif";
+    ctx.fillText("Danny Pick", 1140, 210);
     ctx.fillStyle = "#c4a574";
     ctx.fillRect(1028, 242, 112, 5);
     ctx.fillStyle = "#0f4c81";
     ctx.direction = "ltr";
     ctx.font = "800 58px Heebo, sans-serif";
-    ctx.fillText("052-3795155", 1140, 350);
+    ctx.fillText("+972 52-379-5155", 1140, 350);
     ctx.font = "800 48px Heebo, sans-serif";
     ctx.fillText("danny@pdpsagot.co.il", 1140, 430);
     var blob = await new Promise(function (resolve) { canvas.toBlob(resolve, "image/jpeg", 0.9); });
