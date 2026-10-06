@@ -23,7 +23,13 @@ export function outboundAllowed(url, method, ownOrigin) {
     'api.x.ai': /^\/v1\/(chat\/completions|responses|embeddings)\/?$/,
   };
   if (verb === 'POST' && inference[target.hostname]?.test(target.pathname)) return true;
-  if (verb === 'POST' && target.hostname === 'api.chatgpt.com' && /^\/v1\/workspace_agents\/agtch_[a-z0-9]+\/trigger$/.test(target.pathname)) return true;
+  const workspaceAgentId = '(?:agtch_[a-z0-9]+|[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12})';
+  const workspaceTriggerPath = new RegExp(`^/v1/workspace_agents/${workspaceAgentId}/trigger$`, 'i');
+  const workspaceProbePath = new RegExp(`^/v1/workspace_agents/${workspaceAgentId}/?$`, 'i');
+  if (target.hostname === 'api.chatgpt.com' && (
+    (verb === 'POST' && workspaceTriggerPath.test(target.pathname)) ||
+    (['GET', 'HEAD'].includes(verb) && workspaceProbePath.test(target.pathname))
+  )) return true;
   if (verb === 'POST' && target.hostname === 'api.cursor.com' && /^\/v0\/agents(?:\/[^/]+\/followup)?$/.test(target.pathname)) return true;
   if (verb === 'POST' && target.hostname === 'googleads.googleapis.com' && /\/googleAds:search(Stream)?$/.test(target.pathname)) return true;
   if (verb === 'POST' && target.hostname === 'analyticsdata.googleapis.com' && /:(runReport|batchRunReports|runRealtimeReport)$/.test(target.pathname)) return true;
