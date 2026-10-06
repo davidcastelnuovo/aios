@@ -48,6 +48,7 @@ Deno.serve(async (req) => {
       end_date,
       scheduled_history_from,
       scheduled_synced_through,
+      scheduled_lookback_on,
       update_last_sync = true,
     } = requestBody;
 
@@ -365,6 +366,9 @@ Deno.serve(async (req) => {
             : {}),
           ...(typeof scheduled_synced_through === 'string' && isoDate.test(scheduled_synced_through)
             ? { scheduled_synced_through }
+            : {}),
+          ...(typeof scheduled_lookback_on === 'string' && isoDate.test(scheduled_lookback_on)
+            ? { scheduled_lookback_on }
             : {}),
         }
       })

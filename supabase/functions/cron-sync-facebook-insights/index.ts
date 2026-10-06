@@ -149,6 +149,7 @@ Deno.serve(async (req) => {
           jerusalemToday(),
           typeof settings.scheduled_history_from === 'string' ? settings.scheduled_history_from : null,
           typeof settings.scheduled_synced_through === 'string' ? settings.scheduled_synced_through : null,
+          typeof settings.scheduled_lookback_on === 'string' ? settings.scheduled_lookback_on : null,
         );
 
         // First, fetch campaign statuses to detect real blocks
@@ -291,6 +292,7 @@ Deno.serve(async (req) => {
               last_sync_at: syncedAt,
               scheduled_history_from: historyFrom,
               scheduled_synced_through: plan.syncedThrough,
+              scheduled_lookback_on: plan.lookbackOn,
               last_insights_until: untilStr,
               last_campaign_updated_at: lastCampaignUpdatedAt,
               last_meta_activity: lastMetaActivity,
