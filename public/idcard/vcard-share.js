@@ -1,5 +1,5 @@
 (function () {
-  var VCARD_URL = "https://pdpsagot.co.il/wp-content/uploads/danny-pik-3795155.vcf";
+  var VCARD_URL = "https://pdpsagot.co.il/wp-content/uploads/danny-pick-en.vcf";
 
   function shareText() {
     return (
