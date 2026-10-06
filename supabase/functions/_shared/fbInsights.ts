@@ -31,7 +31,15 @@ export interface InsightRecord {
   ad_id?: string;
   ad_name?: string;
   impressions: number;
+  reach: number;
+  frequency: number;
   clicks: number;
+  link_clicks: number;
+  conversations: number;
+  video_views: number;
+  post_engagements: number;
+  results: number | null;
+  result_kind: string | null;
   lp_or_form_views: number;
   cpm: number;
   ctr: number;
@@ -44,6 +52,7 @@ export interface InsightRecord {
   add_to_cart: number;
   roas: number;
   campaign_objective: string | null;
+  optimization_goal: string | null;
   campaign_type: 'lead' | 'ecommerce' | 'traffic' | 'other';
   effective_status?: string | null;
   configured_status?: string | null;
@@ -52,9 +61,30 @@ export interface InsightRecord {
 
 // Field schema for the Facebook Insights CRM table (keys / Hebrew names / types),
 // kept here so both sync functions create exactly the same columns.
-export const FB_INSIGHTS_FIELD_KEYS = ['date', 'campaign_name', 'campaign_id', 'impressions', 'clicks', 'lp_or_form_views', 'cpm', 'ctr', 'leads', 'form_leads', 'cost_per_lead', 'spend', 'purchases', 'purchase_value', 'add_to_cart', 'roas', 'campaign_objective', 'campaign_type', 'effective_status', 'configured_status', 'updated_time'];
-export const FB_INSIGHTS_FIELD_NAMES = ['תאריך', 'שם הקמפיין', 'מזהה קמפיין', 'חשיפות', 'קליקים', 'צפיות LP / פתיחות טופס', 'עלות ל-1000 חשיפות', 'אחוז קליקים', 'לידים', 'לידים מטופס', 'עלות לליד', 'הוצאה', 'רכישות', 'ערך רכישות', 'הוספות לעגלה', 'ROAS', 'מטרת קמפיין', 'סוג קמפיין', 'סטטוס בפועל', 'סטטוס מוגדר', 'עדכון אחרון בקמפיין'];
-export const FB_INSIGHTS_FIELD_TYPES = ['date', 'text', 'text', 'number', 'number', 'number', 'number', 'number', 'number', 'number', 'number', 'number', 'number', 'number', 'number', 'number', 'text', 'text', 'text', 'text', 'text'];
+export const FB_INSIGHTS_FIELD_KEYS = ['date', 'campaign_name', 'campaign_id', 'impressions', 'reach', 'frequency', 'clicks', 'link_clicks', 'conversations', 'video_views', 'post_engagements', 'results', 'result_kind', 'lp_or_form_views', 'cpm', 'ctr', 'leads', 'form_leads', 'cost_per_lead', 'spend', 'purchases', 'purchase_value', 'add_to_cart', 'roas', 'campaign_objective', 'optimization_goal', 'campaign_type', 'effective_status', 'configured_status', 'updated_time'];
+export const FB_INSIGHTS_FIELD_NAMES = ['תאריך', 'שם הקמפיין', 'מזהה קמפיין', 'חשיפות', 'תפוצה', 'תדירות', 'קליקים', 'קליקים על קישור', 'שיחות', 'צפיות וידאו', 'אינטראקציות', 'תוצאות', 'סוג תוצאה', 'צפיות LP / פתיחות טופס', 'עלות ל-1000 חשיפות', 'אחוז קליקים', 'לידים', 'לידים מטופס', 'עלות לליד', 'הוצאה', 'רכישות', 'ערך רכישות', 'הוספות לעגלה', 'ROAS', 'מטרת קמפיין', 'אירוע אופטימיזציה', 'סוג קמפיין', 'סטטוס בפועל', 'סטטוס מוגדר', 'עדכון אחרון בקמפיין'];
+export const FB_INSIGHTS_FIELD_TYPES = ['date', 'text', 'text', 'number', 'number', 'number', 'number', 'number', 'number', 'number', 'number', 'number', 'text', 'number', 'number', 'number', 'number', 'number', 'number', 'number', 'number', 'number', 'number', 'number', 'text', 'text', 'text', 'text', 'text', 'text'];
+
+/** Pick the dominant ad-set optimization goal for each campaign. */
+export function buildCampaignOptimizationGoalMap(
+  adsets: Array<{ campaign_id?: string | null; optimization_goal?: string | null }>,
+): Record<string, string> {
+  const counts = new Map<string, Map<string, number>>();
+  for (const adset of adsets) {
+    const campaignId = String(adset.campaign_id || '');
+    const goal = String(adset.optimization_goal || '').trim().toUpperCase();
+    if (!campaignId || !goal) continue;
+    const campaignCounts = counts.get(campaignId) || new Map<string, number>();
+    campaignCounts.set(goal, (campaignCounts.get(goal) || 0) + 1);
+    counts.set(campaignId, campaignCounts);
+  }
+  const result: Record<string, string> = {};
+  for (const [campaignId, campaignCounts] of counts) {
+    result[campaignId] = [...campaignCounts.entries()]
+      .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))[0][0];
+  }
+  return result;
+}
 
 // Standard FB Pixel "intent" events that landing pages frequently use INSTEAD of
 // the standard `Lead` event — each means "user submitted info / asked to be
@@ -201,6 +231,7 @@ export function buildInsightRecord(
   insight: any,
   campaignStatuses: Record<string, CampaignStatus>,
   resultLeadTypesByCampaign: Record<string, string[]> = {},
+  optimizationGoalsByCampaign: Record<string, string> = {},
 ): InsightRecord {
   // Deduplicate: FB often returns the same event (e.g. leadgen_grouped,
   // offsite_conversion.fb_pixel_lead) in BOTH insight.actions AND
@@ -249,10 +280,10 @@ export function buildInsightRecord(
     sumByTypes(['leadgen.other']),
     sumByTypes(['onsite_conversion.lead_grouped']),
   );
-  const _messagingLeadsValue = sumByTypes([
-    'onsite_conversion.messaging_conversation_started_7d',
-    'messaging_conversation_started_7d',
-  ]);
+  const _messagingLeadsValue = Math.max(
+    sumByTypes(['onsite_conversion.messaging_conversation_started_7d']),
+    sumByTypes(['messaging_conversation_started_7d']),
+  );
   const _pixelLeadsValue = sumByTypes(['offsite_conversion.fb_pixel_lead']);
   // Custom Conversions on the Pixel.
   // FB returns BOTH a parent aggregate (`offsite_conversion.custom` or
@@ -394,6 +425,46 @@ export function buildInsightRecord(
     'messaging_first_reply',
   ];
   const hasMessagingSignal = messagingActionTypes.some((type) => actionTypeSet.has(type));
+  const conversations = Math.max(0, ...messagingActionTypes.map((type) => sumByTypes([type])));
+  const videoViews = Math.max(
+    sumByTypes(['video_view']),
+    sumByTypes(['video_thruplay_watched_actions']),
+  );
+  const postEngagements = Math.max(
+    sumByTypes(['post_engagement']),
+    sumByTypes(['page_engagement']),
+  );
+  const linkClicks = Math.max(sumByTypes(['link_click']), parseInt(insight.inline_link_clicks) || 0);
+  const optimizationGoal = optimizationGoalsByCampaign[String(insight.campaign_id || '')] || null;
+  const optimizationUpper = String(optimizationGoal || '').toUpperCase();
+  let results: number | null = null;
+  let resultKind: string | null = null;
+  if (optimizationUpper.includes('MESSAGE') || isMessagingObjective) {
+    results = conversations;
+    resultKind = 'conversations';
+  } else if (optimizationUpper.includes('THRUPLAY')) {
+    results = videoViews;
+    resultKind = 'video_views';
+  } else if (optimizationUpper.includes('VIDEO')) {
+    results = videoViews;
+    resultKind = 'video_views';
+  } else if (optimizationUpper.includes('ENGAGEMENT')) {
+    results = postEngagements;
+    resultKind = 'engagements';
+  } else if (
+    optimizationUpper.includes('LINK_CLICK')
+    || optimizationUpper.includes('LANDING_PAGE')
+    || isTrafficObjective
+  ) {
+    results = optimizationUpper.includes('LANDING_PAGE') ? landingPageViews : linkClicks;
+    resultKind = optimizationUpper.includes('LANDING_PAGE') ? 'landing_page_views' : 'link_clicks';
+  } else if (isEcommerceObjective || optimizationUpper.includes('PURCHASE') || optimizationUpper.includes('VALUE')) {
+    results = purchases > 0 ? purchases : null;
+    resultKind = 'purchases';
+  } else if (isLeadObjective || optimizationUpper.includes('LEAD')) {
+    results = leads > 0 ? leads : null;
+    resultKind = 'leads';
+  }
 
   const hasEcommerceSignal =
     purchases > 0 ||
@@ -406,14 +477,23 @@ export function buildInsightRecord(
     LEAD_ACTION_TYPES.some((type) => actionTypeSet.has(type)) ||
     Array.from(actionTypeSet).some((type) => String(type).startsWith('offsite_conversion.custom') || String(type).startsWith('offsite_conversion.fb_pixel_custom'));
 
+  const campaignName = String(insight.campaign_name || '');
+  const isMessagingLeadCampaign =
+    isMessagingObjective ||
+    hasMessagingSignal ||
+    conversations > 0 ||
+    optimizationUpper.includes('MESSAGE') ||
+    optimizationUpper.includes('CONVERSATION') ||
+    /whatsapp|ווטסאפ|וואטסאפ|מסנג|messenger|click.?to.?message/i.test(campaignName);
+
   // PRIORITY: Campaign objective is the source of truth. Traffic campaigns get
   // their own type so they're not shown as lead campaigns with "0 leads".
   const campaignType: 'lead' | 'ecommerce' | 'traffic' | 'other' =
-    isTrafficObjective
+    isTrafficObjective && !isMessagingLeadCampaign
       ? 'traffic'
       : isLeadObjective
         ? 'lead'
-        : isMessagingObjective && hasMessagingSignal
+        : isMessagingLeadCampaign
           ? 'lead'
           : isEcommerceObjective
             ? 'ecommerce'
@@ -441,7 +521,15 @@ export function buildInsightRecord(
     ad_id: insight.ad_id || undefined,
     ad_name: insight.ad_name || undefined,
     impressions: parseInt(insight.impressions) || 0,
+    reach: parseInt(insight.reach) || 0,
+    frequency: parseFloat(insight.frequency) || 0,
     clicks: parseInt(insight.clicks) || 0,
+    link_clicks: linkClicks,
+    conversations,
+    video_views: videoViews,
+    post_engagements: postEngagements,
+    results,
+    result_kind: resultKind,
     lp_or_form_views: lpOrFormViews,
     cpm: parseFloat(insight.cpm) || 0,
     ctr: parseFloat(insight.ctr) || 0,
@@ -454,6 +542,7 @@ export function buildInsightRecord(
     add_to_cart: addToCart,
     roas,
     campaign_objective: campaignStatus?.objective || null,
+    optimization_goal: optimizationGoal,
     campaign_type: campaignType,
     effective_status: campaignStatus?.effective_status || null,
     configured_status: campaignStatus?.configured_status || null,
@@ -462,7 +551,7 @@ export function buildInsightRecord(
 }
 
 const FB_INSIGHTS_BASE_FIELDS =
-  'impressions,clicks,cpm,ctr,actions,action_values,conversions,cost_per_action_type,cost_per_conversion,spend';
+  'impressions,reach,frequency,clicks,inline_link_clicks,cpm,ctr,actions,action_values,conversions,cost_per_action_type,cost_per_conversion,spend';
 
 /** Paginate Facebook account insights for one hierarchy level. */
 export async function fetchFacebookInsightsAtLevel(
@@ -504,6 +593,7 @@ export async function buildAllLevelInsightRecords(
   accessToken: string,
   campaignStatuses: Record<string, CampaignStatus>,
   resultLeadTypesByCampaign: Record<string, string[]> = {},
+  optimizationGoalsByCampaign: Record<string, string> = {},
 ): Promise<{ records: InsightRecord[]; levelCounts: Record<AdsEntityLevel, number> }> {
   const levels: AdsEntityLevel[] = ['campaign', 'adset', 'ad'];
   const allRows: InsightRecord[] = [];
@@ -513,7 +603,12 @@ export async function buildAllLevelInsightRecords(
     try {
       const raw = await fetchFacebookInsightsAtLevel(adAccountId, level, sinceStr, untilStr, accessToken);
       for (const insight of raw) {
-        allRows.push(buildInsightRecord(insight, campaignStatuses, resultLeadTypesByCampaign));
+        allRows.push(buildInsightRecord(
+          insight,
+          campaignStatuses,
+          resultLeadTypesByCampaign,
+          optimizationGoalsByCampaign,
+        ));
       }
       levelCounts[level] = raw.length;
       console.log(`[fbInsights] level=${level} rows=${raw.length}`);
@@ -523,4 +618,78 @@ export async function buildAllLevelInsightRecords(
   }
 
   return { records: allRows, levelCounts };
+}
+
+export type LastMetaActivity = {
+  at: string | null
+  type: string | null
+  actor: string | null
+  object: string | null
+  availability: string
+  fetched_at?: string
+}
+
+const META_ACTIVITY_OBJECTS = new Set(['CAMPAIGN', 'AD_SET', 'AD'])
+
+export function latestCampaignUpdatedTime(
+  campaigns: Record<string, CampaignStatus> | CampaignStatus[] = {},
+): string | null {
+  const list = Array.isArray(campaigns) ? campaigns : Object.values(campaigns)
+  const times = list.map((campaign) => campaign?.updated_time).filter(Boolean) as string[]
+  return times.sort().at(-1) || null
+}
+
+export function cachedLastMetaActivity(settings: Record<string, unknown> | null | undefined): LastMetaActivity | null {
+  const cached = settings?.last_meta_activity
+  if (!cached || typeof cached !== 'object') return null
+  const activity = cached as LastMetaActivity
+  if (!activity.at && !activity.availability) return null
+  return activity
+}
+
+/** Last campaign/ad-set/ad edit from Meta Ads Manager activities (not insights). */
+export async function fetchLastMetaCampaignActivity(
+  token: string | null,
+  adAccountId: string | null,
+): Promise<LastMetaActivity> {
+  if (!adAccountId) return { at: null, type: null, actor: null, object: null, availability: 'ad_account_not_connected' }
+  if (!token) return { at: null, type: null, actor: null, object: null, availability: 'meta_token_unavailable' }
+  const controller = new AbortController()
+  const timer = setTimeout(() => controller.abort(), 2500)
+  try {
+    const account = String(adAccountId).replace(/^act_/, '')
+    const since = new Date(Date.now() - 30 * 86400000).toISOString()
+    const params = new URLSearchParams({
+      fields: 'event_time,date_time_in_timezone,event_type,translated_event_type,actor_name,object_id,object_name,object_type',
+      add_children: 'true',
+      since,
+      limit: '100',
+      access_token: token,
+    })
+    const response = await fetch(
+      `https://graph.facebook.com/v21.0/act_${account}/activities?${params}`,
+      { signal: controller.signal },
+    )
+    const payload = await response.json()
+    if (!response.ok || payload?.error || !Array.isArray(payload?.data)) {
+      return { at: null, type: null, actor: null, object: null, availability: 'meta_api_unavailable' }
+    }
+    const latest = payload.data
+      .filter((activity: { object_type?: string }) => META_ACTIVITY_OBJECTS.has(String(activity?.object_type || '').toUpperCase()))
+      .sort((a: { event_time?: string; date_time_in_timezone?: string }, b: { event_time?: string; date_time_in_timezone?: string }) =>
+        new Date(b.event_time || b.date_time_in_timezone || 0).getTime() - new Date(a.event_time || a.date_time_in_timezone || 0).getTime())[0]
+    if (!latest) return { at: null, type: null, actor: null, object: null, availability: 'no_campaign_change_in_30d' }
+    return {
+      at: latest.event_time || latest.date_time_in_timezone || null,
+      type: latest.translated_event_type || latest.event_type || null,
+      actor: latest.actor_name || null,
+      object: latest.object_name || latest.object_id || null,
+      availability: 'available',
+      fetched_at: new Date().toISOString(),
+    }
+  } catch {
+    return { at: null, type: null, actor: null, object: null, availability: 'meta_api_unavailable' }
+  } finally {
+    clearTimeout(timer)
+  }
 }

@@ -66,6 +66,9 @@ export function SeoSnapshotCards({ snapshot, prevMonth, campaignStart, gaOrganic
   // There is no historical org_keywords_top20 field. Use the merged live keyword
   // rows so a Top 10 snapshot is never mislabeled as Top 20.
   const effectiveTop20 = liveList.length > 0 ? liveTop20 : undefined;
+  const snapTotal = getVal(snapshot, "org_keywords_total");
+  const effectiveTotal =
+    liveList.length > 0 && (!snapTotal || snapTotal === 0) ? liveList.length : snapTotal;
 
   const metrics = [
     { keys: ['domain_rating', 'dr'], label: 'דירוג דומיין (DR)', icon: '🏆', isOrganic: false, override: undefined as number | undefined },
@@ -73,7 +76,7 @@ export function SeoSnapshotCards({ snapshot, prevMonth, campaignStart, gaOrganic
 
     { keys: ['org_keywords_top3'], label: 'מילות מפתח (Top 3)', icon: '🥇', isOrganic: false, override: effectiveTop3 },
     { keys: ['org_keywords_top20'], label: 'מילות מפתח (Top 20)', icon: '🏆', isOrganic: false, override: effectiveTop20 },
-    { keys: ['org_keywords_total'], label: 'סה״כ מילות מפתח', icon: '🔑', isOrganic: false, override: undefined as number | undefined },
+    { keys: ['org_keywords_total'], label: 'סה״כ מילות מפתח', icon: '🔑', isOrganic: false, override: effectiveTotal },
     { keys: ['referring_domains', 'referring_domains_all_time'], label: 'דומיינים מפנים', icon: '🔗', isOrganic: false, override: undefined as number | undefined },
     { keys: ['backlinks_live'], label: 'קישורים נכנסים (פעילים)', icon: '🌐', isOrganic: false, override: undefined as number | undefined },
     { keys: ['backlinks_all_time'], label: 'קישורים נכנסים (כולל)', icon: '📊', isOrganic: false, override: undefined as number | undefined },

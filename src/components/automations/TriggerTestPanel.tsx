@@ -100,6 +100,8 @@ function getDefaultPayload(triggerType: string): Record<string, any> {
     case "task_status_changed":
     case "task_completed":
     case "task_assigned":
+    case "task_collaborator_added":
+    case "task_update_added":
     case "task_overdue":
       return {
         title: "משימה לדוגמה",
@@ -245,6 +247,8 @@ function getFieldDefs(triggerType: string): FieldDef[] {
     case "task_status_changed":
     case "task_completed":
     case "task_assigned":
+    case "task_collaborator_added":
+    case "task_update_added":
     case "task_overdue":
       return [
         { key: "title", label: "כותרת משימה", type: "text", placeholder: "משימה לדוגמה" },

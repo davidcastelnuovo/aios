@@ -1,6 +1,11 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.75.0'
 import {
+  processAutomationOnlyLeadWebhook,
+  resolveLeadAlertAutomation,
+} from '../_shared/automation-only-lead-webhook.ts'
+import {
   buildLeadRoutingPayload,
+  isClientLeadAlertPayload,
   resolveLeadClient,
 } from '../_shared/lead-routing.ts'
 import { unarchiveExistingLead } from '../_shared/unarchive-lead.ts'
@@ -34,6 +39,9 @@ interface LeadPayload {
   tag_name?: string
   tenant_slug?: string
   tenant_id?: string
+  automation_id?: string
+  crm_intake?: boolean
+  create_crm_lead?: boolean
 }
 
 function pickCampaignName(body: Record<string, unknown> | null | undefined): string | undefined {
@@ -262,6 +270,57 @@ Deno.serve(async (req) => {
           headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
         }
       )
+    }
+
+    const alertPayload: Record<string, unknown> = {
+      ...(typeof rawBody === 'object' && rawBody ? rawBody as Record<string, unknown> : {}),
+      ...(payload as Record<string, unknown>),
+    }
+    const queryAutomationId = url.searchParams.get('automation_id')?.trim() || undefined
+    const explicitAutomationId = queryAutomationId
+      || (typeof payload.automation_id === 'string' ? payload.automation_id.trim() : undefined)
+
+    if (explicitAutomationId || isClientLeadAlertPayload(alertPayload)) {
+      const resolvedAutomation = await resolveLeadAlertAutomation(
+        supabase,
+        tenantId!,
+        explicitAutomationId || null,
+        payload.client_id,
+      )
+
+      if (!resolvedAutomation) {
+        return new Response(
+          JSON.stringify({
+            success: false,
+            error: 'lead_alert_automation_not_found',
+            hint: 'Configure an active flow with trigger inbound_webhook_lead, or POST to automation-lead-webhook?automation_id=… with x-webhook-secret.',
+            crm_lead_created: false,
+          }),
+          {
+            status: 404,
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          },
+        )
+      }
+
+      const result = await processAutomationOnlyLeadWebhook(
+        supabase,
+        supabaseUrl,
+        supabaseKey,
+        {
+          tenantId: tenantId!,
+          automationId: resolvedAutomation.automationId,
+          triggerConfiguration: resolvedAutomation.configuration,
+          body: typeof rawBody === 'object' && rawBody ? rawBody as Record<string, unknown> : {},
+          payload: alertPayload,
+          source: 'webhook_intake_redirect',
+        },
+      )
+
+      return new Response(JSON.stringify(result.body), {
+        status: result.status,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      })
     }
 
     // Agency is optional — tenant_slug / tenant_id is enough to create the lead.

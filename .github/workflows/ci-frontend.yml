@@ -1,6 +1,11 @@
 name: CI — frontend build
 
 on:
+  workflow_call:
+    inputs:
+      source_sha:
+        type: string
+        required: true
   pull_request:
     branches: [main, develop]
   push:
@@ -15,6 +20,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.source_sha || github.sha }}
 
       - uses: pnpm/action-setup@v4
         with:
@@ -22,13 +29,51 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: "20"
+          node-version: "24"
+          cache: pnpm
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Shared-agency dashboard guard
+      - name: Regression guards (dashboards + permission personas)
         run: pnpm test:guards
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.BASE_ACCESS_TOKEN }}
+          SUPABASE_STAGING_PROJECT_ID: ${{ secrets.SUPABASE_STAGING_PROJECT_ID }}
+
+      - name: Environment and report regression tests
+        run: node --test scripts/edge-deploy-plan.test.mjs scripts/deploy-edge.test.mjs supabase/functions/_shared/staging-outbound.test.mjs supabase/functions/_shared/meeting-summary-prompts.test.ts supabase/functions/_shared/signature-field-text.test.ts supabase/functions/_shared/signature-email-template.test.ts supabase/functions/_shared/report-sync-window.test.ts src/lib/carmenLoaderSignal.test.ts src/lib/clipboardFiles.test.ts src/lib/reportRecords.test.ts src/lib/reportCoverage.test.ts src/lib/reportSyncCadence.test.ts src/lib/dashboardDateFilters.test.ts src/lib/weeklyAdsComparison.test.ts src/lib/leadTableLayout.test.ts src/lib/leadTableColumns.test.ts src/lib/leadViewMode.test.ts src/lib/recordingSummaryTarget.test.ts src/lib/sharedReportTabs.test.ts src/lib/signatureFieldGuide.test.ts src/lib/signatureDate.test.ts src/lib/teamMemberMatch.test.ts
+
+      - name: Mirror contract tests
+        run: python3 -m unittest discover -s scripts -p 'test_staging_mirror.py'
+
+      - name: Carmen pulse regression tests
+        run: node --experimental-strip-types --test supabase/functions/_shared/pulse-foundation.test.mjs supabase/functions/_shared/client-retention.test.ts
 
       - name: Build frontend
         run: pnpm build
+
+  mirror-sql:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_DB: mirror_test
+          POSTGRES_USER: mirror_test
+          POSTGRES_PASSWORD: disposable_test_only
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.source_sha || github.sha }}
+      - name: Verify mirror transactions on disposable PostgreSQL
+        env:
+          MIRROR_TEST_DSN: postgresql://mirror_test:disposable_test_only@localhost:5432/mirror_test
+        run: python3 -m unittest discover -s scripts -p 'test_staging_mirror_postgres.py'

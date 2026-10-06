@@ -295,11 +295,11 @@ export function AppSidebar() {
         ) : (
           <div className="flex flex-col gap-2 px-2 py-2" dir="rtl">
             {/* Top row: logo + tenant */}
-            <div className="flex items-center justify-end">
-              <div className="flex items-center gap-2 min-w-0 flex-1 justify-end">
+            <div className="flex items-start justify-end gap-2">
+              <div className="flex min-w-0 flex-1 flex-col items-stretch gap-1.5">
                 {userTenants && userTenants.length > 1 && (
                   <Select value={currentTenantId || undefined} onValueChange={handleTenantChange}>
-                    <SelectTrigger className="h-7 border-0 shadow-none focus:ring-0 min-w-0 bg-sidebar-background text-xs">
+                    <SelectTrigger className="h-8 w-full border-0 shadow-none focus:ring-0 bg-sidebar-accent/50 text-xs font-semibold text-sidebar-foreground">
                       <SelectValue placeholder="בחר ארגון" />
                     </SelectTrigger>
                     <SelectContent className="bg-popover border border-border shadow-lg z-[9999]" position="popper" sideOffset={4} align="start" side="bottom">
@@ -310,14 +310,32 @@ export function AppSidebar() {
                   </Select>
                 )}
                 {userTenants && userTenants.length === 1 && (
-                  <span className="text-sm font-semibold truncate">{userTenants[0].name}</span>
+                  <span className="truncate text-right text-sm font-semibold text-sidebar-foreground">{userTenants[0].name}</span>
                 )}
-                {logoUrl ? (
-                  <img src={logoUrl} alt="Logo" className="h-8 w-8 object-contain flex-shrink-0" />
-                ) : (
-                  <Building2 className="h-8 w-8 flex-shrink-0" />
+                {isMobile && agencies && agencies.length > 0 && (
+                  <Select value={selectedAgency} onValueChange={setSelectedAgency}>
+                    <SelectTrigger className="h-8 w-full gap-2 border-0 shadow-none focus:ring-0 bg-sidebar-accent/35 text-xs text-sidebar-foreground">
+                      <Building2 className="h-3.5 w-3.5 shrink-0 opacity-80" />
+                      <SelectValue placeholder="בחר סוכנות" />
+                    </SelectTrigger>
+                    <SelectContent className="bg-popover border border-border shadow-lg z-[9999]" position="popper" sideOffset={4} align="start" side="bottom">
+                      {agencies.length > 1 && (
+                        <SelectItem value="all">כל הסוכנויות</SelectItem>
+                      )}
+                      {agencies.map((agency) => (
+                        <SelectItem key={agency.id} value={agency.id}>
+                          {agency.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 )}
               </div>
+              {logoUrl ? (
+                <img src={logoUrl} alt="Logo" className="h-8 w-8 shrink-0 object-contain" />
+              ) : (
+                <Building2 className="h-8 w-8 shrink-0" />
+              )}
             </div>
 
             {/* Tab switcher — 3 main tabs */}
@@ -442,28 +460,6 @@ export function AppSidebar() {
         })}
 
       </SidebarContent>
-
-      {isMobile && agencies && agencies.length > 0 && (
-        <div className="p-3 border-t border-sidebar-border" dir="rtl">
-          <p className="mb-1.5 text-xs font-medium text-muted-foreground">סוכנות</p>
-          <Select value={selectedAgency} onValueChange={setSelectedAgency}>
-            <SelectTrigger className="w-full bg-background">
-              <Building2 className="h-4 w-4 ml-2 flex-shrink-0" />
-              <SelectValue placeholder="בחר סוכנות" />
-            </SelectTrigger>
-            <SelectContent className="bg-background z-[100]">
-              {agencies.length > 1 && (
-                <SelectItem value="all">כל הסוכנויות</SelectItem>
-              )}
-              {agencies.map((agency) => (
-                <SelectItem key={agency.id} value={agency.id}>
-                  {agency.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-      )}
 
       {/* Install PWA Button */}
       <InstallAppButton isCollapsed={isCollapsed} />

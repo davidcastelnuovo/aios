@@ -7,7 +7,9 @@
 // known-good monolithic version from main; CI redeploys it via the Supabase CLI. (re-deploy: a stray placeholder bundle had overwritten v40).
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.75.0'
 import { resolveModelId } from '../_shared/models.ts'
+import { isCachedPulseRequest } from '../_shared/pulse-request.mjs'
 import { assertCallerCanAccessClient, assertCallerCanAccessEntityClient } from '../_shared/auth-helpers.ts'
+import { asUuidOrNull } from '../_shared/uuid.ts'
 import { summarizeAndStoreAgentMemory, recallAgentMemory, recallAgentMemoryFTS, saveAgentMemory } from '../_shared/agent-memory.ts'
 import { buildCarmenV2SystemPrompt, shouldUseV2Prompt } from '../_shared/carmen-prompt-v2.ts'
 import { loadMcpTools } from '../_shared/mcp-tools.ts'
@@ -17,6 +19,7 @@ import { DEV_ENVIRONMENT_STANDING } from '../_shared/environments-standing.ts'
 import {
   applyToolForceIncludes,
   buildQuickAck,
+  buildToolApiEntries,
   fetchRelevantMemoryPointers,
   searchToolsFromIndex,
   selectRelevantToolsForMessage,
@@ -24,9 +27,11 @@ import {
   shouldUseTokenOptimize,
 } from '../_shared/carmen-token-optimizer.ts'
 import { aiEmbed, aiEmbedBatch, resolveOpenAIKey } from '../_shared/ai.ts'
-import { asUuidOrNull } from '../_shared/uuid.ts'
+import { fireTaskPeerNotification } from '../_shared/notify-task-peers.ts'
 import { normalizeAdCopyVariants, summarizeSourceAd } from '../_shared/fb-ad-duplicate.ts'
 import { loadDevEscalationTierFromDb } from '../_shared/carmen-access-policy.ts'
+import {
+  buildDevEscalationPromptRule,
   DEV_ESCALATION_REFUSAL_HE,
   DEV_ESCALATION_BUGFIX_ONLY_REFUSAL_HE,
   getDevEscalationTier,
@@ -34,6 +39,8 @@ import { loadDevEscalationTierFromDb } from '../_shared/carmen-access-policy.ts'
   isDevEscalationTool,
   isDevEscalationToolAllowed,
   isBugfixEscalationSkill,
+  NATIVE_DEV_TASK_TOOLS,
+  resolveDevTaskActorUserId,
 } from '../_shared/dev-escalation-auth.ts'
 import {
   buildApprovalConfirmPromptRule,
@@ -71,7 +78,7 @@ import {
 import {
   addGoalBlocker,
   addGoalMilestone,
-  createExecutionGoal,
+  createUnifiedGoal,
   findDuplicateGoals,
   getGoalExecutionReport,
   linkTaskToGoal,
@@ -97,6 +104,7 @@ import {
   pulseSurfacePrefersWhatsAppDigest,
   selectPulseCriticalAlerts,
 } from '../_shared/campaign-pulse.ts'
+import { buildRetentionScan, RETENTION_BATCH_LIMIT } from '../_shared/client-retention.ts'
 
 function scoreNameMatchSafe(fullName: string, query: string): number {
   return scoreNameMatch(fullName, query)
@@ -510,6 +518,7 @@ const PRIORITY_TOOLS = new Set([
   'list_campaigners', 'list_sales_people',
   'get_openai_billing_status',
   'connect_client_meta_ad_account',
+  ...NATIVE_DEV_TASK_TOOLS,
 ])
 
 function capToolsForTarget(target: LLMTarget, tools: any[]): any[] {
@@ -708,6 +717,8 @@ const ALL_TOOLS = [
   { name: 'get_maskyoo_calls_report', description: 'דוח שיחות מסקיו לדוחות SEO. מחזיר ספירות שיחות נכנסות לפי לקוח וקטגוריה (organic/paid) מ-seo_call_snapshots. אם אין snapshot — שולף ישירות מ-call_logs. מחזיר השוואה בין תקופות אם period_compare=true.', parameters: { type: 'object', properties: { client_id: { type: 'string', description: 'מזהה לקוח (אופציונלי — בלעדיו מחזיר כל הלקוחות)' }, client_name: { type: 'string', description: 'חיפוש לקוח לפי שם אם אין client_id' }, period_start: { type: 'string', description: 'תחילת תקופה YYYY-MM-DD (ברירת מחדל: תחילת החודש הנוכחי)' }, period_end: { type: 'string', description: 'סוף תקופה YYYY-MM-DD (ברירת מחדל: היום)' }, category: { type: 'string', enum: ['organic', 'paid', 'all'], description: 'ברירת מחדל: all' }, period_compare: { type: 'boolean', description: 'אם true — מחזיר גם תקופה קודמת מקבילה להשוואה' } } } },
   { name: 'sync_maskyoo_cdr', description: 'סנכרון CDRs (Call Detail Records) מ-API של מסקיו אל call_logs. הרץ כשהנתונים לא עדכניים. מחזיר כמה רשומות נוספו.', parameters: { type: 'object', properties: { from_date: { type: 'string', description: 'YYYY-MM-DD — תאריך התחלה לסנכרון (ברירת מחדל 7 ימים אחורה)' } } } },
   { name: 'update_client_health', description: 'עדכון מצב בריאות לקוח: מעדכן mood_status בטבלת clients ויוצר רשומה ב-communication_logs. השתמש בכלי הזה כדי להדליק דגל על לקוח כשמזהים בעיה (התייקרות, ירידה בביצועים).', parameters: { type: 'object', properties: { client_id: { type: 'string' }, mood_status: { type: 'string', enum: ['happy', 'wavering', 'churn_risk'], description: 'מצב הלקוח: happy=תקין, wavering=מתלבט, churn_risk=סיכון נטישה' }, communication_status: { type: 'string', enum: ['normal', 'sensitive', 'complaint'], description: 'סטטוס תקשורת לרשומת communication_logs' }, note: { type: 'string', description: 'הערה/סיכום — מה הבעיה שזוהתה' } }, required: ['client_id', 'mood_status', 'note'] } },
+  { name: 'get_client_retention_scan', description: 'דופק שימור: מדרג לקוחות פעילים לטיפול עכשיו או למעקב לפי דופק שמור ומצב CRM. לא מחשב דופק חדש, לא קורא למודל, ולא שולח הודעה ללקוח. בוואטסאפ החזירי רק whatsapp_digest.', parameters: { type: 'object', properties: { client_id: { type: 'string' }, client_name: { type: 'string', description: 'חיפוש חלקי בשם הלקוח' } } } },
+  { name: 'batch_update_client_health', description: 'עדכון בריאות לכמה לקוחות בבת אחת (עד 25). לכל שורה חובה client_id, mood_status ו-note. רק אחרי בקשה מפורשת לעדכן את הדשבורד — לא כחלק מסריקת שימור.', parameters: { type: 'object', properties: { updates: { type: 'array', items: { type: 'object', properties: { client_id: { type: 'string' }, mood_status: { type: 'string', enum: ['happy', 'wavering', 'churn_risk'] }, communication_status: { type: 'string', enum: ['normal', 'sensitive', 'complaint'] }, note: { type: 'string' } }, required: ['client_id', 'mood_status', 'note'] } } }, required: ['updates'] } },
   // CLIENTS - full CRUD
   { name: 'create_client', description: 'יצירת לקוח חדש במערכת', parameters: { type: 'object', properties: { name: { type: 'string', description: 'שם העסק/לקוח' }, contact_name: { type: 'string' }, phone: { type: 'string' }, email: { type: 'string' }, agency_id: { type: 'string', description: 'מזהה סוכנות (אופציונלי)' }, notes: { type: 'string' } }, required: ['name'] } },
   { name: 'update_client', description: 'עדכון פרטי לקוח קיים', parameters: { type: 'object', properties: { client_id: { type: 'string' }, name: { type: 'string' }, contact_name: { type: 'string' }, phone: { type: 'string' }, email: { type: 'string' }, status: { type: 'string', enum: ['active', 'inactive', 'lead'] }, notes: { type: 'string' }, follow_up_date: { type: 'string', description: 'תאריך לדבר עם הלקוח בפורמט YYYY-MM-DD' } }, required: ['client_id'] } },
@@ -781,7 +792,7 @@ const ALL_TOOLS = [
   { name: 'kb_learn', description: 'שמירת ידע פרוצדורלי/אפיזודי חדש (לקח שנלמד, נוהל, סיכום שיחה חשובה). שונה מ-save_memory: זה נכנס לממלכת הידע עם embedding לחיפוש סמנטי. שמור פה דברים שכרמן צריכה לזכור לטווח ארוך עם הקשר.', parameters: { type: 'object', properties: { topic: { type: 'string' }, summary: { type: 'string' }, topic_tags: { type: 'array', items: { type: 'string' } }, importance: { type: 'integer', description: '1-10' }, source_table: { type: 'string' }, source_ids: { type: 'array', items: { type: 'string' } } }, required: ['topic','summary'] } },
   // CHAT HISTORY
   { name: 'get_chat_history', description: 'שליפת היסטוריית שיחות WhatsApp עם ליד או לקוח', parameters: { type: 'object', properties: { contact_type: { type: 'string', enum: ['lead', 'client'] }, contact_id: { type: 'string' }, limit: { type: 'integer' } }, required: ['contact_type', 'contact_id'] } },
-  { name: 'search_conversation_history', description: 'שליפה מכל היסטוריית ההתכתבויות של הארגון (WhatsApp) — ללא מגבלת סשן. שני מצבים: (1) חיפוש מילות מפתח — "מה המייל של פליקס", שם לקוח, נושא. חשוב: חפשי מילות תוכן בלבד (שם/מייל/נושא) — לעולם לא מילות זמן כמו "אתמול"/"בערב", הן לא מופיעות בהודעות! (2) דפדוף לפי זמן — לשאלות "מה דיברנו אתמול/בשבוע שעבר": קראי בלי query עם days_back מתאים ו-only_carmen_chats=true, ותקבלי את השיחות איתך כרונולוגית. אם חיפוש לא מצא — נסי מילה אחרת או עברי לדפדוף לפני שאת אומרת שאין.', parameters: { type: 'object', properties: { query: { type: 'string', description: 'מילות תוכן לחיפוש (עד 4, כולן חייבות להופיע). השמיטי לדפדוף לפי זמן.' }, days_back: { type: 'integer', description: 'כמה ימים אחורה (ברירת מחדל 180; לדפדוף "אתמול" השתמשי ב-2)' }, only_carmen_chats: { type: 'boolean', description: 'רק שיחות בערוץ של כרמן (ברירת מחדל true בדפדוף בלי query)' }, with_phone: { type: 'string', description: 'סינון לשיחות עם מספר טלפון מסוים' }, limit: { type: 'integer', description: 'מקסימום תוצאות (ברירת מחדל 20, בדפדוף 40)' } } } },
+  { name: 'search_conversation_history', description: 'שליפת היסטוריית WhatsApp. כברירת מחדל בשיחת WhatsApp פעילה — רק הצ׳אט הנוכחי (chat_id). לדפדוף בכל הארגון: browse_all_chats=true. מצבים: (1) חיפוש מילות תוכן (לא מילות זמן כמו אתמול) (2) דפדוף לפי זמן בלי query.', parameters: { type: 'object', properties: { query: { type: 'string', description: 'מילות תוכן לחיפוש (עד 4). השמיטי לדפדוף לפי זמן.' }, days_back: { type: 'integer', description: 'כמה ימים אחורה (ברירת מחדל 180; לדפדוף אתמול השתמשי ב-2)' }, only_carmen_chats: { type: 'boolean', description: 'רק ערוץ manus_wa (ברירת מחדל true בדפדוף)' }, with_phone: { type: 'string', description: 'סינון למספר טלפון' }, browse_all_chats: { type: 'boolean', description: 'true = חפשי בכל שיחות הארגון, לא רק הצ׳אט הנוכחי' }, limit: { type: 'integer', description: 'מקסימום תוצאות (ברירת מחדל 20, בדפדוף 40)' } } } },
   { name: 'get_recent_inbound_messages', description: 'שליפת הודעות נכנסות אחרונות מכל השיחות', parameters: { type: 'object', properties: { limit: { type: 'integer' }, hours: { type: 'integer', description: 'כמה שעות אחורה (ברירת מחדל 24)' } } } },
   // FINANCE
   { name: 'list_finance', description: 'רשימת תנועות מטבלת finance הישנה (legacy). להנהלת חשבונות האמיתית השתמשי ב-get_accounting_overview / list_one_time_incomes / list_income_payments.', parameters: { type: 'object', properties: { client_id: { type: 'string' }, type: { type: 'string', enum: ['income', 'expense'] }, limit: { type: 'integer' } } } },
@@ -807,18 +818,19 @@ const ALL_TOOLS = [
   { name: 'create_goal', description: 'יצירת יעד חדש במערכת היעדים ההיררכית', parameters: { type: 'object', properties: { title: { type: 'string' }, description: { type: 'string' }, parent_goal_id: { type: 'string', description: 'מזהה יעד-אב (אופציונלי)' }, due_date: { type: 'string' }, owner_type: { type: 'string', enum: ['agent', 'campaigner'] }, owner_id: { type: 'string' } }, required: ['title'] } },
   { name: 'list_goals', description: 'רשימת יעדים עם אחוז התקדמות', parameters: { type: 'object', properties: { status: { type: 'string' }, limit: { type: 'integer' } } } },
   { name: 'find_execution_goal_duplicates', description: 'חיפוש יעדי ביצוע פתוחים דומים (דדופ לפני יצירה).', parameters: { type: 'object', properties: { title: { type: 'string' } }, required: ['title'] } },
-  { name: 'create_execution_goal', description: 'יצירת יעד ביצוע במרכז הפיקוד — כולל אבני דרך, קריטריוני השלמה, דדופ. פעולות פיננסיות/פרודקשן/קמפיינים דורשות execute_pending_approval.', parameters: { type: 'object', properties: { title: { type: 'string' }, description: { type: 'string' }, due_date: { type: 'string' }, priority: { type: 'string', enum: ['urgent', 'high', 'normal', 'low'] }, completion_criteria: { type: 'string' }, next_action: { type: 'string' }, milestones: { type: 'array', items: { type: 'object', properties: { title: { type: 'string' }, description: { type: 'string' }, due_date: { type: 'string' } }, required: ['title'] } } }, required: ['title'] } },
+  { name: 'create_execution_goal', description: 'יצירת יעד במרכז הפיקוד. autonomous=true: לולאה אוטונומית עם Completion Gate + worker. autonomous=false (ברירת מחדל): ניהול ידני עם אבני דרך. פעולות פיננסיות/פרודקשן דורשות execute_pending_approval.', parameters: { type: 'object', properties: { title: { type: 'string' }, description: { type: 'string' }, due_date: { type: 'string' }, priority: { type: 'string', enum: ['urgent', 'high', 'normal', 'low'] }, completion_criteria: { type: 'string' }, next_action: { type: 'string' }, autonomous: { type: 'boolean', description: 'true = Autonomous Goal Engine (worker + evidence gate)' }, objective: { type: 'string' }, risk_level: { type: 'string', enum: ['READ', 'SAFE_WRITE', 'REVERSIBLE', 'PRODUCTION', 'DESTRUCTIVE'] }, success_criteria: { type: 'array', items: { type: 'object', properties: { key: { type: 'string' }, description: { type: 'string' }, required: { type: 'boolean' } }, required: ['description'] } }, milestones: { type: 'array', items: { type: 'object', properties: { title: { type: 'string' }, description: { type: 'string' }, due_date: { type: 'string' } }, required: ['title'] } } }, required: ['title'] } },
   { name: 'get_execution_goal_report', description: 'דוח ביצוע יעד: מה השתנה, חסמים, מה ממתין לאישור דוד, 3 פעולות הבאות.', parameters: { type: 'object', properties: { goal_id: { type: 'string' }, since_hours: { type: 'integer' } }, required: ['goal_id'] } },
   { name: 'add_goal_milestone', description: 'הוספת אבן דרך ליעד ביצוע.', parameters: { type: 'object', properties: { goal_id: { type: 'string' }, title: { type: 'string' }, description: { type: 'string' }, due_date: { type: 'string' } }, required: ['goal_id', 'title'] } },
   { name: 'add_goal_blocker', description: 'רישום חסם על יעד ביצוע (מעדכן סטטוס ל-blocked).', parameters: { type: 'object', properties: { goal_id: { type: 'string' }, title: { type: 'string' }, description: { type: 'string' } }, required: ['goal_id', 'title'] } },
   { name: 'link_task_to_execution_goal', description: 'קישור משימת tasks קיימת ליעד ביצוע.', parameters: { type: 'object', properties: { goal_id: { type: 'string' }, task_id: { type: 'string' } }, required: ['goal_id', 'task_id'] } },
+  { name: 'get_autonomous_goal_status', description: 'סטטוס יעד (כולל אוטונומי): engine_status, קריטריונים, Evidence, Completion Gate. alias ל-get_execution_goal_report על יעד אוטונומי.', parameters: { type: 'object', properties: { goal_id: { type: 'string' } }, required: ['goal_id'] } },
   // AGENT TASK OWNERSHIP
   { name: 'take_task', description: 'כרמן לוקחת בעלות על משימה - מעדכנת assigned_agent וסטטוס ל-agent_working', parameters: { type: 'object', properties: { task_id: { type: 'string' }, agent_name: { type: 'string', description: 'שם הסוכן שלוקח את המשימה (ברירת מחדל: כרמן)' } }, required: ['task_id'] } },
   { name: 'assign_task_to_cursor', description: 'מקצה משימה ל-Cursor (תור פיתוח). מעדכן assigned_agent=Cursor ומפעיל dispatch אוטומטי אם אין משימה אחרת ב-in_progress.', parameters: { type: 'object', properties: { task_id: { type: 'string' }, notes: { type: 'string', description: 'הערות נוספות למשימה' } }, required: ['task_id'] } },
   { name: 'find_dev_task_duplicates', description: 'חיפוש משימות פיתוח פתוחות דומות לפי כותרת (דדופ לפני יצירה/שליחה).', parameters: { type: 'object', properties: { title: { type: 'string' } }, required: ['title'] } },
   { name: 'create_dev_task', description: 'יצירת משימת פיתוח מובנית (טיוטה). כולל brief: title, problem, expected/current behavior, scope, acceptance criteria. תמיד בדקי duplicates קודם.', parameters: { type: 'object', properties: { title: { type: 'string' }, problem: { type: 'string' }, expected_behavior: { type: 'string' }, current_behavior: { type: 'string' }, scope: { type: 'string' }, affected_areas: { type: 'string' }, constraints: { type: 'string' }, acceptance_criteria: { type: 'string' }, base_branch: { type: 'string', description: 'ברירת מחדל develop' }, environment: { type: 'string', description: 'ברירת מחדל staging' }, requested_by: { type: 'string' }, priority: { type: 'string', enum: ['urgent', 'high', 'normal', 'low'] }, assigned_agent: { type: 'string', enum: ['cursor', 'grok', 'manus', 'claude'] }, dedup_of: { type: 'string', description: 'מזהה משימה קיימת לעדכון במקום חדשה' }, goal_id: { type: 'string', description: 'קישור ליעד ביצוע' }, source_message: { type: 'string' } }, required: ['title'] } },
   { name: 'approve_dev_task', description: 'אישור משימת פיתוח לפני שליחה לסוכן קוד.', parameters: { type: 'object', properties: { dev_task_id: { type: 'string' } }, required: ['dev_task_id'] } },
-  { name: 'dispatch_dev_task', description: 'שליחת משימת פיתוח מאושרת ל-Cursor. אם כבר יש סשן — מחזיר אותו בלי כפילות. אם timeout — ניתן לקשר סשן אחר כ attach_dev_task_session.', parameters: { type: 'object', properties: { dev_task_id: { type: 'string' } }, required: ['dev_task_id'] } },
+  { name: 'dispatch_dev_task', description: 'שליחת משימת פיתוח מאושרת ל-Cursor. מחזיר delivered/userStatus — אם delivered=true דווחי שנשלח גם כשיש dispatchToolError (reconciled). אם verificationFailed=true — לא אומתה הגעה; צייני dispatchToolError ו/או attach_dev_task_session.', parameters: { type: 'object', properties: { dev_task_id: { type: 'string' } }, required: ['dev_task_id'] } },
   { name: 'list_dev_tasks', description: 'רשימת משימות פיתוח מה-Dev Task Command Center.', parameters: { type: 'object', properties: { status: { type: 'string' }, priority: { type: 'string' }, limit: { type: 'integer' } } } },
   { name: 'update_dev_task', description: 'עדכון משימת פיתוח: PR URL, סטטוס, עדיפות, הערות.', parameters: { type: 'object', properties: { dev_task_id: { type: 'string' }, pr_url: { type: 'string' }, status: { type: 'string' }, priority: { type: 'string' }, problem: { type: 'string' }, acceptance_criteria: { type: 'string' } }, required: ['dev_task_id'] } },
   { name: 'attach_dev_task_session', description: 'קישור סשן Cursor קיים למשימת פיתוח (reconcile אחרי timeout).', parameters: { type: 'object', properties: { dev_task_id: { type: 'string' }, cursor_session_id: { type: 'string', description: 'bc-…' }, cursor_session_url: { type: 'string' } }, required: ['dev_task_id', 'cursor_session_id'] } },
@@ -1752,7 +1764,7 @@ async function tryCreateCalendarEventForTask(
   }
 }
 
-async function executeTool(name: string, args: Record<string, any>, supabase: any, tenantId: string, userId: string | null, callerCampaignerId?: string | null, agentId?: string | null, callerRole?: string | null, callerManagedAgencyIds?: string[] | null, callerPhone?: string | null, waNotify?: any, surface?: string | null): Promise<any> {
+async function executeTool(name: string, args: Record<string, any>, supabase: any, tenantId: string, userId: string | null, callerCampaignerId?: string | null, agentId?: string | null, callerRole?: string | null, callerManagedAgencyIds?: string[] | null, callerPhone?: string | null, waNotify?: any, surface?: string | null, conversationId?: string | null): Promise<any> {
   // WhatsApp / automations often pass the sentinel "system". Never write that into uuid columns.
   const actorUserId = asUuidOrNull(userId)
   // Coding-agent escalations are identity-allowlisted (David=full, Ana=bugfix-only).
@@ -1886,6 +1898,8 @@ async function executeTool(name: string, args: Record<string, any>, supabase: an
       const descStr = String(args.description || '')
       const looksLikeReminder = skillsArr.includes('reminder')
         || /תזכור|reminder|להזכיר|תזכר/i.test(titleStr + ' ' + descStr)
+      const { buildCampaignShutdownJobFromBrief } = await import('../_shared/client-campaign-shutdown.ts')
+      const shutdownJob = buildCampaignShutdownJobFromBrief(titleStr, descStr)
       let finalDescription = descStr || null
       if (looksLikeReminder && callerPhone) {
         const reminderText = descStr || titleStr
@@ -1905,19 +1919,29 @@ async function executeTool(name: string, args: Record<string, any>, supabase: an
         task_skills: args.task_skills ? JSON.stringify(args.task_skills) : null,
         task_mode: 'agent',
         enabled: true,
-        created_by: userId !== 'system' ? userId : null,
+        created_by: actorUserId,
         // WhatsApp reminders must retain the exact originating destination.
         // run-agent-task consumes this metadata deterministically at execution
         // time, so a group reminder is sent back to the group rather than
         // asking the model to infer a recipient (or create another reminder).
-        result: looksLikeReminder && waNotify
-          ? {
+        result: (() => {
+          if (looksLikeReminder && waNotify) {
+            return {
               notify: waNotify,
-              reminder_delivery: {
-                message: descStr || titleStr,
+              reminder_delivery: { message: descStr || titleStr },
+            }
+          }
+          if (shutdownJob) {
+            return {
+              campaign_shutdown_job: {
+                ...shutdownJob,
+                scope: shutdownJob.scope ?? { mode: 'all_client_campaigns' },
+                notify_david: shutdownJob.notify_david !== false,
               },
             }
-          : null,
+          }
+          return null
+        })(),
       }
       const { data, error } = await supabase.from('agent_tasks').insert(taskData).select('id, title, status, schedule_type, scheduled_at').single()
       if (error) throw error
@@ -2760,6 +2784,7 @@ async function executeTool(name: string, args: Record<string, any>, supabase: an
     case 'get_latest_campaign_pulse': {
       const PULSE_BASE_COLUMNS = 'tenant_id, calculated_at, data_fresh_through, status, campaign_goal_mode, is_ecommerce, spend_7d, lead_spend_7d, ecommerce_spend_7d, leads_7d, cpl_7d, cpl_change_pct, purchases_7d, revenue_7d, roas_7d, roas_change_pct, lead_goal_status, ecommerce_goal_status, flags, source, last_meta_change_at, last_meta_change_type, last_meta_change_actor, last_meta_change_object, meta_change_availability, client_id, agency_id, clients(name), agencies(name)'
       const PULSE_CALL_COLUMNS = 'last_client_call_at, last_client_call_by'
+      const PULSE_CAMPAIGN_COLUMNS = 'campaign_breakdown'
       const loadPulse = async (columns: string) => {
         let query = supabase
           .from('campaign_pulse_snapshots')
@@ -2775,7 +2800,11 @@ async function executeTool(name: string, args: Record<string, any>, supabase: an
         }
         return await query
       }
-      let { data, error } = await loadPulse(`${PULSE_BASE_COLUMNS}, ${PULSE_CALL_COLUMNS}`)
+      let { data, error } = await loadPulse(`${PULSE_BASE_COLUMNS}, ${PULSE_CALL_COLUMNS}, ${PULSE_CAMPAIGN_COLUMNS}`)
+      if (error && /campaign_breakdown/.test(error.message)) {
+        // Campaign breakdown not deployed yet — serve the client-level pulse.
+        ({ data, error } = await loadPulse(`${PULSE_BASE_COLUMNS}, ${PULSE_CALL_COLUMNS}`))
+      }
       if (error && /last_client_call/.test(error.message)) {
         // Call-freshness columns not deployed yet — still serve the pulse.
         ({ data, error } = await loadPulse(PULSE_BASE_COLUMNS))
@@ -3262,6 +3291,157 @@ async function executeTool(name: string, args: Record<string, any>, supabase: an
 
       return { success: true, client_id: args.client_id, mood_status: args.mood_status, communication_status: commStatus, user_id: effectiveUserId }
     }
+    case 'get_client_retention_scan': {
+      let clientQuery = supabase
+        .from('clients')
+        .select('id, name, mood_status, status')
+        .in('tenant_id', accessibleTenantIds)
+        .eq('status', 'active')
+      if (args.client_id) clientQuery = clientQuery.eq('id', args.client_id)
+      if (callerManagedAgencyIds && callerManagedAgencyIds.length > 0) {
+        clientQuery = clientQuery.in('agency_id', callerManagedAgencyIds)
+      }
+      const { data: clientRows, error: clientError } = await clientQuery
+      if (clientError) throw clientError
+      let activeClients = clientRows || []
+      if (args.client_name) {
+        const needle = String(args.client_name).toLocaleLowerCase('he')
+        activeClients = activeClients.filter((client: any) => String(client.name || '').toLocaleLowerCase('he').includes(needle))
+      }
+      if (callerCampaignerId && !bypassCampaignerScope) {
+        const { data: links, error: linksError } = await supabase
+          .from('client_team')
+          .select('client_id')
+          .eq('campaigner_id', callerCampaignerId)
+        if (linksError) throw linksError
+        const assigned = new Set((links || []).map((link: any) => link.client_id).filter(Boolean))
+        activeClients = activeClients.filter((client: any) => assigned.has(client.id))
+      }
+      const clientIds = activeClients.map((client: any) => client.id).filter(Boolean)
+      let callKnown = true
+      let pulseRows: any[] = []
+      if (clientIds.length) {
+        const loadPulses = async (columns: string) => await supabase
+          .from('campaign_pulse_snapshots')
+          .select(columns)
+          .in('tenant_id', accessibleTenantIds)
+          .in('client_id', clientIds)
+          .order('calculated_at', { ascending: false })
+        let pulseResult = await loadPulses('client_id, status, flags, last_client_call_at, calculated_at')
+        if (pulseResult.error && /last_client_call/.test(pulseResult.error.message)) {
+          callKnown = false
+          pulseResult = await loadPulses('client_id, status, flags, calculated_at')
+        }
+        if (pulseResult.error) throw pulseResult.error
+        pulseRows = pulseResult.data || []
+      }
+      const freshestPulse = new Map<string, any>()
+      for (const row of pulseRows) {
+        if (!freshestPulse.has(row.client_id)) freshestPulse.set(row.client_id, row)
+      }
+      const scan = buildRetentionScan(activeClients.map((client: any) => {
+        const pulse = freshestPulse.get(client.id)
+        return {
+          client_id: client.id,
+          client_name: client.name || 'לקוח',
+          mood_status: client.mood_status,
+          pulse_status: pulse?.status || null,
+          last_client_call_at: pulse?.last_client_call_at || null,
+          flags: pulse?.flags || [],
+          has_campaign_snapshot: !!pulse,
+          call_known: callKnown,
+        }
+      }))
+      const preferDigest = pulseSurfacePrefersWhatsAppDigest(surface)
+      return {
+        data_source: 'stored_pulse_and_crm_mood',
+        external_api_called: false,
+        ai_used_to_calculate: false,
+        outbound_sent: false,
+        call_freshness_available: callKnown,
+        scanned: scan.scanned,
+        act_now_count: scan.act_now_count,
+        watch_count: scan.watch_count,
+        steady_count: scan.steady_count,
+        truncated: scan.truncated,
+        whatsapp_digest: scan.whatsapp_digest,
+        items: preferDigest ? undefined : scan.items,
+        instructions_to_agent:
+          'הציגי את whatsapp_digest. אסור לטעון שנשלחה הודעה ללקוח. אסור לעדכן mood בלי בקשה מפורשת לעדכן את הדשבורד.',
+      }
+    }
+    case 'batch_update_client_health': {
+      const updates = Array.isArray(args.updates) ? args.updates : []
+      if (!updates.length) throw new Error('נדרשת רשימת עדכונים')
+      if (updates.length > RETENTION_BATCH_LIMIT) {
+        throw new Error(`אפשר לעדכן עד ${RETENTION_BATCH_LIMIT} לקוחות בקריאה אחת`)
+      }
+      let batchUserId = userId !== 'system' ? userId : null
+      if (!batchUserId) {
+        const { data: ownerRole } = await supabase
+          .from('user_roles')
+          .select('user_id')
+          .in('tenant_id', accessibleTenantIds)
+          .eq('role', 'owner')
+          .limit(1)
+          .maybeSingle()
+        batchUserId = ownerRole?.user_id || null
+      }
+      const results: any[] = []
+      for (const update of updates) {
+        const clientId = update?.client_id
+        const mood = update?.mood_status
+        const note = typeof update?.note === 'string' ? update.note.trim() : ''
+        if (!clientId || !mood || !note) {
+          results.push({ client_id: clientId || null, success: false, error: 'חסר client_id, mood_status או note' })
+          continue
+        }
+        if (!['happy', 'wavering', 'churn_risk'].includes(mood)) {
+          results.push({ client_id: clientId, success: false, error: 'mood_status לא חוקי' })
+          continue
+        }
+        try {
+          await assertCallerCanAccessClient(supabase, clientId, callerScope)
+          const { error: clientErr } = await supabase
+            .from('clients')
+            .update({ mood_status: mood })
+            .eq('id', clientId)
+            .in('tenant_id', accessibleTenantIds)
+          if (clientErr) throw clientErr
+          const commStatus = update.communication_status || (mood === 'happy' ? 'normal' : mood === 'wavering' ? 'sensitive' : 'complaint')
+          const { error: logErr } = await supabase.from('communication_logs').insert({
+            client_id: clientId,
+            tenant_id: tenantId,
+            status: commStatus,
+            interaction_type: 'system_alert',
+            note,
+            updated_by: batchUserId,
+          })
+          if (logErr) throw logErr
+          if (batchUserId) {
+            const { error: clientUpdateErr } = await supabase.from('client_updates').insert({
+              client_id: clientId,
+              tenant_id: tenantId,
+              user_id: batchUserId,
+              content: `[עדכון אוטומטי - כרמן] ${note}`,
+            })
+            if (clientUpdateErr) throw clientUpdateErr
+          }
+          results.push({ client_id: clientId, success: true, mood_status: mood })
+        } catch (err: any) {
+          results.push({ client_id: clientId, success: false, error: err?.message || 'update failed' })
+        }
+      }
+      const updated = results.filter((row) => row.success).length
+      return {
+        success: updated === results.length,
+        updated,
+        failed: results.length - updated,
+        outbound_sent: false,
+        results,
+        instructions_to_agent: 'דווחי כמה עודכנו וכמה נכשלו. אסור לומר שנשלחה הודעה ללקוח.',
+      }
+    }
     case 'create_social_post': {
       // Insert into both social_media_posts (for publishing) and social_gantt_posts (for planning view)
       const postData = {
@@ -3643,14 +3823,34 @@ async function executeTool(name: string, args: Record<string, any>, supabase: an
       await assertCallerCanAccessEntityClient(supabase, 'tasks', args.task_id, callerScope)
       const { data, error } = await supabase.from('task_updates').insert({ task_id: args.task_id, user_id: userId, tenant_id: tenantId, content: args.content }).select('id').single()
       if (error) throw error
+      void fireTaskPeerNotification({
+        supabaseUrl: SUPABASE_URL,
+        serviceKey: Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!,
+        triggerType: 'task_update_added',
+        data: { task_id: args.task_id, user_id: userId, update_content: args.content },
+      })
       return { update_id: data.id }
     }
     case 'manage_task_collaborators': {
       if (args.action === 'add') {
+        const { data: taskRow, error: taskErr } = await supabase
+          .from('tasks')
+          .select('tenant_id')
+          .eq('id', args.task_id)
+          .in('tenant_id', accessibleTenantIds)
+          .maybeSingle()
+        if (taskErr) throw taskErr
+        if (!taskRow?.tenant_id) throw new Error('משימה לא נמצאה')
         const { data, error } = await supabase.from('task_collaborators').insert({
-          task_id: args.task_id, campaigner_id: args.campaigner_id, tenant_id: tenantId,
+          task_id: args.task_id, campaigner_id: args.campaigner_id, tenant_id: taskRow.tenant_id,
         }).select('id').single()
         if (error) throw error
+        void fireTaskPeerNotification({
+          supabaseUrl: SUPABASE_URL,
+          serviceKey: Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!,
+          triggerType: 'task_collaborator_added',
+          data: { task_id: args.task_id, notify_campaigner_id: args.campaigner_id, user_id: userId },
+        })
         return { success: true, action: 'added', collaborator_id: data.id }
       } else {
         const { error } = await supabase.from('task_collaborators').delete()
@@ -4154,8 +4354,32 @@ async function executeTool(name: string, args: Record<string, any>, supabase: an
       const daysBack = Math.min(Number(args.days_back) > 0 ? Number(args.days_back) : 180, 730)
       const since = new Date(Date.now() - daysBack * 24 * 60 * 60 * 1000).toISOString()
       const defaultLimit = browseMode ? 40 : 20
-      const withPhone = String(args.with_phone || '').replace(/\D/g, '')
+      let withPhone = String(args.with_phone || '').replace(/\D/g, '')
       const onlyCarmen = args.only_carmen_chats === true || (browseMode && args.only_carmen_chats !== false)
+      const browseAll = args.browse_all_chats === true
+      // Default: stay inside the active WhatsApp chat_id (private or group).
+      let scopeGroupId: string | null = null
+      let scopeNote = 'current_chat'
+      if (!browseAll && waNotify?.chat_id) {
+        const chatId = String(waNotify.chat_id)
+        const isGroupChat = /@g\.us/i.test(chatId) || waNotify.is_group === true
+        if (isGroupChat) {
+          const { data: g } = await supabase
+            .from('whatsapp_groups')
+            .select('id')
+            .eq('tenant_id', tenantId)
+            .eq('group_chat_id', chatId)
+            .maybeSingle()
+          scopeGroupId = g?.id || null
+          if (!scopeGroupId) {
+            return { count: 0, mode: browseMode ? 'browse' : 'keyword_search', note: 'הקבוצה הנוכחית לא נמצאה — נסי browse_all_chats=true אם צריך חיפוש ארגוני.' }
+          }
+        } else if (!withPhone) {
+          withPhone = chatId.split('@')[0].replace(/\D/g, '')
+        }
+      } else if (browseAll) {
+        scopeNote = 'all_chats'
+      }
       let q = supabase.from('chat_messages')
         .select('message_text, direction, sender_name, sender_phone, created_at, group_id, provider, clients(name)')
         .in('tenant_id', accessibleTenantIds)
@@ -4165,17 +4389,21 @@ async function executeTool(name: string, args: Record<string, any>, supabase: an
         .limit(Math.min(Number(args.limit) > 0 ? Number(args.limit) : defaultLimit, 60))
       for (const t of tokens) q = q.ilike('message_text', `%${t}%`)
       if (onlyCarmen) q = q.eq('provider', 'manus_wa')
-      if (withPhone) q = q.ilike('sender_phone', `%${withPhone}%`)
+      if (scopeGroupId) q = q.eq('group_id', scopeGroupId)
+      else if (withPhone && !browseAll) q = q.is('group_id', null).ilike('sender_phone', `%${withPhone.slice(-9)}%`)
+      else if (withPhone) q = q.ilike('sender_phone', `%${withPhone}%`)
       const { data, error } = await q
       if (error) throw error
       const fmt = (iso: string) => new Date(iso).toLocaleString('he-IL', { timeZone: 'Asia/Jerusalem', dateStyle: 'short', timeStyle: 'short' })
       return {
         count: data.length,
         mode: browseMode ? 'browse' : 'keyword_search',
+        scope: scopeNote,
+        chat_id: waNotify?.chat_id || null,
         note: data.length === 0
           ? (browseMode
-              ? 'אין הודעות בחלון הזמן — נסי days_back גדול יותר או only_carmen_chats=false.'
-              : 'אין תוצאות — נסי מילת תוכן אחרת (שם פרטי בלבד, חלק מהמייל, מילה נרדפת) או דפדוף בלי query.')
+              ? 'אין הודעות בחלון הזמן בצ׳אט הנוכחי — נסי days_back גדול יותר או browse_all_chats=true.'
+              : 'אין תוצאות בצ׳אט הנוכחי — נסי מילת תוכן אחרת או browse_all_chats=true.')
           : undefined,
         messages: data.reverse().map((m: any) => ({
           when_israel: fmt(m.created_at),
@@ -4463,16 +4691,24 @@ async function executeTool(name: string, args: Record<string, any>, supabase: an
       const duplicates = await findDuplicateGoals(supabase, tenantId, title)
       return { duplicates: duplicates.map((d) => ({ id: d.goal.id, title: d.goal.title, status: d.goal.status, score: d.score })) }
     }
-    case 'create_execution_goal': {
+    case 'create_execution_goal':
+    case 'create_autonomous_goal': {
       const title = String(args.title || '').trim()
       if (!title) throw new Error('title required')
+      const autonomous = name === 'create_autonomous_goal' || !!args.autonomous
       const duplicates = await findDuplicateGoals(supabase, tenantId, title)
-      const goal = await createExecutionGoal(supabase, {
+      const { goal, criteria } = await createUnifiedGoal(supabase, {
         tenantId, title, description: args.description, dueDate: args.due_date,
         priority: args.priority, completionCriteria: args.completion_criteria,
         nextAction: args.next_action, ownerUserId: actorUserId, actorUserId,
+        autonomous,
+        objective: args.objective,
+        constraints: args.constraints,
+        scope: args.scope,
+        riskLevel: args.risk_level,
+        successCriteria: args.success_criteria,
       })
-      if (Array.isArray(args.milestones)) {
+      if (!autonomous && Array.isArray(args.milestones)) {
         for (const [i, m] of args.milestones.entries()) {
           if (m?.title) {
             await addGoalMilestone(supabase, {
@@ -4482,7 +4718,7 @@ async function executeTool(name: string, args: Record<string, any>, supabase: an
           }
         }
       }
-      return { goal, possible_duplicates: duplicates.slice(0, 5) }
+      return { goal, criteria, possible_duplicates: duplicates.slice(0, 5) }
     }
     case 'get_execution_goal_report': {
       const report = await getGoalExecutionReport(supabase, tenantId, String(args.goal_id), Number(args.since_hours) || 24)
@@ -4507,6 +4743,11 @@ async function executeTool(name: string, args: Record<string, any>, supabase: an
         tenantId, goalId: String(args.goal_id), taskId: String(args.task_id), actorUserId,
       })
       return { task }
+    }
+    case 'get_autonomous_goal_status': {
+      const report = await getGoalExecutionReport(supabase, tenantId, String(args.goal_id))
+      if (!report?.goal) throw new Error('goal not found')
+      return { report }
     }
     // AGENT TASK OWNERSHIP
     case 'take_task': {
@@ -4599,23 +4840,38 @@ async function executeTool(name: string, args: Record<string, any>, supabase: an
         requested_by: args.requested_by,
       }
       if (!brief.title) throw new Error('title required')
+      const devActorId = actorUserId || await resolveDevTaskActorUserId(supabase, {
+        tenantId,
+        userId: actorUserId,
+        campaignerId: callerCampaignerId || null,
+        phone: callerPhone || null,
+        devEscalationTier,
+      })
       const duplicates = await findDuplicateDevTasks(supabase, tenantId, brief.title)
       const task = await createDevTask(supabase, {
         tenantId,
         brief,
         priority: args.priority,
         assignedAgent: args.assigned_agent || 'cursor',
-        requestedByUserId: actorUserId,
+        requestedByUserId: devActorId,
+        sourceConversationId: args.source_conversation_id || conversationId || null,
         sourceMessage: args.source_message,
         dedupOf: args.dedup_of || null,
-        actorUserId,
+        actorUserId: devActorId,
         goalId: args.goal_id || null,
       })
       return { task, possible_duplicates: duplicates.slice(0, 5) }
     }
     case 'approve_dev_task': {
-      if (!actorUserId) throw new Error('user auth required')
-      const task = await approveDevTask(supabase, tenantId, String(args.dev_task_id), actorUserId)
+      const approverId = actorUserId || await resolveDevTaskActorUserId(supabase, {
+        tenantId,
+        userId: actorUserId,
+        campaignerId: callerCampaignerId || null,
+        phone: callerPhone || null,
+        devEscalationTier,
+      })
+      if (!approverId) throw new Error('user auth required')
+      const task = await approveDevTask(supabase, tenantId, String(args.dev_task_id), approverId)
       return { task }
     }
     case 'dispatch_dev_task': {
@@ -6923,7 +7179,7 @@ async function handleRunAgent(bodyJson: any, surface: Surface, emit: Emit): Prom
         'sentiment-analyzer': 'בכל הודעה שמקבלת, נתחי את הטון הרגשי (חיובי/שלילי/נייטרלי) והתאם את התגובה בהתאם.',
         'faq-responder': 'כשעונה לשאלות, שלוף קודם את הנתונים הקיימים במערכת וענה לפי המידע הקיים.',
         'upsell-advisor': 'כשמתבקשת לנתח לקוח, זהה הזדמנויות לאפסליינג וקרוס-סלינג לפי היסטוריית הקניות.',
-        'churn-predictor': 'נתח את דפוסי הלקוחות וזהה סימני אזהרה לנטישה פוטנציאלית. הצע פעולות שימור מתאימות.',
+        'churn-predictor': 'קראי get_client_retention_scan ודווחי act_now ואז watch. אל תשלחי הודעה ללקוח. עדכני בריאות רק אם ביקשו במפורש.',
         'campaign-optimizer': 'נתח נתוני קמפיינים מהמערכת, זהה מה עובד ומה לא, והצע שיפורים קונקרטיים.',
         'smart-summarizer': 'כשמתבקשת סיכום, שלוף את כל המידע הרלוונטי והצג את העיקריות בצורה קצרה וברורה.',
         'crm-health-monitor': `את מנהלת דשבורד CRM לסוכנות שיווק. תפקידך לנתח כל לקוח ולעדכן את המצב שלו בדיוק לפי הכללים הבאים:
@@ -7020,7 +7276,7 @@ async function handleRunAgent(bodyJson: any, surface: Surface, emit: Emit): Prom
         'sentiment-analyzer': 'בכל הודעה שמקבלת, נתחי את הטון הרגשי (חיובי/שלילי/נייטרלי) והתאם את התגובה בהתאם.',
         'faq-responder': 'כשעונה לשאלות, שלוף קודם את הנתונים הקיימים במערכת וענה לפי המידע הקיים.',
         'upsell-advisor': 'כשמתבקשת לנתח לקוח, זהה הזדמנויות לאפסליינג וקרוס-סלינג לפי היסטוריית הקניות.',
-        'churn-predictor': 'נתח את דפוסי הלקוחות וזהה סימני אזהרה לנטישה פוטנציאלית. הצע פעולות שימור מתאימות.',
+        'churn-predictor': 'קראי get_client_retention_scan ודווחי act_now ואז watch. אל תשלחי הודעה ללקוח. עדכני בריאות רק אם ביקשו במפורש.',
         'campaign-optimizer': 'נתח נתוני קמפיינים מהמערכת, זהה מה עובד ומה לא, והצע שיפורים קונקרטיים.',
         'smart-summarizer': 'כשמתבקשת סיכום, שלוף את כל המידע הרלוונטי והצג את העיקריות בצורה קצרה וברורה.',
         'crm-health-monitor': `את מנהלת דשבורד CRM לסוכנות שיווק. תפקידך לנתח כל לקוח ולעדכן את המצב שלו בדיוק לפי הכללים הבאים:
@@ -7138,7 +7394,7 @@ async function handleRunAgent(bodyJson: any, surface: Surface, emit: Emit): Prom
     const currentTime = now.toLocaleTimeString('he-IL', { hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Jerusalem' })
     const tomorrowDate = new Date(now.getTime() + 24 * 60 * 60 * 1000).toISOString().split('T')[0]
     const todayISO = now.toISOString().split('T')[0]
-    systemPrompt += `\n\n=== תאריך ושעה נוכחיים ===\nהיום: ${currentDate}, שעה: ${currentTime}\nתאריך ISO של היום: ${todayISO}\nתאריך ISO של מחר: ${tomorrowDate}\nחשוב: כשמבקשים "למחר" השתמש ב-${tomorrowDate}, כש"היום" השתמש ב-${todayISO}.\n\n=== כללי אזור זמן ותזכורות (חובה) ===\n• אזור הזמן של המשתמש הוא Asia/Jerusalem (IST = UTC+2 / IDT = UTC+3). כל שעה שהמשתמש אומר היא בשעון ישראל.\n• כש-create_agent_task דורש scheduled_at — חובה להמיר משעון ישראל ל-UTC ב-ISO עם Z. דוגמה: "מוצ"ש 21:30" → 2026-06-20T18:30:00Z (קיץ, UTC+3). אסור לשמור שעת ישראל בתור UTC.\n• בתשובה למשתמש תמיד הציגי את הזמן בשעון ישראל (לדוגמה "מחר בשעה 21:30") — לא ב-UTC.\n• אם המשתמש שואל "מה תזמנת?" / "באיזו שעה התזכורת?" / "תבדקי אם הגדרת" / "את בטוחה?" — חובה לקרוא ל-list_my_agent_tasks לפני שאת עונה. אסור לנחש או לענות מהזיכרון.\n• הכלי create_agent_task מחזיר scheduled_at_israel — השתמשי בערך הזה כשאת מאשרת למשתמש את הזמן.\n\n=== זיכרון פעולות חוזרות (חובה) ===\n• לפני הרצה של pulse_check / סקירת קמפיינים / סקירת לידים / כל פעולה כבדה חוזרת — חובה לקרוא קודם ל-recall_recent_action(action_type, max_age_hours=8).\n• אם נמצאה ריצה מהיום (found=true) ולא נאמר במפורש "רענני" / "עכשיו" / "בזמן אמת" / "תרוצי שוב" — אסור להריץ מחדש. ענו על בסיס הסיכום הקיים, ציינו את הזמן בשעון ישראל ("בדקתי בשעה HH:mm"), והוסיפו "אם רוצה לרענן עכשיו תגידי".\n• רק אם המשתמש ביקש במפורש לרענן או שלא נמצא episode — להריץ את הפעולה.\n• בסיום של פעולה כבדה שבאמת רצה — חובה לקרוא ל-record_action_episode(action_type, summary) עם סיכום תמציתי. בלי זה הפעם הבאה לא תזכרי.\n• action_type סטנדרטי: 'pulse_check', 'campaign_analysis', 'lead_review', 'health_check'.`
+    systemPrompt += `\n\n=== תאריך ושעה נוכחיים ===\nהיום: ${currentDate}, שעה: ${currentTime}\nתאריך ISO של היום: ${todayISO}\nתאריך ISO של מחר: ${tomorrowDate}\nחשוב: כשמבקשים "למחר" השתמש ב-${tomorrowDate}, כש"היום" השתמש ב-${todayISO}.\n\n=== כללי אזור זמן ותזכורות (חובה) ===\n• אזור הזמן של המשתמש הוא Asia/Jerusalem (IST = UTC+2 / IDT = UTC+3). כל שעה שהמשתמש אומר היא בשעון ישראל.\n• כש-create_agent_task דורש scheduled_at — חובה להמיר משעון ישראל ל-UTC ב-ISO עם Z. דוגמה: "מוצ"ש 21:30" → 2026-06-20T18:30:00Z (קיץ, UTC+3). אסור לשמור שעת ישראל בתור UTC.\n• בתשובה למשתמש תמיד הציגי את הזמן בשעון ישראל (לדוגמה "מחר בשעה 21:30") — לא ב-UTC.\n• אם המשתמש שואל "מה תזמנת?" / "באיזו שעה התזכורת?" / "תבדקי אם הגדרת" / "את בטוחה?" — חובה לקרוא ל-list_my_agent_tasks לפני שאת עונה. אסור לנחש או לענות מהזיכרון.\n• הכלי create_agent_task מחזיר scheduled_at_israel — השתמשי בערך הזה כשאת מאשרת למשתמש את הזמן.\n• תזכורות אישיות / \"תזכירי לי\" / משימה מתוזמנת לכרמן → create_agent_task בלבד. אסור find_dev_task_duplicates / create_dev_task אלא אם המשתמש ביקש במפורש להעביר לפיתוח (\"תעבירי ל-Cursor\", \"משימת פיתוח\").\n\n=== זיכרון פעולות חוזרות (חובה) ===\n• לפני הרצה של pulse_check / סקירת קמפיינים / סקירת לידים / כל פעולה כבדה חוזרת — חובה לקרוא קודם ל-recall_recent_action(action_type, max_age_hours=8).\n• אם נמצאה ריצה מהיום (found=true) ולא נאמר במפורש "רענני" / "עכשיו" / "בזמן אמת" / "תרוצי שוב" — אסור להריץ מחדש. ענו על בסיס הסיכום הקיים, ציינו את הזמן בשעון ישראל ("בדקתי בשעה HH:mm"), והוסיפו "אם רוצה לרענן עכשיו תגידי".\n• רק אם המשתמש ביקש במפורש לרענן או שלא נמצא episode — להריץ את הפעולה.\n• בסיום של פעולה כבדה שבאמת רצה — חובה לקרוא ל-record_action_episode(action_type, summary) עם סיכום תמציתי. בלי זה הפעם הבאה לא תזכרי.\n• action_type סטנדרטי: 'pulse_check', 'campaign_analysis', 'lead_review', 'health_check'.`
     systemPrompt += `\n\n=== הקשר ארגוני ===\n${tenantContext}`
 
     // Inject memory context — instructions get top priority and a strict directive
@@ -7267,6 +7523,15 @@ async function handleRunAgent(bodyJson: any, surface: Surface, emit: Emit): Prom
     // system/dev/config/code fixes to Cursor/Claude/Manus/GitHub agent.
     systemPrompt += buildDevEscalationPromptRule(devEscalationTier)
 
+    if (isCarmen && surface === 'whatsapp' && canEscalateDevFixes) {
+      systemPrompt +=
+        '\n\n📱 === משימות פיתוח מ-WhatsApp (מורשה) ===\n' +
+        'כשמבקשים "תעבירי לפיתוח" / "שלחי לקרסר" / תיקון מערכת:\n' +
+        '1) find_dev_task_duplicates → 2) create_dev_task (brief מובנה) → 3) אם הבקשה מפורשת ("שלחי"/"תעבירי") — approve_dev_task + dispatch_dev_task מיד.\n' +
+        '4) דווחי bc- session URL. אם dispatch נכשל — attach_dev_task_session או mcp_Cursor__request_dev_task.\n' +
+        'אל תבקשי אישור נוסף כשהמשתמש כבר אמר לשלוח.'
+    }
+
     // Voice capability (both prompt versions): answer from 🎤 / explicit failure markers.
     if (isCarmen && (surface === 'whatsapp' || surface === 'internal_chat' || surface === 'aios')) {
       systemPrompt += buildVoiceCapabilityPromptRule()
@@ -7359,16 +7624,9 @@ ${relevantLongTermMemory.map((item: any) => `• [${item.label}] ${item.text}`).
     // - On 'task' surface (a subagent itself running via run-agent-task): hide delegation tools entirely
     //   so a subagent can't recursively spawn more subagents.
     const cmd = (command_text || '').toString()
-    // "דופק" is intentionally sufficient: speech transcription frequently
-    // mangles the word before it ("ביגת דופק", "מדיקת דופק"). A pulse request
-    // must never depend on the model deciding whether to call the data tool.
-    const isStoredPulseRequest = !pinSkillsOnly
-      && (
-        /\bדופק\b|\bpulse\s*check\b/i.test(cmd)
-        || /בדיקת\s*(דוח|דופק)/i.test(cmd)
-        || /מצב\s*קמפיינים|סיכום\s*קמפיינים/i.test(cmd)
-      ) && !/(רעננ|חדש|עכשיו|בזמן\s*אמת|תריצ|תבצע)/i.test(cmd)
-      && !/תקינות\s*מערכות/i.test(cmd)
+    // Only unqualified summaries use empty tool args; scoped requests must
+    // retain their client/agency filters through normal tool routing.
+    const isStoredPulseRequest = !pinSkillsOnly && isCachedPulseRequest(cmd)
     const userAskedBackground = /\b(ברקע|תמשיכ[יה]\s+לבד|background|אל\s+תחכ[יה]|תעדכנ[יה]\s+אחר[\s-]?כך|תרוצ[יה]\s+ברקע)\b/i.test(cmd)
     const userAskedManus = /\b(manus|מנוס|מאנוס|מנואס)\b/i.test(cmd)
     const userAskedGithubAgent = /\b(github|גיטהאב|גיט\s*האב|שגיאת\s*קוד|תמיכה\s*טכנית|אגנט\s*קוד)\b/i.test(cmd)
@@ -7400,50 +7658,56 @@ ${relevantLongTermMemory.map((item: any) => `• [${item.label}] ${item.text}`).
     // tools, and do not fall back to Carmen's full CRM set. The pinned
     // copywriter skin still lists operational tools (gmail_send, Meta reads);
     // those must not be injected later either.
+    let promotedToolNames = new Set(filteredTools.map((t) => t.name))
     if (pinSkillsOnly) {
       filteredTools = []
+      promotedToolNames = new Set()
       console.log('[AGENT] pin_skills_only: exposing no tools (isolated copy session)')
     } else if (isCarmen) {
-      filteredTools = await selectRelevantToolsForMessage(supabase, String(command_text || ''), filteredTools, {
+      const routed = await selectRelevantToolsForMessage(supabase, String(command_text || ''), filteredTools, {
         lazy: tokenOptimize,
         priorityTools: PRIORITY_TOOLS,
         legacyCoreTools: CORE_TOOLS,
-        forceInclude: (userText, picked) => applyToolForceIncludes(userText, picked, {
+        forceInclude: (userText, picked, fullSchemaNames) => applyToolForceIncludes(userText, picked, {
           isExplicitApprovalPhrase,
           isExplicitRejectionPhrase,
           extractMeetingUrl,
-        }),
+        }, fullSchemaNames),
       })
+      filteredTools = routed.tools
+      promotedToolNames = routed.fullSchemaNames
     }
 
-    const toolsForAPI = filteredTools.map(t => ({ type: 'function', function: t }))
+    let exposedMcpTools: Array<{ name: string; description?: string; parameters?: any }> = []
+    const toolsForAPI: Array<{ type: 'function'; function: any }> = []
+    const rebuildToolsForApi = () => {
+      toolsForAPI.length = 0
+      toolsForAPI.push(...buildToolApiEntries(filteredTools, promotedToolNames, tokenOptimize))
+      toolsForAPI.push(...buildToolApiEntries(exposedMcpTools, promotedToolNames, tokenOptimize))
+    }
+    rebuildToolsForApi()
     const expandAgentTools = (extra: Array<{ name: string; description?: string; parameters?: any }>) => {
-      const present = new Set(toolsForAPI.map((t: any) => t.function?.name))
       for (const t of extra) {
-        if (!t?.name || present.has(t.name)) continue
-        toolsForAPI.push({ type: 'function', function: t })
+        if (!t?.name) continue
+        promotedToolNames.add(t.name)
         if (!filteredTools.some((ft) => ft.name === t.name)) filteredTools.push(t as any)
-        present.add(t.name)
       }
+      rebuildToolsForApi()
     }
 
     // Unauthorized callers must not see native GitHub-agent delegation either.
     if (!canEscalateDevFixes) {
       filteredTools = filteredTools.filter((t) => !isDevEscalationTool(t.name))
-      // Rebuild API list from the filtered native set (MCP added below).
-      toolsForAPI.length = 0
-      toolsForAPI.push(...filteredTools.map((t) => ({ type: 'function', function: t })))
+      rebuildToolsForApi()
     } else if (devEscalationTier === 'bugfix') {
       filteredTools = filteredTools.filter((t) => !isDevEscalationTool(t.name) || isDevEscalationToolAllowed(t.name, devEscalationTier))
-      toolsForAPI.length = 0
-      toolsForAPI.push(...filteredTools.map((t) => ({ type: 'function', function: t })))
+      rebuildToolsForApi()
     }
 
     // OpenAI billing/usage is super_admin-only — hide from everyone else.
     if (!isSuperAdminRole(callerRole)) {
       filteredTools = filteredTools.filter((t) => t.name !== 'get_openai_billing_status')
-      toolsForAPI.length = 0
-      toolsForAPI.push(...filteredTools.map((t) => ({ type: 'function', function: t })))
+      rebuildToolsForApi()
     }
 
     // 4b. Load MCP tools for this tenant + agent (Phase 3)
@@ -7480,11 +7744,13 @@ ${relevantLongTermMemory.map((item: any) => `• [${item.label}] ${item.text}`).
           if (escalationAgent === 'none'   && isEscalationMcp(t.name)) continue
           // 4b-ii. Hard auth: only allowlisted tiers may see/call coding-agent MCP tools.
           if (isDevEscalationTool(t.name) && !isDevEscalationToolAllowed(t.name, devEscalationTier)) continue
-          toolsForAPI.push({ type: 'function', function: t as any })
+          exposedMcpTools.push(t as any)
+          if (!tokenOptimize || isEscalationMcp(t.name)) promotedToolNames.add(t.name)
           const exec = mcp.executors.get(t.name)
           if (exec) mcpExecutors.set(t.name, exec)
         }
-        console.log(`[AGENT] Loaded ${mcp.toolDefs.length} MCP tools from ${mcp.connectionsCount} connections (escalation=${escalationAgent}, dev_tier=${devEscalationTier ?? 'none'}, exposed=${[...mcpExecutors.keys()].length})`)
+        rebuildToolsForApi()
+        console.log(`[AGENT] Loaded ${mcp.toolDefs.length} MCP tools from ${mcp.connectionsCount} connections (escalation=${escalationAgent}, dev_tier=${devEscalationTier ?? 'none'}, exposed=${exposedMcpTools.length})`)
       }
       }
     } catch (e: any) {
@@ -7500,10 +7766,10 @@ ${relevantLongTermMemory.map((item: any) => `• [${item.label}] ${item.text}`).
       systemPrompt += `\n\n=== סביבת פיתוח (חובה) ===\n${DEV_ENVIRONMENT_STANDING}`
     }
     if (tokenOptimize) {
-      systemPrompt += `\n\n=== אופטימיזציית טוקנים (פעילה) ===
-נטענו רק הנחיות קבועות, זיכרון רלוונטי למשימה, וכלים שעברו אינדקס embedding.
-אם חסר כלי — קראי ל-search_agent_tools עם תיאור קצר; הכלים יתווספו מסבב הבא.
-לזיכרון נוסף: recall_memory / kb_search / recall_memory_fts.`
+      systemPrompt += `\n\n=== אופטימיזציית טוקנים (שלב 2 — פעילה) ===
+נטענו הנחיות קבועות + זיכרון רלוונטי + כלים דרך אינדקס hybrid (מילות מפתח + embedding).
+רוב הכלים מוצגים כסיכום קומפקטי; ל-top רלוונטיים יש סכמה מלאה. קריאה לכלי מקדמת אותו לסכמה מלאה בסבב הבא.
+אם חסר כלי — search_agent_tools. לזיכרון: recall_memory / kb_search / recall_memory_fts.`
     }
 
     // ─── Skill resolver: detect active skills from the user message and append their prompts (DB-backed) ───
@@ -7537,7 +7803,8 @@ ${relevantLongTermMemory.map((item: any) => `• [${item.label}] ${item.text}`).
           isDevEscalationToolAllowed(t.name, devEscalationTier))
         if (missing.length > 0) {
           filteredTools = [...filteredTools, ...missing]
-          toolsForAPI.push(...missing.map(t => ({ type: 'function', function: t })))
+          for (const t of missing) promotedToolNames.add(t.name)
+          rebuildToolsForApi()
           console.log(`[AGENT] Skill tools added: ${missing.map(t => t.name).join(', ')}`)
         }
       }
@@ -7888,9 +8155,13 @@ ${relevantLongTermMemory.map((item: any) => `• [${item.label}] ${item.text}`).
         emit({ type: 'token', content: msg.content })
       }
 
-      // Execute tool calls
+      // Execute tool calls — promote any called tool to full schema for the next round.
       const toolResults: any[] = []
       let pulseDigestShortcut: string | null = null
+      if (tokenOptimize && msg.tool_calls?.length) {
+        for (const tc of msg.tool_calls) promotedToolNames.add(tc.function.name)
+        rebuildToolsForApi()
+      }
       for (const tc of msg.tool_calls) {
         const toolName = tc.function.name
         let toolArgs: Record<string, any> = {}
@@ -7930,7 +8201,7 @@ ${relevantLongTermMemory.map((item: any) => `• [${item.label}] ${item.text}`).
             result = await mcpExecutors.get(toolName)!(toolArgs)
           } else {
             // Prefer profile UUID resolved from WhatsApp phone; never pass literal "system" into uuid columns.
-            result = await executeTool(toolName, toolArgs, supabase, resolvedTenantId, callerUserId || asUuidOrNull(resolvedUserId), callerCampaignerId, agent_id, callerRole, callerManagedAgencyIds, callerPhone, wa_notify, surface)
+            result = await executeTool(toolName, toolArgs, supabase, resolvedTenantId, callerUserId || asUuidOrNull(resolvedUserId), callerCampaignerId, agent_id, callerRole, callerManagedAgencyIds, callerPhone, wa_notify, surface, serverConversationId)
           }
           console.log(`[AGENT] Tool ${toolName} OK`)
         } catch (e: any) {

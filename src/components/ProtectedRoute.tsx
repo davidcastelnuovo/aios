@@ -35,15 +35,7 @@ export function ProtectedRoute({ children, requiredPermission, redirectTo = "my-
       if (user) {
         const slug = await resolveTenantSlug(user.id);
         if (slug) {
-          const { data: roleData } = await (supabase as any)
-            .from("user_roles")
-            .select("role")
-            .eq("user_id", user.id)
-            .in("role", ["owner", "admin"])
-            .maybeSingle();
-
-          const landingPage = roleData ? "dashboard" : "my-profile";
-          navigate(`/t/${slug}/${landingPage}`, { replace: true });
+          navigate(`/t/${slug}/home`, { replace: true });
         }
       }
       setResolvingTenant(false);

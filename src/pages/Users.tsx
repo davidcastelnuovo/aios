@@ -953,7 +953,7 @@ export default function Users() {
             <DialogHeader>
               <DialogTitle>הזמן משתמש חדש לארגון שלך</DialogTitle>
               <DialogDescription>
-                המשתמש יקבל מייל מ-AIOS עם קישור ליצירת חשבון והצטרפות לארגון. תפקיד, הרשאות ואיש צוות ייווצרו אוטומטית.
+                המשתמש יקבל מייל מ-AIOS עם קישור ליצירת חשבון והצטרפות לארגון. אם בוחרים איש צוות קיים, המשתמש משויך אליו. בלי בחירה, כרטיס עם אותו אימייל משויך למשתמש, ואחרת נוצרת רשומה חדשה במודול אנשי צוות.
               </DialogDescription>
             </DialogHeader>
             <ScrollArea className="max-h-[calc(90vh-180px)] pl-4">
@@ -1092,6 +1092,9 @@ export default function Users() {
                         ))}
                       </SelectContent>
                     </Select>
+                    <p className="text-xs text-muted-foreground mt-1">
+                      בלי בחירה ידנית, משתמש חדש משויך לכרטיס שכבר נושא את האימייל שלו, או שנוצרת לו רשומה במודול אנשי צוות. שיוך ידני לאיש צוות קיים גובר.
+                    </p>
                   </div>
                 )}
 
@@ -1099,8 +1102,8 @@ export default function Users() {
                   <div className="md:col-span-2 p-3 border rounded-md bg-muted/40">
                     <p className="text-sm text-muted-foreground">
                       {inviteRole === "campaigner"
-                        ? "רשומת קמפיינר (איש צוות) תיווצר אוטומטית מהשם והאימייל — לא צריך ליצור בנפרד."
-                        : "רשומת איש מכירות תיווצר אוטומטית מהשם והאימייל."}
+                        ? "אם כבר יש איש צוות עם האימייל הזה, המשתמש משויך אליו. אם אין, תיווצר רשומה חדשה במודול אנשי צוות."
+                        : "אם כבר יש איש מכירות עם האימייל הזה, המשתמש משויך אליו. אם אין, תיווצר רשומה חדשה."}
                     </p>
                   </div>
                 )}

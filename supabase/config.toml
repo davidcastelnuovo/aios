@@ -106,6 +106,9 @@ verify_jwt = true
 [functions.goal-execution-center]
 verify_jwt = true
 
+[functions.openai-billing-status]
+verify_jwt = true
+
 [functions.test-facebook-lead-webhook]
 verify_jwt = false
 
@@ -330,6 +333,24 @@ verify_jwt = false
 [functions.cron-sync-gsc-keywords]
 verify_jwt = false
 
+[functions.marketing-seo-publish-due]
+verify_jwt = false
+
+[functions.marketing-seo-intake]
+verify_jwt = true
+
+[functions.marketing-seo-plan]
+verify_jwt = true
+
+[functions.marketing-seo-materialize]
+verify_jwt = true
+
+[functions.marketing-seo-generate-entry]
+verify_jwt = true
+
+[functions.marketing-seo-chat]
+verify_jwt = true
+
 [functions.cron-lead-alert-failure-watch]
 verify_jwt = false
 
@@ -342,6 +363,9 @@ verify_jwt = true
 verify_jwt = false
 
 [functions.manus-wa-status]
+verify_jwt = true
+
+[functions.manus-wa-sync-groups]
 verify_jwt = true
 
 [functions.trigger-automation]
@@ -416,4 +440,12 @@ verify_jwt = true
 verify_jwt = false
 
 [functions.generate-signed-pdf]
+verify_jwt = false
+
+# Existing collaboration service is deployed to Staging only (see scripts/staging-only-functions.json).
+[functions.collaboration-mcp]
+verify_jwt = false
+
+# Public signing uses document-bound tokens validated inside the function.
+[functions.get-signature-document]
 verify_jwt = false

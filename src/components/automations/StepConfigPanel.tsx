@@ -61,6 +61,8 @@ export const TRIGGER_CATEGORIES = [
       { value: "task_status_changed",label: "סטאטוס משימה השתנה" },
       { value: "task_completed",     label: "משימה הושלמה" },
       { value: "task_assigned",      label: "משימה שוייכה" },
+      { value: "task_collaborator_added", label: "קמפיינר נוסף למשימה" },
+      { value: "task_update_added",  label: "עדכון נוסף למשימה" },
       { value: "task_overdue",       label: "משימה באיחור" },
     ],
   },

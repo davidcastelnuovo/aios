@@ -38,6 +38,8 @@ interface SeoDashboardViewProps {
   gaRecords?: any[];
   /** GSC site URL persisted on the SEO crm_table — used as source of truth on first load. */
   initialGscSiteUrl?: string;
+  /** GSC OAuth connection persisted on the SEO crm_table. */
+  selectedGscIntegrationId?: string;
   /** Persist callback when GSC site is selected/auto-linked at the report level. */
   onGscSiteSelected?: (siteUrl: string) => void;
   /** Initial language filter for the keywords table, persisted on the SEO crm_table. */
@@ -55,7 +57,7 @@ interface SeoDashboardViewProps {
   ahrefsProtocol?: string | null;
 }
 
-export function SeoDashboardView({ tenantId, clientId, accessibleTenantIds, gaRecords = [], initialGscSiteUrl, onGscSiteSelected, initialLangFilter, onLangFilterChange, expectedDomain, ahrefsProjectId, ahrefsMode, ahrefsProtocol }: SeoDashboardViewProps) {
+export function SeoDashboardView({ tenantId, clientId, accessibleTenantIds, gaRecords = [], initialGscSiteUrl, selectedGscIntegrationId, onGscSiteSelected, initialLangFilter, onLangFilterChange, expectedDomain, ahrefsProjectId, ahrefsMode, ahrefsProtocol }: SeoDashboardViewProps) {
   const queryClient = useQueryClient();
   const [selectedReportId, setSelectedReportId] = useState<string | null>(null);
   const [isFetchingSnapshot, setIsFetchingSnapshot] = useState(false);
@@ -136,6 +138,7 @@ export function SeoDashboardView({ tenantId, clientId, accessibleTenantIds, gaRe
   const { data: reports = [], isLoading, isFetching: reportsFetching, error: reportsError } = useAhrefsReports({
     clientId,
     tenantIds: reportTenants,
+    domain: expectedDomain || undefined,
     limit: 12,
   });
 
@@ -288,7 +291,13 @@ export function SeoDashboardView({ tenantId, clientId, accessibleTenantIds, gaRe
   const prevMonthMap = useMemo(() => buildPrevMonthMap(prevMonthReport), [prevMonthReport]);
 
   // Normalize and enrich keywords with comparison data
-  const rawOrganic = Array.isArray(reportData?.organic_keywords) ? reportData.organic_keywords : [];
+  const rawOrganic = useMemo(() => {
+    const organic = Array.isArray(reportData?.organic_keywords) ? reportData.organic_keywords : [];
+    if (organic.length > 0) return organic;
+    // Rank-tracker-only reports (dentiq): mirror tracked phrases for the organic table.
+    const tracked = Array.isArray(reportData?.tracked_keywords) ? reportData.tracked_keywords : [];
+    return tracked.length > 0 ? tracked : [];
+  }, [reportData?.organic_keywords, reportData?.tracked_keywords]);
   const rawTracked = Array.isArray(reportData?.tracked_keywords) ? reportData.tracked_keywords : [];
 
   // Build GSC lookup map (current period — used for clicks/impressions/CTR enrichment)
@@ -578,10 +587,10 @@ export function SeoDashboardView({ tenantId, clientId, accessibleTenantIds, gaRe
   return (
     <div className="space-y-5" dir="rtl">
       {/* Report Header */}
-      <div className="flex items-center justify-between flex-wrap gap-2">
-        <div className="flex items-center gap-3">
-          <Globe className="h-5 w-5 text-primary" />
-          <span className="font-semibold text-lg">{reportData?.domain || selectedReport?.domain}</span>
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div className="flex flex-wrap items-center gap-2 min-w-0">
+          <Globe className="h-5 w-5 text-primary shrink-0" />
+          <span className="font-semibold text-base sm:text-lg break-words">{reportData?.domain || selectedReport?.domain}</span>
           {reportData?.project_name && (
             <Badge variant="outline">{reportData.project_name}</Badge>
           )}
@@ -606,7 +615,7 @@ export function SeoDashboardView({ tenantId, clientId, accessibleTenantIds, gaRe
             בחר פרויקט מ-Ahrefs
           </Button>
         </div>
-        <div className="flex items-center gap-2 text-sm text-muted-foreground">
+        <div className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground w-full sm:w-auto min-w-0">
           {(() => {
              const uniqueDomains = new Set(validReports.map(r => r.domain));
             const showDomain = uniqueDomains.size > 1;
@@ -623,7 +632,7 @@ export function SeoDashboardView({ tenantId, clientId, accessibleTenantIds, gaRe
                 value={selectedReport?.id || ''}
                 onValueChange={(val) => setSelectedReportId(val)}
               >
-                <SelectTrigger className={`${showDomain ? 'w-[300px]' : 'w-[200px]'} h-8 text-xs`}>
+                <SelectTrigger className={`w-full min-w-0 ${showDomain ? 'sm:w-[300px]' : 'sm:w-[200px]'} h-8 text-xs`}>
                   <SelectValue placeholder="בחר דוח" />
                 </SelectTrigger>
                 <SelectContent>
@@ -685,11 +694,12 @@ export function SeoDashboardView({ tenantId, clientId, accessibleTenantIds, gaRe
         tenantId={tenantId}
         tenantIds={accessibleTenantIds}
         clientId={clientId}
-        domain={reportData?.domain || selectedReport?.domain}
+        domain={expectedDomain || reportData?.domain || selectedReport?.domain}
         keywords={[]}
         onDataLoaded={handleGscDataLoaded}
         onMultiPeriodLoaded={handleGscMultiPeriodLoaded}
         initialSiteUrl={initialGscSiteUrl}
+        selectedIntegrationId={selectedGscIntegrationId}
         onSiteSelected={onGscSiteSelected}
         resolvedFallback={resolvedGsc}
         hideTable

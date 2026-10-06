@@ -32,7 +32,25 @@ logged.
 ## Log
 
 <!-- New entries go below this line, newest first. -->
-### 2026-09-10 — מודול הרשאות שיחה (Agent → 💬 הרשאות שיחה)
+### 2026-09-22 — סימון משימת פיתוח כבוצעה כש-Cursor מחזיר תשובה לכרמן
+- **Skin slug:** n/a (`agent-channel/ingest` + `complete_dev_task`)
+- **What Carmen can now do:** כש-Cursor/Claude מסיים ו-`reply_to_aios_session` מגיע לשיחת Command Center — משימת `dev_tasks` הפעילה (לפי `source_conversation_id` / `dev_task_id`) עוברת ל-`done` ו-PR נשמר אם בטקסט.
+- **How:** `create_dev_task` שומר `source_conversation_id`; `completeDevTaskFromAgentReply` ב-ingest; אופציונלי `mcp_Cursor__complete_dev_task`.
+- **Origin:** David — משימה מכרמן צריכה להתעדכן שבוצעה בסיום.
+
+### 2026-09-22 — אימות משלוח dev task ל-Cursor אחרי שגיאת dispatch
+- **Skin slug:** n/a (שינוי ב-`dispatch_dev_task` / `dev-tasks.ts`)
+- **What Carmen can now do:** אחרי `dispatch_dev_task`, אם `delivered=true` — לדווח שנשלח ל-Cursor (כולל `sessionUrl`) גם כשיש `dispatchToolError` / `reconciled`. רק אם `verificationFailed=true` — לדווח כשלון ולציין את שגיאת הכלי.
+- **How:** `dispatch_dev_task` → שדות `delivered`, `userStatus`, `reconciled`; reconcile מ-`cursor_dispatches` / `cursor_task_sessions` לפי `dev_task_id` בקונטקסט.
+- **Origin:** Carmen → Cursor DEV TASK — false failure when Cursor actually received the task after MCP timeout.
+
+### 2026-09-22 — כיבוי/בדיקת קמפיינים מתוזמנת ללקוח (scope רחב + דיווח לדוד)
+- **Skin slug:** `carmen_client_campaign_shutdown` (tenant: `2dcdaac6-41bf-42cc-86bf-9a0b4b2e6019`)
+- **What Carmen can now do:** Schedule evening verify/shutdown for a client (e.g. Binat at 20:30) over **all** Meta campaigns — including names like `DMM_CHALLANGE | 22.9`, not webinar-only — and push a Hebrew completion summary to David on WhatsApp.
+- **How:** `create_agent_task` stores `result.campaign_shutdown_job`; `run-agent-task` runs `_shared/client-campaign-shutdown-runner.ts` (live Meta list + optional pause) and calls `claude_notify_david`. Staging backfill: `supabase/ops/apply_binat_campaign_shutdown_job_staging.sql`.
+- **Origin:** Carmen → Cursor DEV TASK — 20:30 Binat shutdown missed non-webinar campaign and did not notify David.
+
+### 2026-09-10 — מודול הרשאות שיחה (Agent → 📱 הרשאות WhatsApp)
 - **Skin slug:** `carmen_conversation_access_admin` (tenant: `2dcdaac6-41bf-42cc-86bf-9a0b4b2e6019`)
 - **What Carmen can now do:** מנהל מגדיר ב-Agent Hub טאב **הרשאות שיחה**: טלפונים לפרטי, קבוצות, לקוח↔קבוצה, dev tier (full/bugfix). Runtime קורא `carmen_access_policies` + `carmen_whatsapp_identities` + `carmen_client_group_access`.
 - **How:** UI `CarmenConversationAccessTab`; tables `carmen_access_policies`, `carmen_client_group_access`, `carmen_command_center_access`; helpers `_shared/carmen-access-policy.mjs`; `loadDevEscalationTierFromDb` in run-ai-agent.
@@ -43,6 +61,11 @@ logged.
 - **What Carmen can now do:** בקבוצות — לדעת **מי** פנה אליה לפי `participant_phone` (לא group_id / display name). דוד (מנהל + `carmen_allowed_phones`) מורשה; אנה מורשית בפרטי בלבד — בקבוצה נחסמת אלא אם יש `carmen_whatsapp_identities` מאושר. עונה רק כשפונים אליה ישירות ("כרמן…").
 - **How:** Pipeline: webhook → `chat_messages.sender_phone` (Green API + Manus) → `handleCarmenMessage` → `resolveCarmenGroupIdentity` + `[שולח בקבוצה] participant_phone=…` בקונטקסט → `run-ai-agent` (`lead_data.phone`, `channel=whatsapp_group`). Helpers: `_shared/carmen-group-sender.mjs`.
 - **Origin:** Carmen → Cursor DEV TASK — בדיקת זיהוי טלפון והרשאות בהודעות קבוצת WhatsApp.
+### 2026-09-01 — Command Center OpenAI billing widget + brain flags
+- **Skin slug:** `openai_billing_status` (existing — unchanged)
+- **What Carmen can now do:** Point David to Command Center **שימוש** panel for live OpenAI Admin costs (month spend, daily trend, line items, tokens). Same data as `get_openai_billing_status` tool. Never invent credit balance.
+- **How:** Edge `openai-billing-status` + `OPENAI_ADMIN_KEY`. Feature flags (Staging): `CARMEN_LIGHTWEIGHT_BRAIN` (sticky Cursor Direct), `CODEX_USE_OPENAI_API` (sync Codex via OpenAI). See `docs/ai-cost-and-brain-architecture.md`.
+- **Origin:** Carmen → Cursor DEV TASK — David: cost visibility in Command Center + token-saving brain/Codex architecture.
 
 ### 2026-08-31 — מצב ביצוע יעדים (Goal Execution Mode)
 - **Skin slug:** `carmen_goal_execution_mode` (tenant: `2dcdaac6-41bf-42cc-86bf-9a0b4b2e6019`)
@@ -74,11 +97,11 @@ logged.
 - **How:** `CarmenSidecar` + `surface=command_center_sidecar` in `run-ai-agent`. Dev tier from `devEscalationAccess.ts` (mirrors server allowlist).
 - **Origin:** Carmen → Cursor DEV TASK for David — contextual system-fix chat while keeping the dashboard visible.
 
-### 2026-08-30 — Cursor / Grok / Codex = Cursor Cloud Direct
+### 2026-08-30 — Codex Direct = ChatGPT Workspace (not Cursor Cloud)
 - **Skin slug:** n/a (Command Center gateway). Tenant `2dcdaac6-41bf-42cc-86bf-9a0b4b2e6019`.
-- **What Carmen can now do:** Cursor, Grok, and Codex Direct all launch Cursor Cloud background agents (`launchCloudDirect`). Each seat keeps its own sticky `conversation_key` / optional fixed agent id.
-- **How:** `dispatchSend` → `launchCloudDirect` for `cursor|grok|codex`. Secrets: `CURSOR_API_KEY`; optional `CODEX_DIRECT_AGENT_ID`, `CODEX_CLOUD_ENV_NAME`, `CODEX_MODEL_ID`. Agent must `reply_to_aios_session`.
-- **Origin:** David — Codex on main was routing to ChatGPT Workspace instead of Cursor Cloud; aligned with Cursor/Grok direct seats.
+- **What Carmen can now do:** Codex Direct triggers ChatGPT Workspace / Work Mode (`launchWorkspaceAgent`), same stack as ChatGPT Direct but with its own `conversation_key` (`aios:codex:<id>`). Cursor and Grok stay on Cursor Cloud / webhook.
+- **How:** `dispatchSend` → `launchWorkspaceAgent(ctx, "codex")`. Secrets: `CHATGPT_WORK_AGENT_TRIGGER_ID` + `CHATGPT_WORK_AGENT_TOKEN` (or `CODEX_WORK_AGENT_*`). Agent must `reply_to_aios_session` or HTTP callback.
+- **Origin:** David — Codex must talk to ChatGPT, not Cursor Cloud agents.
 
 ### 2026-08-29 — סוכנים בסביבת הפיתוח (Preview → Staging)
 - **Skin slug:** `staging_agents_need_cursor_key` (tenant: `2dcdaac6-41bf-42cc-86bf-9a0b4b2e6019`)

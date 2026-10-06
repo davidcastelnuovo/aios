@@ -1,4 +1,5 @@
 import { useMemo, useState, useEffect, useCallback } from "react";
+import { useIsMobile } from "@/hooks/use-mobile";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -79,6 +80,9 @@ type DateRangePreset =
   | 'last_7_days'
   | 'last_14_days'
   | 'last_30_days'
+  | 'last_60_days'
+  | 'last_70_days'
+  | 'last_120_days'
   | 'this_month'
   | 'last_month'
   | 'last_90_days'
@@ -111,6 +115,9 @@ export function GoogleAnalyticsDashboard({
       'last_7_days': 'last_7_days',
       'last_14_days': 'last_14_days',
       'last_30_days': 'last_30_days',
+      'last_60_days': 'last_60_days',
+      'last_70_days': 'last_70_days',
+      'last_120_days': 'last_120_days',
       'this_month': 'this_month',
       'last_month': 'last_month',
       'last_90_days': 'last_90_days',
@@ -122,6 +129,7 @@ export function GoogleAnalyticsDashboard({
   };
 
   const usesExternalFilter = typeof externalDateFilter === 'string';
+  const isMobile = useIsMobile();
   const [datePreset, setDatePreset] = useState<DateRangePreset>(mapExternalPreset(externalDateFilter));
   const [customDateRange, setCustomDateRange] = useState<DateRange>({ from: undefined, to: undefined });
 
@@ -227,6 +235,12 @@ export function GoogleAnalyticsDashboard({
         return { start: subDays(today, 14), end: yesterday };
       case 'last_30_days':
         return { start: subDays(today, 30), end: yesterday };
+      case 'last_60_days':
+        return { start: subDays(today, 60), end: yesterday };
+      case 'last_70_days':
+        return { start: subDays(today, 70), end: yesterday };
+      case 'last_120_days':
+        return { start: subDays(today, 120), end: yesterday };
       case 'this_month':
         return { start: startOfMonth(today), end: today };
       case 'last_month': {
@@ -684,11 +698,14 @@ export function GoogleAnalyticsDashboard({
     { value: 'last_7_days', label: '7 ימים אחרונים' },
     { value: 'last_14_days', label: '14 יום אחרונים' },
     { value: 'last_30_days', label: '30 יום אחרונים' },
-    { value: 'this_month', label: 'החודש' },
-    { value: 'last_month', label: 'חודש שעבר' },
+    { value: 'last_60_days', label: '60 יום אחרונים' },
+    { value: 'last_70_days', label: '70 יום אחרונים' },
     { value: 'last_90_days', label: '90 יום אחרונים' },
+    { value: 'last_120_days', label: '120 יום אחרונים' },
     { value: 'last_180_days', label: '6 חודשים אחרונים' },
     { value: 'last_365_days', label: 'שנה אחרונה' },
+    { value: 'this_month', label: 'החודש' },
+    { value: 'last_month', label: 'חודש שעבר' },
     { value: 'custom', label: 'בחירה ידנית' },
   ];
 
@@ -725,7 +742,7 @@ export function GoogleAnalyticsDashboard({
             </Badge>
           ) : (
             <Select value={datePreset} onValueChange={(v) => setDatePreset(v as DateRangePreset)}>
-              <SelectTrigger className="w-[180px]">
+              <SelectTrigger className="w-full min-w-0 sm:w-[180px]">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -763,7 +780,7 @@ export function GoogleAnalyticsDashboard({
                     setCalendarOpen(false);
                   }
                 }}
-                numberOfMonths={2}
+                numberOfMonths={isMobile ? 1 : 2}
                 className="pointer-events-auto"
               />
             </PopoverContent>
@@ -1133,16 +1150,16 @@ export function GoogleAnalyticsDashboard({
           </CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="h-[400px]" dir="ltr">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={trafficSources.slice(0, 10)} layout="vertical" margin={{ left: 10, right: 160 }}>
+          <div className={isMobile ? "h-[320px] overflow-x-auto" : "h-[400px]"} dir="ltr">
+            <ResponsiveContainer width="100%" height="100%" minWidth={isMobile ? 320 : undefined}>
+              <BarChart data={trafficSources.slice(0, 10)} layout="vertical" margin={{ left: 10, right: isMobile ? 48 : 160 }}>
                 <CartesianGrid strokeDasharray="3 3" className="opacity-30" horizontal={false} />
-                <XAxis type="number" fontSize={12} />
+                <XAxis type="number" fontSize={isMobile ? 10 : 12} />
                 <YAxis 
                   dataKey="name" 
                   type="category" 
-                  width={150} 
-                  fontSize={11}
+                  width={isMobile ? 88 : 150} 
+                  fontSize={isMobile ? 9 : 11}
                   tickLine={false}
                   axisLine={false}
                   orientation="right"

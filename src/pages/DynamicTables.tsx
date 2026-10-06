@@ -26,10 +26,12 @@ import { SeoReportDialog } from "@/components/dynamic-tables/SeoReportDialog";
 import { TikTokTableDialog } from "@/components/dynamic-tables/TikTokTableDialog";
 import { TableCardAlerts } from "@/components/dynamic-tables/TableCardAlerts";
 import { CategorySyncControl } from "@/components/dynamic-tables/CategorySyncControl";
+import { EditTableDialog } from "@/components/dynamic-tables/EditTableDialog";
 
 import { CreateDashboardDialog } from "@/components/dynamic-tables/CreateDashboardDialog";
 import { fetchAccessibleDashboards } from "@/lib/crmDashboards";
 import { invalidateClientCrmTablesQueries } from "@/lib/reportQueryCache";
+import { refetchOnMountIfEmpty } from "@/lib/reportQueryOptions";
 import { Badge } from "@/components/ui/badge";
 import {
   DropdownMenu,
@@ -40,7 +42,7 @@ import {
 import { useNavigate } from "react-router-dom";
 import { useTenantPath } from "@/hooks/useTenantPath";
 import { isSeoTaggedClient } from "@/lib/seoClients";
-import { Skeleton } from "@/components/ui/skeleton";
+import { CarmenLoadingScreen } from "@/components/shared/CarmenLoadingScreen";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
@@ -105,6 +107,7 @@ export default function DynamicTables() {
   const [showSeoReportDialog, setShowSeoReportDialog] = useState(false);
   const [showTikTokDialog, setShowTikTokDialog] = useState(false);
   const [editingTable, setEditingTable] = useState<CrmTable | null>(null);
+  const [editViaConnectionDialog, setEditViaConnectionDialog] = useState(false);
   const [deletingTable, setDeletingTable] = useState<CrmTable | null>(null);
   const [editingDashboard, setEditingDashboard] = useState<{ id: string; name: string } | null>(null);
   const [editDashboardName, setEditDashboardName] = useState("");
@@ -253,7 +256,7 @@ export default function DynamicTables() {
       return Array.isArray(response.data) ? response.data as CrmTable[] : [];
     },
     enabled: !!tenantId,
-    refetchOnMount: "always",
+    refetchOnMount: refetchOnMountIfEmpty,
   });
 
   // Fetch dashboards across own tenant + shared agencies (e.g. DMM-MC under DMM).
@@ -443,6 +446,16 @@ export default function DynamicTables() {
   const handleEdit = (table: CrmTable, e: React.MouseEvent) => {
     e.stopPropagation();
     setEditingTable(table);
+    // GA / GSC / Ahrefs: full connection picker (all org emails) via EditTableDialog.
+    if (
+      table.integration_type === 'google_analytics'
+      || table.integration_type === 'google_search_console'
+      || table.integration_type === 'ahrefs'
+    ) {
+      setEditViaConnectionDialog(true);
+      return;
+    }
+    setEditViaConnectionDialog(false);
     setEditName(table.name);
     setEditAgencyId(table.agency_id || "");
     setEditClientId(table.client_id || "");
@@ -695,16 +708,7 @@ export default function DynamicTables() {
             </Select>
           </div>
           {isLoading ? (
-            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-              {[1, 2, 3].map((i) => (
-                <Card key={i}>
-                  <CardHeader>
-                    <Skeleton className="h-6 w-32" />
-                    <Skeleton className="h-4 w-48 mt-2" />
-                  </CardHeader>
-                </Card>
-              ))}
-            </div>
+            <CarmenLoadingScreen variant="card" messages={["כרמן אוספת את הדוחות…", "בודקת שיוך ללקוחות…"]} />
           ) : !filteredTables || filteredTables.length === 0 ? (
             <Card className="p-12 text-center">
               <Table2 className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
@@ -980,16 +984,7 @@ export default function DynamicTables() {
             />
           </div>
           {dashboardsLoading ? (
-            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-              {[1, 2, 3].map((i) => (
-                <Card key={i}>
-                  <CardHeader>
-                    <Skeleton className="h-6 w-32" />
-                    <Skeleton className="h-4 w-48 mt-2" />
-                  </CardHeader>
-                </Card>
-              ))}
-            </div>
+            <CarmenLoadingScreen variant="card" messages={["כרמן אוספת את הדשבורדים…"]} />
           ) : dashboards.length === 0 ? (
             <Card className="p-12 text-center">
               <LayoutDashboard className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
@@ -1193,7 +1188,24 @@ export default function DynamicTables() {
       </Dialog>
 
       {/* Edit Dialog */}
-      <Dialog open={!!editingTable} onOpenChange={(open) => !open && setEditingTable(null)}>
+      <EditTableDialog
+        open={editViaConnectionDialog && !!editingTable}
+        onOpenChange={(open) => {
+          if (!open) {
+            setEditViaConnectionDialog(false);
+            setEditingTable(null);
+          }
+        }}
+        table={editingTable}
+        tenantId={tenantId || ''}
+        onSaved={() => {
+          queryClient.invalidateQueries({ queryKey: ['crm-tables', tenantId] });
+          setEditViaConnectionDialog(false);
+          setEditingTable(null);
+        }}
+      />
+
+      <Dialog open={!!editingTable && !editViaConnectionDialog} onOpenChange={(open) => !open && setEditingTable(null)}>
         <DialogContent>
           <DialogHeader>
             <DialogTitle>עריכת דוח</DialogTitle>

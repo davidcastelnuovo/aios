@@ -11,9 +11,10 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
-import { Download, Share2, FileText, Pencil, X, Loader2 } from "lucide-react";
+import { Download, Share2, FileText, Pencil, X, Loader2, Sparkles } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
+import { useRegenerateRecordingSummary } from "@/hooks/useRegenerateRecordingSummary";
 import { ShareSummaryDialog, type ShareableRecording } from "./ShareSummaryDialog";
 
 interface SummaryViewerDialogProps {
@@ -82,6 +83,17 @@ export function SummaryViewerDialog({
     },
   });
 
+  const regenerateMutation = useRegenerateRecordingSummary({
+    tenantId,
+    recordingIds: ids,
+    onRegenerated: (nextSummary) => {
+      setSummaryMd(nextSummary);
+      setDraft(nextSummary);
+      setEditing(false);
+      onSaved?.(nextSummary);
+    },
+  });
+
   const meetingName = recording.meeting_topic || "פגישה";
   const meetingDate = recording.start_time
     ? new Date(recording.start_time).toLocaleDateString("he-IL")
@@ -140,10 +152,24 @@ export function SummaryViewerDialog({
                 {summaryMd ? "ערוך סיכום" : "כתוב סיכום"}
               </Button>
             )}
+            {!editing && (
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => regenerateMutation.mutate()}
+                disabled={regenerateMutation.isPending}
+                title="יוצר סיכום מפורט מחדש מהתמלול, לפי מתודת הסיכום הנוכחית"
+              >
+                {regenerateMutation.isPending
+                  ? <Loader2 className="h-4 w-4 ml-1 animate-spin" />
+                  : <Sparkles className="h-4 w-4 ml-1" />}
+                {regenerateMutation.isPending ? "מסכם מחדש..." : "סכם מחדש מפורט"}
+              </Button>
+            )}
             <Button
               size="sm"
               onClick={() => setShareOpen(true)}
-              disabled={!summaryMd || editing}
+              disabled={!summaryMd || editing || regenerateMutation.isPending}
             >
               <Share2 className="h-4 w-4 ml-1" />
               שתף ללקוח

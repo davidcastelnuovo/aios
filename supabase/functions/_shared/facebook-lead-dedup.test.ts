@@ -8,6 +8,7 @@ import {
   facebookFlowEventSource,
   facebookIntakeEventSource,
   facebookTriggerAutomationSucceeded,
+  shouldCreateCrmLeadForFacebookFlowConfig,
   facebookWhatsAppSendSource,
   hashWhatsAppBody,
   releaseFacebookLeadAutomationRun,
@@ -296,5 +297,33 @@ test("facebookTriggerAutomationSucceeded requires a successful inner result", ()
       results: [{ success: true, automation_id: "82858e4b-3daa-41ed-9b50-5045769b2115" }],
     }),
     true,
+  );
+});
+
+test("shouldCreateCrmLeadForFacebookFlowConfig skips CRM for WhatsApp-only flows", () => {
+  const squashTrigger = {
+    lead_source: "facebook_form",
+    facebook_form_id: "2804363709904461",
+    facebook_integration_id: "1d250a3d-7515-4d85-85d6-c4a8581f8b62",
+  };
+  assert.equal(
+    shouldCreateCrmLeadForFacebookFlowConfig(squashTrigger, "lead_created", false),
+    false,
+  );
+  assert.equal(
+    shouldCreateCrmLeadForFacebookFlowConfig(squashTrigger, "lead_created", true),
+    true,
+  );
+  assert.equal(
+    shouldCreateCrmLeadForFacebookFlowConfig(
+      { ...squashTrigger, create_crm_lead: true },
+      "lead_created",
+      false,
+    ),
+    true,
+  );
+  assert.equal(
+    shouldCreateCrmLeadForFacebookFlowConfig({}, "inbound_webhook_lead", true),
+    false,
   );
 });

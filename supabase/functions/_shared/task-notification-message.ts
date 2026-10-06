@@ -1,5 +1,56 @@
 const AIOS_APP_URL = 'https://aios.co.il'
 
+/** Deep link into the tasks board. Always tenant-scoped so the recipient can open it. */
+export function buildTaskAppLink(taskId: string, tenantSlug?: string | null): string {
+  const encodedId = encodeURIComponent(String(taskId || ''))
+  const slug = String(tenantSlug || '').trim().replace(/^\/+|\/+$/g, '')
+  if (slug) return `${AIOS_APP_URL}/t/${encodeURIComponent(slug)}/tasks?task=${encodedId}`
+  return `${AIOS_APP_URL}/tasks?task=${encodedId}`
+}
+
+/**
+ * Tenant that owns the recipient's home board — not the task owner / Carmen sender.
+ * A Marketing Captain campaigner working a DMM-agency task must open
+ * `/t/marketingcaptain/tasks`, not DMM and not a bare `/tasks` URL.
+ */
+export function resolveTaskNotificationLinkTenantId(input: {
+  notifyCreator: boolean
+  creatorHomeTenantId?: string | null
+  campaignerTenantId?: string | null
+  salesPersonTenantId?: string | null
+  fallbackTenantId?: string | null
+}): string | null {
+  const fallback = input.fallbackTenantId || null
+  if (input.notifyCreator) return input.creatorHomeTenantId || fallback
+  return input.campaignerTenantId || input.salesPersonTenantId || fallback
+}
+
+/**
+ * Carmen lines that may deliver the notification, best first. The recipient's own
+ * tenant line comes first: a Marketing Captain teammate must hear from the
+ * Marketing Captain Carmen even when the task's client belongs to another agency
+ * tenant, otherwise the message arrives from a WhatsApp number he never talks to.
+ * The client/task tenant stays as the fallback line.
+ */
+export function resolveTaskNotificationSenderTenantIds(input: {
+  notifyCreator: boolean
+  creatorHomeTenantId?: string | null
+  campaignerTenantId?: string | null
+  salesPersonTenantId?: string | null
+  fallbackTenantId?: string | null
+}): string[] {
+  const preferred = input.notifyCreator
+    ? [input.creatorHomeTenantId]
+    : [input.campaignerTenantId, input.salesPersonTenantId]
+  const ordered = [...preferred, input.fallbackTenantId]
+  return [...new Set(ordered.map((id) => String(id || '').trim()).filter(Boolean))]
+}
+
+export type TaskNotificationExtras = {
+  updateContent?: string | null
+  updaterName?: string | null
+}
+
 export function formatTaskNotificationMessage(
   notificationType: string,
   task: any,
@@ -7,8 +58,10 @@ export function formatTaskNotificationMessage(
   assigneeName: string,
   recipientName: string,
   creatorName: string,
+  tenantSlug?: string | null,
+  extras?: TaskNotificationExtras,
 ): string {
-  const taskLink = `${AIOS_APP_URL}/tasks?task=${encodeURIComponent(task.id)}`
+  const taskLink = buildTaskAppLink(task.id, tenantSlug)
   const details = [`היי ${recipientName || 'צוות'}, כאן כרמן 👋`, '']
 
   if (notificationType === 'task_self_reminder') {
@@ -53,6 +106,22 @@ export function formatTaskNotificationMessage(
       '',
       'אעדכן אותך כשהמשימה תסומן כבוצעה.',
     )
+  } else if (notificationType === 'task_collaborator_added') {
+    details.push(
+      creatorName
+        ? `נוספת למשימה על ידי ${creatorName} עבור ${clientName}:`
+        : `נוספת למשימה עבור ${clientName}:`,
+      `*${task.title}*`,
+    )
+  } else if (notificationType === 'task_update_added') {
+    details.push(
+      extras?.updaterName
+        ? `יש עדכון חדש במשימה מאת ${extras.updaterName}:`
+        : 'יש עדכון חדש במשימה:',
+      `*${task.title}*`,
+      `לקוח: ${clientName}`,
+    )
+    if (extras?.updateContent) details.push('', String(extras.updateContent))
   } else {
     details.push(
       creatorName
@@ -62,7 +131,9 @@ export function formatTaskNotificationMessage(
     )
   }
 
-  if (task.notes) details.push('', String(task.notes))
+  if (notificationType !== 'task_update_added' && task.notes) {
+    details.push('', String(task.notes))
+  }
   if (Number(task.priority) >= 8) details.push('', 'דחיפות: גבוהה')
   if (task.due_date) {
     const due = task.due_time
@@ -73,4 +144,3 @@ export function formatTaskNotificationMessage(
   details.push('', `לצפייה במשימה: ${taskLink}`)
   return details.join('\n')
 }
-

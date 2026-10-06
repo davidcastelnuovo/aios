@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect, useLayoutEffect } from "react";
+import { useState, useMemo, useEffect, useLayoutEffect, useRef } from "react";
 import { useSearchParams } from "react-router-dom";
 import { markLinkedTaskDoneForCalendarEvent } from "@/lib/taskCalendarSync";
 import { useSidebar } from "@/components/ui/sidebar";
@@ -22,25 +22,25 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
-import { ChevronRight, ChevronLeft, CalendarDays, Filter, LayoutGrid, Calendar, List, Plus, RefreshCw, Users } from "lucide-react";
+import { ChevronRight, ChevronLeft, CalendarDays, Filter, LayoutGrid, Calendar, List, Plus, RefreshCw, MessageSquare } from "lucide-react";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { DayColumn } from "./DayColumn";
 import { DailyView } from "./DailyView";
 import { MonthlyView } from "./MonthlyView";
 import { TaskDetailDialog } from "./TaskDetailDialog";
-import { TaskFiltersDialog, TaskFilterState, defaultTaskFilters, resolveMineTaskAssignee } from "./TaskFiltersDialog";
+import { TasksChatView, TasksChatSearchInput } from "./TasksChatView";
+import { TasksToolbarFilters } from "./TasksToolbarFilters";
+import { TaskFiltersDialog, TaskFilterState, defaultTaskFilters } from "./TaskFiltersDialog";
 import { TaskBacklogPanel } from "./OverdueTasksPanel";
 import type { QuickTaskPayload } from "./QuickTaskInput";
 import { CalendarEventEditDialog } from "./CalendarEventEditDialog";
 import { useCurrentTenant } from "@/hooks/useCurrentTenant";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
 import { useUserRole } from "@/hooks/useUserRole";
+import { useViewAs } from "@/contexts/ViewAsContext";
 import { useCrossTenantAgencyIds } from "@/hooks/useCrossTenantAgencyIds";
 import { useAgency } from "@/contexts/AgencyContext";
-import { useTerminology } from "@/hooks/useTerminology";
 import { toast } from "sonner";
 import confetti from "canvas-confetti";
 import {
@@ -50,11 +50,42 @@ import {
   resolveTasksBoardScope,
   filterTasksForBoardView,
   syncLocalTasksForAgencyFilter,
+  filterTasksByBoardTenantScope,
 } from "@/lib/taskBoardAgency";
+import {
+  collectTaskAssigneeIds,
+  shouldFanOutRecurringTasks,
+} from "@/lib/recurringTaskAssignees";
+import {
+  isRecurringBoardTask,
+  recurringTaskBelongsInBacklog,
+  shouldShowRecurringTaskOnBoard,
+} from "@/lib/recurringTaskBoardFilter";
+import {
+  computeFirstOccurrenceDate,
+  type RecurrenceFrequency,
+} from "@/lib/taskRecurrence";
 import { fetchActiveCampaigners } from "@/lib/taskCampaigners";
-import { buildMineAssignmentOrFilter, fetchMineTaskIdentity } from "@/lib/mineTaskIdentity";
-import { buildTaskDueDateOrFilter, taskAppearsOnTimeGrid } from "@/lib/taskBoardQuery";
+import { buildMineQueueOrFilter, fetchMineTaskIdentity } from "@/lib/mineTaskIdentity";
+import {
+  chunkIds,
+  filterTasksByCampaignerBoardFilter,
+  filterTasksByRelatedEntity,
+  filterTasksForBoardUserPreview,
+  hasTasksFilterPreset,
+  isMineQueueFilter,
+  readTasksFilterPreset,
+  resolveTaskPeriodStart,
+  taskMatchesActivityPeriod,
+  writeTasksFilterPreset,
+} from "@/lib/taskFilters";
+import { buildChatTaskOrFilter, buildTaskDueDateOrFilter, taskAppearsOnTimeGrid } from "@/lib/taskBoardQuery";
 import { isTaskOverdue } from "@/lib/taskDeadline";
+import {
+  checkCalendarConnection,
+  getStoredCalendarProvider,
+  startCalendarOAuth,
+} from "@/lib/calendarApi";
 
 interface Task {
   id: string;
@@ -72,13 +103,22 @@ interface Task {
   tenant_id: string | null;
   created_by?: string | null;
   creator_name?: string | null;
+  created_at?: string | null;
+  updated_at?: string | null;
   sort_order?: number;
   target_date?: string | null;
   duration_minutes?: number;
   google_calendar_event_id?: string | null;
+  recurrence_frequency?: "daily" | "weekly" | "monthly" | null;
+  recurrence_interval?: number;
+  recurrence_weekday?: number | null;
+  recurrence_monthday?: number | null;
+  recurrence_series_id?: string | null;
+  recurrence_previous_task_id?: string | null;
   clients?: { name: string; agency_id?: string | null } | null;
+  leads?: { company_name?: string | null; contact_name?: string | null } | null;
   task_updates?: { id: string }[];
-  task_collaborators?: { id: string }[];
+  task_collaborators?: { id?: string; campaigner_id?: string }[];
 }
 
 interface CalendarEvent {
@@ -90,16 +130,31 @@ interface CalendarEvent {
   calendarId?: string;
 }
 
-export type ViewMode = "daily" | "weekly" | "monthly";
+export type ViewMode = "chat" | "daily" | "weekly" | "monthly";
+
+const TASKS_VIEW_MODE_KEY = "aios-tasks-view-mode";
+
+function readTasksViewMode(): ViewMode {
+  try {
+    const saved = localStorage.getItem(TASKS_VIEW_MODE_KEY);
+    if (saved === "chat" || saved === "daily" || saved === "weekly" || saved === "monthly") {
+      return saved;
+    }
+  } catch {
+    // ignore
+  }
+  return "chat";
+}
 
 export function WeeklyTaskBoard() {
   const queryClient = useQueryClient();
   const [searchParams, setSearchParams] = useSearchParams();
   const { tenantId } = useCurrentTenant();
   const { user } = useCurrentUser();
-  const { isOwner, isSuperAdmin } = useUserRole();
+  const { isViewingAs, viewAsUserId, viewAsUserName } = useViewAs();
+  const boardUserId = isViewingAs && viewAsUserId ? viewAsUserId : user?.id ?? null;
+  const { isOwner, isSuperAdmin, userId: authenticatedUserId } = useUserRole();
   const { state: sidebarState } = useSidebar();
-  const { t } = useTerminology();
 
   // Fetch clients for inline selector
   const { crossTenantAgencyIds } = useCrossTenantAgencyIds();
@@ -128,25 +183,65 @@ export function WeeklyTaskBoard() {
     enabled: !!tenantId,
   });
 
+  const { data: leadsList = [] } = useQuery({
+    queryKey: ["leads-for-task-filter", tenantId, crossTenantAgencyIds],
+    queryFn: async () => {
+      let query = supabase
+        .from("leads")
+        .select("id, company_name, contact_name, created_at");
+      if (crossTenantAgencyIds.length > 0) {
+        query = query.or(`tenant_id.eq.${tenantId},agency_id.in.(${crossTenantAgencyIds.join(",")})`);
+      } else {
+        query = query.eq("tenant_id", tenantId!);
+      }
+      const { data, error } = await query.order("created_at", { ascending: false }).limit(400);
+      if (error) throw error;
+      return data || [];
+    },
+    enabled: !!tenantId,
+  });
+
   // Start from today instead of week start
   const [currentDate, setCurrentDate] = useState(() => startOfDay(new Date()));
-  const [viewMode, setViewMode] = useState<ViewMode>("weekly");
+  const [viewMode, setViewMode] = useState<ViewMode>(readTasksViewMode);
+  useEffect(() => {
+    try {
+      localStorage.setItem(TASKS_VIEW_MODE_KEY, viewMode);
+    } catch {
+      // ignore
+    }
+  }, [viewMode]);
   const [selectedTask, setSelectedTask] = useState<Task | null>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [activeTaskId, setActiveTaskId] = useState<string | null>(null);
   // Everyone lands on their own queue: tasks assigned to the staff member
   // linked on the user (profiles.campaigner_id / sales_person_id).
   const [filters, setFilters] = useState<TaskFilterState>(defaultTaskFilters);
+  const [chatListSearch, setChatListSearch] = useState("");
+  const appliedOwnerBoardDefaultRef = useRef(false);
+  const presetKeyRef = useRef<string | null>(null);
+  const effectiveCampaignerFilter = isViewingAs ? "mine" : filters.campaignerId;
 
-  // Personal queue ("mine"): default header to "all agencies" so cross-agency
+  useLayoutEffect(() => {
+    if (isViewingAs || !user?.id) return;
+    if (presetKeyRef.current === user.id) return;
+    presetKeyRef.current = user.id;
+    setFilters(readTasksFilterPreset(user.id));
+    if (hasTasksFilterPreset(user.id)) {
+      appliedOwnerBoardDefaultRef.current = true;
+    }
+  }, [isViewingAs, user?.id]);
+
+  // Personal queue: default header to "all agencies" so cross-agency
   // assignments are visible. User can still narrow by agency afterward.
   useLayoutEffect(() => {
-    if (filters.campaignerId === "mine") {
+    if (isMineQueueFilter(effectiveCampaignerFilter)) {
       setSelectedAgency("all");
     }
-  }, [filters.campaignerId, setSelectedAgency]);
+  }, [effectiveCampaignerFilter, setSelectedAgency]);
 
   const [filtersDialogOpen, setFiltersDialogOpen] = useState(false);
+  const [filtersIncludeToolbar, setFiltersIncludeToolbar] = useState(false);
   const [selectedCalendarEvent, setSelectedCalendarEvent] = useState<CalendarEvent | null>(null);
   const [calendarEventDialogOpen, setCalendarEventDialogOpen] = useState(false);
   const [quickAddSlot, setQuickAddSlot] = useState<{ date: Date; time: string } | null>(null);
@@ -159,7 +254,7 @@ export function WeeklyTaskBoard() {
     clients?: { name: string; agency_id?: string | null } | null;
     campaigners?: { full_name: string } | null;
     task_updates?: { id: string }[];
-    task_collaborators?: { id: string }[];
+    task_collaborators?: { id?: string; campaigner_id?: string }[];
   };
 
   const linkedTaskId = searchParams.get("task");
@@ -186,7 +281,8 @@ export function WeeklyTaskBoard() {
         return;
       }
       setSelectedTask(data as FullTask);
-      setDialogOpen(true);
+      setViewMode("chat");
+      setDialogOpen(false);
     };
 
     void openLinkedTask();
@@ -225,14 +321,14 @@ export function WeeklyTaskBoard() {
 
   // Resolve every campaigner row + sales person that represents this user for "mine".
   const { data: mineIdentity, isSuccess: mineIdentityReady } = useQuery({
-    queryKey: ["mine-task-identity", user?.id, tenantId, crossTenantAgencyIds.join(",")],
+    queryKey: ["mine-task-identity", boardUserId, tenantId, crossTenantAgencyIds.join(","), isViewingAs, viewAsUserId],
     queryFn: () =>
       fetchMineTaskIdentity({
-        userId: user!.id,
+        userId: boardUserId!,
         tenantId: tenantId!,
         crossTenantAgencyIds,
       }),
-    enabled: !!user?.id && !!tenantId,
+    enabled: !!boardUserId && !!tenantId,
   });
 
   const primaryCampaignerId =
@@ -243,27 +339,30 @@ export function WeeklyTaskBoard() {
     mineIdentity?.kind === "assigned" ? mineIdentity.salesPersonId ?? null : null;
 
   // Owners without a linked staff row: "mine" only matches created_by and looks empty.
+  // Apply once on entry — do not override when the user explicitly picks "שלי בלבד".
   useLayoutEffect(() => {
-    if (!mineIdentityReady || !mineIdentity) return;
+    if (isViewingAs) return;
+    if (!mineIdentityReady || !mineIdentity || appliedOwnerBoardDefaultRef.current) return;
     if (
-      filters.campaignerId === "mine" &&
+      effectiveCampaignerFilter === "mine" &&
       mineIdentity.kind === "created_by" &&
       (isOwner || isSuperAdmin)
     ) {
+      appliedOwnerBoardDefaultRef.current = true;
       setFilters((prev) => ({ ...prev, campaignerId: "all" }));
     }
-  }, [mineIdentityReady, mineIdentity, isOwner, isSuperAdmin, filters.campaignerId]);
+  }, [mineIdentityReady, mineIdentity, isOwner, isSuperAdmin, effectiveCampaignerFilter, isViewingAs]);
 
   // Fetch Google Calendar events
   const { data: calendarEvents = [] } = useQuery({
     queryKey: ["calendar-events-weekly", format(dateRange.start, "yyyy-MM-dd"), format(dateRange.end, "yyyy-MM-dd"), tenantId],
     queryFn: async () => {
       try {
-        const { getCalendarEvents } = await import("@/lib/calendarApi");
+        const { getCalendarEvents, getStoredCalendarProvider } = await import("@/lib/calendarApi");
         const data = await getCalendarEvents(
           dateRange.start.toISOString(),
           endOfDay(addDays(dateRange.end, 1)).toISOString(),
-          { tenantId: tenantId! }
+          { tenantId: tenantId!, provider: getStoredCalendarProvider() }
         );
         
         // Transform to our CalendarEvent format
@@ -285,31 +384,58 @@ export function WeeklyTaskBoard() {
         return [];
       }
     },
-    enabled: !!user?.id && !!tenantId && viewMode !== "monthly",
+    enabled: !!user?.id && !!tenantId && viewMode !== "monthly" && viewMode !== "chat",
     staleTime: 1000 * 60 * 5, // 5 minutes
   });
 
+  const calendarProvider = getStoredCalendarProvider();
+  const { data: calendarStatus } = useQuery({
+    queryKey: ["calendar-status", tenantId, calendarProvider],
+    queryFn: () => checkCalendarConnection({ tenantId: tenantId!, provider: calendarProvider }),
+    enabled: !!tenantId && viewMode !== "chat",
+    staleTime: 1000 * 60,
+  });
+  const calendarConnected = Boolean(calendarStatus?.connected);
+  const [connectingCalendar, setConnectingCalendar] = useState(false);
+
+  const handleConnectCalendar = async () => {
+    if (!tenantId || connectingCalendar) return;
+    setConnectingCalendar(true);
+    try {
+      await startCalendarOAuth(tenantId, calendarProvider);
+      await queryClient.invalidateQueries({ queryKey: ["calendar-status"] });
+      await queryClient.invalidateQueries({ queryKey: ["calendar-events-weekly"] });
+      toast.success("היומן חובר");
+    } catch (error) {
+      console.error("[connectCalendar] failed", error);
+      toast.error((error as Error).message || "שגיאה בחיבור ליומן");
+    } finally {
+      setConnectingCalendar(false);
+    }
+  };
+
   // Fetch tasks for the current view + overdue tasks
   const { data: fetchedTasks = [], isLoading, isFetching, isSuccess, isError, error: tasksError } = useQuery({
-    queryKey: ["tasks", tenantId, crossTenantAgencyIds, (agencies || []).map((agency) => agency.id).join(","), format(dateRange.start, "yyyy-MM-dd"), format(dateRange.end, "yyyy-MM-dd"), filters, viewMode, mineIdentity?.campaignerIds.join(","), selectedAgency],
+    queryKey: ["tasks", tenantId, crossTenantAgencyIds, (agencies || []).map((agency) => agency.id).join(","), viewMode === "chat" ? "chat" : format(dateRange.start, "yyyy-MM-dd"), viewMode === "chat" ? "chat" : format(dateRange.end, "yyyy-MM-dd"), filters, effectiveCampaignerFilter, viewMode, mineIdentity?.campaignerIds.join(","), selectedAgency, isViewingAs, viewAsUserId, boardUserId],
     enabled:
       !!tenantId &&
-      !!user?.id &&
-      (filters.campaignerId !== "mine" || mineIdentityReady),
+      !!boardUserId &&
+      (isMineQueueFilter(effectiveCampaignerFilter) ? mineIdentityReady : true),
     queryFn: async () => {
       const today = format(startOfDay(new Date()), "yyyy-MM-dd");
       const rangeStartStr = format(dateRange.start, "yyyy-MM-dd");
       const rangeEndStr = format(dateRange.end, "yyyy-MM-dd");
       
-      let query = supabase
-        .from("tasks")
-        .select(`
+      const TASK_BOARD_SELECT = `
           *,
           clients (name, agency_id),
+          leads (company_name, contact_name),
           campaigners (full_name),
           task_updates (count),
           task_collaborators (count)
-        `);
+        `;
+
+      let query = supabase.from("tasks").select(TASK_BOARD_SELECT);
 
       // Tenant scope only. The header agency is applied after the fetch, on the
       // task's effective agency (its client's agency when it has one), because
@@ -318,87 +444,176 @@ export function WeeklyTaskBoard() {
       const boardScope = resolveTasksBoardScope({
         tenantId: tenantId!,
         crossTenantAgencyIds,
-        accessibleAgencyIds: (agencies || []).map((agency) => agency.id),
       });
 
-      let personScopeCampaignerIds: string[] = [];
       let collaboratorTaskIds: string[] = [];
-      if (filters.campaignerId === "mine") {
-        personScopeCampaignerIds = mineIdentity?.campaignerIds ?? [];
-        if (personScopeCampaignerIds.length > 0) {
-          const { data: collabRows } = await supabase
-            .from("task_collaborators")
-            .select("task_id")
-            .in("campaigner_id", personScopeCampaignerIds);
-          collaboratorTaskIds = Array.from(new Set((collabRows || []).map((row) => row.task_id)));
-        }
-      } else if (filters.campaignerId !== "all" && filters.campaignerId !== "none") {
-        personScopeCampaignerIds = [filters.campaignerId];
+      const collaboratorScopeIds = isMineQueueFilter(effectiveCampaignerFilter)
+        ? mineIdentity?.campaignerIds ?? []
+        : effectiveCampaignerFilter !== "all" && effectiveCampaignerFilter !== "none"
+          ? [effectiveCampaignerFilter]
+          : [];
+      if (collaboratorScopeIds.length > 0) {
+        const { data: collabRows } = await supabase
+          .from("task_collaborators")
+          .select("task_id")
+          .in("campaigner_id", collaboratorScopeIds);
+        collaboratorTaskIds = Array.from(new Set((collabRows || []).map((row) => row.task_id)));
       }
 
-      query = query.or(
-        buildTasksBoardScopeOrFilter(boardScope, personScopeCampaignerIds, collaboratorTaskIds),
-      );
+      query = query.or(buildTasksBoardScopeOrFilter(boardScope));
 
       // Include: current range OR overdue open OR unscheduled open (no due_date).
       // Do not fetch historical done-undated / all-time untimed rows — that
       // flooded the board after the target_date 400-fix made the query succeed.
+      const periodStart = viewMode === "chat" ? resolveTaskPeriodStart(filters.period) : undefined;
+      const activitySince = periodStart ? format(periodStart, "yyyy-MM-dd") : undefined;
       query = query.or(
-        buildTaskDueDateOrFilter({
-          rangeStart: rangeStartStr,
-          rangeEnd: rangeEndStr,
-          today,
-          customStart: filters.startDate ? format(filters.startDate, "yyyy-MM-dd") : undefined,
-          customEnd: filters.endDate ? format(filters.endDate, "yyyy-MM-dd") : undefined,
-        }),
+        viewMode === "chat"
+          ? buildChatTaskOrFilter({
+              today,
+              doneSince: activitySince ?? format(addDays(startOfDay(new Date()), -14), "yyyy-MM-dd"),
+              activitySince,
+            })
+          : buildTaskDueDateOrFilter({
+              rangeStart: rangeStartStr,
+              rangeEnd: rangeEndStr,
+              today,
+            }),
       );
 
-      // "שלי בלבד" = tasks assigned to the staff member this user is linked to.
-      if (filters.campaignerId === "mine") {
+      // Personal queue: assigned to me ("mine") or assigned to me + created by me.
+      // Collaborator tasks are fetched in a second query — do not stuff hundreds of
+      // UUIDs into this .or() or PostgREST 400s and the board never loads.
+      let skipAssignedQuery = false;
+      if (isMineQueueFilter(effectiveCampaignerFilter)) {
         const mine = mineIdentity!;
-        const assignmentOr = buildMineAssignmentOrFilter(mine);
-        if (assignmentOr) {
+        const mode = effectiveCampaignerFilter === "mine_assigned" ? "mine_assigned" : "mine";
+        const queueOr = buildMineQueueOrFilter(mine, mode);
+        if (queueOr) {
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          query = (query as any).or(assignmentOr);
-        } else if (mine.kind === "created_by") {
-          query = query.eq("created_by", mine.userId);
-        } else {
-          // No staff row linked — "mine" would otherwise return the whole tenant scope.
+          query = (query as any).or(queueOr);
+        } else if (collaboratorTaskIds.length === 0) {
           return [];
+        } else {
+          skipAssignedQuery = true;
         }
-      } else if (filters.campaignerId === "none") {
+      } else if (effectiveCampaignerFilter === "none") {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         query = (query as any).is("campaigner_id", null);
-      } else if (filters.campaignerId !== "all") {
+      } else if (effectiveCampaignerFilter !== "all") {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        query = (query as any).eq("campaigner_id", filters.campaignerId);
+        query = (query as any).eq("campaigner_id", effectiveCampaignerFilter);
       }
 
-      // Apply task type filter
-      if (filters.taskType !== "all") {
-        query = query.eq("task_type", filters.taskType as "campaign" | "collection" | "creative" | "other");
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const applyBoardFilters = (q: any) => {
+        if (filters.taskType !== "all") {
+          q = q.eq("task_type", filters.taskType as "campaign" | "collection" | "creative" | "other");
+        }
+        if (filters.relatedKind === "client" && filters.relatedId) {
+          q = q.eq("client_id", filters.relatedId);
+        } else if (filters.relatedKind === "lead" && filters.relatedId) {
+          q = q.eq("lead_id", filters.relatedId);
+        } else if (filters.relatedKind === "none") {
+          q = q.is("client_id", null).is("lead_id", null);
+        } else if (filters.association === "clients") {
+          q = q.not("client_id", "is", null);
+        } else if (filters.association === "leads") {
+          q = q.not("lead_id", "is", null);
+        } else if (filters.association === "general") {
+          q = q.is("client_id", null).is("lead_id", null);
+        } else if (filters.association === "unassigned") {
+          q = q.is("client_id", null);
+        }
+        return q;
+      };
+
+      query = applyBoardFilters(query);
+
+      let taskRows: FullTask[] = [];
+      if (!skipAssignedQuery) {
+        const { data, error } = await query
+          .order("due_date", { ascending: true })
+          .order("created_at", { ascending: true })
+          .order("sort_order", { ascending: true });
+
+        if (error) throw error;
+        taskRows = (data || []) as FullTask[];
       }
 
-      // Apply association filter
-      if (filters.association === "clients") {
-        query = query.not("client_id", "is", null);
-      } else if (filters.association === "leads") {
-        query = query.not("lead_id", "is", null);
-      } else if (filters.association === "general") {
-        query = query.is("client_id", null).is("lead_id", null);
-      } else if (filters.association === "unassigned") {
-        // Tasks not linked to any client (may still have a lead).
-        query = query.is("client_id", null);
+      if (collaboratorTaskIds.length > 0) {
+        const have = new Set(taskRows.map((task) => task.id));
+        const missing = collaboratorTaskIds.filter((id) => !have.has(id));
+        const dueOr = viewMode === "chat"
+          ? buildChatTaskOrFilter({
+              today,
+              doneSince: activitySince ?? format(addDays(startOfDay(new Date()), -14), "yyyy-MM-dd"),
+              activitySince,
+            })
+          : buildTaskDueDateOrFilter({
+              rangeStart: rangeStartStr,
+              rangeEnd: rangeEndStr,
+              today,
+            });
+        for (const chunk of chunkIds(missing)) {
+          const extraQuery = applyBoardFilters(
+            supabase
+              .from("tasks")
+              .select(TASK_BOARD_SELECT)
+              .in("id", chunk)
+              .or(buildTasksBoardScopeOrFilter(boardScope))
+              .or(dueOr),
+          );
+          const { data: extra, error: extraError } = await extraQuery;
+          if (extraError) throw extraError;
+          taskRows = taskRows.concat((extra || []) as FullTask[]);
+        }
       }
 
+      const seen = new Set<string>();
+      const collabSet = new Set(collaboratorTaskIds);
+      taskRows = taskRows.filter((task) => {
+        if (seen.has(task.id)) return false;
+        seen.add(task.id);
+        return true;
+      }).map((task) => (
+        collabSet.has(task.id) ? { ...task, collaborator_for_me: true } : task
+      ));
 
-      const { data, error } = await query
-        .order("due_date", { ascending: true })
-        .order("created_at", { ascending: true })
-        .order("sort_order", { ascending: true });
+      if (filters.showAllRecurring) {
+        let recurringQuery = supabase
+          .from("tasks")
+          .select(TASK_BOARD_SELECT)
+          .or(buildTasksBoardScopeOrFilter(boardScope))
+          .not("recurrence_frequency", "is", null)
+          .neq("status", "done");
+        recurringQuery = applyBoardFilters(recurringQuery);
+        if (isMineQueueFilter(effectiveCampaignerFilter)) {
+          const mine = mineIdentity!;
+          const mode = effectiveCampaignerFilter === "mine_assigned" ? "mine_assigned" : "mine";
+          const queueOr = buildMineQueueOrFilter(mine, mode);
+          if (queueOr) {
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            recurringQuery = (recurringQuery as any).or(queueOr);
+          }
+        } else if (effectiveCampaignerFilter === "none") {
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          recurringQuery = (recurringQuery as any).is("campaigner_id", null);
+        } else if (effectiveCampaignerFilter !== "all") {
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          recurringQuery = (recurringQuery as any).eq("campaigner_id", effectiveCampaignerFilter);
+        }
+        const { data: recurringExtra, error: recurringError } = await recurringQuery;
+        if (recurringError) throw recurringError;
+        taskRows = taskRows.concat((recurringExtra || []) as FullTask[]);
+        const seenRecurring = new Set<string>();
+        taskRows = taskRows.filter((task) => {
+          if (seenRecurring.has(task.id)) return false;
+          seenRecurring.add(task.id);
+          return true;
+        });
+      }
 
-      if (error) throw error;
-      const taskRows = (data || []) as FullTask[];
       const creatorIds = Array.from(new Set(
         taskRows.map((task) => task.created_by).filter((id): id is string => Boolean(id))
       ));
@@ -419,7 +634,64 @@ export function WeeklyTaskBoard() {
 
   // Local tasks state for optimistic updates
   const [localTasks, setLocalTasks] = useState<FullTask[]>([]);
+
+  // View-as preview: show the selected user's queue, not the admin's.
+  useEffect(() => {
+    if (!isViewingAs || !viewAsUserId) return;
+    presetKeyRef.current = null;
+    setFilters(defaultTaskFilters);
+    setLocalTasks([]);
+    appliedOwnerBoardDefaultRef.current = true;
+    queryClient.removeQueries({ queryKey: ["tasks", tenantId] });
+    queryClient.removeQueries({ queryKey: ["mine-task-identity"] });
+  }, [isViewingAs, viewAsUserId, tenantId, queryClient]);
   
+  const applyBoardViewFilters = useMemo(
+    () => (rows: FullTask[]) => {
+      let filtered = filterTasksByBoardTenantScope(
+        filterTasksForBoardView(rows, selectedAgency, effectiveCampaignerFilter),
+        tenantId!,
+        crossTenantAgencyIds,
+      );
+      filtered = filterTasksByCampaignerBoardFilter(
+        filtered,
+        effectiveCampaignerFilter,
+        mineIdentity ?? null,
+      );
+      filtered = filterTasksByRelatedEntity(filtered, filters.relatedKind, filters.relatedId);
+      if (viewMode === "chat") {
+        const periodStart = resolveTaskPeriodStart(filters.period);
+        if (periodStart) {
+          filtered = filtered.filter((task) => taskMatchesActivityPeriod(task, periodStart));
+        }
+      }
+      if (isViewingAs && boardUserId) {
+        filtered = filterTasksForBoardUserPreview(filtered, boardUserId, mineIdentity ?? null);
+      }
+      filtered = filtered.filter((task) =>
+        shouldShowRecurringTaskOnBoard(task, {
+          showAllRecurring: filters.showAllRecurring,
+          asOf: startOfDay(new Date()),
+        }),
+      );
+      return filtered;
+    },
+    [
+      selectedAgency,
+      effectiveCampaignerFilter,
+      filters.relatedKind,
+      filters.relatedId,
+      filters.period,
+      filters.showAllRecurring,
+      viewMode,
+      tenantId,
+      crossTenantAgencyIds,
+      mineIdentity,
+      isViewingAs,
+      boardUserId,
+    ],
+  );
+
   useEffect(() => {
     if (isError) return;
     if (!isSuccess && !isFetching) return;
@@ -431,13 +703,14 @@ export function WeeklyTaskBoard() {
       fetchedTasks,
       previousLocal: localTasks,
       selectedAgency,
-      campaignerFilter: filters.campaignerId,
+      campaignerFilter: effectiveCampaignerFilter,
+      applyCampaignerFilter: applyBoardViewFilters,
     });
     setLocalTasks(next);
     // Intentionally depend on the fingerprint of fetched rows + agency + fetching, not
     // localTasks (that would loop). Same fingerprint style as before, plus agency_id.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isFetching, isSuccess, isError, selectedAgency, filters.campaignerId, JSON.stringify(fetchedTasks?.map(t => `${t.id}_${t.agency_id}_${t.duration_minutes}_${t.status}_${t.campaigner_id}_${t.client_id}`))]);
+  }, [isFetching, isSuccess, isError, selectedAgency, effectiveCampaignerFilter, isViewingAs, boardUserId, applyBoardViewFilters, JSON.stringify(fetchedTasks?.map(t => `${t.id}_${t.agency_id}_${t.duration_minutes}_${t.status}_${t.campaigner_id}_${t.client_id}`))]);
 
   useEffect(() => {
     if (!isError || !tasksError) return;
@@ -448,8 +721,8 @@ export function WeeklyTaskBoard() {
   // Team board: header agency narrows rows. Personal "mine" queue is the linked
   // staff member's assignments across every agency.
   const tasks = useMemo(
-    () => filterTasksForBoardView(localTasks, selectedAgency, filters.campaignerId),
-    [localTasks, selectedAgency, filters.campaignerId],
+    () => applyBoardViewFilters(localTasks),
+    [localTasks, applyBoardViewFilters],
   );
 
   // Filter out calendar events that are actually synced tasks (to avoid duplicates).
@@ -457,11 +730,11 @@ export function WeeklyTaskBoard() {
   // queue — "mine" and the user's own staff row keep the calendar.
   const filteredCalendarEvents = useMemo(() => {
     const viewingOtherCampaigner =
-      !!filters.campaignerId &&
-      filters.campaignerId !== "mine" &&
-      filters.campaignerId !== "all" &&
-      filters.campaignerId !== "none" &&
-      filters.campaignerId !== primaryCampaignerId;
+      !!effectiveCampaignerFilter &&
+      !isMineQueueFilter(effectiveCampaignerFilter) &&
+      effectiveCampaignerFilter !== "all" &&
+      effectiveCampaignerFilter !== "none" &&
+      effectiveCampaignerFilter !== primaryCampaignerId;
     if (viewingOtherCampaigner) {
       return [];
     }
@@ -479,7 +752,7 @@ export function WeeklyTaskBoard() {
         .map((t) => t.google_calendar_event_id as string),
     );
     return calendarEvents.filter((event) => !syncedEventIds.has(event.id));
-  }, [calendarEvents, tasks, filters.campaignerId, dateRange, primaryCampaignerId]);
+  }, [calendarEvents, tasks, effectiveCampaignerFilter, dateRange, primaryCampaignerId]);
 
   const { data: firstAgency } = useQuery({
     queryKey: ["first-agency", tenantId],
@@ -508,6 +781,10 @@ export function WeeklyTaskBoard() {
       campaignerId,
       selfReminderAt,
       targetDate,
+      recurrenceFrequency,
+      recurrenceWeekday,
+      recurrenceMonthday,
+      collaboratorIds,
     }: {
       title: string;
       date: Date | null;
@@ -516,6 +793,10 @@ export function WeeklyTaskBoard() {
       campaignerId?: string | null;
       selfReminderAt?: string | null;
       targetDate?: string | null;
+      recurrenceFrequency?: "daily" | "weekly" | "monthly" | null;
+      recurrenceWeekday?: number | null;
+      recurrenceMonthday?: number | null;
+      collaboratorIds?: string[];
     }) => {
       if (!tenantId) throw new Error("TENANT_NOT_READY");
       // A task attached to a client must carry that client's agency, otherwise
@@ -542,30 +823,89 @@ export function WeeklyTaskBoard() {
         priority: 5,
         tenant_id: tenantId,
         agency_id: agencyId,
-        created_by: user?.id || null,
+        created_by: boardUserId,
+        ...(isViewingAs && authenticatedUserId
+          ? { impersonated_by: authenticatedUserId }
+          : {}),
         campaigner_id: assignedCampaignerId,
         sales_person_id: assignedCampaignerId ? null : assignedSalesPersonId,
         client_id: clientId ?? null,
       };
+      // Only send recurrence columns when configured — avoids insert failures
+      // before the recurring-tasks migration has been applied.
+      if (recurrenceFrequency) {
+        insertData.recurrence_frequency = recurrenceFrequency;
+        insertData.recurrence_interval = 1;
+        insertData.recurrence_weekday =
+          recurrenceFrequency === "weekly" ? recurrenceWeekday ?? null : null;
+        insertData.recurrence_monthday =
+          recurrenceFrequency === "monthly" ? recurrenceMonthday ?? null : null;
+      }
       if (selfReminderAt) {
         insertData.self_reminder_at = selfReminderAt;
       }
       if (targetDate) {
         insertData.target_date = targetDate;
       }
-      if (validDate) {
-        insertData.due_date = format(validDate, "yyyy-MM-dd");
-        // Only save time if we have a valid date
+      let taskDueDate = validDate;
+      if (!taskDueDate && recurrenceFrequency) {
+        const first = computeFirstOccurrenceDate({
+          frequency: recurrenceFrequency as RecurrenceFrequency,
+          weekday: recurrenceWeekday,
+          monthday: recurrenceMonthday,
+        });
+        taskDueDate = first;
+      }
+      if (taskDueDate) {
+        insertData.due_date = format(taskDueDate, "yyyy-MM-dd");
         if (time) {
           insertData.due_time = time + ":00";
         }
       }
       // Note: time without date is not saved to prevent orphaned times
-      const { data: newTask, error } = await supabase.from("tasks").insert(insertData).select().single();
-      if (error) throw error;
+      const assigneeIds = collectTaskAssigneeIds(assignedCampaignerId, collaboratorIds);
+      const fanOut = shouldFanOutRecurringTasks(recurrenceFrequency, assigneeIds);
+
+      let newTask: { id: string } | null = null;
+      if (fanOut) {
+        const payloads = assigneeIds.map((campaignerId) => ({
+          ...insertData,
+          campaigner_id: campaignerId,
+          sales_person_id: null,
+        }));
+        const { data: createdTasks, error } = await supabase
+          .from("tasks")
+          .insert(payloads)
+          .select("id");
+        if (error) throw error;
+        newTask = createdTasks?.[0] ?? null;
+      } else {
+        const { data: created, error } = await supabase
+          .from("tasks")
+          .insert(insertData)
+          .select()
+          .single();
+        if (error) throw error;
+        newTask = created;
+
+        const uniqueCollaborators = Array.from(
+          new Set((collaboratorIds || []).filter((id) => id && id !== assignedCampaignerId)),
+        );
+        if (uniqueCollaborators.length > 0) {
+          const { error: collabError } = await supabase.from("task_collaborators").insert(
+            uniqueCollaborators.map((campaignerCollaboratorId) => ({
+              task_id: newTask!.id,
+              campaigner_id: campaignerCollaboratorId,
+              tenant_id: tenantId,
+              added_by: boardUserId,
+            })),
+          );
+          if (collabError) throw collabError;
+        }
+      }
 
       // אם יש תאריך ושעה - יצור גם אירוע ביומן גוגל ושמור את ה-eventId
-      if (validDate && time) {
+      if (!fanOut && validDate && time && newTask) {
         try {
           const startDateTime = new Date(`${format(validDate, "yyyy-MM-dd")}T${time}:00`);
           const endDateTime = new Date(startDateTime.getTime() + 30 * 60000); // 30 דקות
@@ -593,22 +933,35 @@ export function WeeklyTaskBoard() {
         }
       }
       
-      return newTask;
+      return fanOut ? { fanOutCount: assigneeIds.length, newTask } : newTask;
     },
-    onSuccess: (newTask) => {
+    onSuccess: (result) => {
+      const fanOutCount =
+        result && typeof result === "object" && "fanOutCount" in result
+          ? (result as { fanOutCount: number }).fanOutCount
+          : null;
+      const newTask =
+        result && typeof result === "object" && "newTask" in result
+          ? (result as { newTask: typeof result }).newTask
+          : result;
+
       // Optimistic add so the user sees it immediately even if filters are restrictive
-      setLocalTasks(prev => {
-        if (!newTask) return prev;
-        return prev.some(t => t.id === (newTask as any).id) ? prev : [newTask as any, ...prev];
-      });
+      if (newTask && typeof newTask === "object" && "id" in newTask) {
+        setLocalTasks((prev) => {
+          if (!newTask) return prev;
+          return prev.some((t) => t.id === (newTask as any).id) ? prev : [newTask as any, ...prev];
+        });
+      }
 
       queryClient.invalidateQueries({ queryKey: ["tasks", tenantId] });
       queryClient.invalidateQueries({ queryKey: ["calendar-events-weekly", tenantId] });
-      toast.success("משימה נוספה");
+      toast.success(
+        fanOutCount ? `נוצרו ${fanOutCount} משימות חוזרות — אחת לכל איש צוות` : "משימה נוספה",
+      );
     },
     onError: (error) => {
       console.error("[addTask] failed", error);
-      const msg = (error as any)?.message;
+      const msg = (error as any)?.message as string | undefined;
       if (msg === "TENANT_NOT_READY") {
         toast.error("המערכת עדיין נטענת, נסי שוב בעוד רגע");
         return;
@@ -617,7 +970,11 @@ export function WeeklyTaskBoard() {
         toast.error("לא נמצאה סוכנות בארגון – אי אפשר להוסיף משימה");
         return;
       }
-      toast.error("שגיאה בהוספת משימה");
+      if (msg && /recurrence_/i.test(msg)) {
+        toast.error("עמודות משימה חוזרת עדיין לא זמינות בדאטהבייס — אפשר להוסיף משימה רגילה בינתיים");
+        return;
+      }
+      toast.error(msg ? `שגיאה בהוספת משימה: ${msg}` : "שגיאה בהוספת משימה");
     },
   });
 
@@ -660,6 +1017,10 @@ export function WeeklyTaskBoard() {
       campaignerId: payload.campaignerId,
       selfReminderAt: payload.selfReminderAt,
       targetDate: payload.targetDate,
+      recurrenceFrequency: payload.recurrenceFrequency,
+      recurrenceWeekday: payload.recurrenceWeekday,
+      recurrenceMonthday: payload.recurrenceMonthday,
+      collaboratorIds: payload.collaboratorIds,
     });
   };
 
@@ -1141,9 +1502,13 @@ export function WeeklyTaskBoard() {
   // Split tasks: backlog (overdue + unscheduled + untimed) vs scheduled in range
   const today = startOfDay(new Date());
   
-  // Backlog includes: overdue, no due_date, or has due_date but no due_time
+  // Backlog includes: overdue, no due_date, or has due_date but no due_time.
+  // Recurring tasks only appear here on their due day (not all week).
   const backlogTasks = tasks.filter((t) => {
     if (t.status === "done") return false;
+    if (isRecurringBoardTask(t)) {
+      return recurringTaskBelongsInBacklog(t, today, filters.showAllRecurring);
+    }
     if (isTaskOverdue(t, today)) return true;
     if (t.due_date === null) return true;
     if (!t.due_time) return true;
@@ -1152,6 +1517,9 @@ export function WeeklyTaskBoard() {
 
   // Current range tasks: only those with both due_date AND due_time in range
   const currentRangeTasks = tasks.filter((t) => {
+    if (!shouldShowRecurringTaskOnBoard(t, { showAllRecurring: filters.showAllRecurring, asOf: today })) {
+      return false;
+    }
     if (t.due_date === null) return false;
     if (!t.due_time) return false; // No time = goes to backlog
     const dueDate = new Date(t.due_date);
@@ -1163,19 +1531,43 @@ export function WeeklyTaskBoard() {
   const dailyTasks = tasks.filter((t) => {
     if (!t.due_date) return false;
     if (t.status === "done") return false;
+    if (
+      !shouldShowRecurringTaskOnBoard(t, {
+        showAllRecurring: filters.showAllRecurring,
+        asOf: startOfDay(currentDate),
+      })
+    ) {
+      return false;
+    }
     const dueDate = new Date(t.due_date);
     const isToday = format(dueDate, "yyyy-MM-dd") === format(currentDate, "yyyy-MM-dd");
     // For daily view, include all tasks for that day regardless of time
     return isToday;
   });
 
-  // Count active filters (exclude campaigner since it has its own selector in toolbar)
   const activeFiltersCount = [
+    filters.campaignerId !== defaultTaskFilters.campaignerId,
     filters.taskType !== "all",
     filters.association !== "all",
-    filters.startDate !== undefined,
-    filters.endDate !== undefined,
+    filters.period !== "all",
+    filters.relatedKind !== "all",
+    filters.showAllRecurring,
   ].filter(Boolean).length;
+
+  const openFiltersDialog = (includeToolbar: boolean) => {
+    setFiltersIncludeToolbar(includeToolbar);
+    setFiltersDialogOpen(true);
+  };
+
+  const saveFilterPreset = (next?: TaskFilterState) => {
+    if (!user?.id || isViewingAs) {
+      toast.error("אי אפשר לשמור ברירת מחדל במצב צפייה כמשתמש אחר");
+      return;
+    }
+    const toSave = next && "campaignerId" in next ? next : filters;
+    writeTasksFilterPreset(user.id, toSave);
+    toast.success("ברירת המחדל נשמרה");
+  };
 
   const goToToday = () => {
     setCurrentDate(startOfDay(new Date()));
@@ -1204,6 +1596,7 @@ export function WeeklyTaskBoard() {
   const handleViewModeChange = (value: string) => {
     if (value) {
       setViewMode(value as ViewMode);
+      if (value === "chat") setMobileCalendarOpen(false);
     }
   };
 
@@ -1231,10 +1624,36 @@ export function WeeklyTaskBoard() {
     }
   };
 
+  const renderToolbarFilters = (layout: "inline" | "stacked" = "inline") => (
+    <TasksToolbarFilters
+      layout={layout}
+      campaignerFilter={effectiveCampaignerFilter}
+      onCampaignerFilterChange={(val) => setFilters((prev) => ({ ...prev, campaignerId: val }))}
+      campaignerFilterDisabled={isViewingAs}
+      campaignersList={campaignersList}
+      relatedKind={filters.relatedKind}
+      relatedId={filters.relatedId}
+      relatedLabel={filters.relatedLabel}
+      onRelatedChange={(related) => setFilters((prev) => ({ ...prev, ...related }))}
+      clientsList={clientsList ?? []}
+      leadsList={leadsList ?? []}
+      period={filters.period}
+      onPeriodChange={(period) => setFilters((prev) => ({ ...prev, period }))}
+      onSaveFilterPreset={() => saveFilterPreset()}
+      saveDisabled={isViewingAs}
+    />
+  );
+  const toolbarFilters = renderToolbarFilters();
+
   return (
     <div className="flex flex-col h-full min-h-0">
-      {/* Header - Desktop only - single compact row */}
-      <div className="hidden md:flex md:items-center md:justify-between mb-2 gap-3">
+      {isViewingAs && (
+        <div className="mb-2 rounded-md border border-warning/40 bg-warning/10 px-3 py-2 text-sm text-warning-foreground">
+          מציג משימות של <strong>{viewAsUserName}</strong> בלבד (שלי בלבד)
+        </div>
+      )}
+      {/* Header - Desktop: view toggles + open filters on one row */}
+      <div className="hidden md:flex md:items-center md:justify-between mb-2 gap-3 flex-wrap">
         <div className="flex items-center gap-3">
           <ToggleGroup
             type="single"
@@ -1242,6 +1661,10 @@ export function WeeklyTaskBoard() {
             onValueChange={handleViewModeChange}
             className="border rounded-lg"
           >
+            <ToggleGroupItem value="chat" aria-label="תצוגת צ'אט" className="gap-1 px-3">
+              <MessageSquare className="h-4 w-4" />
+              <span>צ'אט</span>
+            </ToggleGroupItem>
             <ToggleGroupItem value="daily" aria-label="תצוגה יומית" className="gap-1 px-3">
               <List className="h-4 w-4" />
               <span>יומי</span>
@@ -1256,120 +1679,206 @@ export function WeeklyTaskBoard() {
             </ToggleGroupItem>
           </ToggleGroup>
           <h2 className="text-lg font-semibold">
+            {viewMode === "chat" && "משימות"}
             {viewMode === "daily" && format(currentDate, "EEEE, dd MMMM yyyy", { locale: he })}
             {viewMode === "weekly" && format(currentDate, "MMMM yyyy", { locale: he })}
             {viewMode === "monthly" && format(currentDate, "MMMM yyyy", { locale: he })}
           </h2>
+          {viewMode === "chat" && (
+            <TasksChatSearchInput
+              value={chatListSearch}
+              onChange={setChatListSearch}
+              className="w-[200px] shrink-0"
+            />
+          )}
         </div>
 
-        <div className="flex items-center gap-2">
-          <Button variant="outline" size="icon" onClick={goToNext}>
+        <div className="flex items-center gap-1.5 flex-nowrap min-w-0 overflow-x-auto">
+          {viewMode !== "chat" && (
+            <>
+          <Button variant="outline" size="icon" className="h-8 w-8 shrink-0" onClick={goToNext}>
             <ChevronLeft className="h-4 w-4" />
           </Button>
-          <Button variant="outline" size="icon" onClick={goToPrev}>
+          <Button variant="outline" size="icon" className="h-8 w-8 shrink-0" onClick={goToPrev}>
             <ChevronRight className="h-4 w-4" />
           </Button>
-          <Button variant="outline" onClick={goToToday} className="gap-2">
-            <CalendarDays className="h-4 w-4" />
+          <Button variant="outline" onClick={goToToday} className="h-8 gap-1.5 px-2 text-xs shrink-0">
+            <CalendarDays className="h-3.5 w-3.5" />
             היום
           </Button>
-
-          {/* Filters popover */}
-          <Popover>
-            <PopoverTrigger asChild>
-              <Button variant="outline" className="gap-2 relative">
-                <Filter className="h-4 w-4" />
-                פילטרים
-                {(activeFiltersCount > 0 || filters.campaignerId !== "mine") && (
-                  <Badge variant="secondary" className="h-5 w-5 p-0 justify-center">
-                    {activeFiltersCount + (filters.campaignerId !== "mine" ? 1 : 0)}
-                  </Badge>
-                )}
-              </Button>
-            </PopoverTrigger>
-            <PopoverContent className="w-72 space-y-3" align="end">
-              <div className="space-y-2">
-                <label className="text-sm font-medium">{t('role_campaigner')}</label>
-                <Select
-                  value={filters.campaignerId}
-                  onValueChange={(val) => setFilters((prev) => ({ ...prev, campaignerId: val }))}
-                >
-                  <SelectTrigger className="w-full gap-2">
-                    <Users className="h-4 w-4 shrink-0" />
-                    <SelectValue placeholder={t('role_campaigner')} />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="mine">שלי בלבד</SelectItem>
-                    <SelectItem value="all">כל ה{t('role_campaigner', true)}</SelectItem>
-                    <SelectItem value="none">ללא שיוך</SelectItem>
-                    {campaignersList.map((c) => (
-                      <SelectItem key={c.id} value={c.id}>
-                        {c.full_name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <Button
-                variant="outline"
-                className="w-full gap-2"
-                onClick={() => setFiltersDialogOpen(true)}
-              >
-                <Filter className="h-4 w-4" />
-                פילטרים מתקדמים
-                {activeFiltersCount > 0 && (
-                  <Badge variant="secondary" className="h-5 w-5 p-0 justify-center">
-                    {activeFiltersCount}
-                  </Badge>
-                )}
-              </Button>
-              <Button
-                variant="outline"
-                className="w-full gap-2"
-                onClick={() => syncToCalendar.mutate()}
-                disabled={syncToCalendar.isPending}
-              >
-                <RefreshCw className={`h-4 w-4 ${syncToCalendar.isPending ? 'animate-spin' : ''}`} />
-                סנכרן ליומן
-              </Button>
-            </PopoverContent>
-          </Popover>
+            </>
+          )}
+          {toolbarFilters}
+          <Button
+            variant="outline"
+            className="h-8 gap-1.5 px-2 relative shrink-0 text-xs"
+            onClick={() => openFiltersDialog(false)}
+          >
+            <Filter className="h-3.5 w-3.5" />
+            מתקדם
+            {activeFiltersCount > 0 && (
+              <Badge variant="secondary" className="h-4 w-4 p-0 justify-center text-[10px]">
+                {activeFiltersCount}
+              </Badge>
+            )}
+          </Button>
+          {viewMode !== "chat" && (
+            calendarConnected ? (
+            <Button
+              variant="outline"
+              className="h-8 gap-1.5 px-2 text-xs shrink-0"
+              onClick={() => syncToCalendar.mutate()}
+              disabled={syncToCalendar.isPending}
+            >
+              <RefreshCw className={`h-3.5 w-3.5 ${syncToCalendar.isPending ? "animate-spin" : ""}`} />
+              סנכרן
+            </Button>
+            ) : (
+            <Button
+              className="h-8 gap-1.5 px-2 text-xs shrink-0 bg-emerald-600 text-white hover:bg-emerald-500"
+              onClick={() => void handleConnectCalendar()}
+              disabled={connectingCalendar}
+            >
+              <CalendarDays className={`h-3.5 w-3.5 ${connectingCalendar ? "animate-pulse" : ""}`} />
+              {connectingCalendar ? "מתחבר..." : "חבר יומן"}
+            </Button>
+            )
+          )}
         </div>
       </div>
 
+      {viewMode !== "chat" && calendarStatus && !calendarConnected && (
+        <div className="mb-2 rounded-md border border-emerald-500/30 bg-emerald-50 px-3 py-2 text-sm flex items-center justify-between gap-3 flex-wrap">
+          <span className="text-emerald-950">
+            היומן לא מחובר. חבר Google Calendar מכאן כדי לראות אירועים ליד המשימות.
+          </span>
+          <Button
+            size="sm"
+            className="h-8 gap-1.5 bg-emerald-600 text-white hover:bg-emerald-500"
+            onClick={() => void handleConnectCalendar()}
+            disabled={connectingCalendar}
+          >
+            <CalendarDays className="h-4 w-4" />
+            {connectingCalendar ? "מתחבר..." : "חבר יומן"}
+          </Button>
+        </div>
+      )}
+
       {/* Board with Overdue Panel */}
       <div className="flex-1 min-h-0 flex flex-col overflow-hidden">
+      {viewMode === "chat" ? (
+        <>
+          <div className="flex flex-col md:hidden gap-2 shrink-0">
+            <div className="flex items-center gap-2 justify-between">
+              <div className="flex items-center gap-2 min-w-0">
+                <h1 className="text-xl font-bold shrink-0">משימות</h1>
+                <TasksChatSearchInput
+                  value={chatListSearch}
+                  onChange={setChatListSearch}
+                  className="w-[140px] min-w-0 flex-1"
+                />
+              </div>
+              <div className="flex items-center gap-1.5 shrink-0">
+                <Button
+                  variant="outline"
+                  size="icon"
+                  onClick={() => openFiltersDialog(true)}
+                  className="relative h-9 w-9"
+                  aria-label="פילטרים"
+                >
+                  <Filter className="h-4 w-4" />
+                  {activeFiltersCount > 0 && (
+                    <Badge variant="secondary" className="absolute -top-1 -right-1 h-4 w-4 p-0 justify-center text-[10px]">
+                      {activeFiltersCount}
+                    </Badge>
+                  )}
+                </Button>
+                <Button
+                  variant="outline"
+                  size="icon"
+                  className="h-9 w-9"
+                  onClick={() => setViewMode("weekly")}
+                  aria-label="תצוגת יומן"
+                  title="יומן"
+                >
+                  <CalendarDays className="h-5 w-5" />
+                </Button>
+              </div>
+            </div>
+          </div>
+          <div className="flex-1 min-h-0 h-full">
+            <TasksChatView
+              tasks={tasks}
+              selectedTaskId={selectedTask?.id ?? null}
+              onSelectTask={(task) => {
+                setSelectedTask(task);
+                if (!task && linkedTaskId) {
+                  const next = new URLSearchParams(searchParams);
+                  next.delete("task");
+                  setSearchParams(next, { replace: true });
+                }
+              }}
+              onToggleComplete={(taskId, completed) =>
+                toggleComplete.mutate({ taskId, completed })
+              }
+              onDelete={(taskId, googleCalendarEventId) =>
+                deleteTask.mutate({ taskId, googleCalendarEventId })
+              }
+              onMoveToBacklog={(taskId) => {
+                setLocalTasks((prev) =>
+                  prev.map((t) =>
+                    t.id === taskId ? { ...t, due_date: null, due_time: null } : t
+                  )
+                );
+                updateDueDate.mutate({
+                  taskId,
+                  newDate: null,
+                  newTime: null,
+                  title: selectedTask?.title,
+                  googleCalendarEventId: selectedTask?.google_calendar_event_id,
+                });
+                toast.success("המשימה הועברה לרשימת המשימות");
+              }}
+              onAddTask={handleBacklogAddTask}
+              isLoading={isLoading || addTask.isPending || !canQuickAddTask}
+              clientsList={clientsList}
+              campaignersList={campaignersList}
+              defaultCampaignerId={primaryCampaignerId}
+              openClosedFilter={filters.openClosed}
+              onOpenClosedFilterChange={(openClosed) =>
+                setFilters((prev) => ({ ...prev, openClosed }))
+              }
+              showAllRecurring={filters.showAllRecurring}
+              onShowAllRecurringChange={(showAllRecurring) =>
+                setFilters((prev) => ({ ...prev, showAllRecurring }))
+              }
+              listSearch={chatListSearch}
+              onListSearchChange={setChatListSearch}
+              hideListSearch
+            />
+          </div>
+        </>
+      ) : (
       <DndContext sensors={sensors} onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
         {/* Mobile Layout — full task list by default; calendar opens from icon only */}
         <div className="flex flex-col md:hidden gap-2 flex-1 min-h-0 overflow-hidden">
-          <div className="flex flex-wrap items-center gap-2 justify-between shrink-0">
-            <Select
-              value={filters.campaignerId}
-              onValueChange={(val) => setFilters((prev) => ({ ...prev, campaignerId: val }))}
-            >
-              <SelectTrigger className="w-full gap-2">
-                <Users className="h-4 w-4 shrink-0" />
-                <SelectValue placeholder={t('role_campaigner')} />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="mine">שלי בלבד</SelectItem>
-                <SelectItem value="all">כל ה{t('role_campaigner', true)}</SelectItem>
-                <SelectItem value="none">ללא שיוך</SelectItem>
-                {campaignersList.map((c) => (
-                  <SelectItem key={c.id} value={c.id}>
-                    {c.full_name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
           <div className="flex items-center gap-2 justify-between shrink-0">
             <h1 className="text-xl font-bold">משימות</h1>
             <div className="flex items-center gap-2">
               <Button
                 variant="outline"
                 size="icon"
-                onClick={() => setFiltersDialogOpen(true)}
+                onClick={() => setViewMode("chat")}
+                aria-label="תצוגת צ'אט"
+                title="תצוגת צ'אט"
+                className="shrink-0"
+              >
+                <MessageSquare className="h-5 w-5" />
+              </Button>
+              <Button
+                variant="outline"
+                size="icon"
+                onClick={() => openFiltersDialog(true)}
                 className="relative"
                 aria-label="פילטרים"
               >
@@ -1451,6 +1960,9 @@ export function WeeklyTaskBoard() {
                       onValueChange={handleViewModeChange}
                       className="border rounded-lg"
                     >
+                      <ToggleGroupItem value="chat" aria-label="תצוגת צ'אט" className="px-2">
+                        <MessageSquare className="h-4 w-4" />
+                      </ToggleGroupItem>
                       <ToggleGroupItem value="daily" aria-label="תצוגה יומית" className="px-2">
                         <List className="h-4 w-4" />
                       </ToggleGroupItem>
@@ -1622,9 +2134,11 @@ export function WeeklyTaskBoard() {
           ) : null}
         </DragOverlay>
       </DndContext>
+      )}
       </div>
 
-      {/* Task Detail Dialog */}
+      {/* Task Detail Dialog — calendar views only; chat view embeds the panel */}
+      {viewMode !== "chat" && (
       <TaskDetailDialog
         task={selectedTask}
         open={dialogOpen}
@@ -1655,6 +2169,7 @@ export function WeeklyTaskBoard() {
           toast.success("המשימה הועברה לרשימת המשימות");
         }}
       />
+      )}
 
       {/* Calendar Event Edit Dialog */}
       <CalendarEventEditDialog
@@ -1688,7 +2203,10 @@ export function WeeklyTaskBoard() {
             priority: 5,
             tenant_id: tenantId,
             agency_id: agencyId,
-            created_by: user?.id || null,
+            created_by: boardUserId,
+        ...(isViewingAs && authenticatedUserId
+          ? { impersonated_by: authenticatedUserId }
+          : {}),
             campaigner_id: myCampaignerId,
             sales_person_id: myCampaignerId ? null : mySalesPersonId,
             due_date: data.dueDate,
@@ -1713,6 +2231,7 @@ export function WeeklyTaskBoard() {
         onOpenChange={setFiltersDialogOpen}
         currentFilters={filters}
         onApply={(next) => setFilters(next)}
+        toolbarFilters={filtersIncludeToolbar ? renderToolbarFilters("stacked") : undefined}
       />
 
       {/* Quick Add Task Dialog (double-click on slot) */}

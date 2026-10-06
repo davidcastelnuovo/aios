@@ -69,12 +69,20 @@ function getDateRange(filter: string, integrationType?: string | null): { startD
       startDate = new Date(Date.UTC(y, m, d - 30)).toISOString().split("T")[0];
       endDate = yesterdayStr;
       break;
+    case "last_60_days":
+      startDate = new Date(Date.UTC(y, m, d - 60)).toISOString().split("T")[0];
+      endDate = yesterdayStr;
+      break;
     case 'last_70_days':
       startDate = new Date(Date.UTC(y, m, d - 70)).toISOString().split("T")[0];
       endDate = yesterdayStr;
       break;
     case "last_90_days":
       startDate = new Date(Date.UTC(y, m, d - 90)).toISOString().split("T")[0];
+      endDate = yesterdayStr;
+      break;
+    case "last_120_days":
+      startDate = new Date(Date.UTC(y, m, d - 120)).toISOString().split("T")[0];
       endDate = yesterdayStr;
       break;
     case "last_180_days":
@@ -356,12 +364,13 @@ Deno.serve(async (req) => {
         const seoSettings = (seoTable?.integration_settings as any) || {};
         const linkedGaTableId = seoSettings.linkedGaTableId || null;
         const linkedGscTableId = seoSettings.linkedGscTableId || null;
-        seoLinkedGscSiteUrl = seoSettings.linkedGscSiteUrl || null;
+        seoLinkedGscSiteUrl = seoSettings.linkedGscSiteUrl || seoSettings.gsc_site_url || null;
         seoTargetClientId = seoSettings.clientId || seoSettings.client_id || dashboard.client_id || null;
         seoTargetDomain =
           seoSettings.targetDomain ||
           seoSettings.domain ||
           seoSettings.linkedGscSiteUrl ||
+          seoSettings.gsc_site_url ||
           null;
 
         const accessibleTenantIds = new Set<string>();

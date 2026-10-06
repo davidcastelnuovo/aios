@@ -17,7 +17,7 @@ interface ResizableTaskItemProps {
     creator_name?: string | null;
     clients?: { name: string } | null;
     task_updates?: { id: string }[];
-    task_collaborators?: { id: string }[];
+    task_collaborators?: { id?: string; campaigner_id?: string }[];
   };
   onToggleComplete: (taskId: string, completed: boolean) => void;
   onClick: () => void;

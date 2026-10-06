@@ -110,6 +110,7 @@ function AgentTabsWithUrl({ agent }: { agent: any }) {
         { value: "registry", label: "📚 מאגר כלים" },
         { value: "mcp", label: "🔌 MCP" },
         { value: "supervisor", label: "👑 Supervisor" },
+        ...(carmen ? [{ value: "conversation-access", label: "📱 הרשאות WhatsApp" as const }] : []),
       ],
     },
     {

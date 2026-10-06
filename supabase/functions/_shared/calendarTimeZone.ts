@@ -103,8 +103,18 @@ export function getJerusalemDashboardDateRange(
       return { startDate: shiftYmd(today, -14), endDate: shiftYmd(today, -1) };
     case "last_30_days":
       return { startDate: shiftYmd(today, -30), endDate: shiftYmd(today, -1) };
+    case "last_60_days":
+      return { startDate: shiftYmd(today, -60), endDate: shiftYmd(today, -1) };
     case "last_70_days":
       return { startDate: shiftYmd(today, -70), endDate: shiftYmd(today, -1) };
+    case "last_90_days":
+      return { startDate: shiftYmd(today, -90), endDate: shiftYmd(today, -1) };
+    case "last_120_days":
+      return { startDate: shiftYmd(today, -120), endDate: shiftYmd(today, -1) };
+    case "last_180_days":
+      return { startDate: shiftYmd(today, -180), endDate: shiftYmd(today, -1) };
+    case "last_365_days":
+      return { startDate: shiftYmd(today, -365), endDate: shiftYmd(today, -1) };
     case "this_month":
       return { startDate: `${today.slice(0, 7)}-01`, endDate: today };
     case "last_month": {

@@ -33,9 +33,25 @@ export const getExplicitLeadFieldsFromData = (data: any) =>
   Number(data?.offsite_conversion_fb_pixel_lead) ||
   0;
 
+export const getMessagingLeadsFromData = (data: any) => {
+  const conversations =
+    Number(data?.conversations) ||
+    Number(data?.messages) ||
+    Number(data?.messaging_conversations) ||
+    0;
+  if (conversations > 0) return conversations;
+  const resultKind = String(data?.result_kind || '').toLowerCase();
+  if (['conversations', 'messages', 'messaging_conversations'].includes(resultKind)) {
+    const results = Number(data?.results);
+    if (results > 0) return results;
+  }
+  return 0;
+};
+
 export const getLeadsFromData = (data: any) =>
   Number(data?.leads) ||
   getFacebookFormLeadsFromData(data) ||
+  getMessagingLeadsFromData(data) ||
   Number(data?.conversions) ||
   Number(data?.website_leads) ||
   Number(data?.offsite_conversion) ||
@@ -112,8 +128,29 @@ export function isFacebookEcommerceCampaign(data: FacebookCampaignRow): boolean 
   );
 }
 
+export function isFacebookMessagingLeadRecord(data: any): boolean {
+  const name = String(data?.campaign_name || data?.campaign || data?.name || '');
+  if (/whatsapp|ווטסאפ|וואטסאפ|מסנג|messenger|click.?to.?message/i.test(name)) return true;
+  const optimization = String(data?.optimization_goal || '').toUpperCase();
+  if (/MESSAGE|CONVERSATION|WHATSAPP|MESSENGER/.test(optimization)) return true;
+  const resultKind = String(data?.result_kind || '').toLowerCase();
+  if (['conversations', 'messages', 'messaging_conversations'].includes(resultKind)) return true;
+  const objective = String(data?.campaign_objective || data?.objective || '').toUpperCase();
+  if (/OUTCOME_ENGAGEMENT|MESSAGES/.test(objective) && getMessagingLeadsFromData(data) > 0) return true;
+  if (/OUTCOME_ENGAGEMENT|MESSAGES/.test(objective) && /whatsapp|ווטסאפ|וואטסאפ/i.test(name)) return true;
+  return false;
+}
+
+/** Stored rows may still say traffic until the next Meta sync — WhatsApp/messaging belongs in leads. */
+export function effectiveFacebookCampaignType(data: any): 'lead' | 'ecommerce' | 'traffic' | 'other' {
+  const rowType = String(data?.campaign_type || '').toLowerCase();
+  if (rowType === 'traffic' && isFacebookMessagingLeadRecord(data)) return 'lead';
+  if (rowType === 'ecommerce' || rowType === 'lead' || rowType === 'traffic') return rowType;
+  return 'other';
+}
+
 export function isFacebookTrafficCampaign(data: FacebookCampaignRow): boolean {
-  return String(data.campaign_type || '').toLowerCase() === 'traffic';
+  return effectiveFacebookCampaignType(data) === 'traffic';
 }
 
 /**
@@ -178,7 +215,7 @@ export function aggregateFacebookCampaignsFromRecords(
     map[name].purchases += getAdsPurchasesFromData(d);
     map[name].purchase_value += getRevenueFromData(d);
     map[name].add_to_cart += getAddToCartFromData(d);
-    const rowType = String(d.campaign_type || '').toLowerCase();
+    const rowType = effectiveFacebookCampaignType(d);
     if (rowType === 'ecommerce' || rowType === 'lead' || rowType === 'traffic') {
       map[name].campaign_type = rowType;
     }
@@ -191,7 +228,7 @@ export type FacebookRecordKind = 'ecommerce' | 'leads' | 'traffic';
 
 /** Mirrors DynamicTableView campaign split — per row before aggregation. */
 export function classifyFacebookRecord(data: any): FacebookRecordKind {
-  const rowType = String(data?.campaign_type || '').toLowerCase();
+  const rowType = effectiveFacebookCampaignType(data);
   if (rowType === 'traffic') return 'traffic';
   if (rowType === 'ecommerce') return 'ecommerce';
 

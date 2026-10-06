@@ -68,6 +68,37 @@ export default function ManusWhatsAppSettings() {
     enabled: !!tenantId && !!userId,
   });
 
+  const instanceIds = integrations
+    .map((i) => i.settings?.instance_id as string | undefined)
+    .filter((id): id is string => !!id);
+
+  // Outbound works with just instance id + API key; inbound needs the webhook configured
+  // on the Manus side. Surface the difference instead of failing silently.
+  const { data: lastInboundByInstance = {} } = useQuery({
+    queryKey: ["manus-wa-inbound-health", tenantId, instanceIds.join(",")],
+    enabled: !!tenantId && instanceIds.length > 0,
+    refetchInterval: 60_000,
+    queryFn: async () => {
+      const since = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
+      const entries = await Promise.all(
+        instanceIds.map(async (instanceId) => {
+          const { data } = await supabase
+            .from("chat_messages")
+            .select("created_at")
+            .eq("tenant_id", tenantId!)
+            .eq("provider", "manus_wa")
+            .eq("direction", "inbound")
+            .eq("raw_provider_data->>instanceId", instanceId)
+            .gte("created_at", since)
+            .order("created_at", { ascending: false })
+            .limit(1);
+          return [instanceId, data?.[0]?.created_at || null] as const;
+        }),
+      );
+      return Object.fromEntries(entries) as Record<string, string | null>;
+    },
+  });
+
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState({
@@ -274,6 +305,8 @@ export default function ManusWhatsAppSettings() {
             const status = s.status as string | undefined;
             const phone = s.phone_number as string | undefined;
             const isConnected = status === "CONNECTED";
+            const lastInbound = s.instance_id ? lastInboundByInstance[s.instance_id] : null;
+            const inboundOk = !!lastInbound;
             return (
               <Card key={i.id} className={isConnected ? "border-emerald-500/20" : ""}>
                 <CardHeader>
@@ -283,6 +316,13 @@ export default function ManusWhatsAppSettings() {
                       <CardTitle className="text-xl">{i.display_name || "ללא שם"}</CardTitle>
                       {status && <Badge variant={isConnected ? "default" : "secondary"}>{status}</Badge>}
                       {phone && <Badge variant="outline" dir="ltr">{phone}</Badge>}
+                      {s.instance_id && (
+                        <Badge variant={inboundOk ? "outline" : "destructive"}>
+                          {inboundOk
+                            ? `הודעות נכנסות · ${new Date(lastInbound!).toLocaleString("he-IL")}`
+                            : "אין הודעות נכנסות"}
+                        </Badge>
+                      )}
                     </div>
                     <div className="flex gap-2">
                       <Button variant="outline" size="sm" onClick={() => statusMutation.mutate(i.id)} disabled={statusMutation.isPending}>
@@ -310,6 +350,18 @@ export default function ManusWhatsAppSettings() {
                   </div>
                 </CardHeader>
                 <CardContent className="space-y-3 text-sm">
+                  {s.instance_id && !inboundOk && (
+                    <Alert variant="destructive">
+                      <AlertCircle className="h-4 w-4" />
+                      <AlertDescription>
+                        לא התקבלה אף הודעה נכנסת בשבוע האחרון. שליחה עובדת עם ה-Instance ID וה-API Key בלבד,
+                        אבל קבלה דורשת Webhook בצד Manus: בדשבורד של Manus → Instance{" "}
+                        <code dir="ltr">{s.instance_id}</code> → טאב Webhook, הזן את ה-Webhook URL מהכרטיס העליון ואת
+                        ה-Webhook Secret שבכרטיס הזה, וסמן{" "}
+                        <strong>message</strong> ו-<strong>message_ack</strong>.
+                      </AlertDescription>
+                    </Alert>
+                  )}
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                     <div>
                       <Label className="text-xs text-muted-foreground">Instance ID</Label>

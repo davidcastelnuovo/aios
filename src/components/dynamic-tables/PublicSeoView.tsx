@@ -266,21 +266,21 @@ export function PublicSeoView({
 
   return (
     <div className="space-y-5" dir="rtl">
-      <div className="flex items-center justify-between flex-wrap gap-2">
-        <div className="flex items-center gap-3">
-          <Globe className="h-5 w-5 text-primary" />
-          <span className="font-semibold text-lg">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div className="flex flex-wrap items-center gap-2 min-w-0">
+          <Globe className="h-5 w-5 text-primary shrink-0" />
+          <span className="font-semibold text-base sm:text-lg break-words">
             {reportData?.domain || selectedReport?.domain || tableName}
           </span>
           {reportData?.project_name && <Badge variant="outline">{reportData.project_name}</Badge>}
         </div>
-        <div className="flex items-center gap-2 text-sm text-muted-foreground">
+        <div className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground w-full sm:w-auto min-w-0">
            {validReports.length > 1 && (
             <Select
               value={selectedReport?.id || ""}
               onValueChange={(val) => setSelectedReportId(val)}
             >
-              <SelectTrigger className="w-[200px] h-8 text-xs">
+              <SelectTrigger className="w-full min-w-0 sm:w-[200px] h-8 text-xs">
                 <SelectValue placeholder="בחר תאריך דוח" />
               </SelectTrigger>
               <SelectContent>

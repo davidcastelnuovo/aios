@@ -1,5 +1,24 @@
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
+import {
+  pickExistingTeamMember,
+  type TeamMemberCandidate,
+} from "../_shared/team-member-match.ts";
+
+async function findExistingStaff(
+  supabaseAdmin: ReturnType<typeof createClient>,
+  table: "campaigners" | "sales_people",
+  tenantId: string,
+  email?: string | null,
+  fullName?: string | null,
+): Promise<TeamMemberCandidate | null> {
+  const { data, error } = await supabaseAdmin
+    .from(table)
+    .select("id, email, full_name, active, created_at")
+    .eq("tenant_id", tenantId);
+  if (error || !data) return null;
+  return pickExistingTeamMember(data as TeamMemberCandidate[], { email, fullName });
+}
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -136,33 +155,31 @@ serve(async (req: Request) => {
             // Check if there's an existing sales_person in this tenant with same email
             let salesPersonId: string | null = null;
             
-            if (profile.email) {
-              const { data: existingSalesPerson } = await supabaseAdmin
-                .from("sales_people")
-                .select("id, email, full_name")
-                .eq("tenant_id", tenantId)
-                .eq("email", profile.email)
-                .eq("active", true)
-                .maybeSingle();
+            const existingSalesPerson = await findExistingStaff(
+              supabaseAdmin,
+              "sales_people",
+              tenantId,
+              profile.email,
+              profile.full_name,
+            );
 
-              if (existingSalesPerson) {
-                salesPersonId = existingSalesPerson.id;
-                reusedExisting = true;
+            if (existingSalesPerson) {
+              salesPersonId = existingSalesPerson.id;
+              reusedExisting = true;
 
-                // ודא שלאיש המכירות הקיים יש email/full_name (סנכרון מהפרופיל אם חסר)
-                const spPatch: Record<string, any> = {};
-                if (!existingSalesPerson.email && profile.email) spPatch.email = profile.email;
-                if (
-                  (!existingSalesPerson.full_name ||
-                    existingSalesPerson.full_name === "" ||
-                    existingSalesPerson.full_name === "איש מכירות") &&
-                  profile.full_name
-                ) {
-                  spPatch.full_name = profile.full_name;
-                }
-                if (Object.keys(spPatch).length > 0) {
-                  await supabaseAdmin.from("sales_people").update(spPatch).eq("id", salesPersonId);
-                }
+              const spPatch: Record<string, any> = {};
+              if (!existingSalesPerson.email && profile.email) spPatch.email = profile.email;
+              if (
+                (!existingSalesPerson.full_name ||
+                  existingSalesPerson.full_name === "" ||
+                  existingSalesPerson.full_name === "איש מכירות") &&
+                profile.full_name
+              ) {
+                spPatch.full_name = profile.full_name;
+              }
+              if (existingSalesPerson.active === false) spPatch.active = true;
+              if (Object.keys(spPatch).length > 0) {
+                await supabaseAdmin.from("sales_people").update(spPatch).eq("id", salesPersonId);
               }
             }
 
@@ -245,33 +262,31 @@ serve(async (req: Request) => {
             // Check if there's an existing campaigner in this tenant with same email
             let campaignerId: string | null = null;
 
-            if (profile.email) {
-              const { data: existingCampaigner } = await supabaseAdmin
-                .from("campaigners")
-                .select("id, email, full_name")
-                .eq("tenant_id", tenantId)
-                .eq("email", profile.email)
-                .eq("active", true)
-                .maybeSingle();
+            const existingCampaigner = await findExistingStaff(
+              supabaseAdmin,
+              "campaigners",
+              tenantId,
+              profile.email,
+              profile.full_name,
+            );
 
-              if (existingCampaigner) {
-                campaignerId = existingCampaigner.id;
-                reusedExisting = true;
+            if (existingCampaigner) {
+              campaignerId = existingCampaigner.id;
+              reusedExisting = true;
 
-                // ודא שלקמפיינר הקיים יש email/full_name (סנכרון מהפרופיל אם חסר)
-                const cPatch: Record<string, any> = {};
-                if (!existingCampaigner.email && profile.email) cPatch.email = profile.email;
-                if (
-                  (!existingCampaigner.full_name ||
-                    existingCampaigner.full_name === "" ||
-                    existingCampaigner.full_name === "קמפיינר") &&
-                  profile.full_name
-                ) {
-                  cPatch.full_name = profile.full_name;
-                }
-                if (Object.keys(cPatch).length > 0) {
-                  await supabaseAdmin.from("campaigners").update(cPatch).eq("id", campaignerId);
-                }
+              const cPatch: Record<string, any> = {};
+              if (!existingCampaigner.email && profile.email) cPatch.email = profile.email;
+              if (
+                (!existingCampaigner.full_name ||
+                  existingCampaigner.full_name === "" ||
+                  existingCampaigner.full_name === "קמפיינר") &&
+                profile.full_name
+              ) {
+                cPatch.full_name = profile.full_name;
+              }
+              if (existingCampaigner.active === false) cPatch.active = true;
+              if (Object.keys(cPatch).length > 0) {
+                await supabaseAdmin.from("campaigners").update(cPatch).eq("id", campaignerId);
               }
             }
 

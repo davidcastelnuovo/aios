@@ -1,7 +1,8 @@
 /**
- * דשבורד בדיקת דופק — deterministic campaign pulse from campaign_pulse_snapshots.
- * Format matches Carmen's get_latest_campaign_pulse table.
+ * דשבורד בדיקת דופק — שכבה 1: נתוני קמפיין גולמיים מ-Meta/Google, מקובצים לפי לקוח
+ * וסוג קמפיין (לידים / אינגייג׳מנט / איקומרס) ללא רמזור או ניתוח.
  */
+/* eslint-disable @typescript-eslint/no-explicit-any */
 
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
@@ -18,10 +19,12 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "@/components/ui/popover";
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+  SheetTrigger,
+} from "@/components/ui/sheet";
 import {
   Select,
   SelectContent,
@@ -29,321 +32,97 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
 import { Card, CardContent } from "@/components/ui/card";
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { ChevronDown, ExternalLink, Filter, Link2, Pencil, RefreshCw, Search } from "lucide-react";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { AlertTriangle, ChevronDown, Facebook, Filter, LayoutGrid, Link2, RefreshCw, Search, Table2 } from "lucide-react";
+import { isFacebookIntegration, type AgencyPlatformFilter } from "@/lib/agencyCampaignData";
+import { PulseClientRawCard } from "@/components/pulse/PulseClientRawCard";
+import { PulseAttentionTable } from "@/components/pulse/PulseAttentionTable";
+import {
+  buildPlatformTargetPatch,
+  buildPulseAttentionRows,
+  type PulseAttentionClientContext,
+} from "@/lib/pulseAttentionMatrix";
+import { CarmenLoadingScreen } from "@/components/shared/CarmenLoadingScreen";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
-import { type OverallStatus } from "@/lib/healthScore";
-import {
-  PulseStatusOverrideDialog,
-  type PulseStatusOverrideTarget,
-} from "@/components/clients/PulseStatusOverrideDialog";
 import {
   PulseClientCallDialog,
   type PulseClientCallTarget,
 } from "@/components/clients/PulseClientCallDialog";
 import {
   buildPulseDashboardUrl,
-  clientHasCampaignService,
-  expandPulseToPlatformGoalRows,
+  clientHasCampaignCoverage,
+  collectCampaignBreakdownFromSnapshots,
+  fetchPulseCampaignDeliveryHints,
+  pulseMetaTablesNeedingDeliveryHints,
+  rehydrateCampaignBreakdownRows,
   applyClientCallToPulseSnapshot,
-  filterPulseCallFlags,
-  formatGoalChange,
-  formatGoalEfficiency,
-  formatGoalOutcomes,
-  formatLastClientCall,
-  formatMetaChangeDetails,
-  formatPulseMoney,
+  filterPulseCampaignRowsWithSpend,
+  fetchPulseCampaignRecords,
   getPulsePeriodBounds,
-  goalLabel,
-  metaChangeSummary,
-  overallStatusLabel,
-  platformGoalLabel,
+  jerusalemYmd,
   PULSE_PERIOD_OPTIONS,
-  pulseSpendColumnLabel,
-  pulseStatusLabel,
-  pulseStatusToOverall,
   type PulseCampaignTable,
-  type PulseCrmRecord,
-  type PulsePlatformDisplayRow,
-  type PulseOverrideRow,
   type PulsePeriod,
   type PulseSnapshotRow,
 } from "@/lib/pulseDashboard";
+import {
+  buildPulseCampaignRows,
+  pulseTrendWindows,
+  type PulseCampaignGoal,
+  type PulseCampaignGoalRow,
+} from "@/lib/pulseCampaignGoals";
 
-type ClientBase = {
-  id: string;
-  name: string;
-  status: string;
-  agency_id: string | null;
-  services: string[];
-  campaignerName: string;
-  agencyName: string;
+export type CampaignPulseDashboardProps = {
+  /** When embedded from agency dashboard — lock to one agency and hide picker */
+  fixedAgencyId?: string | null;
+  showTitle?: boolean;
 };
 
-type PulseRow = ClientBase & {
-  clientId: string;
-  pulse: PulseSnapshotRow | null;
-  goalRow: PulsePlatformDisplayRow | null;
-  algorithmOverall: OverallStatus;
-  overall: OverallStatus;
-  manualOverride: PulseOverrideRow | null;
-  flags: string[];
-};
-
-function StatusDot({ status, compact = false }: { status: OverallStatus; compact?: boolean }) {
-  const label = status === "red" ? "דורש טיפול" : status === "yellow" ? "לתשומת לב" : "תקין";
-  const dot = status === "red" ? "🔴" : status === "yellow" ? "🟡" : "🟢";
-  return (
-    <TooltipProvider>
-      <Tooltip>
-        <TooltipTrigger asChild>
-          <span
-            className={`cursor-default leading-none ${
-              compact ? "text-base sm:text-xl" : "text-base md:text-xl"
-            }`}
-          >
-            {dot}
-          </span>
-        </TooltipTrigger>
-        <TooltipContent>{label}</TooltipContent>
-      </Tooltip>
-    </TooltipProvider>
-  );
-}
-
-type PulseRowActionsProps = {
-  client: PulseRow;
-  onOverride: (target: PulseStatusOverrideTarget) => void;
-  onOpenClient: (clientId: string) => void;
-  onCallLog: (target: PulseClientCallTarget) => void;
-  compact?: boolean;
-};
-
-function PulseRowActions({
-  client,
-  onOverride,
-  onOpenClient,
-  compact = false,
-}: Omit<PulseRowActionsProps, "onCallLog">) {
-  return (
-    <div className={`flex flex-wrap gap-1 ${compact ? "w-full" : ""}`}>
-      <Button
-        variant="outline"
-        size="sm"
-        className={`h-8 gap-1 ${compact ? "flex-1 min-w-0 px-2" : "px-2"}`}
-        onClick={() =>
-          onOverride({
-            clientId: client.clientId,
-            clientName: client.name,
-            algorithmOverall: client.algorithmOverall,
-            pulse: client.pulse,
-            flags: client.flags,
-            activeOverride: client.manualOverride,
-          })
-        }
-      >
-        <Pencil className="h-3.5 w-3.5 shrink-0" />
-        <span className="text-xs truncate">ערוך צבע</span>
-      </Button>
-      <Button
-        variant="outline"
-        size="sm"
-        className={`h-8 gap-1 ${compact ? "flex-1 min-w-0 px-2" : "px-2"}`}
-        onClick={() => onOpenClient(client.clientId)}
-      >
-        <ExternalLink className="h-3.5 w-3.5 shrink-0" />
-        <span className="text-xs truncate">פתח כרטיס</span>
-      </Button>
-    </div>
-  );
-}
-
-function PulseMobileCard({
-  client,
-  period,
-  onOverride,
-  onOpenClient,
-  onCallLog,
-}: Omit<PulseRowActionsProps, "compact"> & { period: PulsePeriod }) {
-  const pulse = client.pulse;
-  const goalRow = client.goalRow;
-  const metaSource = goalRow || pulse;
-  const statusText = client.manualOverride
-    ? `${goalRow ? pulseStatusLabel(goalRow.status) : pulse ? pulseStatusLabel(pulse.status) : overallStatusLabel(client.algorithmOverall)} → ${overallStatusLabel(client.overall)}`
-    : goalRow
-      ? pulseStatusLabel(goalRow.status)
-      : pulse
-        ? pulseStatusLabel(pulse.status)
-        : "🟡 ממתין לבדיקה";
-
-  return (
-    <Card
-      className={
-        client.overall === "red"
-          ? "border-red-200 bg-red-50/40"
-          : client.overall === "yellow"
-            ? "border-yellow-200 bg-yellow-50/30"
-            : ""
-      }
-    >
-      <CardContent className="p-3 space-y-2.5">
-        <div className="flex items-start gap-2 min-w-0">
-          <div className="flex flex-col items-center gap-0.5 shrink-0 pt-0.5">
-            <StatusDot status={client.overall} compact />
-            {client.manualOverride ? (
-              <Badge variant="secondary" className="text-[9px] px-1 py-0">
-                ידני
-              </Badge>
-            ) : null}
-          </div>
-          <div className="min-w-0 flex-1">
-            <div className="font-medium text-sm leading-snug break-words">{client.name}</div>
-            <div className="text-xs text-muted-foreground break-words">{statusText}</div>
-            <div className="text-xs text-muted-foreground mt-0.5 break-words">
-              {client.agencyName} · {client.campaignerName}
-            </div>
-          </div>
-          {goalRow ? (
-            <Badge variant="outline" className="text-[10px] shrink-0 max-w-[40%] truncate">
-              {platformGoalLabel(goalRow)}
-            </Badge>
-          ) : null}
-        </div>
-
-        {goalRow ? (
-          <div className="grid grid-cols-2 gap-x-3 gap-y-1 text-xs">
-            <div>
-              <span className="text-muted-foreground">{pulseSpendColumnLabel(period).split(" ")[0]}: </span>
-              <span className="tabular-nums font-medium">{formatPulseMoney(goalRow.spend_7d)}</span>
-            </div>
-            <div>
-              <span className="text-muted-foreground">לידים/רכישות: </span>
-              <span className="tabular-nums font-medium">{formatGoalOutcomes(goalRow)}</span>
-            </div>
-            <div>
-              <span className="text-muted-foreground">CPL/ROAS: </span>
-              <span className="tabular-nums font-medium">{formatGoalEfficiency(goalRow)}</span>
-            </div>
-            <div>
-              <span className="text-muted-foreground">שינוי: </span>
-              <span className="tabular-nums font-medium">{formatGoalChange(goalRow)}</span>
-            </div>
-          </div>
-        ) : null}
-
-        {pulse ? (
-          <div className="text-xs">
-            <span className="text-muted-foreground">שיחת לקוח: </span>
-            <button
-              type="button"
-              className={`hover:text-primary ${
-                pulse.last_client_call_at
-                  ? "underline decoration-dotted underline-offset-2"
-                  : "text-amber-700 underline decoration-dotted underline-offset-2 font-medium"
-              }`}
-              onClick={() =>
-                onCallLog({
-                  clientId: client.clientId,
-                  clientName: client.name,
-                  pulse,
-                })
-              }
-            >
-              {formatLastClientCall(pulse)}
-            </button>
-          </div>
-        ) : null}
-
-        {metaSource ? (
-          <div className="text-xs text-muted-foreground break-words line-clamp-2">
-            {metaSource.last_meta_change_at ? (
-              <Popover>
-                <PopoverTrigger asChild>
-                  <button
-                    type="button"
-                    className="underline decoration-dotted underline-offset-2 hover:text-primary text-right"
-                  >
-                    {metaChangeSummary(metaSource)}
-                  </button>
-                </PopoverTrigger>
-                <PopoverContent className="w-[min(18rem,calc(100vw-2rem))] text-sm whitespace-pre-wrap" align="start">
-                  {formatMetaChangeDetails(metaSource)}
-                </PopoverContent>
-              </Popover>
-            ) : (
-              metaChangeSummary(metaSource)
-            )}
-          </div>
-        ) : null}
-
-        {client.flags.length > 0 ? (
-          <div className="flex flex-wrap gap-1">
-            {client.flags.slice(0, 3).map((flag) => (
-              <Badge
-                key={flag}
-                variant="outline"
-                className={`text-[10px] max-w-full truncate ${
-                  flag.includes("אין טבלת") || flag.includes("ממתין")
-                    ? "bg-amber-100 text-amber-900 border-amber-300"
-                    : ""
-                }`}
-              >
-                {flag}
-              </Badge>
-            ))}
-          </div>
-        ) : null}
-
-        <PulseRowActions
-          client={client}
-          onOverride={onOverride}
-          onOpenClient={onOpenClient}
-          compact
-        />
-      </CardContent>
-    </Card>
-  );
-}
-
-export default function DMMDashboard() {
+export function CampaignPulseDashboard({
+  fixedAgencyId = null,
+  showTitle = true,
+}: CampaignPulseDashboardProps = {}) {
   const { tenantId } = useCurrentTenant();
   const queryClient = useQueryClient();
   const navigate = useNavigate();
   const { buildPath, tenantSlug } = useTenantPath();
-  const { selectedAgency, setSelectedAgency, agencies } = useAgency();
+  const { selectedAgency, setSelectedAgency } = useAgency();
   const { isOwner, isTeamManager, isSuperAdmin, isCampaigner, isSeo, campaignerId } = useUserRole();
   const { userAgencyIds } = useUserAgencies();
   const [searchParams, setSearchParams] = useSearchParams();
 
   const [search, setSearch] = useState("");
-  const [filterStatus, setFilterStatus] = useState<"all" | OverallStatus>("all");
+  const [dashboardTab, setDashboardTab] = useState<"data" | "attention">("data");
   const [filterService, setFilterService] = useState<"all" | "ppc_google" | "ppc_meta" | "seo" | "campaign">("campaign");
   const [filterCampaigner, setFilterCampaigner] = useState("all");
+  const [platformFilter, setPlatformFilter] = useState<AgencyPlatformFilter>("all");
   const [period, setPeriod] = useState<PulsePeriod>("last_7_days");
-  const [overrideTarget, setOverrideTarget] = useState<PulseStatusOverrideTarget | null>(null);
   const [callLogTarget, setCallLogTarget] = useState<PulseClientCallTarget | null>(null);
   const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false);
+  const [savingTargetTableId, setSavingTargetTableId] = useState<string | null>(null);
   const periodBounds = useMemo(() => getPulsePeriodBounds(period), [period]);
+  const campaignTrendBounds = useMemo(() => pulseTrendWindows(jerusalemYmd()), []);
+  const effectiveAgencyId = fixedAgencyId || (selectedAgency !== "all" ? selectedAgency : null);
 
-  // Sync agency from shareable URL (?agency=...)
   useEffect(() => {
+    if (fixedAgencyId && fixedAgencyId !== selectedAgency) {
+      setSelectedAgency(fixedAgencyId);
+    }
+  }, [fixedAgencyId]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Sync agency from shareable URL (?agency=...) — standalone pulse dashboard only
+  useEffect(() => {
+    if (fixedAgencyId) return;
     const agencyFromUrl = searchParams.get("agency");
     if (agencyFromUrl && agencyFromUrl !== selectedAgency) {
       setSelectedAgency(agencyFromUrl);
     }
-  }, [searchParams]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [searchParams, fixedAgencyId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
+    if (fixedAgencyId) return;
     const current = searchParams.get("agency");
     if (selectedAgency && selectedAgency !== "all") {
       if (current !== selectedAgency) {
@@ -356,7 +135,7 @@ export default function DMMDashboard() {
       next.delete("agency");
       setSearchParams(next, { replace: true });
     }
-  }, [selectedAgency]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [selectedAgency, fixedAgencyId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   function openClientCard(clientId: string) {
     navigate(buildPath(`/clients?clientId=${clientId}&tab=updates`));
@@ -370,14 +149,12 @@ export default function DMMDashboard() {
     const url = buildPulseDashboardUrl(
       window.location.origin,
       tenantSlug,
-      selectedAgency && selectedAgency !== "all" ? selectedAgency : null,
+      effectiveAgencyId,
     );
     try {
       await navigator.clipboard.writeText(url);
       toast.success(
-        selectedAgency && selectedAgency !== "all"
-          ? "קישור הסוכנות הועתק"
-          : "קישור הדשבורד הועתק",
+        effectiveAgencyId ? "קישור הסוכנות הועתק" : "קישור הדשבורד הועתק",
       );
     } catch {
       toast.error("לא ניתן להעתיק קישור");
@@ -407,7 +184,7 @@ export default function DMMDashboard() {
       let query = supabase
         .from("clients")
         .select(`
-          id, name, status, agency_id, is_seo_client, services,
+          id, name, status, agency_id, is_seo_client, services, mood_status,
           agencies ( name ),
           client_team (
             campaigner_id,
@@ -468,20 +245,27 @@ export default function DMMDashboard() {
 
   const clientIds = filteredByRole.map((c: any) => c.id);
 
-  const { data: pulseRows = [], refetch: refetchPulse, dataUpdatedAt } = useQuery({
+  const {
+    data: pulseRows = [],
+    isLoading: pulseSnapshotsLoading,
+    isFetching: pulseSnapshotsFetching,
+    refetch: refetchPulse,
+    dataUpdatedAt,
+  } = useQuery({
     queryKey: ["pulse-dash-snapshots", tenantId, clientIds.join(","), selectedAgency],
     queryFn: async () => {
       if (!tenantId || !clientIds.length) return [] as PulseSnapshotRow[];
       const baseColumns =
-        "client_id, agency_id, status, campaign_goal_mode, is_ecommerce, spend_7d, lead_spend_7d, ecommerce_spend_7d, leads_7d, cpl_7d, cpl_change_pct, purchases_7d, revenue_7d, roas_7d, roas_change_pct, lead_goal_status, ecommerce_goal_status, flags, data_fresh_through, calculated_at, last_meta_change_at, last_meta_change_type, last_meta_change_actor, last_meta_change_object, meta_change_availability";
+        "client_id, agency_id, status, campaign_goal_mode, is_ecommerce, spend_7d, lead_spend_7d, ecommerce_spend_7d, leads_7d, cpl_7d, cpl_change_pct, purchases_7d, revenue_7d, roas_7d, roas_change_pct, lead_goal_status, ecommerce_goal_status, campaign_breakdown, flags, data_fresh_through, calculated_at, last_meta_change_at, last_meta_change_type, last_meta_change_actor, last_meta_change_object, meta_change_availability";
+      const legacyBaseColumns = baseColumns.replace(", campaign_breakdown", "");
       const load = (columns: string) =>
         (supabase as any)
           .from("campaign_pulse_snapshots")
           .select(columns)
           .in("client_id", clientIds);
       let { data, error } = await load(`${baseColumns}, last_client_call_at, last_client_call_by`);
-      if (error && /last_client_call/.test(error.message ?? "")) {
-        ({ data, error } = await load(baseColumns));
+      if (error && /last_client_call|campaign_breakdown/.test(error.message ?? "")) {
+        ({ data, error } = await load(legacyBaseColumns));
       }
       if (error) throw error;
       return (data ?? []) as PulseSnapshotRow[];
@@ -490,82 +274,136 @@ export default function DMMDashboard() {
     staleTime: 30_000,
   });
 
-  const { data: pulseOverrides = [], refetch: refetchOverrides } = useQuery({
-    queryKey: ["pulse-dash-overrides", tenantId, clientIds.join(",")],
+  const {
+    data: pulseCampaignTables = [],
+    refetch: refetchPulseTables,
+  } = useQuery({
+    queryKey: ["pulse-dash-tables", tenantId, clientIds.join(",")],
     queryFn: async () => {
-      if (!tenantId || !clientIds.length) return [] as PulseOverrideRow[];
-      const { data, error } = await (supabase as any)
-        .from("campaign_pulse_overrides")
-        .select("*")
-        .in("client_id", clientIds)
-        .is("cleared_at", null)
-        .order("created_at", { ascending: false });
-      if (error) throw error;
-      return (data ?? []) as PulseOverrideRow[];
-    },
-    enabled: !!tenantId && clientIds.length > 0,
-    staleTime: 30_000,
-  });
-
-  const activeOverrideByClient = useMemo(() => {
-    const map = new Map<string, PulseOverrideRow>();
-    for (const row of pulseOverrides) {
-      if (!map.has(row.client_id)) map.set(row.client_id, row);
-    }
-    return map;
-  }, [pulseOverrides]);
-
-  // Campaign tables + CRM records for per-platform metrics (all periods).
-  const { data: campaignData, refetch: refetchCampaignData } = useQuery({
-    queryKey: [
-      "pulse-dash-campaign-data",
-      tenantId,
-      clientIds.join(","),
-      period,
-      periodBounds.startDate,
-      periodBounds.endDate,
-      periodBounds.prevStartDate,
-    ],
-    queryFn: async () => {
-      const empty = {
-        tables: [] as PulseCampaignTable[],
-        records: [] as PulseCrmRecord[],
-        tableToType: new Map<string, string | null>(),
-        tableToClient: new Map<string, string>(),
-      };
-      if (!tenantId || !clientIds.length) return empty;
-
-      const { data: tables, error: tablesError } = await supabase
+      if (!tenantId || !clientIds.length) return [] as PulseCampaignTable[];
+      const { data: tables, error } = await supabase
         .from("crm_tables")
-        .select("id, client_id, integration_type, campaign_active, last_sync_at, integration_settings")
+        .select("id, client_id, integration_type, category, campaign_active, last_sync_at, integration_settings")
         .in("client_id", clientIds)
         .in("integration_type", ["facebook_insights", "facebook_ecommerce", "google_ads"]);
-      if (tablesError) throw tablesError;
-      if (!tables?.length) return empty;
-
-      const tableIds = tables.map((t) => t.id);
-      const tableToType = new Map(tables.map((t) => [t.id, t.integration_type as string | null]));
-      const tableToClient = new Map(tables.map((t) => [t.id, t.client_id as string]));
-
-      const { data: records, error: recordsError } = await supabase
-        .from("crm_records")
-        .select("table_id, data")
-        .in("table_id", tableIds)
-        .filter("data->>date", "gte", periodBounds.prevStartDate)
-        .filter("data->>date", "lte", periodBounds.endDate)
-        .limit(20000);
-      if (recordsError) throw recordsError;
-
-      return {
-        tables: tables as PulseCampaignTable[],
-        records: (records ?? []) as PulseCrmRecord[],
-        tableToType,
-        tableToClient,
-      };
+      if (error) throw error;
+      // Keep both Meta sources here. The campaign classifier deduplicates the
+      // same campaign/day after choosing the richer objective/outcome record.
+      return (tables ?? []) as PulseCampaignTable[];
     },
     enabled: !!tenantId && clientIds.length > 0,
-    staleTime: 30_000,
+    staleTime: 60_000,
   });
+
+  const pulseTableIds = useMemo(
+    () => pulseCampaignTables.map((table) => table.id),
+    [pulseCampaignTables],
+  );
+
+  const snapshotCampaignRows = useMemo(
+    () => collectCampaignBreakdownFromSnapshots(pulseRows),
+    [pulseRows],
+  );
+
+  const deliveryHintStart = useMemo(
+    () => jerusalemYmd(new Date(Date.now() - 7 * 86_400_000)),
+    [],
+  );
+
+  const metaHintTableIds = useMemo(() => {
+    const primed = rehydrateCampaignBreakdownRows(snapshotCampaignRows, pulseCampaignTables, []);
+    return pulseMetaTablesNeedingDeliveryHints(primed, pulseCampaignTables);
+  }, [snapshotCampaignRows, pulseCampaignTables]);
+
+  const metaTableIdSet = useMemo(
+    () =>
+      new Set(
+        pulseCampaignTables
+          .filter(
+            (table) =>
+              table.integration_type === "facebook_insights"
+              || table.integration_type === "facebook_ecommerce",
+          )
+          .map((table) => table.id),
+      ),
+    [pulseCampaignTables],
+  );
+
+  const {
+    data: deliveryHints = [],
+    isFetching: deliveryHintsFetching,
+  } = useQuery({
+    queryKey: ["pulse-dash-delivery-hints", metaHintTableIds.join(","), deliveryHintStart],
+    queryFn: () => fetchPulseCampaignDeliveryHints(metaHintTableIds, deliveryHintStart),
+    enabled: metaHintTableIds.length > 0,
+    staleTime: 120_000,
+  });
+
+  const {
+    data: pulseCampaignRecords = [],
+    isFetching: pulseRecordsFetching,
+    refetch: refetchPulseRecords,
+  } = useQuery({
+    queryKey: [
+      "pulse-dash-records",
+      pulseTableIds.join(","),
+      campaignTrendBounds.queryStart,
+      campaignTrendBounds.queryEnd,
+    ],
+    queryFn: () => fetchPulseCampaignRecords(pulseTableIds, {
+      ...periodBounds,
+      prevStartDate: campaignTrendBounds.queryStart,
+      endDate: campaignTrendBounds.queryEnd,
+    }),
+    enabled: pulseTableIds.length > 0,
+    staleTime: 30_000,
+    placeholderData: (previous) => previous,
+  });
+
+  const campaignData = useMemo(() => {
+    const tableToType = new Map(pulseCampaignTables.map((t) => [t.id, t.integration_type as string | null]));
+    const tableToClient = new Map(pulseCampaignTables.map((t) => [t.id, t.client_id as string]));
+    return {
+      tables: pulseCampaignTables,
+      records: pulseCampaignRecords,
+      tableToType,
+      tableToClient,
+    };
+  }, [pulseCampaignTables, pulseCampaignRecords]);
+
+  const campaignGoalRows = useMemo(() => {
+    if (pulseCampaignRecords.length > 0) {
+      return buildPulseCampaignRows({
+        records: pulseCampaignRecords,
+        tables: pulseCampaignTables,
+        nowYmd: jerusalemYmd(),
+      });
+    }
+    return rehydrateCampaignBreakdownRows(
+      snapshotCampaignRows,
+      pulseCampaignTables,
+      deliveryHints,
+    );
+  }, [
+    snapshotCampaignRows,
+    pulseCampaignTables,
+    deliveryHints,
+    pulseCampaignRecords,
+  ]);
+
+  const pulseInitialLoading =
+    clientsLoading
+    || (pulseSnapshotsLoading && clientIds.length > 0)
+    || (pulseSnapshotsFetching && pulseRows.length === 0 && clientIds.length > 0);
+
+  const pulseRefining =
+    deliveryHintsFetching
+    || (pulseRecordsFetching && pulseTableIds.length > 0);
+
+  const refetchCampaignData = () => {
+    refetchPulseTables();
+    refetchPulseRecords();
+  };
 
   const tablesByClient = useMemo(() => {
     const map = new Map<string, PulseCampaignTable[]>();
@@ -576,20 +414,6 @@ export default function DMMDashboard() {
     }
     return map;
   }, [campaignData?.tables]);
-
-  const recordsByClient = useMemo(() => {
-    const map = new Map<string, PulseCrmRecord[]>();
-    const tableToClient = campaignData?.tableToClient;
-    if (!tableToClient) return map;
-    for (const record of campaignData?.records ?? []) {
-      const clientId = tableToClient.get(record.table_id);
-      if (!clientId) continue;
-      const list = map.get(clientId) || [];
-      list.push(record);
-      map.set(clientId, list);
-    }
-    return map;
-  }, [campaignData?.records, campaignData?.tableToClient]);
 
   const pulseByClient = useMemo(() => {
     const map = new Map<string, PulseSnapshotRow>();
@@ -602,91 +426,254 @@ export default function DMMDashboard() {
     return map;
   }, [pulseRows]);
 
-  const rows: PulseRow[] = useMemo(() => {
-    const expanded: PulseRow[] = [];
-    for (const c of filteredByRole) {
+  const clientMetaById = useMemo(() => {
+    const map = new Map<string, {
+      name: string;
+      campaignerName: string;
+      agencyName: string;
+      services: string[];
+      moodStatus: string | null;
+    }>();
+    for (const c of filteredByRole as Array<{
+      id: string;
+      name: string;
+      services?: string[];
+      mood_status?: string | null;
+      client_team?: Array<{ campaigners?: { full_name?: string } }>;
+      agencies?: { name?: string };
+    }>) {
       const services: string[] = Array.isArray(c.services) ? [...c.services] : [];
-      if (c.is_seo_client === true && !services.includes("seo")) services.push("seo");
-      const pulse = pulseByClient.get(c.id) ?? null;
-      const hasCampaign = clientHasCampaignService(services);
-      const manualOverride = activeOverrideByClient.get(c.id) ?? null;
-      const clientTables = tablesByClient.get(c.id) ?? [];
-      const clientRecords = recordsByClient.get(c.id) ?? [];
-      const platformRows = hasCampaign
-        ? expandPulseToPlatformGoalRows({
-            snapshot: pulse,
-            services,
-            tables: clientTables,
-            records: clientRecords,
-            bounds: periodBounds,
-          })
-        : [];
-      const displayRows = platformRows.length ? platformRows : [null];
-      for (const goalRow of displayRows) {
-        const algorithmOverall = goalRow
-          ? pulseStatusToOverall(goalRow.status)
-          : hasCampaign
-            ? "yellow"
-            : "green";
-        const overall = manualOverride?.override_status ?? algorithmOverall;
-        const flags = filterPulseCallFlags([
-          ...(goalRow?.flags || pulse?.flags || []),
-          ...(!pulse && hasCampaign ? ["ממתין לבדיקת דופק"] : []),
-        ]);
-        expanded.push({
-          id: goalRow?.rowKey || c.id,
-          clientId: c.id,
-          name: c.name,
-          status: c.status,
-          agency_id: c.agency_id,
-          services,
-          campaignerName: c.client_team?.[0]?.campaigners?.full_name ?? "—",
-          agencyName: c.agencies?.name ?? "—",
-          pulse,
-          goalRow,
-          algorithmOverall,
-          overall,
-          manualOverride,
-          flags,
-        });
-      }
+      map.set(c.id, {
+        name: c.name,
+        campaignerName: c.client_team?.[0]?.campaigners?.full_name ?? "—",
+        agencyName: c.agencies?.name ?? "—",
+        services,
+        moodStatus: c.mood_status ?? null,
+      });
     }
-    return expanded;
-  }, [filteredByRole, pulseByClient, activeOverrideByClient, tablesByClient, recordsByClient, periodBounds]);
+    return map;
+  }, [filteredByRole]);
 
-  const filtered = useMemo(() => {
-    return rows
-      .filter((c) => {
-        if (search && !c.name.toLowerCase().includes(search.toLowerCase())) return false;
-        if (filterStatus !== "all" && c.overall !== filterStatus) return false;
-        if (filterService === "campaign" && !clientHasCampaignService(c.services)) return false;
-        if (filterService === "ppc_meta" && c.goalRow?.platform !== "meta") return false;
-        if (filterService === "ppc_google" && c.goalRow?.platform !== "google") return false;
-        if (filterService !== "all" && filterService !== "campaign" && filterService !== "ppc_meta" && filterService !== "ppc_google" && !c.services.includes(filterService)) {
-          return false;
-        }
+  const { data: communicationLogs = [] } = useQuery({
+    queryKey: ["pulse-dash-comm-logs", tenantId, clientIds.join(",")],
+    queryFn: async () => {
+      if (!tenantId || !clientIds.length) return [];
+      const { data, error } = await supabase
+        .from("communication_logs")
+        .select("client_id, status, created_at")
+        .in("client_id", clientIds)
+        .order("created_at", { ascending: false })
+        .limit(500);
+      if (error) throw error;
+      return data ?? [];
+    },
+    enabled: !!tenantId && clientIds.length > 0,
+    staleTime: 60_000,
+  });
+
+  const { data: recentClientUpdates = [] } = useQuery({
+    queryKey: ["pulse-dash-client-updates", tenantId, clientIds.join(",")],
+    queryFn: async () => {
+      if (!tenantId || !clientIds.length) return [];
+      const since = new Date(Date.now() - 30 * 86_400_000).toISOString();
+      const { data, error } = await supabase
+        .from("client_updates")
+        .select("client_id, update_type, content, created_at")
+        .in("client_id", clientIds)
+        .gte("created_at", since)
+        .order("created_at", { ascending: false })
+        .limit(300);
+      if (error) throw error;
+      return data ?? [];
+    },
+    enabled: !!tenantId && clientIds.length > 0,
+    staleTime: 60_000,
+  });
+
+  const spendingCampaignRows = useMemo(
+    () => filterPulseCampaignRowsWithSpend(campaignGoalRows),
+    [campaignGoalRows],
+  );
+
+  const visibleCampaignRows = useMemo(() => {
+    return spendingCampaignRows.filter((row) => {
+      const meta = clientMetaById.get(row.client_id);
+      if (!meta) return false;
+      if (search && !meta.name.toLowerCase().includes(search.toLowerCase())) return false;
+      if (platformFilter === "facebook" && row.platform !== "meta") return false;
+      if (platformFilter === "google_ads" && row.platform !== "google") return false;
+      if (filterService === "campaign") {
+        const clientTables = tablesByClient.get(row.client_id) ?? [];
+        if (!clientHasCampaignCoverage(meta.services, clientTables)) return false;
+      }
+      if (filterService === "ppc_meta" && row.platform !== "meta") return false;
+      if (filterService === "ppc_google" && row.platform !== "google") return false;
+      if (
+        filterService !== "all"
+        && filterService !== "campaign"
+        && filterService !== "ppc_meta"
+        && filterService !== "ppc_google"
+        && !meta.services.includes(filterService)
+      ) {
+        return false;
+      }
+      return true;
+    });
+  }, [
+    spendingCampaignRows,
+    clientMetaById,
+    search,
+    platformFilter,
+    filterService,
+    tablesByClient,
+  ]);
+
+  const clientRawViews = useMemo(() => {
+    const byClient = new Map<string, PulseCampaignGoalRow[]>();
+    for (const row of visibleCampaignRows) {
+      const list = byClient.get(row.client_id) ?? [];
+      list.push(row);
+      byClient.set(row.client_id, list);
+    }
+
+    return filteredByRole
+      .filter((client: { id: string; name: string; services?: string[] }) => {
+        if (!byClient.has(client.id)) return false;
+        if (search && !client.name.toLowerCase().includes(search.toLowerCase())) return false;
         return true;
       })
-      .sort((a, b) => {
-        const rank = (s: OverallStatus) => (s === "red" ? 0 : s === "yellow" ? 1 : 2);
-        return rank(a.overall) - rank(b.overall) || a.name.localeCompare(b.name, "he");
-      });
-  }, [rows, search, filterStatus, filterService]);
+      .map((client: { id: string }) => {
+        const rowsForClient = byClient.get(client.id) ?? [];
+        const campaignsByGoal: Partial<Record<PulseCampaignGoal, PulseCampaignGoalRow[]>> = {};
+        for (const row of rowsForClient) {
+          const bucket = campaignsByGoal[row.goal] ?? [];
+          bucket.push(row);
+          campaignsByGoal[row.goal] = bucket;
+        }
+        const lastCampaignTouchAt = rowsForClient
+          .map((row) => row.last_change_at)
+          .filter(Boolean)
+          .sort()
+          .reverse()[0] ?? null;
+        const meta = clientMetaById.get(client.id)!;
+        return {
+          clientId: client.id,
+          meta,
+          campaignsByGoal,
+          lastCampaignTouchAt,
+          pulse: pulseByClient.get(client.id) ?? null,
+        };
+      })
+      .sort((a, b) => a.meta.name.localeCompare(b.meta.name, "he"));
+  }, [visibleCampaignRows, filteredByRole, search, clientMetaById, pulseByClient]);
 
-  const summary = useMemo(() => {
-    const base = filterService === "campaign"
-      ? rows.filter((c) => clientHasCampaignService(c.services))
-      : rows;
+  const unclassifiedCampaignRows = useMemo(
+    () => visibleCampaignRows.filter((row) => row.goal === "unknown"),
+    [visibleCampaignRows],
+  );
+
+  const attentionClientContexts = useMemo(() => {
+    const logsByClient = new Map<string, Array<{ status: string; created_at: string }>>();
+    for (const log of communicationLogs as Array<{ client_id: string; status: string; created_at: string }>) {
+      const list = logsByClient.get(log.client_id) ?? [];
+      list.push({ status: log.status, created_at: log.created_at });
+      logsByClient.set(log.client_id, list);
+    }
+    const updatesByClient = new Map<string, Array<{ update_type: string | null; content: string }>>();
+    for (const update of recentClientUpdates as Array<{ client_id: string; update_type: string | null; content: string }>) {
+      const list = updatesByClient.get(update.client_id) ?? [];
+      list.push({ update_type: update.update_type, content: update.content ?? "" });
+      updatesByClient.set(update.client_id, list);
+    }
+
+    const contexts: PulseAttentionClientContext[] = [];
+    for (const [clientId, meta] of clientMetaById) {
+      const pulse = pulseByClient.get(clientId);
+      const logs = logsByClient.get(clientId) ?? [];
+      const latestLog = logs[0];
+      const daysSinceLastCommunication = latestLog
+        ? Math.floor((Date.now() - new Date(latestLog.created_at).getTime()) / 86_400_000)
+        : null;
+      const recentStatus = latestLog?.status as PulseAttentionClientContext["recentCommunicationStatus"];
+      const updates = updatesByClient.get(clientId) ?? [];
+      const hasRecentComplaintUpdate = updates.some((row) => {
+        const text = `${row.update_type ?? ""} ${row.content}`.toLowerCase();
+        return /complaint|תלונה|לא מרוצ|כועס|עצבן|בעיה חמורה/.test(text);
+      });
+
+      contexts.push({
+        clientId,
+        clientName: meta.name,
+        campaignerName: meta.campaignerName,
+        moodStatus: meta.moodStatus,
+        lastClientCallAt: pulse?.last_client_call_at ?? null,
+        daysSinceLastCommunication,
+        recentCommunicationStatus: recentStatus ?? null,
+        hasRecentComplaintUpdate,
+      });
+    }
+    return contexts;
+  }, [clientMetaById, communicationLogs, recentClientUpdates, pulseByClient]);
+
+  const attentionRows = useMemo(
+    () => buildPulseAttentionRows({
+      campaignRows: visibleCampaignRows,
+      tables: pulseCampaignTables,
+      clients: attentionClientContexts,
+    }),
+    [visibleCampaignRows, pulseCampaignTables, attentionClientContexts],
+  );
+
+  const tableSettingsById = useMemo(() => {
+    const map = new Map<string, Record<string, unknown>>();
+    for (const table of pulseCampaignTables) {
+      map.set(table.id, (table.integration_settings ?? {}) as Record<string, unknown>);
+    }
+    return map;
+  }, [pulseCampaignTables]);
+
+  async function savePlatformTarget(input: {
+    tableId: string;
+    goal: PulseCampaignGoal;
+    value: number | null;
+    existingSettings: Record<string, unknown>;
+  }) {
+    setSavingTargetTableId(input.tableId);
+    try {
+      const nextSettings = buildPlatformTargetPatch(
+        input.existingSettings,
+        input.goal,
+        input.value,
+      );
+      const { error } = await supabase
+        .from("crm_tables")
+        .update({ integration_settings: nextSettings as any })
+        .eq("id", input.tableId);
+      if (error) throw error;
+      toast.success("יעד הפלטפורמה נשמר");
+      await refetchPulseTables();
+      refetchPulseRecords();
+    } catch (error: any) {
+      toast.error(error?.message ?? "שמירת היעד נכשלה");
+    } finally {
+      setSavingTargetTableId(null);
+    }
+  }
+
+  const availablePlatforms = useMemo(() => {
+    const types = new Set((campaignData?.tables ?? []).map((table) => table.integration_type));
     return {
-      red: base.filter((c) => c.overall === "red").length,
-      yellow: base.filter((c) => c.overall === "yellow").length,
-      green: base.filter((c) => c.overall === "green").length,
-      total: base.length,
-      missingPulse: new Set(
-        base.filter((c) => clientHasCampaignService(c.services) && !c.pulse).map((c) => c.clientId),
-      ).size,
+      hasFacebook: Array.from(types).some((type) => isFacebookIntegration(type)),
+      hasGoogleAds: types.has("google_ads"),
     };
-  }, [rows, filterService]);
+  }, [campaignData?.tables]);
+
+  const listSummary = useMemo(() => ({
+    clientCount: clientRawViews.length,
+    campaignCount: visibleCampaignRows.length,
+    unclassifiedCount: unclassifiedCampaignRows.length,
+    attentionCount: attentionRows.length,
+  }), [clientRawViews.length, visibleCampaignRows.length, unclassifiedCampaignRows.length, attentionRows.length]);
 
   const freshness = useMemo(() => {
     const times = pulseRows.map((r) => r.calculated_at).filter(Boolean) as string[];
@@ -701,24 +688,16 @@ export default function DMMDashboard() {
 
   const mobileActiveFilterCount = useMemo(() => {
     let count = 0;
-    if (selectedAgency && selectedAgency !== "all") count += 1;
     if (period !== "last_7_days") count += 1;
-    if (filterStatus !== "all") count += 1;
     if (filterService !== "campaign") count += 1;
     if (showCampaignerPicker && filterCampaigner !== "all") count += 1;
     return count;
-  }, [selectedAgency, period, filterStatus, filterService, filterCampaigner, showCampaignerPicker]);
+  }, [period, filterService, filterCampaigner, showCampaignerPicker]);
 
   const mobileFilterSummary = useMemo(() => {
     const parts: string[] = [];
-    if (selectedAgency && selectedAgency !== "all") {
-      parts.push(agencies?.find((a) => a.id === selectedAgency)?.name ?? "סוכנות");
-    }
     if (period !== "last_7_days") {
       parts.push(PULSE_PERIOD_OPTIONS.find((o) => o.value === period)?.label ?? period);
-    }
-    if (filterStatus !== "all") {
-      parts.push(filterStatus === "red" ? "🔴 דורש טיפול" : filterStatus === "yellow" ? "🟡 לתשומת לב" : "🟢 תקין");
     }
     if (filterService !== "campaign") {
       const serviceLabels: Record<string, string> = {
@@ -734,33 +713,59 @@ export default function DMMDashboard() {
     }
     return parts.length ? parts.join(" · ") : "כל הסינונים";
   }, [
-    selectedAgency,
-    agencies,
     period,
-    filterStatus,
     filterService,
     filterCampaigner,
     showCampaignerPicker,
     campaigners,
   ]);
 
-  if (clientsLoading) {
-    return <div className="flex justify-center p-12 text-muted-foreground">טוען בדיקת דופק...</div>;
+  if (pulseInitialLoading) {
+    return (
+      <CarmenLoadingScreen
+        variant="page"
+        title="כרמן מכינה את בדיקת הדופק"
+        messages={[
+          "כרמן אוספת את נתוני הקמפיינים…",
+          "מסדרת לפי לקוח, פלטפורמה ומטרה…",
+          "בודקת מי פעיל ומי מושהה…",
+          "עוד רגע הכול על המסך…",
+        ]}
+      />
+    );
   }
 
   return (
     <div className="p-3 sm:p-4 space-y-3 sm:space-y-4 overflow-x-hidden max-w-full min-w-0" dir="rtl">
+      {pulseRefining ? (
+        <CarmenLoadingScreen
+          variant="inline"
+          messages={[
+            "כרמן מדייקת סטטוסי קמפיין (פעיל/מושהה)…",
+            "מעדכנת את הקריטריונים החדשים…",
+            "עוד רגע הנתונים יתיישרו…",
+          ]}
+        />
+      ) : null}
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div className="min-w-0">
-          <h1 className="text-xl sm:text-2xl font-bold">דשבורד בדיקת דופק</h1>
+          {showTitle ? (
+            <h1 className="text-xl sm:text-2xl font-bold">דשבורד בדיקת דופק</h1>
+          ) : null}
           <p className="text-muted-foreground text-xs sm:text-sm mt-0.5 break-words">
-            {summary.total} לקוחות קמפיין פעילים
+            {listSummary.clientCount} לקוחות · {listSummary.campaignCount} קמפיינים עם הוצאה
             {` · ${periodBounds.label}`}
             {period !== "last_7_days"
               ? ` (${periodBounds.startDate}–${periodBounds.endDate})`
               : ""}
             {freshness ? ` · עודכן ${freshness}` : ""}
-            {summary.missingPulse > 0 ? ` · ${summary.missingPulse} ממתינים לחישוב` : ""}
+            {pulseRefining ? " · כרמן מכינה את הנתונים…" : ""}
+            {listSummary.unclassifiedCount > 0
+              ? ` · ${listSummary.unclassifiedCount} קמפיינים טעונים סיווג`
+              : ""}
+            {listSummary.attentionCount > 0
+              ? ` · ${listSummary.attentionCount} שורות לתשומת לב`
+              : ""}
           </p>
         </div>
         <div className="flex gap-2 w-full sm:w-auto">
@@ -775,7 +780,6 @@ export default function DMMDashboard() {
             onClick={() => {
               refetchClients();
               refetchPulse();
-              refetchOverrides();
               refetchCampaignData();
             }}
           >
@@ -783,45 +787,6 @@ export default function DMMDashboard() {
             רענן
           </Button>
         </div>
-      </div>
-
-      <div className="grid grid-cols-3 gap-2 sm:gap-3">
-        <Card
-          className="cursor-pointer hover:shadow-md transition-shadow border-red-200 bg-red-50"
-          onClick={() => setFilterStatus(filterStatus === "red" ? "all" : "red")}
-        >
-          <CardContent className="p-2 sm:p-4 flex items-center gap-2 sm:gap-3 min-w-0">
-            <span className="text-xl sm:text-3xl leading-none shrink-0">🔴</span>
-            <div className="min-w-0">
-              <p className="text-lg sm:text-2xl font-bold text-red-700">{summary.red}</p>
-              <p className="text-[11px] sm:text-sm text-red-600 truncate">דורשים טיפול</p>
-            </div>
-          </CardContent>
-        </Card>
-        <Card
-          className="cursor-pointer hover:shadow-md transition-shadow border-yellow-200 bg-yellow-50"
-          onClick={() => setFilterStatus(filterStatus === "yellow" ? "all" : "yellow")}
-        >
-          <CardContent className="p-2 sm:p-4 flex items-center gap-2 sm:gap-3 min-w-0">
-            <span className="text-xl sm:text-3xl leading-none shrink-0">🟡</span>
-            <div className="min-w-0">
-              <p className="text-lg sm:text-2xl font-bold text-yellow-700">{summary.yellow}</p>
-              <p className="text-[11px] sm:text-sm text-yellow-600 truncate">לתשומת לב</p>
-            </div>
-          </CardContent>
-        </Card>
-        <Card
-          className="cursor-pointer hover:shadow-md transition-shadow border-green-200 bg-green-50"
-          onClick={() => setFilterStatus(filterStatus === "green" ? "all" : "green")}
-        >
-          <CardContent className="p-2 sm:p-4 flex items-center gap-2 sm:gap-3 min-w-0">
-            <span className="text-xl sm:text-3xl leading-none shrink-0">🟢</span>
-            <div className="min-w-0">
-              <p className="text-lg sm:text-2xl font-bold text-green-700">{summary.green}</p>
-              <p className="text-[11px] sm:text-sm text-green-600 truncate">תקינים</p>
-            </div>
-          </CardContent>
-        </Card>
       </div>
 
       {/* Mobile filters — search + single filter dropdown */}
@@ -835,8 +800,8 @@ export default function DMMDashboard() {
             className="pr-9 w-full"
           />
         </div>
-        <Popover open={mobileFiltersOpen} onOpenChange={setMobileFiltersOpen}>
-          <PopoverTrigger asChild>
+        <Sheet open={mobileFiltersOpen} onOpenChange={setMobileFiltersOpen}>
+          <SheetTrigger asChild>
             <Button
               variant="outline"
               className="w-full justify-between font-normal h-10 px-3"
@@ -853,115 +818,73 @@ export default function DMMDashboard() {
               </span>
               <ChevronDown className="h-4 w-4 shrink-0 opacity-50 mr-1" />
             </Button>
-          </PopoverTrigger>
-          <PopoverContent
-            className="w-[min(calc(100vw-1.5rem),22rem)] p-3 space-y-3"
-            align="start"
-            dir="rtl"
-          >
-            {agencies && agencies.length > 1 && (
+          </SheetTrigger>
+          <SheetContent side="bottom" className="max-h-[85vh] overflow-y-auto" dir="rtl">
+            <SheetHeader>
+              <SheetTitle>סינון</SheetTitle>
+            </SheetHeader>
+            <div className="mt-4 space-y-4">
               <div className="space-y-1">
-                <Label className="text-xs text-muted-foreground">סוכנות</Label>
-                <Select value={selectedAgency} onValueChange={setSelectedAgency}>
+                <Label className="text-xs text-muted-foreground">טווח זמן</Label>
+                <Select value={period} onValueChange={(v) => setPeriod(v as PulsePeriod)}>
                   <SelectTrigger className="w-full">
-                    <SelectValue placeholder="כל הסוכנויות" />
+                    <SelectValue placeholder="טווח זמן" />
                   </SelectTrigger>
                   <SelectContent className="bg-background z-[200]">
-                    <SelectItem value="all">כל הסוכנויות</SelectItem>
-                    {agencies.map((a) => (
-                      <SelectItem key={a.id} value={a.id}>{a.name}</SelectItem>
+                    {PULSE_PERIOD_OPTIONS.map((opt) => (
+                      <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
               </div>
-            )}
-            <div className="space-y-1">
-              <Label className="text-xs text-muted-foreground">טווח זמן</Label>
-              <Select value={period} onValueChange={(v) => setPeriod(v as PulsePeriod)}>
-                <SelectTrigger className="w-full">
-                  <SelectValue placeholder="טווח זמן" />
-                </SelectTrigger>
-                <SelectContent className="bg-background z-[200]">
-                  {PULSE_PERIOD_OPTIONS.map((opt) => (
-                    <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-1">
-              <Label className="text-xs text-muted-foreground">סטטוס</Label>
-              <Select value={filterStatus} onValueChange={(v) => setFilterStatus(v as any)}>
-                <SelectTrigger className="w-full">
-                  <SelectValue placeholder="כל הסטטוסים" />
-                </SelectTrigger>
-                <SelectContent className="bg-background z-[200]">
-                  <SelectItem value="all">כל הסטטוסים</SelectItem>
-                  <SelectItem value="red">🔴 דורש טיפול</SelectItem>
-                  <SelectItem value="yellow">🟡 לתשומת לב</SelectItem>
-                  <SelectItem value="green">🟢 תקין</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-1">
-              <Label className="text-xs text-muted-foreground">שירות</Label>
-              <Select value={filterService} onValueChange={(v) => setFilterService(v as any)}>
-                <SelectTrigger className="w-full">
-                  <SelectValue placeholder="שירותים" />
-                </SelectTrigger>
-                <SelectContent className="bg-background z-[200]">
-                  <SelectItem value="campaign">קמפיין (Meta/Google)</SelectItem>
-                  <SelectItem value="all">כל השירותים</SelectItem>
-                  <SelectItem value="ppc_google">PPC Google</SelectItem>
-                  <SelectItem value="ppc_meta">PPC Meta</SelectItem>
-                  <SelectItem value="seo">SEO</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            {showCampaignerPicker && (
               <div className="space-y-1">
-                <Label className="text-xs text-muted-foreground">קמפיינר</Label>
-                <Select value={filterCampaigner} onValueChange={setFilterCampaigner}>
+                <Label className="text-xs text-muted-foreground">שירות</Label>
+                <Select value={filterService} onValueChange={(v) => setFilterService(v as any)}>
                   <SelectTrigger className="w-full">
-                    <SelectValue placeholder="קמפיינר" />
+                    <SelectValue placeholder="שירותים" />
                   </SelectTrigger>
                   <SelectContent className="bg-background z-[200]">
-                    <SelectItem value="all">כל הקמפיינרים</SelectItem>
-                    {campaigners.map((campaigner) => (
-                      <SelectItem key={campaigner.id} value={campaigner.id}>
-                        {campaigner.full_name}
-                      </SelectItem>
-                    ))}
+                    <SelectItem value="campaign">קמפיין (Meta/Google)</SelectItem>
+                    <SelectItem value="all">כל השירותים</SelectItem>
+                    <SelectItem value="ppc_google">PPC Google</SelectItem>
+                    <SelectItem value="ppc_meta">PPC Meta</SelectItem>
+                    <SelectItem value="seo">SEO</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
-            )}
-            <Button
-              variant="secondary"
-              size="sm"
-              className="w-full"
-              onClick={() => setMobileFiltersOpen(false)}
-            >
-              סגור
-            </Button>
-          </PopoverContent>
-        </Popover>
+              {showCampaignerPicker && (
+                <div className="space-y-1">
+                  <Label className="text-xs text-muted-foreground">קמפיינר</Label>
+                  <Select value={filterCampaigner} onValueChange={setFilterCampaigner}>
+                    <SelectTrigger className="w-full">
+                      <SelectValue placeholder="קמפיינר" />
+                    </SelectTrigger>
+                    <SelectContent className="bg-background z-[200]">
+                      <SelectItem value="all">כל הקמפיינרים</SelectItem>
+                      {campaigners.map((campaigner) => (
+                        <SelectItem key={campaigner.id} value={campaigner.id}>
+                          {campaigner.full_name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
+              <Button
+                variant="secondary"
+                size="sm"
+                className="w-full"
+                onClick={() => setMobileFiltersOpen(false)}
+              >
+                סגור
+              </Button>
+            </div>
+          </SheetContent>
+        </Sheet>
       </div>
 
-      {/* Desktop filters — inline row */}
+      {/* Desktop filters — inline row (agency filter lives in AppLayout header) */}
       <div className="hidden md:flex flex-wrap gap-2 items-center">
-        {agencies && agencies.length > 1 && (
-          <Select value={selectedAgency} onValueChange={setSelectedAgency}>
-            <SelectTrigger className="w-[180px]">
-              <SelectValue placeholder="כל הסוכנויות" />
-            </SelectTrigger>
-            <SelectContent className="bg-background">
-              <SelectItem value="all">כל הסוכנויות</SelectItem>
-              {agencies.map((a) => (
-                <SelectItem key={a.id} value={a.id}>{a.name}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        )}
         <Select value={period} onValueChange={(v) => setPeriod(v as PulsePeriod)}>
           <SelectTrigger className="w-[170px]">
             <SelectValue placeholder="טווח זמן" />
@@ -981,17 +904,6 @@ export default function DMMDashboard() {
             className="pr-9"
           />
         </div>
-        <Select value={filterStatus} onValueChange={(v) => setFilterStatus(v as any)}>
-          <SelectTrigger className="w-[150px]">
-            <SelectValue placeholder="כל הסטטוסים" />
-          </SelectTrigger>
-          <SelectContent className="bg-background">
-            <SelectItem value="all">כל הסטטוסים</SelectItem>
-            <SelectItem value="red">🔴 דורש טיפול</SelectItem>
-            <SelectItem value="yellow">🟡 לתשומת לב</SelectItem>
-            <SelectItem value="green">🟢 תקין</SelectItem>
-          </SelectContent>
-        </Select>
         <Select value={filterService} onValueChange={(v) => setFilterService(v as any)}>
           <SelectTrigger className="w-[160px]">
             <SelectValue placeholder="שירותים" />
@@ -1021,259 +933,113 @@ export default function DMMDashboard() {
         )}
       </div>
 
-      {/* Mobile client cards */}
-      <div className="md:hidden space-y-2 min-w-0">
-        {filtered.length === 0 ? (
-          <Card>
-            <CardContent className="py-10 text-center text-muted-foreground text-sm">
-              אין לקוחות להצגה
-            </CardContent>
-          </Card>
-        ) : (
-          filtered.map((client) => (
-            <PulseMobileCard
-              key={client.id}
-              client={client}
-              period={period}
-              onOverride={setOverrideTarget}
-              onOpenClient={openClientCard}
-              onCallLog={setCallLogTarget}
-            />
-          ))
-        )}
-      </div>
+      <Tabs
+        value={dashboardTab}
+        onValueChange={(value) => setDashboardTab(value as "data" | "attention")}
+        dir="rtl"
+        className="space-y-3"
+      >
+        <TabsList className="h-auto w-full flex-wrap justify-start gap-1 sm:w-auto">
+          <TabsTrigger value="data" className="gap-2">
+            <Table2 className="h-4 w-4" />
+            נתונים
+          </TabsTrigger>
+          <TabsTrigger value="attention" className="gap-2">
+            <AlertTriangle className="h-4 w-4" />
+            תשומת לב
+            {listSummary.attentionCount > 0 ? (
+              <Badge variant="secondary" className="mr-1 text-[10px] px-1.5 py-0">
+                {listSummary.attentionCount}
+              </Badge>
+            ) : null}
+          </TabsTrigger>
+        </TabsList>
 
-      {/* Desktop table */}
-      <Card className="hidden md:block">
-        <CardContent className="p-0 overflow-x-auto">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead className="text-right w-8">סטטוס</TableHead>
-                <TableHead className="text-right">סוכנות</TableHead>
-                <TableHead className="text-right">לקוח</TableHead>
-                <TableHead className="text-right">פלטפורמה</TableHead>
-                <TableHead className="text-right">יעד</TableHead>
-                <TableHead className="text-right">קמפיינר</TableHead>
-                <TableHead className="text-right">{pulseSpendColumnLabel(period)}</TableHead>
-                <TableHead className="text-right">לידים/רכישות</TableHead>
-                <TableHead className="text-right">CPL/ROAS</TableHead>
-                <TableHead className="text-right">שינוי</TableHead>
-                <TableHead className="text-right">שיחת לקוח אחרונה</TableHead>
-                <TableHead className="text-right">שינוי במטה</TableHead>
-                <TableHead className="text-right">הערה</TableHead>
-                <TableHead className="text-right">פעולות</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {filtered.length === 0 ? (
-                <TableRow>
-                  <TableCell colSpan={14} className="text-center text-muted-foreground py-10">
-                    אין לקוחות להצגה
-                  </TableCell>
-                </TableRow>
-              ) : (
-                filtered.map((client) => {
-                  const pulse = client.pulse;
-                  const goalRow = client.goalRow;
-                  const metaSource = goalRow || pulse;
-                  return (
-                    <TableRow
-                      key={client.id}
-                      className={
-                        client.overall === "red"
-                          ? "bg-red-50/40"
-                          : client.overall === "yellow"
-                            ? "bg-yellow-50/30"
-                            : ""
-                      }
-                    >
-                      <TableCell className="text-center">
-                        <div className="flex flex-col items-center gap-1">
-                          <StatusDot status={client.overall} />
-                          {client.manualOverride ? (
-                            <Badge variant="secondary" className="text-[10px] px-1 py-0">
-                              ידני
-                            </Badge>
-                          ) : null}
-                        </div>
-                      </TableCell>
-                      <TableCell className="text-sm text-muted-foreground whitespace-nowrap">
-                        {client.agencyName}
-                      </TableCell>
-                      <TableCell>
-                        <div className="font-medium whitespace-nowrap">{client.name}</div>
-                        <div className="text-xs text-muted-foreground">
-                          {client.manualOverride
-                            ? `${goalRow ? pulseStatusLabel(goalRow.status) : pulse ? pulseStatusLabel(pulse.status) : overallStatusLabel(client.algorithmOverall)} → ${overallStatusLabel(client.overall)}`
-                            : goalRow
-                              ? pulseStatusLabel(goalRow.status)
-                              : pulse
-                                ? pulseStatusLabel(pulse.status)
-                                : "🟡 ממתין לבדיקה"}
-                        </div>
-                      </TableCell>
-                      <TableCell className="text-sm whitespace-nowrap">
-                        {goalRow ? (
-                          <Badge variant="secondary" className="text-xs font-medium">
-                            {goalRow.platformLabel}
-                          </Badge>
-                        ) : (
-                          "—"
-                        )}
-                      </TableCell>
-                      <TableCell className="text-sm whitespace-nowrap">
-                        {goalRow ? (
-                          <Badge variant="outline" className="text-xs">
-                            {goalLabel(goalRow.goal)}
-                          </Badge>
-                        ) : (
-                          "—"
-                        )}
-                      </TableCell>
-                      <TableCell className="text-sm text-muted-foreground whitespace-nowrap">
-                        {client.campaignerName}
-                      </TableCell>
-                      <TableCell className="whitespace-nowrap tabular-nums">
-                        {goalRow ? formatPulseMoney(goalRow.spend_7d) : pulse ? formatPulseMoney(pulse.spend_7d) : "—"}
-                      </TableCell>
-                      <TableCell className="whitespace-nowrap tabular-nums">
-                        {goalRow ? formatGoalOutcomes(goalRow) : "—"}
-                      </TableCell>
-                      <TableCell className="whitespace-nowrap tabular-nums">
-                        {goalRow ? formatGoalEfficiency(goalRow) : "—"}
-                      </TableCell>
-                      <TableCell className="whitespace-nowrap tabular-nums">
-                        {goalRow ? formatGoalChange(goalRow) : "—"}
-                      </TableCell>
-                      <TableCell className="text-xs whitespace-nowrap">
-                        {pulse ? (
-                          <button
-                            type="button"
-                            className={`text-right hover:text-primary ${
-                              pulse.last_client_call_at
-                                ? "underline decoration-dotted underline-offset-2"
-                                : "text-amber-700 underline decoration-dotted underline-offset-2 font-medium"
-                            }`}
-                            onClick={() =>
-                              setCallLogTarget({
-                                clientId: client.clientId,
-                                clientName: client.name,
-                                pulse,
-                              })
-                            }
-                          >
-                            {formatLastClientCall(pulse)}
-                          </button>
-                        ) : (
-                          "—"
-                        )}
-                        {pulse?.last_client_call_by ? (
-                          <div className="text-muted-foreground">תיעד/ה: {pulse.last_client_call_by}</div>
-                        ) : null}
-                      </TableCell>
-                      <TableCell className="text-xs max-w-[180px]">
-                        {metaSource ? (
-                          metaSource.last_meta_change_at ? (
-                            <Popover>
-                              <PopoverTrigger asChild>
-                                <button
-                                  type="button"
-                                  className="underline decoration-dotted underline-offset-2 hover:text-primary"
-                                >
-                                  {metaChangeSummary(metaSource)}
-                                </button>
-                              </PopoverTrigger>
-                              <PopoverContent className="w-72 text-sm whitespace-pre-wrap" align="start">
-                                {formatMetaChangeDetails(metaSource)}
-                              </PopoverContent>
-                            </Popover>
-                          ) : (
-                            metaChangeSummary(metaSource)
-                          )
-                        ) : (
-                          "—"
-                        )}
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex flex-wrap gap-1 max-w-[220px]">
-                          {client.flags.length === 0 ? (
-                            <span className="text-xs text-muted-foreground">—</span>
-                          ) : (
-                            client.flags.slice(0, 4).map((flag) => (
-                              <Badge
-                                key={flag}
-                                variant="outline"
-                                className={`text-xs ${
-                                  flag.includes("אין טבלת") || flag.includes("ממתין")
-                                    ? "bg-amber-100 text-amber-900 border-amber-300"
-                                    : ""
-                                }`}
-                              >
-                                {flag}
-                              </Badge>
-                            ))
-                          )}
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex flex-wrap gap-1">
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            className="h-8 px-2 gap-1"
-                            onClick={() =>
-                              setOverrideTarget({
-                                clientId: client.clientId,
-                                clientName: client.name,
-                                algorithmOverall: client.algorithmOverall,
-                                pulse: client.pulse,
-                                flags: client.flags,
-                                activeOverride: client.manualOverride,
-                              })
-                            }
-                          >
-                            <Pencil className="h-3.5 w-3.5" />
-                            <span className="text-xs">ערוך צבע</span>
-                          </Button>
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            className="h-8 px-2 gap-1"
-                            onClick={() => openClientCard(client.clientId)}
-                          >
-                            <ExternalLink className="h-3.5 w-3.5" />
-                            <span className="text-xs">פתח כרטיס</span>
-                          </Button>
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  );
-                })
-              )}
-            </TableBody>
-          </Table>
-        </CardContent>
-      </Card>
-      {dataUpdatedAt ? (
-        <p className="text-xs text-muted-foreground">
-          טבלאות לא מחוברות מוצגות כאן ליד הלקוח (צהוב) — לא נשלחות בוואטסאפ.
-          {" "}
-          עריכת צבע ידנית נשמרת עם הסבר לכרמן ומשפיעה על הדשבורד (לא על וואטסאפ).
-        </p>
-      ) : null}
+        <TabsContent value="data" className="space-y-3 mt-0">
+          {(availablePlatforms.hasFacebook || availablePlatforms.hasGoogleAds) ? (
+            <Tabs
+              value={platformFilter}
+              onValueChange={(value) => setPlatformFilter(value as AgencyPlatformFilter)}
+              dir="rtl"
+            >
+              <TabsList className="h-auto w-full flex-wrap justify-start gap-1 sm:w-auto">
+                <TabsTrigger value="all" className="gap-2">
+                  <LayoutGrid className="h-4 w-4" />
+                  כל הפלטפורמות
+                </TabsTrigger>
+                {availablePlatforms.hasFacebook && (
+                  <TabsTrigger value="facebook" className="gap-2">
+                    <Facebook className="h-4 w-4 text-blue-600" />
+                    Facebook
+                  </TabsTrigger>
+                )}
+                {availablePlatforms.hasGoogleAds && (
+                  <TabsTrigger value="google_ads" className="gap-2">
+                    <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" aria-hidden>
+                      <path d="M3.654 14.916l6.26-10.857c.68-1.18 2.184-1.59 3.361-.916l.004.003c1.178.68 1.586 2.184.909 3.361l-6.26 10.857c-.68 1.18-2.184 1.59-3.361.916l-.004-.003c-1.178-.68-1.586-2.184-.909-3.361z" fill="#FBBC04" />
+                      <path d="M14.088 14.916l6.26-10.857c.68-1.18.27-2.684-.909-3.361l-.004-.003c-1.177-.674-2.681-.264-3.361.916l-6.26 10.857c-.68 1.18-.27 2.684.909 3.361l.004.003c1.177.674 2.681.264 3.361-.916z" fill="#4285F4" />
+                      <circle cx="6" cy="18" r="3.5" fill="#34A853" />
+                    </svg>
+                    Google Ads
+                  </TabsTrigger>
+                )}
+              </TabsList>
+            </Tabs>
+          ) : null}
 
-      <PulseStatusOverrideDialog
-        open={!!overrideTarget}
-        onOpenChange={(open) => {
-          if (!open) setOverrideTarget(null);
-        }}
-        target={overrideTarget}
-        onSaved={() => {
-          refetchOverrides();
-          refetchClients();
-        }}
-      />
+          {unclassifiedCampaignRows.length > 0 ? (
+            <div className="rounded-md border p-3 text-sm text-muted-foreground">
+              <strong className="text-foreground">{unclassifiedCampaignRows.length} קמפיינים טעונים סיווג</strong>
+              {" "}— מוצגים תחת «טעון סיווג» בתוך כרטיס הלקוח.
+            </div>
+          ) : null}
+
+          <div className="space-y-4 min-w-0">
+            {clientRawViews.length === 0 ? (
+              <Card>
+                <CardContent className="py-10 text-center text-muted-foreground text-sm">
+                  אין לקוחות עם נתוני קמפיין בטווח ובסינון שנבחרו
+                </CardContent>
+              </Card>
+            ) : (
+              clientRawViews.map((view) => (
+                <PulseClientRawCard
+                  key={view.clientId}
+                  clientName={view.meta.name}
+                  campaignerName={view.meta.campaignerName}
+                  agencyName={view.meta.agencyName}
+                  period={period}
+                  pulse={view.pulse}
+                  campaignsByGoal={view.campaignsByGoal}
+                  lastCampaignTouchAt={view.lastCampaignTouchAt}
+                  onOpenClient={() => openClientCard(view.clientId)}
+                  onCallLog={() => {
+                    if (!view.pulse) return;
+                    setCallLogTarget({
+                      clientId: view.clientId,
+                      clientName: view.meta.name,
+                      pulse: view.pulse,
+                    });
+                  }}
+                />
+              ))
+            )}
+          </div>
+        </TabsContent>
+
+        <TabsContent value="attention" className="space-y-3 mt-0">
+          <p className="text-sm text-muted-foreground">
+            שורה לכל לקוח × פלטפורמה — רק כשיש נושא רגיש. יעד מאושר → אחרת מגמת 7 ימים → אחרת בסיס 30 יום.
+          </p>
+          <PulseAttentionTable
+            rows={attentionRows}
+            onOpenClient={openClientCard}
+            onSaveTarget={savePlatformTarget}
+            tableSettingsById={tableSettingsById}
+            savingTableId={savingTargetTableId}
+          />
+        </TabsContent>
+      </Tabs>
 
       <PulseClientCallDialog
         open={!!callLogTarget}
@@ -1297,4 +1063,8 @@ export default function DMMDashboard() {
       />
     </div>
   );
+}
+
+export default function DMMDashboard() {
+  return <CampaignPulseDashboard />;
 }

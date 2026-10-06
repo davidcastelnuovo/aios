@@ -2,19 +2,13 @@ import { useState } from "react";
 import { useQueryClient, useMutation, useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useCurrentTenant } from "@/hooks/useCurrentTenant";
-import { useCurrentUser } from "@/hooks/useCurrentUser";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Separator } from "@/components/ui/separator";
-import { Settings2, TrendingUp, Search, Share2, BarChart3, Loader2, Check, CalendarDays } from "lucide-react";
+import { Settings2, TrendingUp, Search, Share2, BarChart3, Check, CalendarDays } from "lucide-react";
 import { toast } from "sonner";
-import { format } from "date-fns";
-import { he } from "date-fns/locale";
+import { SeoUpdateModal } from "@/components/clients/SeoUpdateModal";
 
 // ── Constants ──────────────────────────────────────────────────────────────────
 const TIER_OPTIONS = [
@@ -39,11 +33,6 @@ const SEO_STATUS_OPTIONS = [
   { value: "down",   label: "ירידה",  color: "text-red-700" },
 ];
 
-// ── Helper: get current month string yyyy-MM ───────────────────────────────────
-function currentMonth() {
-  return format(new Date(), "yyyy-MM");
-}
-
 // ── Main component ─────────────────────────────────────────────────────────────
 interface CRMSettingsSectionProps {
   client: any;
@@ -52,14 +41,9 @@ interface CRMSettingsSectionProps {
 
 export function CRMSettingsSection({ client, onUpdate }: CRMSettingsSectionProps) {
   const { tenantId } = useCurrentTenant();
-  const { user } = useCurrentUser();
   const queryClient = useQueryClient();
 
-  // Local state for SEO modal
   const [seoOpen, setSeoOpen] = useState(false);
-  const [seoStatus, setSeoStatus] = useState("stable");
-  const [seoNotes, setSeoNotes] = useState("");
-  const [seoMonth, setSeoMonth] = useState(currentMonth());
 
   // Current values (graceful fallback if columns don't exist yet)
   const currentTier: string = (client as any).tier ?? "";
@@ -146,32 +130,6 @@ export function CRMSettingsSection({ client, onUpdate }: CRMSettingsSectionProps
       : [...currentServices, val];
     updateServicesMutation.mutate(next);
   }
-
-  // ── Mutation: save SEO update ───────────────────────────────────────────────
-  const saveSeoMutation = useMutation({
-    mutationFn: async () => {
-      if (!tenantId || !user?.id) throw new Error("Missing tenant or user");
-      const { error } = await (supabase as any)
-        .from("seo_monthly_updates")
-        .upsert({
-          client_id: client.id,
-          tenant_id: tenantId,
-          month: seoMonth,
-          status: seoStatus,
-          notes: seoNotes.trim() || null,
-          updated_by: user.id,
-        }, { onConflict: "client_id,month" });
-      if (error) throw error;
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["seo-history", client.id, tenantId] });
-      queryClient.invalidateQueries({ queryKey: ["seo-monthly-updates", tenantId] });
-      setSeoOpen(false);
-      setSeoNotes("");
-      toast.success("עדכון SEO נשמר");
-    },
-    onError: () => toast.error("שגיאה בשמירת עדכון SEO"),
-  });
 
   // ── Render ──────────────────────────────────────────────────────────────────
   return (
@@ -277,69 +235,12 @@ export function CRMSettingsSection({ client, onUpdate }: CRMSettingsSectionProps
         )}
       </div>
 
-      {/* SEO Update Dialog */}
-      <Dialog open={seoOpen} onOpenChange={setSeoOpen}>
-        <DialogContent className="max-w-sm" dir="rtl">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2 text-right">
-              <TrendingUp className="h-4 w-4 text-primary" />
-              עדכון SEO חודשי — {client.name}
-            </DialogTitle>
-          </DialogHeader>
-
-          <div className="space-y-4 py-2">
-            {/* Month */}
-            <div className="space-y-1">
-              <Label className="text-sm">חודש</Label>
-              <input
-                type="month"
-                value={seoMonth}
-                onChange={e => setSeoMonth(e.target.value)}
-                className="w-full border rounded-md px-3 py-1.5 text-sm bg-background"
-              />
-            </div>
-
-            {/* Status */}
-            <div className="space-y-1">
-              <Label className="text-sm">סטטוס</Label>
-              <Select value={seoStatus} onValueChange={setSeoStatus}>
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {SEO_STATUS_OPTIONS.map(opt => (
-                    <SelectItem key={opt.value} value={opt.value}>
-                      <span className={opt.color}>{opt.label}</span>
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            {/* Notes */}
-            <div className="space-y-1">
-              <Label className="text-sm">הערות</Label>
-              <Textarea
-                placeholder="מה השתנה החודש..."
-                value={seoNotes}
-                onChange={e => setSeoNotes(e.target.value)}
-                className="min-h-[80px] resize-none text-sm"
-              />
-            </div>
-          </div>
-
-          <DialogFooter className="gap-2">
-            <Button variant="outline" size="sm" onClick={() => setSeoOpen(false)}>ביטול</Button>
-            <Button
-              size="sm"
-              onClick={() => saveSeoMutation.mutate()}
-              disabled={saveSeoMutation.isPending}
-            >
-              {saveSeoMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : "שמור"}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <SeoUpdateModal
+        clientId={client.id}
+        clientName={client.name}
+        open={seoOpen}
+        onOpenChange={setSeoOpen}
+      />
     </>
   );
 }

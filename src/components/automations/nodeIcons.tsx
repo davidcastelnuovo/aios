@@ -46,6 +46,7 @@ import {
   Code2,
   SplitSquareHorizontal,
   Zap,
+  FileText,
   LucideIcon,
 } from "lucide-react";
 
@@ -289,6 +290,20 @@ export const NODE_ICON_MAP: Record<string, NodeIconConfig> = {
     color: "#7c3aed",
     bgColor: "rgba(124,58,237,0.12)",
     borderColor: "rgba(124,58,237,0.35)",
+    category: "trigger_task",
+  },
+  task_collaborator_added: {
+    icon: UserPlus,
+    color: "#7c3aed",
+    bgColor: "rgba(124,58,237,0.12)",
+    borderColor: "rgba(124,58,237,0.35)",
+    category: "trigger_task",
+  },
+  task_update_added: {
+    icon: StickyNote,
+    color: "#2563eb",
+    bgColor: "rgba(37,99,235,0.12)",
+    borderColor: "rgba(37,99,235,0.35)",
     category: "trigger_task",
   },
   task_overdue: {

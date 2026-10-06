@@ -9,6 +9,15 @@ import { Switch } from "@/components/ui/switch";
 import { toast } from "sonner";
 import { Share2, Copy, Plus, Trash2, Pencil, Check, X } from "lucide-react";
 import { buildDefaultShareToken, SLUG_REGEX } from "@/lib/share-slug";
+import {
+  isLastVisibleSharedReportTab,
+  parseSharedReportTabs,
+  withSharedReportTab,
+  SHARED_REPORT_TAB_HINTS,
+  SHARED_REPORT_TAB_KEYS,
+  SHARED_REPORT_TAB_LABELS,
+  type SharedReportTabKey,
+} from "@/lib/sharedReportTabs";
 
 interface ShareTableDialogProps {
   tableId: string;
@@ -37,6 +46,44 @@ export function ShareTableDialog({ tableId, tableName, tenantId, clientId }: Sha
       return data?.website ?? null;
     },
     enabled: open && !!clientId,
+  });
+
+  // Tab visibility is a report-level preference, so every share link of this
+  // table shows the same tabs.
+  const { data: tableRow } = useQuery({
+    queryKey: ["share-table-settings", tableId],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("crm_tables")
+        .select("id, integration_type, integration_settings")
+        .eq("id", tableId)
+        .maybeSingle();
+      if (error) throw error;
+      return data;
+    },
+    enabled: open,
+  });
+
+  const tabVisibility = parseSharedReportTabs(tableRow?.integration_settings);
+  const supportsTabs = tableRow?.integration_type === "ahrefs";
+
+  const toggleTabMutation = useMutation({
+    mutationFn: async ({ key, visible }: { key: SharedReportTabKey; visible: boolean }) => {
+      const nextSettings = withSharedReportTab(tableRow?.integration_settings, key, visible);
+      const { error } = await supabase
+        .from("crm_tables")
+        .update({ integration_settings: nextSettings as never })
+        .eq("id", tableId);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["share-table-settings", tableId] });
+      queryClient.invalidateQueries({ queryKey: ["crm-tables", tenantId] });
+      toast.success("הטאבים בקישור השיתוף עודכנו");
+    },
+    onError: (err: any) => {
+      toast.error(`שגיאה בעדכון הטאבים: ${err?.message || String(err)}`);
+    },
   });
 
   const { data: shares = [], isLoading } = useQuery({
@@ -192,6 +239,37 @@ export function ShareTableDialog({ tableId, tableName, tenantId, clientId }: Sha
             <Plus className="ml-2 h-4 w-4" />
             צור קישור שיתוף חדש
           </Button>
+
+          {supportsTabs && (
+            <div className="space-y-3 rounded-lg border p-4">
+              <div>
+                <Label className="text-sm font-semibold">מה הלקוח רואה בקישור</Label>
+                <p className="text-xs text-muted-foreground">
+                  כבה טאב שאין בו מדידה — הוא ייעלם מכל קישורי השיתוף של הדוח הזה.
+                </p>
+              </div>
+              {SHARED_REPORT_TAB_KEYS.map((key) => {
+                const isLast = isLastVisibleSharedReportTab(tabVisibility, key);
+                return (
+                  <div key={key} className="flex items-center justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="text-sm">{SHARED_REPORT_TAB_LABELS[key]}</p>
+                      <p className="text-xs text-muted-foreground">
+                        {isLast ? "חייב להישאר טאב אחד גלוי" : SHARED_REPORT_TAB_HINTS[key]}
+                      </p>
+                    </div>
+                    <Switch
+                      checked={tabVisibility[key]}
+                      disabled={isLast || toggleTabMutation.isPending}
+                      onCheckedChange={(checked) =>
+                        toggleTabMutation.mutate({ key, visible: checked })
+                      }
+                    />
+                  </div>
+                );
+              })}
+            </div>
+          )}
 
           {shares.length === 0 && !isLoading && (
             <p className="text-sm text-muted-foreground text-center py-4">

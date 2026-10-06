@@ -3,6 +3,13 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Button } from "@/components/ui/button";
 import { Pin, PinOff } from "lucide-react";
 import {
+  applyLeadTableColumnWidths,
+  LEAD_TABLE_COLUMN_MIN_WIDTH,
+  LEAD_TABLE_COLUMN_WIDTHS_EVENT,
+  readLeadTableColumnWidths,
+  writeLeadTableColumnWidths,
+} from "@/lib/leadTableColumns";
+import {
   Popover,
   PopoverContent,
   PopoverTrigger,
@@ -28,6 +35,8 @@ interface ResizableTableProps {
   };
   getRowClassName?: (row: any, rowIndex: number) => string;
   getStickyCellClassName?: (row: any, rowIndex: number) => string;
+  /** When set, resized widths are restored on the next CRM visit. */
+  columnWidthStorageKey?: string;
 }
 
 export function ResizableTable({ 
@@ -36,36 +45,52 @@ export function ResizableTable({
   onColumnsChange,
   checkboxColumn,
   getRowClassName,
-  getStickyCellClassName
+  getStickyCellClassName,
+  columnWidthStorageKey,
 }: ResizableTableProps) {
-  const [columns, setColumns] = useState<ColumnConfig[]>(initialColumns);
+  const [columns, setColumns] = useState<ColumnConfig[]>(() => {
+    if (!columnWidthStorageKey || typeof window === "undefined") return initialColumns;
+    return applyLeadTableColumnWidths(initialColumns, readLeadTableColumnWidths(window.localStorage));
+  });
   const [resizing, setResizing] = useState<{ columnId: string; startX: number; startWidth: number } | null>(null);
   const tableRef = useRef<HTMLDivElement>(null);
+  const widthStorageKeyRef = useRef(columnWidthStorageKey);
+  widthStorageKeyRef.current = columnWidthStorageKey;
 
   // Sync columns with initialColumns when they change (e.g., after data loads)
   // Preserve user-modified properties (width, sticky) while updating render functions
   useEffect(() => {
+    const saved = columnWidthStorageKey && typeof window !== "undefined"
+      ? readLeadTableColumnWidths(window.localStorage)
+      : {};
     setColumns(prevColumns => {
       return initialColumns.map(newCol => {
         const existingCol = prevColumns.find(c => c.id === newCol.id);
+        const savedWidth = saved[newCol.id];
         if (existingCol) {
-          // Preserve user-modified width and sticky, but update render and other props
+          // Saved width wins over the default that comes back after a view switch.
           return {
             ...newCol,
-            width: existingCol.width,
+            width: savedWidth ?? existingCol.width,
             sticky: existingCol.sticky,
           };
         }
-        return newCol;
+        return savedWidth ? { ...newCol, width: savedWidth } : newCol;
       });
     });
-  }, [initialColumns]);
+  }, [initialColumns, columnWidthStorageKey]);
 
   const updateColumn = useCallback((columnId: string, updates: Partial<ColumnConfig>) => {
     setColumns(prev => {
       const newColumns = prev.map(col => 
         col.id === columnId ? { ...col, ...updates } : col
       );
+      if (typeof updates.width === "number" && widthStorageKeyRef.current && typeof window !== "undefined") {
+        writeLeadTableColumnWidths(
+          Object.fromEntries(newColumns.map((col) => [col.id, col.width])),
+          window.localStorage,
+        );
+      }
       onColumnsChange?.(newColumns);
       return newColumns;
     });
@@ -80,14 +105,30 @@ export function ResizableTable({
     if (!resizing) return;
     
     const diff = e.clientX - resizing.startX;
-    const newWidth = Math.max(resizing.startWidth + diff, 80);
+    const newWidth = Math.max(resizing.startWidth + diff, LEAD_TABLE_COLUMN_MIN_WIDTH);
     
     updateColumn(resizing.columnId, { width: newWidth });
   }, [resizing, updateColumn]);
 
   const handleMouseUp = useCallback(() => {
     setResizing(null);
+    if (widthStorageKeyRef.current && typeof window !== "undefined") {
+      window.dispatchEvent(new CustomEvent(LEAD_TABLE_COLUMN_WIDTHS_EVENT));
+    }
   }, []);
+
+  useEffect(() => {
+    if (!columnWidthStorageKey || typeof window === "undefined") return;
+    const applySavedWidths = () => {
+      const saved = readLeadTableColumnWidths(window.localStorage);
+      setColumns((prev) => prev.map((col) => {
+        const width = saved[col.id];
+        return width ? { ...col, width } : col;
+      }));
+    };
+    window.addEventListener(LEAD_TABLE_COLUMN_WIDTHS_EVENT, applySavedWidths);
+    return () => window.removeEventListener(LEAD_TABLE_COLUMN_WIDTHS_EVENT, applySavedWidths);
+  }, [columnWidthStorageKey]);
 
   useEffect(() => {
     if (resizing) {
@@ -126,7 +167,7 @@ export function ResizableTable({
         <thead className="sticky top-0 z-20 bg-card">
           <tr className="border-b">
             {checkboxColumn && (
-              <th className="sticky right-0 z-30 bg-card border-l p-3 text-center w-[50px]">
+              <th className="sticky right-0 z-30 bg-card border-l px-2 py-1.5 text-center w-[50px]">
                 <Checkbox
                   checked={checkboxColumn.checked.every(Boolean)}
                   onCheckedChange={checkboxColumn.onSelectAll}
@@ -138,7 +179,7 @@ export function ResizableTable({
               return (
                 <th
                   key={column.id}
-                  className="sticky z-20 bg-card border-l p-3 text-right relative group overflow-hidden"
+                  className="sticky z-20 bg-card border-l px-2 py-1.5 text-right relative group overflow-hidden"
                   style={{ 
                     width: column.width,
                     minWidth: column.minWidth || 80,
@@ -176,7 +217,7 @@ export function ResizableTable({
             {regularColumns.map((column) => (
               <th
                 key={column.id}
-                className="bg-card border-l p-3 text-right relative group"
+                className="bg-card border-l px-2 py-1.5 text-right relative group"
                 style={{ width: column.width }}
               >
                 <div className="flex items-center justify-between gap-2">
@@ -217,7 +258,7 @@ export function ResizableTable({
               className={`border-b hover:bg-muted/30 ${rowClassName}`}
             >
               {checkboxColumn && (
-                <td className={`sticky right-0 z-10 border-l p-3 text-center ${stickyCellClassName}`}>
+                <td className={`sticky right-0 z-10 border-l px-2 py-1.5 text-center ${stickyCellClassName}`}>
                   <Checkbox
                     checked={checkboxColumn.checked[rowIndex]}
                     onCheckedChange={(checked) => checkboxColumn.onCheckedChange(rowIndex, checked as boolean)}
@@ -229,7 +270,7 @@ export function ResizableTable({
                 return (
                   <td
                     key={column.id}
-                    className={`sticky z-10 border-l p-3 overflow-hidden ${stickyCellClassName}`}
+                    className={`sticky z-10 border-l px-2 py-1.5 overflow-hidden ${stickyCellClassName}`}
                     style={{ 
                       width: column.width,
                       minWidth: column.minWidth || 80,
@@ -244,7 +285,7 @@ export function ResizableTable({
               {regularColumns.map((column) => (
                 <td
                   key={column.id}
-                  className="border-l p-3"
+                  className="border-l px-2 py-1.5"
                   style={{ width: column.width }}
                 >
                   {column.render(row)}

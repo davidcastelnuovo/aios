@@ -10,6 +10,7 @@ import {
   findMessageByIdempotency,
   insertMessage,
   loadRoute,
+  logChannelAction,
   resolveCarmenAgent,
   serviceClient,
   setConversationStatus,
@@ -75,24 +76,25 @@ Deno.serve(async (req) => {
   if (action === "channel_health") {
     const { probeCursorApiKey, cursorApiKey } = await import("../_shared/agent-channel/cursor-api.ts");
     const { collectOpenChatIds } = await import("../_shared/agent-channel/sticky-agent.ts");
-    const cursor = await probeCursorApiKey(cursorApiKey());
-    const appEnv = Deno.env.get("APP_ENV") || Deno.env.get("VITE_APP_ENV") || "";
+    const { probeWorkspaceAgent } = await import("../_shared/agent-channel/workspace-agent.ts");
     let env: Record<string, string | undefined> = {};
     try { env = Deno.env.toObject(); } catch { /* ignore */ }
-  const cursorChats = await collectOpenChatIds(sb, { tenantId, provider: "cursor", env });
-    const codexChats = await collectOpenChatIds(sb, { tenantId, provider: "codex", env });
+    const cursor = await probeCursorApiKey(cursorApiKey());
+    const codex = await probeWorkspaceAgent("codex", env);
+    const appEnv = Deno.env.get("APP_ENV") || Deno.env.get("VITE_APP_ENV") || "";
+    const cursorChats = await collectOpenChatIds(sb, { tenantId, provider: "cursor", env });
     const canCreate = cursor.ok;
     return json(200, {
       ok: cursor.ok,
       cursor,
+      codex,
       app_env: appEnv || null,
       seats: {
         cursor: { bill: "cursor_cloud", open_chat: canCreate, chats: cursorChats.length },
         codex: {
-          bill: "cursor_cloud",
-          open_chat: canCreate,
-          probe: cursor,
-          chats: codexChats.length,
+          bill: "chatgpt_workspace",
+          open_chat: codex.ok,
+          probe: codex,
         },
         grok: { bill: "grok_webhook" },
         carmen: { bill: "openai_api" },
@@ -222,6 +224,25 @@ Deno.serve(async (req) => {
     if (reused) return json(200, { ...reused, duplicate: true });
   }
 
+  const provider = String(route.provider || route.slug || "internal");
+  if (action === "send" && provider !== "internal" && provider !== "parliament") {
+    const { recordAndCheckLoopGuard } = await import("../_shared/carmen-brain-flags.ts");
+    const loopHit = recordAndCheckLoopGuard({
+      conversationId: conv.id,
+      provider,
+    });
+    if (loopHit) {
+      console.warn("[agent-channel-send] loop_guard", JSON.stringify(loopHit));
+      await logChannelAction(sb, {
+        tenantId,
+        agentId,
+        action: "loop_guard_warning",
+        details: loopHit,
+        status: "warn",
+      });
+    }
+  }
+
   try {
     const result: SendResult = await dispatchSend({
       tenantId,
@@ -239,6 +260,9 @@ Deno.serve(async (req) => {
     await sb.from("ai_conversation_messages").update({
       metadata: { dispatch: result, input_mode: body.input_mode || "typed" },
     }).eq("tenant_id", tenantId).eq("idempotency_key", idempotencyKey);
+    if (result.inline_reply) {
+      await setConversationStatus(sb, conv.id, "idle");
+    }
     return json(200, result);
   } catch (e: any) {
     await setConversationStatus(sb, conv.id, "error");

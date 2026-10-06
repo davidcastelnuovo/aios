@@ -31,6 +31,58 @@ export function isPhoneInAllowedList(phone, allowedPhones) {
 }
 
 /**
+ * True when a value is a real phone number rather than a WhatsApp LID.
+ * Manus LIDs are long opaque ids (14+ digits); real Israeli mobiles are at most
+ * 13 digits and their last 9 start with 5-9.
+ */
+export function looksLikeRealPhone(value) {
+  const d = digitsOnly(value);
+  if (!d || d.length > 13) return false;
+  return /^[5-9]\d{8}$/.test(phoneTail9(d));
+}
+
+/**
+ * A `wa_lid_map.lid` key is only trustworthy when it cannot be a real phone.
+ * The gateway often puts the REAL phone in `from` / `senderPhone` while flagging
+ * the chat as `@lid`; keying the map by that value stored phone→phone rows
+ * (David's own number → the connected bot number), which then re-attributed all
+ * of his later messages and made Carmen refuse them with `scope_phone`.
+ */
+export function isUsableLidKey(value) {
+  const d = digitsOnly(value);
+  if (d.length < 9) return false;
+  return !looksLikeRealPhone(d);
+}
+
+/** LID digits of an inbound private event — taken only from LID-bearing fields. */
+export function pickInboundLidDigits({ fromRaw = "", chatIdRaw = "", senderLidRaw = "" } = {}) {
+  const senderLid = digitsOnly(senderLidRaw);
+  if (isUsableLidKey(senderLid)) return senderLid;
+  for (const raw of [fromRaw, chatIdRaw]) {
+    if (!/@lid$/i.test(String(raw || ""))) continue;
+    const d = digitsOnly(String(raw).split("@")[0]);
+    if (isUsableLidKey(d)) return d;
+  }
+  return "";
+}
+
+/**
+ * First real phone among the gateway's phone fields, ignoring the LID itself.
+ * Israeli-shaped numbers win; other international numbers are still accepted.
+ */
+export function pickPayloadRealPhone(candidates = [], lidDigits = "") {
+  const lid = digitsOnly(lidDigits);
+  const fallbacks = [];
+  for (const candidate of Array.isArray(candidates) ? candidates : []) {
+    const d = digitsOnly(String(candidate || "").split("@")[0]);
+    if (!d || d === lid) continue;
+    if (looksLikeRealPhone(d)) return d;
+    if (d.length >= 9 && d.length <= 15) fallbacks.push(d);
+  }
+  return fallbacks[0] || "";
+}
+
+/**
  * Resolve an inbound @lid private sender to a real phone.
  * Priority (deterministic only):
  *  0) payload real-phone field (senderPn / participantPn / …)
@@ -58,6 +110,13 @@ export function resolveInboundLidToPhone({
   const fromPayload = digitsOnly(payloadRealPhone);
   if (fromPayload && fromPayload.length >= 9 && fromPayload.length <= 15 && fromPayload !== lid) {
     return { phone: fromPayload, reason: "payload_real_phone" };
+  }
+
+  // Defensive: the "LID" is sometimes the sender's real phone (gateway puts it in
+  // `from` while marking the chat @lid). It resolves to itself — never through the
+  // map or the single-allowed-phone fallback, which caused cross-attribution.
+  if (looksLikeRealPhone(lid)) {
+    return { phone: lid, reason: "lid_is_real_phone" };
   }
 
   const aliases =
@@ -147,6 +206,8 @@ export function buildPrivateRoutingAcceptanceCases() {
     anaPhone: "972545612156",
     davidPhone: "972507677613",
     anaLid: "999888777666555",
+    davidLid: "224686986293269",
+    botPhone: "972549696673",
     unauthorizedPhone: "972501111111",
   };
 }

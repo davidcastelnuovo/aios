@@ -1,7 +1,8 @@
 import { useMemo, useState, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Tabs, TabsContent } from "@/components/ui/tabs";
+import { ResponsiveTabsList, type ResponsiveTabItem } from "@/components/ui/responsive-tabs-list";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -21,7 +22,8 @@ import { useUserIntegrations } from "@/hooks/useUserIntegrations";
 import { useAhrefsReports } from "@/hooks/useAhrefsReports";
 import { filterValidSeoReports } from "./seo/reportValidity";
 import { useSeoScope } from "@/hooks/useSeoScope";
-import { filterSeoReportsByDomain, seoDomainsMatch } from "@/lib/seoDomain";
+import { useResolvedGscIntegration } from "@/hooks/useResolvedGscIntegration";
+import { filterSeoReportsByDomain, resolveLinkedCrmTableId, resolveSeoLinkedGscSiteUrl } from "@/lib/seoDomain";
 
 interface SeoReportTabsProps {
   /**
@@ -115,14 +117,22 @@ export function SeoReportTabs({ tenantId, clientId }: SeoReportTabsProps) {
   const targetDomain = (seoTable?.integration_settings as any)?.targetDomain || '';
   const savedGaTableId = (seoTable?.integration_settings as any)?.linkedGaTableId || '';
   const savedGscTableId = (seoTable?.integration_settings as any)?.linkedGscTableId || '';
-  const savedGscSiteUrlRaw = (seoTable?.integration_settings as any)?.linkedGscSiteUrl || '';
-  // Ignore a linked Search Console property that belongs to another site —
-  // otherwise a bad link keeps feeding another client's clicks/impressions in.
-  const savedGscSiteUrl =
-    savedGscSiteUrlRaw && expectedDomain && !seoDomainsMatch(savedGscSiteUrlRaw, expectedDomain)
-      ? ''
-      : savedGscSiteUrlRaw;
+  const savedGscIntegrationId = (seoTable?.integration_settings as any)?.gsc_integration_id || '';
+  const savedGscSiteUrl = resolveSeoLinkedGscSiteUrl({
+    integrationSettings: (seoTable?.integration_settings || {}) as Record<string, unknown>,
+    clientGscSiteUrl: scope?.clientGscSiteUrl,
+    expectedDomain,
+  });
   const savedGscLangFilter = ((seoTable?.integration_settings as any)?.linkedGscLangFilter || 'all') as 'all' | 'he' | 'en';
+
+  // Org-wide GSC fallback — same path as SeoDashboardView so the Search Console
+  // tab works even when the viewer didn't OAuth personally (Anna's connection).
+  const resolvedGsc = useResolvedGscIntegration({
+    clientId,
+    tenantIds: accessibleTenantIds,
+    savedSiteUrl: savedGscSiteUrl,
+    expectedDomain,
+  });
 
   // GA / GSC tables come from the scope (already searched across all accessible tenants)
   const gaTables = scope?.gaTables || [];
@@ -134,32 +144,20 @@ export function SeoReportTabs({ tenantId, clientId }: SeoReportTabsProps) {
   const [showGaDialog, setShowGaDialog] = useState(false);
 
   useEffect(() => {
-    if (savedGaTableId) setSelectedGaTableId(savedGaTableId);
-    else {
-      // Auto-match by client_id
-      const matchByClient = gaTables.find(t => t.client_id === clientId);
-      if (matchByClient) {
-        setSelectedGaTableId(matchByClient.id);
-        // Auto-save the link
-        if (seoTable?.id) saveLinkMutation.mutate({ key: 'linkedGaTableId', value: matchByClient.id });
-      } else if (gaTables.length === 1) {
-        setSelectedGaTableId(gaTables[0].id);
-      }
+    const resolved = resolveLinkedCrmTableId(savedGaTableId, gaTables, clientId);
+    setSelectedGaTableId(resolved);
+    if (resolved && resolved !== savedGaTableId && seoTable?.id) {
+      saveLinkMutation.mutate({ key: "linkedGaTableId", value: resolved });
     }
-  }, [savedGaTableId, gaTables, clientId]);
+  }, [savedGaTableId, gaTables, clientId, seoTable?.id]);
 
   useEffect(() => {
-    if (savedGscTableId) setSelectedGscTableId(savedGscTableId);
-    else {
-      const matchByClient = gscTables.find(t => t.client_id === clientId);
-      if (matchByClient) {
-        setSelectedGscTableId(matchByClient.id);
-        if (seoTable?.id) saveLinkMutation.mutate({ key: 'linkedGscTableId', value: matchByClient.id });
-      } else if (gscTables.length === 1) {
-        setSelectedGscTableId(gscTables[0].id);
-      }
+    const resolved = resolveLinkedCrmTableId(savedGscTableId, gscTables, clientId);
+    setSelectedGscTableId(resolved);
+    if (resolved && resolved !== savedGscTableId && seoTable?.id) {
+      saveLinkMutation.mutate({ key: "linkedGscTableId", value: resolved });
     }
-  }, [savedGscTableId, gscTables, clientId]);
+  }, [savedGscTableId, gscTables, clientId, seoTable?.id]);
 
   // Save linked table ID to SEO table's integration_settings
   const saveLinkMutation = useMutation({
@@ -269,41 +267,43 @@ export function SeoReportTabs({ tenantId, clientId }: SeoReportTabsProps) {
     (Array.isArray(gscUserIntegrations) && gscUserIntegrations.length > 0) ||
     gscTables.length > 0 ||
     !!savedGscTableId ||
+    !!resolvedGsc.integrationId ||
     !!savedGscSiteUrl;
 
-  // Always render tabs so the Maskyoo (calls) tab is available even when no
-  // GSC/GA integrations are linked.
+  const [activeTab, setActiveTab] = useState("seo");
 
+  const seoTabItems = useMemo((): ResponsiveTabItem[] => {
+    const items: ResponsiveTabItem[] = [
+      { value: "seo", label: "SEO", icon: TrendingUp },
+    ];
+    if (hasGsc) {
+      items.push({ value: "gsc", label: "Search Console", icon: Search });
+    }
+    if (hasGa) {
+      items.push({ value: "ga", label: "Analytics", icon: BarChart3 });
+    }
+    items.push(
+      { value: "maskyoo", label: "שיחות מסקיו", icon: Phone },
+      { value: "monthly-work", label: "עבודה חודשית", icon: FileText },
+    );
+    return items;
+  }, [hasGsc, hasGa]);
+
+  useEffect(() => {
+    if (!seoTabItems.some((item) => item.value === activeTab)) {
+      setActiveTab(seoTabItems[0]?.value || "seo");
+    }
+  }, [activeTab, seoTabItems]);
 
   return (
-    <div className="space-y-4" dir="rtl">
-      <Tabs defaultValue="seo" className="w-full">
-        <TabsList className="w-full justify-start gap-1">
-          <TabsTrigger value="seo" className="gap-1.5">
-            <TrendingUp className="h-4 w-4" />
-            SEO
-          </TabsTrigger>
-          {hasGsc && (
-            <TabsTrigger value="gsc" className="gap-1.5">
-              <Search className="h-4 w-4" />
-              Search Console
-            </TabsTrigger>
-          )}
-          {hasGa && (
-            <TabsTrigger value="ga" className="gap-1.5">
-              <BarChart3 className="h-4 w-4" />
-              Analytics
-            </TabsTrigger>
-          )}
-          <TabsTrigger value="maskyoo" className="gap-1.5">
-            <Phone className="h-4 w-4" />
-            שיחות מסקיו
-          </TabsTrigger>
-          <TabsTrigger value="monthly-work" className="gap-1.5">
-            <FileText className="h-4 w-4" />
-            עבודה חודשית
-          </TabsTrigger>
-        </TabsList>
+    <div className="space-y-4 min-w-0 max-w-full" dir="rtl">
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+        <ResponsiveTabsList
+          items={seoTabItems}
+          value={activeTab}
+          onValueChange={setActiveTab}
+          mobileLabel="בחר דוח SEO"
+        />
 
         <TabsContent value="maskyoo">
           <MaskyooSiblingCard clientId={clientId} fallbackTenantId={reportTenantId} />
@@ -324,6 +324,7 @@ export function SeoReportTabs({ tenantId, clientId }: SeoReportTabsProps) {
             ahrefsMode={ahrefsMode}
             ahrefsProtocol={ahrefsProtocol}
             initialGscSiteUrl={savedGscSiteUrl}
+            selectedGscIntegrationId={savedGscIntegrationId}
             onGscSiteSelected={(siteUrl) => {
               if (siteUrl && siteUrl !== savedGscSiteUrl) {
                 saveLinkMutation.mutate({ key: 'linkedGscSiteUrl', value: siteUrl });
@@ -336,6 +337,45 @@ export function SeoReportTabs({ tenantId, clientId }: SeoReportTabsProps) {
 
         {hasGsc && (
           <TabsContent value="gsc">
+            {Array.isArray(gscUserIntegrations) && gscUserIntegrations.length > 0 && (
+              <Card className="mb-3 border-primary/20">
+                <CardContent className="p-3">
+                  <div className="flex items-center gap-3 flex-wrap">
+                    <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                      <Settings2 className="h-4 w-4" />
+                      <span>חשבון Search Console לדוח:</span>
+                    </div>
+                    <Select
+                      value={savedGscIntegrationId}
+                      onValueChange={(integrationId) => {
+                        if (integrationId !== savedGscIntegrationId) {
+                          saveLinkMutation.mutate({ key: 'gsc_integration_id', value: integrationId });
+                        }
+                      }}
+                    >
+                      <SelectTrigger className="h-8 w-full max-w-full sm:w-[320px] text-sm">
+                        <SelectValue placeholder="בחר משתמש Google" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {gscUserIntegrations.map((integration) => {
+                          const integrationSettings =
+                            (integration.settings || {}) as Record<string, unknown>;
+                          const email = String(integrationSettings.google_email || "חשבון Google");
+                          const owner = integration._isOwn
+                            ? "שלי"
+                            : integration._sharedByName || "משותף";
+                          return (
+                            <SelectItem key={integration.id} value={integration.id}>
+                              {email} · {owner}
+                            </SelectItem>
+                          );
+                        })}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </CardContent>
+              </Card>
+            )}
             {/* If we have a GSC crm_table with data, show the full dashboard */}
             {selectedGscTableId ? (
               <div className="space-y-3">
@@ -375,7 +415,10 @@ export function SeoReportTabs({ tenantId, clientId }: SeoReportTabsProps) {
                   clientId={clientId}
                   domain={savedGscSiteUrl || expectedDomain || targetDomain || clientWebsite}
                   initialSiteUrl={savedGscSiteUrl}
+                  selectedIntegrationId={savedGscIntegrationId}
+                  showIntegrationSelector={false}
                   initialLangFilter={savedGscLangFilter}
+                  resolvedFallback={resolvedGsc}
                   onLangFilterChange={(v) => saveLinkMutation.mutate({ key: 'linkedGscLangFilter', value: v })}
                   onSiteSelected={(siteUrl) => {
                     if (siteUrl && siteUrl !== savedGscSiteUrl) {
@@ -406,7 +449,7 @@ export function SeoReportTabs({ tenantId, clientId }: SeoReportTabsProps) {
                         saveLinkMutation.mutate({ key: 'linkedGaTableId', value: id });
                       }}
                     >
-                      <SelectTrigger className="h-8 w-[280px] text-sm">
+                      <SelectTrigger className="h-8 w-full max-w-full sm:w-[280px] text-sm">
                         <SelectValue placeholder="בחר חשבון Analytics" />
                       </SelectTrigger>
                       <SelectContent>
@@ -525,7 +568,7 @@ function GscTableSelector({ tables, selectedId, onSelect }: {
             <span>חיבור Search Console:</span>
           </div>
           <Select value={selectedId} onValueChange={onSelect}>
-            <SelectTrigger className="h-8 w-[280px] text-sm">
+            <SelectTrigger className="h-8 w-full max-w-full sm:w-[280px] text-sm">
               <SelectValue placeholder="בחר אתר Search Console" />
             </SelectTrigger>
             <SelectContent>

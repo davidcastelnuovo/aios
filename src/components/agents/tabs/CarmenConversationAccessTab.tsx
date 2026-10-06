@@ -4,10 +4,16 @@ import { Loader2, Phone, Users, MessageSquare, Shield, RefreshCw, Save } from "l
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { useCurrentTenant } from "@/hooks/useCurrentTenant";
-import { fetchCarmenManusGroups } from "@/lib/carmenManusGroups";
+import {
+  fetchCarmenManusGroups,
+  fetchManusGroupsSyncInfo,
+  syncCarmenManusGroups,
+} from "@/lib/carmenManusGroups";
 import {
   buildPolicyFromAutomation,
   fetchCarmenAutomationConfig,
+  mergePrivatePhoneAllowlist,
+  type PrivatePhoneRow,
 } from "@/lib/carmenAccessAutomation";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -17,6 +23,7 @@ import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 import {
   Select,
   SelectContent,
@@ -32,13 +39,6 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-
-type PolicyPhone = {
-  phone: string;
-  label?: string;
-  dev_escalation_tier?: "full" | "bugfix" | null;
-  surfaces?: string[];
-};
 
 type ClientGroupRow = {
   id?: string;
@@ -57,7 +57,9 @@ export function CarmenConversationAccessTab({ agent }: { agent: { id: string; na
   const { tenantId } = useCurrentTenant();
   const qc = useQueryClient();
   const autoSyncedRef = useRef(false);
-  const [phones, setPhones] = useState<PolicyPhone[]>([]);
+  const autoManusSyncRef = useRef(false);
+  const [phones, setPhones] = useState<PrivatePhoneRow[]>([]);
+  const [phonesDirty, setPhonesDirty] = useState(false);
   const [groupIds, setGroupIds] = useState<string[]>([]);
   const [requireDirect, setRequireDirect] = useState(true);
   const [openMemberGroups, setOpenMemberGroups] = useState(false);
@@ -82,11 +84,16 @@ export function CarmenConversationAccessTab({ agent }: { agent: { id: string; na
     },
   });
 
-  /** Only groups where Carmen's Manus bot has been seen — not operator Green API groups. */
   const { data: manusGroups, isLoading: groupsLoading } = useQuery({
     queryKey: ["carmen-manus-groups", tenantId],
     enabled: !!tenantId,
     queryFn: () => fetchCarmenManusGroups(tenantId!),
+  });
+
+  const { data: manusSyncInfo } = useQuery({
+    queryKey: ["carmen-manus-sync-info", tenantId],
+    enabled: !!tenantId,
+    queryFn: () => fetchManusGroupsSyncInfo(tenantId!),
   });
 
   const manusGroupIdSet = useMemo(
@@ -138,8 +145,23 @@ export function CarmenConversationAccessTab({ agent }: { agent: { id: string; na
     queryFn: () => fetchCarmenAutomationConfig(tenantId!, agent.id),
   });
 
+  const mergedPhones = useMemo(
+    () => mergePrivatePhoneAllowlist({
+      policyPhones: Array.isArray(policy?.private_phones) ? policy.private_phones : [],
+      identities: identities as Array<{
+        phone: string;
+        display_name?: string | null;
+        status?: string;
+        surfaces?: string[] | null;
+        dev_escalation_tier?: string | null;
+      }>,
+      automationPhones: automationCfg?.carmen_allowed_phones,
+    }),
+    [policy?.private_phones, identities, automationCfg?.carmen_allowed_phones],
+  );
+
   const persistPolicy = async (draft: {
-    phones: PolicyPhone[];
+    phones: PrivatePhoneRow[];
     groupIds: string[];
     requireDirect: boolean;
     openMemberGroups: boolean;
@@ -181,8 +203,12 @@ export function CarmenConversationAccessTab({ agent }: { agent: { id: string; na
   };
 
   useEffect(() => {
+    if (policyLoading || automationLoading) return;
+    if (!phonesDirty) setPhones(mergedPhones);
+  }, [mergedPhones, policyLoading, automationLoading, phonesDirty]);
+
+  useEffect(() => {
     if (!policy) return;
-    setPhones(Array.isArray(policy.private_phones) ? policy.private_phones : []);
     const savedGroups: string[] = Array.isArray(policy.allowed_group_ids) ? policy.allowed_group_ids : [];
     setGroupIds(savedGroups);
     setRequireDirect(policy.require_direct_address !== false);
@@ -207,14 +233,28 @@ export function CarmenConversationAccessTab({ agent }: { agent: { id: string; na
     mutationFn: async () => {
       if (!tenantId || !automationCfg) return;
       const built = buildPolicyFromAutomation(automationCfg, manusGroups || []);
+      // Keep identity-approved private phones when seeding — never wipe the UI
+      // with an empty automation-only list from a group-only trigger step.
+      const phones = mergePrivatePhoneAllowlist({
+        automationPhones: automationCfg.carmen_allowed_phones,
+        identities: identities as Array<{
+          phone: string;
+          display_name?: string | null;
+          status?: string;
+          surfaces?: string[] | null;
+          dev_escalation_tier?: string | null;
+        }>,
+        policyPhones: built.phones,
+      });
       const draft = {
-        phones: built.phones,
+        phones,
         groupIds: built.groupIds,
         requireDirect: built.requireDirectAddress,
         openMemberGroups: built.openMemberGroups,
         denyMessage,
       };
       await persistPolicy(draft);
+      setPhonesDirty(false);
       setPhones(draft.phones);
       setGroupIds(draft.groupIds);
       setOpenMemberGroups(draft.openMemberGroups);
@@ -232,12 +272,15 @@ export function CarmenConversationAccessTab({ agent }: { agent: { id: string; na
   useEffect(() => {
     if (autoSyncedRef.current || policyLoading || groupsLoading || automationLoading) return;
     if (!tenantId || !automationCfg) return;
+    const identityPrivateCount = (identities || []).filter((id: any) => {
+      const surfaces = Array.isArray(id.surfaces) ? id.surfaces : ["whatsapp_private", "whatsapp_group"];
+      return surfaces.includes("whatsapp_private");
+    }).length;
+    const automationPhoneCount = automationCfg.carmen_allowed_phones?.length ?? 0;
+    const policyPhoneCount = Array.isArray(policy?.private_phones) ? policy.private_phones.length : 0;
     const needsSeed = !policy
       || (automationCfg.carmen_open_member_groups === true && !policy?.open_member_groups)
-      || (
-        Array.isArray(policy?.private_phones) && policy.private_phones.length === 0
-        && (automationCfg.carmen_allowed_phones?.length ?? 0) > 0
-      );
+      || (policyPhoneCount === 0 && (automationPhoneCount > 0 || identityPrivateCount > 0));
     if (!needsSeed) return;
     autoSyncedRef.current = true;
     autoSyncFromAutomation.mutate();
@@ -247,13 +290,54 @@ export function CarmenConversationAccessTab({ agent }: { agent: { id: string; na
     groupsLoading,
     automationLoading,
     automationCfg,
+    identities,
     tenantId,
+  ]);
+
+  const syncManusGroups = useMutation({
+    mutationFn: async () => {
+      if (!tenantId) throw new Error("חסר tenant");
+      return syncCarmenManusGroups(tenantId);
+    },
+    onSuccess: (data) => {
+      qc.invalidateQueries({ queryKey: ["carmen-manus-groups", tenantId] });
+      qc.invalidateQueries({ queryKey: ["carmen-manus-sync-info", tenantId] });
+      if (data.warning) {
+        toast.warning(`${data.syncedCount ?? 0} קבוצות נטענו — ${data.warning}`);
+      } else {
+        toast.success(`סונכרנו ${data.syncedCount ?? 0} קבוצות מ-Manus`);
+      }
+    },
+    onError: (e: Error) => toast.error(e.message || "סנכרון קבוצות נכשל"),
+  });
+
+  const groupsCountMismatch = !!manusSyncInfo?.hasSync
+    && (manusSyncInfo.count || 0) > (manusGroups?.length || 0);
+
+  useEffect(() => {
+    if (autoManusSyncRef.current || !tenantId || groupsLoading) return;
+    if (syncManusGroups.isPending) return;
+    const needsSync = !manusSyncInfo?.hasSync
+      || groupsCountMismatch
+      || (manusGroups?.length || 0) === 0;
+    if (!needsSync) return;
+    autoManusSyncRef.current = true;
+    syncManusGroups.mutate();
+  }, [
+    tenantId,
+    groupsLoading,
+    manusSyncInfo?.hasSync,
+    manusSyncInfo?.count,
+    manusGroups?.length,
+    groupsCountMismatch,
+    syncManusGroups.isPending,
   ]);
 
   const importFromAutomation = useMutation({
     mutationFn: async () => {
       if (!automationCfg) throw new Error("לא נמצאה אוטומציית כרמן לייבוא");
       const built = buildPolicyFromAutomation(automationCfg, manusGroups || []);
+      setPhonesDirty(true);
       setPhones(built.phones);
       setGroupIds(built.groupIds);
       setOpenMemberGroups(built.openMemberGroups);
@@ -282,6 +366,7 @@ export function CarmenConversationAccessTab({ agent }: { agent: { id: string; na
       }
     },
     onSuccess: () => {
+      setPhonesDirty(false);
       toast.success("הרשאות שיחה נשמרו");
       qc.invalidateQueries({ queryKey: policyKey });
       qc.invalidateQueries({ queryKey: ["carmen-identities", tenantId] });
@@ -299,12 +384,32 @@ export function CarmenConversationAccessTab({ agent }: { agent: { id: string; na
       toast.error("המספר כבר ברשימה");
       return;
     }
-    setPhones([...phones, { phone: p, surfaces: ["whatsapp_private"], dev_escalation_tier: null }]);
+    setPhonesDirty(true);
+    setPhones([...phones, { phone: p, surfaces: ["whatsapp_private"], dev_escalation_tier: null, source: "policy" }]);
     setNewPhone("");
   };
 
+  const privateStatusLabel = (row: PrivatePhoneRow) => {
+    if (row.status === "approved") return "מאושר";
+    if (row.status === "pending") return "ממתין";
+    if (row.source === "automation") return "אוטומציה";
+    if (row.source === "policy") return "מדיניות";
+    return "מאושר";
+  };
+
   const toggleGroup = (id: string) => {
+    if (openMemberGroups) return;
     setGroupIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
+  };
+
+  const selectAllGroups = () => {
+    if (openMemberGroups) return;
+    setGroupIds((manusGroups || []).map((g: { id: string }) => g.id));
+  };
+
+  const clearAllGroups = () => {
+    if (openMemberGroups) return;
+    setGroupIds([]);
   };
 
   const addClientGroupRow = () => {
@@ -353,6 +458,13 @@ export function CarmenConversationAccessTab({ agent }: { agent: { id: string; na
           </p>
         </div>
         <div className="flex flex-wrap gap-2 justify-end shrink-0">
+          <Button variant="outline" size="sm" onClick={() => syncManusGroups.mutate()}
+            disabled={syncManusGroups.isPending} className="gap-1">
+            {syncManusGroups.isPending
+              ? <Loader2 className="h-4 w-4 animate-spin" />
+              : <RefreshCw className="h-4 w-4" />}
+            סנכרן קבוצות מ-Manus
+          </Button>
           <Button variant="outline" size="sm" onClick={() => importFromAutomation.mutate()}
             disabled={importFromAutomation.isPending || !automationCfg} className="gap-1">
             <RefreshCw className="h-4 w-4" /> סנכרן מאוטומציה
@@ -383,7 +495,9 @@ export function CarmenConversationAccessTab({ agent }: { agent: { id: string; na
           <Table dir="rtl">
             <TableHeader>
               <TableRow>
+                <TableHead className="text-right">שם</TableHead>
                 <TableHead className="text-right">טלפון</TableHead>
+                <TableHead className="text-right w-20">סטטוס</TableHead>
                 <TableHead className="text-right w-16">פרטי</TableHead>
                 <TableHead className="text-right w-16">קבוצה</TableHead>
                 <TableHead className="text-right">Escalation</TableHead>
@@ -391,9 +505,22 @@ export function CarmenConversationAccessTab({ agent }: { agent: { id: string; na
               </TableRow>
             </TableHeader>
             <TableBody>
+              {phones.length === 0 && (
+                <TableRow>
+                  <TableCell colSpan={7} className="text-center text-sm text-muted-foreground py-6">
+                    אין עדיין מורשים לשיחה פרטית — הוסף מספר או סנכרן מאוטומציה.
+                  </TableCell>
+                </TableRow>
+              )}
               {phones.map((row, idx) => (
                 <TableRow key={row.phone}>
+                  <TableCell className="text-right">{row.label || "—"}</TableCell>
                   <TableCell className="font-mono text-left" dir="ltr">{row.phone}</TableCell>
+                  <TableCell>
+                    <Badge variant={row.status === "approved" || row.source === "policy" ? "default" : "secondary"} className="text-[10px]">
+                      {privateStatusLabel(row)}
+                    </Badge>
+                  </TableCell>
                   <TableCell>
                     <Checkbox checked={row.surfaces?.includes("whatsapp_private") ?? true} disabled />
                   </TableCell>
@@ -401,6 +528,7 @@ export function CarmenConversationAccessTab({ agent }: { agent: { id: string; na
                     <Checkbox
                       checked={row.surfaces?.includes("whatsapp_group") ?? false}
                       onCheckedChange={(c) => {
+                        setPhonesDirty(true);
                         const next = [...phones];
                         const s = new Set(row.surfaces || ["whatsapp_private"]);
                         if (c) s.add("whatsapp_group"); else s.delete("whatsapp_group");
@@ -413,6 +541,7 @@ export function CarmenConversationAccessTab({ agent }: { agent: { id: string; na
                     <Select
                       value={row.dev_escalation_tier || "none"}
                       onValueChange={(v) => {
+                        setPhonesDirty(true);
                         const next = [...phones];
                         next[idx] = {
                           ...row,
@@ -431,7 +560,7 @@ export function CarmenConversationAccessTab({ agent }: { agent: { id: string; na
                   </TableCell>
                   <TableCell>
                     <Button type="button" variant="ghost" size="sm"
-                      onClick={() => setPhones(phones.filter((_, i) => i !== idx))}>×</Button>
+                      onClick={() => { setPhonesDirty(true); setPhones(phones.filter((_, i) => i !== idx)); }}>×</Button>
                   </TableCell>
                 </TableRow>
               ))}
@@ -443,61 +572,111 @@ export function CarmenConversationAccessTab({ agent }: { agent: { id: string; na
       <Card className="p-4 space-y-4 w-full">
         <h3 className="font-medium flex items-center gap-2 justify-end">
           <Users className="h-4 w-4 shrink-0" />
-          WhatsApp — קבוצות (Manus בלבד)
+          באילו קבוצות כרמן מורשית להגיב?
         </h3>
-        <p className="text-xs text-muted-foreground text-right">
-          רק קבוצות של חיבור Manus של כרמן — לא קבוצות מ-Green API (הטלפון שלך לצ׳אט/דיוור).
-        </p>
+
+        <Alert className="text-right" dir="rtl">
+          <AlertDescription className="text-xs space-y-1">
+            <p><strong>איך זה עובד:</strong> כרמן מגיבה בקבוצה רק אם (א) הקבוצה מורשית כאן, (ב) מישהו פונה לה ישירות («כרמן…» אם המתג למטה פעיל), ו-(ג) השולח מזוהה ומורשה.</p>
+            <p><strong>רשימה ידנית:</strong> סמן קבוצות Manus — רק בהן כרמן תענה.</p>
+            <p><strong>כל קבוצות Manus:</strong> כל קבוצה שכרמן חברה בה ב-Manus — בלי לסמן אחת־אחת.</p>
+            <p className="text-muted-foreground">לא מוצגות קבוצות Green API (הטלפון שלך לצ׳אט/דיוור) — רק Manus של כרמן.</p>
+            {(manusSyncInfo?.via?.includes("traffic") || (manusSyncInfo?.warning && !manusSyncInfo?.via?.includes("api_key"))) && (
+              <p className="text-amber-700 dark:text-amber-400">
+                לסנכרון מלא מהאינסטנס נדרש X-Api-Key של Manus על החיבור. ב-Staging החיבור מדומה — אם הרשימה חלקית, רענן אחרי זריעת Gateway.
+              </p>
+            )}
+          </AlertDescription>
+        </Alert>
+
+        {groupsCountMismatch && (
+          <Alert variant="destructive" className="text-right" dir="rtl">
+            <AlertDescription className="text-xs">
+              מ-Manus ידוע על {manusSyncInfo?.count} קבוצות, אבל מוצגות רק {(manusGroups || []).length}.
+              לחץ «סנכרן קבוצות מ-Manus» לרענון מלא מה-Gateway.
+            </AlertDescription>
+          </Alert>
+        )}
+
+        <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-muted-foreground">
+          <span>
+            {syncManusGroups.isPending
+              ? "מסנכרן קבוצות מ-Manus…"
+              : manusSyncInfo?.hasSync
+                ? `${(manusGroups || []).length} קבוצות מ-Manus · סונכרון אחרון: ${manusSyncInfo.syncedAt ? new Date(manusSyncInfo.syncedAt).toLocaleString("he-IL") : "—"}`
+                : "טרם בוצע סנכרון מ-Manus — מסנכרן אוטומטית…"}
+          </span>
+          {!openMemberGroups && (manusGroups || []).length > 0 && (
+            <span>{groupIds.length} / {(manusGroups || []).length} מסומנות להגיבה</span>
+          )}
+        </div>
+
         <div className="space-y-2 w-full">
           <div className="flex w-full flex-row-reverse items-center justify-between gap-3 rounded-md border px-3 py-2">
             <Label htmlFor="require-direct" className="cursor-pointer text-right flex-1">
-              חובה לפנות «כרמן» ישירות
+              חובה לפנות «כרמן» ישירות (לא מגיבה לשיחה עליה בגוף שלישי)
             </Label>
             <Switch checked={requireDirect} onCheckedChange={setRequireDirect} id="require-direct" />
           </div>
-          <div className="flex w-full flex-row-reverse items-center justify-between gap-3 rounded-md border px-3 py-2">
+          <div className="flex w-full flex-row-reverse items-center justify-between gap-3 rounded-md border px-3 py-2 bg-muted/30">
             <Label htmlFor="open-member" className="cursor-pointer text-right flex-1">
-              כל קבוצת Manus שכרמן חבר בה
+              <span className="font-medium">כל קבוצות Manus</span>
+              <span className="block text-[11px] text-muted-foreground font-normal">
+                כרמן מורשית בכל קבוצה שבה היא חברה — הרשימה למטה להצגה בלבד
+              </span>
             </Label>
-            <Switch checked={openMemberGroups} onCheckedChange={setOpenMemberGroups} id="open-member" />
+            <Switch
+              checked={openMemberGroups}
+              onCheckedChange={(v) => {
+                setOpenMemberGroups(v);
+                if (v) setGroupIds((manusGroups || []).map((g: { id: string }) => g.id));
+              }}
+              id="open-member"
+            />
           </div>
         </div>
-        <ScrollArea className="h-48 w-full border rounded-md p-2">
+
+        {!openMemberGroups && (manusGroups || []).length > 0 && (
+          <div className="flex flex-wrap gap-2 justify-end">
+            <Button type="button" variant="outline" size="sm" onClick={selectAllGroups}>סמן את כולן</Button>
+            <Button type="button" variant="ghost" size="sm" onClick={clearAllGroups}>נקה בחירה</Button>
+          </div>
+        )}
+
+        <ScrollArea className="h-64 w-full border rounded-md p-2">
           {(manusGroups || []).length === 0 ? (
             <div className="text-xs text-muted-foreground text-right space-y-2 py-4 px-2">
               <p className="font-medium text-foreground">אין עדיין קבוצות Manus לרשימה</p>
-              <p>
-                Manus Gateway עדיין לא חושף API של «רשימת קבוצות» — לכן מוצגות רק קבוצות שבהן כבר הייתה
-                תעבורת כרמן (Manus), לא קבוצות מ-Green API של הטלפון שלך.
-              </p>
-              <p>
-                אחרי ש-Manus יוסיף <span dir="ltr" className="font-mono">GET …/groups</span> נסנכרן אוטומטית.
-                בינתיים: שליחת «כרמן» בקבוצה שבה הבוט חבר תוסיף אותה לכאן.
-              </p>
+              <p>לחץ <strong>סנכרן קבוצות מ-Manus</strong> למשוך את כל הקבוצות שבהן כרמן חברה.</p>
             </div>
           ) : (
-            (manusGroups || []).map((g: any) => (
-              <label
-                key={g.id}
-                className="flex w-full items-center gap-2 py-1.5 px-1 cursor-pointer"
-                dir="rtl"
-              >
-                <Checkbox
-                  className="shrink-0"
-                  checked={groupIds.includes(g.id)}
-                  onCheckedChange={() => toggleGroup(g.id)}
-                />
-                <span className="min-w-0 flex-1 text-sm text-right truncate">{g.group_name}</span>
-              </label>
-            ))
+            (manusGroups || []).map((g: any) => {
+              const allowed = openMemberGroups || groupIds.includes(g.id);
+              return (
+                <label
+                  key={g.id}
+                  className={`flex w-full items-center gap-2 py-1.5 px-1 ${openMemberGroups ? "opacity-80" : "cursor-pointer"}`}
+                  dir="rtl"
+                >
+                  <Checkbox
+                    className="shrink-0"
+                    checked={allowed}
+                    disabled={openMemberGroups}
+                    onCheckedChange={() => toggleGroup(g.id)}
+                  />
+                  <span className="min-w-0 flex-1 text-sm text-right truncate">{g.group_name}</span>
+                  {allowed && (
+                    <Badge variant="outline" className="text-[10px] shrink-0">מורשה להגיב</Badge>
+                  )}
+                </label>
+              );
+            })
           )}
         </ScrollArea>
-        {groupIds.length > 0 && (
-          <div className="flex flex-wrap gap-1 justify-end">
-            {groupIds.map((id) => (
-              <Badge key={id} variant="secondary">{groupName(id)}</Badge>
-            ))}
-          </div>
+        {!openMemberGroups && groupIds.length > 0 && (
+          <p className="text-[11px] text-muted-foreground text-right">
+            נשמרו {groupIds.length} קבוצות מורשות — כרמן תענה בהן בלבד (בנוסף לבדיקת זהות שולח).
+          </p>
         )}
       </Card>
 

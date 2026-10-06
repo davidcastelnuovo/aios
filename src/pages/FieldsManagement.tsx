@@ -81,6 +81,10 @@ const SYSTEM_FIELDS: Record<'task' | 'client' | 'lead', Array<{ key: string; lab
     { key: 'meeting_location', label: 'מיקום פגישה', type: 'text' },
     { key: 'folder_link', label: 'קישור לתיקייה', type: 'text' },
     { key: 'lost_reason', label: 'סיבת אובדן', type: 'text' },
+    { key: 'tags', label: 'תגיות', type: 'text' },
+    { key: 'follow_up_date', label: 'תאריך לחזרה', type: 'date' },
+    { key: 'created_at', label: 'תאריך', type: 'date' },
+    { key: 'sales_person', label: 'משתמש', type: 'text' },
   ],
   client: [
     { key: 'name', label: 'שם הלקוח', type: 'text' },
@@ -155,6 +159,7 @@ export default function FieldsManagement() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['custom-fields', tenantId] });
+      queryClient.invalidateQueries({ queryKey: ['custom-field-labels', tenantId] });
       toast.success('שדה נוסף בהצלחה');
       setIsAddDialogOpen(false);
       setNewField({
@@ -184,6 +189,7 @@ export default function FieldsManagement() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['custom-fields', tenantId] });
+      queryClient.invalidateQueries({ queryKey: ['custom-field-labels', tenantId] });
       toast.success('שדה עודכן בהצלחה');
     },
     onError: (error: Error) => {
@@ -202,6 +208,7 @@ export default function FieldsManagement() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['custom-fields', tenantId] });
+      queryClient.invalidateQueries({ queryKey: ['custom-field-labels', tenantId] });
       toast.success('שדה נמחק בהצלחה');
     },
     onError: (error: Error) => {

@@ -35,8 +35,15 @@ on:
       - 'supabase/ops/fix_task_agency_and_assignment_notifications.sql'
       - 'supabase/ops/create_campaign_pulse_overrides.sql'
       - 'supabase/ops/apply_pulse_twice_daily_cadence.sql'
+      - 'supabase/ops/apply_pulse_weekly_sunday_cadence.sql'
+      - 'supabase/ops/apply_pulse_refresh_and_instant_alerts.sql'
+      - 'supabase/ops/apply_client_retention_daily_production.sql'
       - 'supabase/ops/notify_felix_calendar_fix_ready.sql'
       - 'supabase/ops/apply_pulse_campaigner_delivery.sql'
+      - 'supabase/ops/apply_pulse_production_reconcile.sql'
+      - 'supabase/ops/apply_pulse_sunday_0730_david_campaigners.sql'
+      - 'supabase/ops/apply_pulse_sunday_0900_dmm_delivery.sql'
+      - 'supabase/ops/apply_pulse_dmm_felix_mc_david.sql'
       - 'supabase/ops/apply_pulse_goal_metrics.sql'
       - 'supabase/ops/apply_campaign_pulse_client_call_freshness.sql'
       - 'supabase/ops/apply_copywriter_inspiration_library.sql'
@@ -51,6 +58,15 @@ on:
       - 'supabase/ops/apply_connect_client_meta_ad_account_skin.sql'
       - 'supabase/ops/apply_cursor_human_task_queue.sql'
       - 'supabase/ops/apply_optimize_clients_tasks_rls_scope.sql'
+      - 'supabase/ops/apply_carmen_autonomous_goal_engine_production.sql'
+      - 'supabase/ops/apply_goal_execution_and_autonomous_engine_production.sql'
+      - 'supabase/ops/apply_pulse_campaign_breakdown_production.sql'
+      - 'supabase/ops/apply_recurring_human_tasks_production.sql'
+      - 'supabase/ops/apply_fix_duplicate_task_reminder_notifications_production.sql'
+      - 'supabase/ops/merge_duplicate_user_campaigners_production.sql'
+      - 'supabase/ops/merge_same_email_campaigners_production.sql'
+      - 'supabase/ops/merge_assigned_campaigner_production.sql'
+      - 'supabase/ops/apply_morning_report_sync_production.sql'
 
 jobs:
   apply:
@@ -86,7 +102,34 @@ jobs:
             echo "$CHANGED" | grep '^supabase/ops/' || true
 
             # Prefer the newest ops migration that triggered this push.
-            if echo "$CHANGED" | grep -qx 'supabase/ops/fix_user_can_access_client_tenant_users_fallback.sql'; then
+            if echo "$CHANGED" | grep -qx 'supabase/ops/apply_morning_report_sync_production.sql'; then
+              FILE="supabase/ops/apply_morning_report_sync_production.sql"
+              NAME="apply_morning_report_sync_production"
+            elif echo "$CHANGED" | grep -qx 'supabase/ops/merge_assigned_campaigner_production.sql'; then
+              FILE="supabase/ops/merge_assigned_campaigner_production.sql"
+              NAME="merge_assigned_campaigner_production"
+            elif echo "$CHANGED" | grep -qx 'supabase/ops/merge_same_email_campaigners_production.sql'; then
+              FILE="supabase/ops/merge_same_email_campaigners_production.sql"
+              NAME="merge_same_email_campaigners_production"
+            elif echo "$CHANGED" | grep -qx 'supabase/ops/merge_duplicate_user_campaigners_production.sql'; then
+              FILE="supabase/ops/merge_duplicate_user_campaigners_production.sql"
+              NAME="merge_duplicate_user_campaigners_production"
+            elif echo "$CHANGED" | grep -qx 'supabase/ops/apply_fix_duplicate_task_reminder_notifications_production.sql'; then
+              FILE="supabase/ops/apply_fix_duplicate_task_reminder_notifications_production.sql"
+              NAME="apply_fix_duplicate_task_reminder_notifications_production"
+            elif echo "$CHANGED" | grep -qx 'supabase/ops/apply_recurring_human_tasks_production.sql'; then
+              FILE="supabase/ops/apply_recurring_human_tasks_production.sql"
+              NAME="apply_recurring_human_tasks_production"
+            elif echo "$CHANGED" | grep -qx 'supabase/ops/apply_pulse_campaign_breakdown_production.sql'; then
+              FILE="supabase/ops/apply_pulse_campaign_breakdown_production.sql"
+              NAME="apply_pulse_campaign_breakdown_production"
+            elif echo "$CHANGED" | grep -qx 'supabase/ops/apply_goal_execution_and_autonomous_engine_production.sql'; then
+              FILE="supabase/ops/apply_goal_execution_and_autonomous_engine_production.sql"
+              NAME="apply_goal_execution_and_autonomous_engine_production"
+            elif echo "$CHANGED" | grep -qx 'supabase/ops/apply_carmen_autonomous_goal_engine_production.sql'; then
+              FILE="supabase/ops/apply_carmen_autonomous_goal_engine_production.sql"
+              NAME="apply_carmen_autonomous_goal_engine_production"
+            elif echo "$CHANGED" | grep -qx 'supabase/ops/fix_user_can_access_client_tenant_users_fallback.sql'; then
               FILE="supabase/ops/fix_user_can_access_client_tenant_users_fallback.sql"
               NAME="fix_user_can_access_client_tenant_users_fallback"
             elif echo "$CHANGED" | grep -qx 'supabase/ops/apply_connect_client_meta_ad_account_skin.sql'; then
@@ -98,6 +141,12 @@ jobs:
             elif echo "$CHANGED" | grep -qx 'supabase/ops/fix_owner_campaigner_rls.sql'; then
               FILE="supabase/ops/fix_owner_campaigner_rls.sql"
               NAME="fix_owner_campaigner_rls"
+            elif echo "$CHANGED" | grep -qx 'supabase/ops/apply_pulse_weekly_sunday_cadence.sql'; then
+              FILE="supabase/ops/apply_pulse_weekly_sunday_cadence.sql"
+              NAME="apply_pulse_weekly_sunday_cadence"
+            elif echo "$CHANGED" | grep -qx 'supabase/ops/apply_pulse_refresh_and_instant_alerts.sql'; then
+              FILE="supabase/ops/apply_pulse_refresh_and_instant_alerts.sql"
+              NAME="apply_pulse_refresh_and_instant_alerts"
             elif echo "$CHANGED" | grep -qx 'supabase/ops/apply_pulse_twice_daily_cadence.sql'; then
               FILE="supabase/ops/apply_pulse_twice_daily_cadence.sql"
               NAME="apply_pulse_twice_daily_cadence"
@@ -137,6 +186,24 @@ jobs:
             elif echo "$CHANGED" | grep -qx 'supabase/ops/apply_pulse_campaigner_delivery.sql'; then
               FILE="supabase/ops/apply_pulse_campaigner_delivery.sql"
               NAME="apply_pulse_campaigner_delivery"
+            elif echo "$CHANGED" | grep -qx 'supabase/ops/apply_pulse_production_reconcile.sql'; then
+              FILE="supabase/ops/apply_pulse_production_reconcile.sql"
+              NAME="apply_pulse_production_reconcile"
+            elif echo "$CHANGED" | grep -qx 'supabase/ops/apply_pulse_sunday_0730_david_campaigners.sql'; then
+              FILE="supabase/ops/apply_pulse_sunday_0730_david_campaigners.sql"
+              NAME="apply_pulse_sunday_0730_david_campaigners"
+            elif echo "$CHANGED" | grep -qx 'supabase/ops/apply_pulse_sunday_0900_dmm_delivery.sql'; then
+              FILE="supabase/ops/apply_pulse_sunday_0900_dmm_delivery.sql"
+              NAME="apply_pulse_sunday_0900_dmm_delivery"
+            elif echo "$CHANGED" | grep -qx 'supabase/ops/apply_pulse_dmm_felix_mc_david.sql'; then
+              FILE="supabase/ops/apply_pulse_dmm_felix_mc_david.sql"
+              NAME="apply_pulse_dmm_felix_mc_david"
+            elif echo "$CHANGED" | grep -qx 'supabase/ops/apply_pulse_weekly_sunday_cadence.sql'; then
+              FILE="supabase/ops/apply_pulse_weekly_sunday_cadence.sql"
+              NAME="apply_pulse_weekly_sunday_cadence"
+            elif echo "$CHANGED" | grep -qx 'supabase/ops/apply_pulse_refresh_and_instant_alerts.sql'; then
+              FILE="supabase/ops/apply_pulse_refresh_and_instant_alerts.sql"
+              NAME="apply_pulse_refresh_and_instant_alerts"
             elif echo "$CHANGED" | grep -qx 'supabase/ops/apply_pulse_twice_daily_cadence.sql'; then
               FILE="supabase/ops/apply_pulse_twice_daily_cadence.sql"
               NAME="apply_pulse_twice_daily_cadence"
@@ -194,6 +261,9 @@ jobs:
             elif echo "$CHANGED" | grep -qx 'supabase/ops/apply_seo_monthly_shares.sql'; then
               FILE="supabase/ops/apply_seo_monthly_shares.sql"
               NAME="apply_seo_monthly_shares"
+            elif echo "$CHANGED" | grep -qx 'supabase/ops/apply_client_retention_daily_production.sql'; then
+              FILE="supabase/ops/apply_client_retention_daily_production.sql"
+              NAME="pause_client_retention_daily_production"
             else
               echo "No matching supabase/ops SQL file in push; skipping apply."
               echo "skip=true" >> "$GITHUB_OUTPUT"

@@ -152,7 +152,7 @@ export default function CarmenCommandCenter() {
             status={brain.status}
             externalUrl={brain.externalUrl}
             debating={brain.status === "debating"}
-            onSelect={(route) => brain.selectRoute(route, conversationId)}
+            onSelect={(route) => brain.selectRoute(route, null)}
           />
         )}
 

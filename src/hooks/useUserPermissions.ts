@@ -93,7 +93,8 @@ export function useUserPermissions() {
       (module === "tenants" ||
         module === "menu_management" ||
         module === "fields_management" ||
-        module === "ai_support")
+        module === "ai_support" ||
+        module === "automations")
     ) {
       return true;
     }

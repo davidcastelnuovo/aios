@@ -41,6 +41,8 @@ const formSchema = z.object({
   description: z.string().optional(),
   trigger_type: z.enum([
     "task_assigned",
+    "task_collaborator_added",
+    "task_update_added",
     "task_status_changed",
     "lead_status_changed",
     "lead_created",
@@ -411,6 +413,8 @@ export function EditAutomationDialog({ automation, open, onOpenChange }: EditAut
                     </FormControl>
                     <SelectContent className="bg-background">
                       <SelectItem value="task_assigned">משימה שוייכה</SelectItem>
+                      <SelectItem value="task_collaborator_added">קמפיינר נוסף למשימה</SelectItem>
+                      <SelectItem value="task_update_added">עדכון נוסף למשימה</SelectItem>
                       <SelectItem value="task_status_changed">סטטוס משימה השתנה</SelectItem>
                       <SelectItem value="lead_status_changed">סטטוס ליד השתנה</SelectItem>
                       <SelectItem value="lead_created">ליד נוצר</SelectItem>

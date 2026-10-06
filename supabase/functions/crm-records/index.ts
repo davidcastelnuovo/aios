@@ -102,6 +102,10 @@ function getDateRange(filter: string, customFrom?: string, customTo?: string, in
       startDate = shiftDateString(today, -30);
       endDate = shiftDateString(today, -1);
       break;
+    case 'last_60_days':
+      startDate = shiftDateString(today, -60);
+      endDate = shiftDateString(today, -1);
+      break;
     case 'last_70_days':
       startDate = shiftDateString(today, -70);
       endDate = shiftDateString(today, -1);
@@ -119,6 +123,10 @@ function getDateRange(filter: string, customFrom?: string, customTo?: string, in
     }
     case 'last_90_days':
       startDate = shiftDateString(today, -90);
+      endDate = shiftDateString(today, -1);
+      break;
+    case 'last_120_days':
+      startDate = shiftDateString(today, -120);
       endDate = shiftDateString(today, -1);
       break;
     case 'last_180_days':

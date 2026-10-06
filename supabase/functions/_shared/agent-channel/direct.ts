@@ -1,4 +1,4 @@
-import type { CloudDirectProvider, SendContext, SendResult } from "./types.ts";
+import type { ChannelProvider, CloudDirectProvider, SendContext, SendResult } from "./types.ts";
 import { acceptedMessageFor, capabilitiesForProvider } from "./logic.ts";
 import { grokUsesExistingWebhook } from "./cloud-errors.ts";
 import { createCloudAgent, followUpCloudAgent, cursorApiKey } from "./cursor-api.ts";
@@ -8,6 +8,7 @@ import { buildCallbackInstructions, wrapDirectPrompt } from "./prompts.ts";
 import {
   allowCreateNewCloudAgent,
   collectOpenChatIds,
+  busyOpenChatMessage,
   missingOpenChatMessage,
   type OpenChatProvider,
 } from "./sticky-agent.ts";
@@ -18,6 +19,8 @@ import {
   type WorkspaceProvider,
 } from "./workspace-agent.ts";
 import { completeSession, logChannelAction, serviceClient, upsertRunningSession } from "./store.ts";
+import { codexOpenAiApiEnabled, runtimeEnv } from "../carmen-brain-flags.ts";
+import { launchCodexViaOpenAiApi } from "./codex-api.ts";
 
 function runtimeEnv(): Record<string, string | undefined> {
   try {
@@ -35,14 +38,10 @@ function clip(text: string, max = MAX_TEXT): string {
 
 function modelIdFor(provider: CloudDirectProvider): string {
   if (provider === "grok") return Deno.env.get("GROK_MODEL_ID") || "cursor-grok-4.6-high-fast";
-  if (provider === "codex") return Deno.env.get("CODEX_MODEL_ID") || Deno.env.get("CURSOR_CODEX_MODEL_ID") || "";
   return Deno.env.get("CURSOR_MODEL_ID") || "";
 }
 
 function envNameFor(provider: CloudDirectProvider): string | undefined {
-  if (provider === "codex") {
-    return Deno.env.get("CODEX_CLOUD_ENV_NAME") || Deno.env.get("CURSOR_CLOUD_ENV_NAME") || undefined;
-  }
   if (provider === "grok") {
     return Deno.env.get("GROK_CLOUD_ENV_NAME") || Deno.env.get("CURSOR_CLOUD_ENV_NAME") || undefined;
   }
@@ -54,7 +53,17 @@ export async function launchCloudDirect(
   provider: CloudDirectProvider,
   extraPrompt?: string,
   parliament?: { runId: string; round: number },
+  options?: {
+    sessionMetadata?: Record<string, unknown>;
+    callbackIntent?: "default" | "meeting_summary";
+    allowCreate?: boolean;
+    autoCreatePR?: boolean;
+  },
 ): Promise<SendResult> {
+  if (provider === "codex" && codexOpenAiApiEnabled(runtimeEnv()) && !parliament) {
+    return launchCodexViaOpenAiApi(ctx);
+  }
+
   const grokWebhook = grokUsesExistingWebhook(
     Deno.env.get("GROK_BOT_WEBHOOK_URL"),
     Deno.env.get("GROK_BOT_WEBHOOK_KEY"),
@@ -73,6 +82,7 @@ export async function launchCloudDirect(
     status: "running",
     parliament_run_id: parliament?.runId ?? null,
     parliament_round: parliament?.round ?? null,
+    metadata: options?.sessionMetadata,
   });
 
   const token = await mintCallbackToken({
@@ -80,17 +90,21 @@ export async function launchCloudDirect(
     conversationId: ctx.conversationId,
     tenantId: ctx.tenantId,
   });
+  const callback = buildCallbackInstructions({
+    origin: provider,
+    conversationId: ctx.conversationId,
+    sessionId: session.id,
+    tenantId: ctx.tenantId,
+    token,
+    parliamentRound: parliament?.round,
+    readOnly: !!parliament,
+    callbackIntent: options?.callbackIntent,
+  });
   const prompt =
-    (extraPrompt || wrapDirectPrompt({ origin: provider, userText: ctx.content, history: ctx.history, attachments: ctx.attachments })) +
-    buildCallbackInstructions({
-      origin: provider,
-      conversationId: ctx.conversationId,
-      sessionId: session.id,
-      tenantId: ctx.tenantId,
-      token,
-      parliamentRound: parliament?.round,
-      readOnly: !!parliament,
-    });
+    clip(
+      extraPrompt || wrapDirectPrompt({ origin: provider, userText: ctx.content, history: ctx.history, attachments: ctx.attachments }),
+      MAX_TEXT - callback.length,
+    ) + callback;
 
   const modelId = modelIdFor(provider);
   const name = `AIOS ${provider} · ${ctx.content.slice(0, 40)}`;
@@ -106,7 +120,7 @@ export async function launchCloudDirect(
         "Do NOT call ask_carmen. Use reply_to_aios_session or the HTTP callback above.",
     });
     fired = { id: delivered.id, url: delivered.url, reused: true };
-  } else if (provider === "cursor" || provider === "codex") {
+  } else if (provider === "cursor") {
     fired = await deliverToOpenCloudChat({
       apiKey,
       sb,
@@ -117,6 +131,8 @@ export async function launchCloudDirect(
       name,
       modelId,
       envName,
+      allowCreate: options?.allowCreate,
+      autoCreatePR: options?.autoCreatePR,
     });
   } else {
     fired = await createCloudAgent({ apiKey, promptText: clip(prompt), name, modelId: modelId || undefined, envName });
@@ -132,7 +148,7 @@ export async function launchCloudDirect(
     status: "running",
     parliament_run_id: parliament?.runId ?? null,
     parliament_round: parliament?.round ?? null,
-    metadata: { reused: fired.reused },
+    metadata: { reused: fired.reused, ...(options?.sessionMetadata || {}) },
   });
 
   await logChannelAction(sb, {
@@ -165,6 +181,8 @@ async function deliverToOpenCloudChat(args: {
   name: string;
   modelId: string;
   envName?: string;
+  allowCreate?: boolean;
+  autoCreatePR?: boolean;
 }): Promise<{ url: string; id: string; reused: boolean }> {
   const env = runtimeEnv();
   const candidates = await collectOpenChatIds(args.sb, {
@@ -174,34 +192,44 @@ async function deliverToOpenCloudChat(args: {
     env,
   });
 
+  let sawBusy: { id: string; url: string } | null = null;
   for (const agentId of candidates) {
     const outcome = await followUpCloudAgent(args.apiKey, agentId, args.prompt);
     if (outcome.kind === "ok") {
       return { id: outcome.id, url: outcome.url, reused: true };
     }
-    // Busy chat — try next candidate, or fall through to a fresh parallel agent.
+    if (outcome.kind === "busy") sawBusy = outcome;
   }
 
-  if (allowCreateNewCloudAgent(env)) {
+  const mayCreate = args.allowCreate ?? allowCreateNewCloudAgent(env);
+  if (mayCreate) {
     return await createCloudAgent({
       apiKey: args.apiKey,
       promptText: args.prompt,
       name: args.name,
       modelId: args.modelId || undefined,
       envName: args.envName,
+      autoCreatePR: args.autoCreatePR,
     });
   }
 
+  if (sawBusy) throw new Error(busyOpenChatMessage(args.provider, sawBusy.url));
   throw new Error(missingOpenChatMessage(args.provider));
 }
 
 export async function launchParliamentSeat(
   ctx: SendContext,
-  provider: CloudDirectProvider,
+  provider: ChannelProvider,
   prompt: string,
   parliament: { runId: string; round: number },
 ): Promise<SendResult> {
-  return launchCloudDirect(ctx, provider, prompt, parliament);
+  if (provider === "codex" || provider === "chatgpt") {
+    return launchWorkspaceAgent(ctx, provider, prompt, parliament);
+  }
+  if (provider === "cursor" || provider === "grok") {
+    return launchCloudDirect(ctx, provider, prompt, parliament);
+  }
+  throw new Error(`Parliament seat not supported: ${provider}`);
 }
 
 export async function launchClaude(ctx: SendContext, extraPrompt?: string): Promise<SendResult> {

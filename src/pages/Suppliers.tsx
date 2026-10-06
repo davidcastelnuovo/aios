@@ -1,6 +1,8 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { CarmenLoadingScreen } from "@/components/shared/CarmenLoadingScreen";
+import { isQueryResolving } from "@/lib/queryUi";
 import { Badge } from "@/components/ui/badge";
 import { Truck, Phone, Mail, Coins, Pencil, Trash2 } from "lucide-react";
 import { AddSupplierForm } from "@/components/forms/AddSupplierForm";
@@ -17,7 +19,7 @@ export default function Suppliers() {
   const { tenantId } = useCurrentTenant();
   const { t } = useTerminology();
   
-  const { data: suppliers, isLoading } = useQuery({
+  const { data: suppliers, isLoading, isPending, isFetching } = useQuery({
     queryKey: ["suppliers", tenantId],
     queryFn: async () => {
       if (!tenantId) return [];
@@ -36,6 +38,8 @@ export default function Suppliers() {
     },
     enabled: !!tenantId,
   });
+
+  const suppliersResolving = !suppliers && isQueryResolving(isPending, isLoading, isFetching);
 
   const deleteSupplierMutation = useMutation({
     mutationFn: async (supplierId: string) => {
@@ -92,6 +96,10 @@ export default function Suppliers() {
         </div>
         <AddSupplierForm />
       </div>
+
+      {suppliersResolving && (
+        <CarmenLoadingScreen variant="card" messages={["כרמן אוספת את הספקים…"]} />
+      )}
 
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
         {suppliers?.map((supplier) => (
@@ -190,7 +198,7 @@ export default function Suppliers() {
         ))}
       </div>
 
-      {suppliers?.length === 0 && (
+      {!suppliersResolving && suppliers?.length === 0 && (
         <Card className="shadow-card">
           <CardContent className="flex flex-col items-center justify-center py-12">
             <Truck className="h-12 w-12 text-muted-foreground mb-4" />

@@ -1,5 +1,5 @@
 import { aiChat } from "../ai.ts";
-import type { ChannelProvider, CloudDirectProvider, SendContext, SendResult } from "./types.ts";
+import type { ChannelProvider, SendContext, SendResult } from "./types.ts";
 import {
   acceptedMessageFor,
   buildReviewPrompt,
@@ -7,7 +7,7 @@ import {
   canAdvanceToReview,
   canSynthesize,
   capabilitiesForProvider,
-  isCloudDirect,
+  isParliamentSeat,
   livingSeats,
   markParliamentFailed,
   parliamentRounds,
@@ -41,7 +41,7 @@ function withParliament(context: unknown, state: ParliamentState): Record<string
 
 export async function startParliament(ctx: SendContext): Promise<SendResult> {
   const sb = serviceClient();
-  const seats = parliamentSeatsFromConfig(ctx.route.config).filter(isCloudDirect);
+  const seats = parliamentSeatsFromConfig(ctx.route.config).filter(isParliamentSeat);
   const maxRounds = parliamentRounds(ctx.route.config);
   const state: ParliamentState = {
     round: 1,
@@ -198,11 +198,11 @@ export async function onParliamentCallback(args: {
     });
     const ctx = await rebuildCtx(run, args.conversationId, state);
     const launches = livingSeats(state)
-      .filter((s) => isCloudDirect(s.provider))
+      .filter((s) => isParliamentSeat(s.provider))
       .map((s) =>
         launchParliamentSeat(
           ctx,
-          s.provider as CloudDirectProvider,
+          s.provider,
           buildReviewPrompt(state, s.provider),
           { runId, round: 2 },
         ).catch(async (err) => {
@@ -397,9 +397,9 @@ export async function forceContinueParliament(conversationId: string): Promise<{
     const ctx = await rebuildCtx(run, conversationId, state);
     await Promise.allSettled(
       living
-        .filter((s) => isCloudDirect(s.provider))
+        .filter((s) => isParliamentSeat(s.provider))
         .map((s) =>
-          launchParliamentSeat(ctx, s.provider as CloudDirectProvider, buildReviewPrompt(state, s.provider), {
+          launchParliamentSeat(ctx, s.provider, buildReviewPrompt(state, s.provider), {
             runId: run.id,
             round: 2,
           }),
@@ -423,7 +423,7 @@ export async function forceSynthesizeParliament(conversationId: string): Promise
 
 export async function clarifyParliamentSeat(
   conversationId: string,
-  provider: CloudDirectProvider,
+  provider: ChannelProvider,
   question: string,
 ): Promise<{ ok: true; status: string }> {
   const loaded = await loadRunningParliament(conversationId);

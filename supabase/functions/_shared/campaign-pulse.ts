@@ -12,9 +12,9 @@ export const PULSE_CRITICAL_ALERT_TYPES = ['campaign_stopped', 'ad_disapproved']
 /** Keep the WhatsApp digest readable — remaining issues are counted, not listed. */
 export const PULSE_CRITICAL_LINE_LIMIT = 5
 /**
- * Sync cadence is twice-daily (05:xx / 12:xx UTC). When a noon run misses a
- * table, the next morning gap is ~24h — and the morning pulse often races the
- * 05:xx sync. 18h produced false "sync old" for healthy Google/Meta tables.
+ * Sync cadence is twice daily (02:40 and 11:40 UTC), before the pulse
+ * refreshes at 04:00 and 13:00 UTC. A missed run leaves about a 24h gap.
+ * 18h produced false "sync old" for healthy Google/Meta tables.
  * 30h covers a full day + buffer without hiding truly abandoned syncs.
  */
 export const STALE_SYNC_MS = 30 * 60 * 60 * 1000
@@ -24,6 +24,7 @@ export type PulseStatus = 'healthy' | 'warning' | 'critical' | 'no_data'
 export type CampaignTableLike = {
   id?: string
   integration_type?: string | null
+  category?: string | null
   campaign_active?: boolean | null
   last_sync_at?: string | null
   integration_settings?: Record<string, unknown> | null
@@ -424,8 +425,11 @@ export type CampaignGoalMode = CampaignGoal | 'hybrid'
 /** Team managers / recipients who must never receive scoped pulse digests. */
 export const PULSE_DELIVERY_EXCLUDED_RECIPIENT_NAMES = ['אילנית'] as const
 
-/** Owner phones that must never receive DMM/MarketingCaptain pulse digests or previews. */
+/** Owner phone suffixes blocked from automated pulse on specific tenants only. */
 export const PULSE_DELIVERY_EXCLUDED_PHONE_SUFFIXES = ['507677613'] as const
+
+/** Tenants where specific owner phones must not receive scoped pulse digests. */
+export const PULSE_DELIVERY_OWNER_EXCLUDED_TENANT_SLUGS = [] as const
 
 export function isPulseDeliveryExcludedRecipient(name: string | null | undefined): boolean {
   const normalized = String(name || '').trim()
@@ -435,23 +439,31 @@ export function isPulseDeliveryExcludedRecipient(name: string | null | undefined
   )
 }
 
-export function isPulseDeliveryExcludedPhone(phone: string | null | undefined): boolean {
+export function isPulseDeliveryExcludedPhone(
+  phone: string | null | undefined,
+  tenantSlug?: string | null,
+): boolean {
+  const slug = String(tenantSlug || '').trim().toLowerCase()
+  if (!slug || !(PULSE_DELIVERY_OWNER_EXCLUDED_TENANT_SLUGS as readonly string[]).includes(slug)) {
+    return false
+  }
   const digits = String(phone || '').replace(/\D/g, '')
   if (!digits) return false
   return PULSE_DELIVERY_EXCLUDED_PHONE_SUFFIXES.some((suffix) => digits.endsWith(suffix))
 }
 
-export function integrationTypeToGoal(integrationType: string | null | undefined): CampaignGoal | null {
-  if (integrationType === 'facebook_ecommerce') return 'ecommerce'
-  if (integrationType === 'facebook_insights' || integrationType === 'google_ads') return 'leads'
-  return null
-}
+import {
+  isEcommerceReportTable,
+  integrationTypeToGoal,
+} from './pulse-campaign-goals.mjs'
+
+export { isEcommerceReportTable, integrationTypeToGoal }
 
 export function detectCampaignGoalMode(tables: CampaignTableLike[]): CampaignGoalMode {
   const goals = new Set<CampaignGoal>()
   for (const table of tables) {
     if (table.campaign_active === false) continue
-    const goal = integrationTypeToGoal(table.integration_type)
+    const goal = integrationTypeToGoal(table.integration_type, table)
     if (goal) goals.add(goal)
   }
   if (goals.has('leads') && goals.has('ecommerce')) return 'hybrid'
@@ -661,6 +673,64 @@ export function goalLabel(goal: CampaignGoal): string {
   return goal === 'ecommerce' ? 'איקומרס' : 'לידים'
 }
 
+export type PulseCampaignBreakdownRow = {
+  goal?: string | null
+  status?: string | null
+  alert_eligible?: boolean | null
+  campaign_name?: string | null
+  client_name?: string | null
+  status_reason?: string | null
+}
+
+const PULSE_CATEGORY_LABELS: Array<[string, string]> = [
+  ['leads', 'לידים'],
+  ['engagement', 'אינגייג׳מנט'],
+  ['ecommerce', 'איקומרס'],
+]
+
+/**
+ * Per-category counts for the WhatsApp digest, from the campaign-level
+ * breakdown. Returns [] for legacy snapshots that have no breakdown, so the
+ * digest falls back to the client-level summary.
+ */
+export function buildPulseCategoryDigestLines(
+  rows: Array<{ campaign_breakdown?: PulseCampaignBreakdownRow[] | null; client_name?: string | null }>,
+): string[] {
+  const campaigns = rows.flatMap((row) =>
+    (Array.isArray(row.campaign_breakdown) ? row.campaign_breakdown : [])
+      .map((campaign) => ({ ...campaign, client_name: campaign.client_name ?? row.client_name ?? null })),
+  )
+  if (!campaigns.length) return []
+
+  const lines: string[] = ['*לפי קטגוריה:*']
+  for (const [goal, label] of PULSE_CATEGORY_LABELS) {
+    const inGoal = campaigns.filter((campaign) => campaign.goal === goal)
+    if (!inGoal.length) continue
+    const critical = inGoal.filter((campaign) => campaign.status === 'critical').length
+    const attention = inGoal.filter((campaign) => campaign.status === 'warning' || campaign.status === 'no_data').length
+    const healthy = inGoal.filter((campaign) => campaign.status === 'healthy').length
+    const countLabel = inGoal.length === 1 ? 'קמפיין אחד' : `${inGoal.length} קמפיינים`
+    lines.push(`${label}: 🔴 ${critical} · 🟡 ${attention} · 🟢 ${healthy} (${countLabel})`)
+  }
+
+  const unclassified = campaigns.filter((campaign) => campaign.goal === 'unknown').length
+  if (unclassified > 0) {
+    lines.push(`טעונים סיווג: ${unclassified} — לא נכללים בקטגוריות`)
+  }
+
+  const exceptions = campaigns.filter((campaign) => campaign.alert_eligible === true)
+  if (exceptions.length) {
+    lines.push('', '*חריגות מאומתות:*')
+    for (const campaign of exceptions.slice(0, 3)) {
+      const client = campaign.client_name ? `${campaign.client_name} — ` : ''
+      lines.push(`🔴 ${client}${campaign.campaign_name || 'קמפיין'}: ${campaign.status_reason || 'חריגה מתמשכת'}`)
+    }
+    if (exceptions.length > 3) lines.push(`ועוד ${exceptions.length - 3}`)
+  }
+
+  return lines
+}
+
 /** Keep only pulse rows for clients assigned to the given campaigner (client_team). */
 export function filterPulseRowsByClientIds<T extends { client_id: string }>(
   rows: T[],
@@ -690,11 +760,12 @@ export function countPulseStatuses(rows: Array<{ status?: string | null }>): Pul
  * Policy: never paste per-client Markdown tables on WhatsApp.
  */
 export function buildPulseWhatsAppDigest(
-  rows: Array<{ status?: string | null; client_name?: string | null; campaign_goal_mode?: string | null; is_ecommerce?: boolean | null; lead_goal_status?: string | null; ecommerce_goal_status?: string | null; leads_7d?: number | null; purchases_7d?: number | null; cpl_7d?: number | null; roas_7d?: number | null; cpl_change_pct?: number | null; roas_change_pct?: number | null; lead_spend_7d?: number | null; ecommerce_spend_7d?: number | null; spend_7d?: number | null }>,
+  rows: Array<{ status?: string | null; client_name?: string | null; campaign_goal_mode?: string | null; is_ecommerce?: boolean | null; lead_goal_status?: string | null; ecommerce_goal_status?: string | null; leads_7d?: number | null; purchases_7d?: number | null; cpl_7d?: number | null; roas_7d?: number | null; cpl_change_pct?: number | null; roas_change_pct?: number | null; lead_spend_7d?: number | null; ecommerce_spend_7d?: number | null; spend_7d?: number | null; campaign_breakdown?: PulseCampaignBreakdownRow[] | null }>,
   dashboardUrl: string,
   criticalIssues: PulseCriticalIssue[] = [],
 ): string {
   const goalRows = expandSnapshotsToGoalRows(rows as SnapshotExpandable[])
+  const categoryLines = buildPulseCategoryDigestLines(rows)
   const counts = countPulseStatuses(goalRows)
   const hybridClients = rows.filter((row) => snapshotGoalMode(row as SnapshotExpandable) === 'hybrid').length
   const goalHint = hybridClients > 0
@@ -719,6 +790,7 @@ export function buildPulseWhatsAppDigest(
       `*בדיקת דופק${name}${goalSuffix}*`,
       `סטטוס: ${label}`,
       metricLine,
+      ...(categoryLines.length ? ['', ...categoryLines] : []),
       ...issueLines,
       '',
       'פירוט מלא בדשבורד בדיקת דופק:',
@@ -732,6 +804,7 @@ export function buildPulseWhatsAppDigest(
     `🟢 *${counts.healthy}* תקינים`,
     `🟡 *${counts.attention}* לתשומת לב`,
     `🔴 *${counts.critical}* קריטיים`,
+    ...(categoryLines.length ? ['', ...categoryLines] : []),
     ...issueLines,
     '',
     'צפה בדשבורד בדיקת דופק:',

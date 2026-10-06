@@ -1,4 +1,6 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { kickNextBatch } from "../_shared/kick-next-batch.ts";
+import { jerusalemToday, planScheduledSyncWindows } from "../_shared/report-sync-window.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -133,11 +135,12 @@ Deno.serve(async (req) => {
 
   try {
     const body = await req.json().catch(() => ({}));
-    const { backfill_from, backfill_to, table_ids, batch_offset } = body as {
+    const { backfill_from, backfill_to, table_ids, batch_offset, operational_only } = body as {
       backfill_from?: string;
       backfill_to?: string;
       table_ids?: string[];
       batch_offset?: number;
+      operational_only?: boolean;
     };
     const offset = Number(batch_offset) || 0;
 
@@ -179,7 +182,7 @@ Deno.serve(async (req) => {
     // Instead process a small batch per invocation and chain the next batch
     // (same pattern as cron-sync-facebook-insights / cron-sync-google-analytics),
     // keeping the request rate and concurrency well under the ceiling.
-    const BATCH_SIZE = 6;
+    const BATCH_SIZE = 3;
     const DIRECT_CHUNK = 3;
     const CHUNK_GAP_MS = 1200;
     const NEXT_BATCH_GAP_MS = 6000;
@@ -192,7 +195,7 @@ Deno.serve(async (req) => {
     const hasMore = allDirect.length > offset + BATCH_SIZE;
     console.log(`[cron-google-ads] direct batch offset=${offset} size=${directBatch.length} of ${allDirect.length} (hasMore=${hasMore})`);
 
-    const syncOne = async (table: any): Promise<{ ok: boolean; rateLimited: boolean; reason?: string }> => {
+    const postSync = async (body: Record<string, unknown>): Promise<{ ok: boolean; rateLimited: boolean; reason?: string }> => {
       try {
         const res = await fetch(`${supabaseUrl}/functions/v1/sync-google-ads-data`, {
           method: 'POST',
@@ -201,7 +204,7 @@ Deno.serve(async (req) => {
             'Authorization': `Bearer ${supabaseServiceKey}`,
             'x-internal-cron': 'true',
           },
-          body: JSON.stringify({ table_id: table.id }),
+          body: JSON.stringify(body),
         });
         const txt = await res.text();
         if (res.ok) return { ok: true, rateLimited: false };
@@ -210,6 +213,30 @@ Deno.serve(async (req) => {
       } catch (err) {
         return { ok: false, rateLimited: false, reason: err instanceof Error ? err.message : String(err) };
       }
+    };
+
+    const syncOne = async (table: any): Promise<{ ok: boolean; rateLimited: boolean; reason?: string }> => {
+      if (operational_only) {
+        return postSync({ table_id: table.id, operational_only: true });
+      }
+      const settings = (table.integration_settings || {}) as { scheduled_history_from?: string };
+      const plan = planScheduledSyncWindows(jerusalemToday(), settings.scheduled_history_from);
+      if (plan.catchup) {
+        const chunk = await postSync({
+          table_id: table.id,
+          start_date: plan.catchup.startDate,
+          end_date: plan.catchup.endDate,
+          scheduled_history_from: plan.historyFrom,
+          update_last_sync: false,
+        });
+        if (!chunk.ok) return chunk;
+      }
+      return postSync({
+        table_id: table.id,
+        start_date: plan.refresh.startDate,
+        end_date: plan.refresh.endDate,
+        ...(plan.catchup ? {} : { scheduled_history_from: plan.historyFrom }),
+      });
     };
 
     const runInChunks = async (batch: any[]): Promise<any[]> => {
@@ -243,22 +270,24 @@ Deno.serve(async (req) => {
     // so the overall request rate stays under the gateway limit.
     if (hasMore) {
       await new Promise((r) => setTimeout(r, NEXT_BATCH_GAP_MS));
-      fetch(`${supabaseUrl}/functions/v1/cron-sync-google-ads`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${supabaseServiceKey}` },
-        body: JSON.stringify({
-          batch_offset: offset + BATCH_SIZE,
-          ...(isBackfill ? { backfill_from, backfill_to } : {}),
-          ...(table_ids ? { table_ids } : {}),
-        }),
-      }).catch((e) => console.error('[cron-google-ads] next batch trigger failed:', e?.message));
+      await kickNextBatch(supabase, 'cron-sync-google-ads', {
+        batch_offset: offset + BATCH_SIZE,
+        ...(operational_only ? { operational_only: true } : {}),
+        ...(isBackfill ? { backfill_from, backfill_to } : {}),
+        ...(table_ids ? { table_ids } : {}),
+      });
     }
 
     // ---- Make.com path (legacy) + zero-spend anomaly detection ----
     // These are per-tenant and independent of the direct sync, so run them once
     // on the first invocation only (not on each chained batch).
-    if (offset !== 0) {
+    if (offset !== 0 || operational_only) {
       if (!hasMore && !table_ids && !isBackfill) {
+        if (operational_only) {
+          return new Response(JSON.stringify({ success: true, operational_only: true, batch_offset: offset, results }), {
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        }
         const pulseResponse = await fetch(`${supabaseUrl}/functions/v1/campaign-pulse-snapshot`, {
           method: 'POST',
           headers: {

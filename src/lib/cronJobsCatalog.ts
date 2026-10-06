@@ -31,9 +31,15 @@ export const CRON_JOB_CATALOG: Record<string, CronJobMeta> = {
   },
   "sync-facebook-insights-twice-daily": {
     label: "סנכרון Facebook Insights",
-    description: "מסנכרן ביצועי קמפיינים פעמיים ביום (05:00, 14:00) ויוצר התראות על ירידות הוצאה / בעיות חיוב.",
+    description: "מסנכרן ביצועי קמפיינים פעמיים ביום, לפני רענון בדיקת הדופק (07:00 ו-16:00).",
     category: "sync",
     icon: "📊",
+  },
+  "campaign-pulse-sunday-0730": {
+    label: "בדיקת דופק שבועית",
+    description: "מחשב בדיקת דופק דטרמיניסטית ביום ראשון 07:30 (שעון ישראל) ושולח לוואטסאפ — לבעלים ולכל קמפיינר (scoped, מכרמן הארגון).",
+    category: "carmen",
+    icon: "💗",
   },
   "campaign-pulse-morning-0730": {
     label: "בדיקת דופק בוקר",
@@ -43,19 +49,19 @@ export const CRON_JOB_CATALOG: Record<string, CronJobMeta> = {
   },
   "cron-sync-facebook-ecommerce-daily": {
     label: "סנכרון Facebook eCommerce",
-    description: "מושך נתוני eCommerce מ-Facebook פעם ביום (05:00).",
+    description: "מושך נתוני eCommerce מ-Facebook פעמיים ביום, לפני רענון בדיקת הדופק.",
     category: "sync",
     icon: "🛒",
   },
   "daily-ga-sync": {
     label: "סנכרון Google Analytics",
-    description: "מושך נתוני GA לכל המחוברים פעם ביום (04:00).",
+    description: "מושך נתוני GA לכל המחוברים פעמיים ביום, לפני רענון בדיקת הדופק.",
     category: "sync",
     icon: "📈",
   },
   "daily-google-ads-sync": {
     label: "סנכרון Google Ads",
-    description: "מסנכרן קמפיינים והוצאות Google Ads (04:00).",
+    description: "מסנכרן קמפיינים והוצאות Google Ads פעמיים ביום, לפני רענון בדיקת הדופק.",
     category: "sync",
     icon: "🎯",
   },
@@ -78,6 +84,19 @@ export const CRON_JOB_CATALOG: Record<string, CronJobMeta> = {
     icon: "✈️",
   },
 };
+
+/**
+ * Report syncs that feed בדיקת הדופק. Times are UTC, twice a day, and each
+ * slot finishes before the pulse refresh at 04:00 and 13:00 UTC.
+ */
+export const REPORT_SYNC_SCHEDULES = [
+  { jobname: "daily-google-ads-sync", cron: "40 2,11 * * *" },
+  { jobname: "sync-facebook-insights-twice-daily", cron: "45 2,11 * * *" },
+  { jobname: "cron-sync-facebook-ecommerce-daily", cron: "50 2,11 * * *" },
+  { jobname: "daily-ga-sync", cron: "55 2,11 * * *" },
+] as const;
+
+export const PULSE_REFRESH_CRONS = ["0 4 * * *", "0 13 * * *"] as const;
 
 export function getCronMeta(jobname: string): CronJobMeta {
   return (

@@ -4,6 +4,7 @@ import { useCurrentTenant } from "@/hooks/useCurrentTenant";
 import { ClientSelector } from "@/components/marketing/ClientSelector";
 import { clientFilterToParam, entryClientFilter, parseClientFilter } from "@/components/marketing/clientFilter";
 import { lazyWithRetry as lazy } from "@/lib/lazyWithRetry";
+import { CarmenLoadingScreen } from "@/components/shared/CarmenLoadingScreen";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -194,17 +195,17 @@ export default function MarketingDepartment() {
       {!department ? (
         <DepartmentLanding onSelect={selectDepartment} />
       ) : department === "copy" && tenantId ? (
-        <Suspense fallback={<div className="flex flex-1 items-center justify-center"><Sparkles className="h-7 w-7 animate-pulse text-violet-500" /></div>}>
+        <Suspense fallback={<CarmenLoadingScreen variant="card" className="flex-1" />}>
           <div className="flex min-h-0 flex-1">
             <CopyDepartment clientFilter={clientFilter} tenantId={tenantId} onClientChange={selectClient} />
           </div>
         </Suspense>
       ) : department === "creative" && tenantId ? (
-        <Suspense fallback={<div className="flex flex-1 items-center justify-center"><Sparkles className="h-7 w-7 animate-pulse text-pink-500" /></div>}>
+        <Suspense fallback={<CarmenLoadingScreen variant="card" className="flex-1" />}>
           <CreativeDepartment clientFilter={clientFilter} tenantId={tenantId} onClientChange={selectClient} />
         </Suspense>
       ) : department === "seo" && tenantId ? (
-        <Suspense fallback={<div className="flex flex-1 items-center justify-center"><Sparkles className="h-7 w-7 animate-pulse text-emerald-500" /></div>}>
+        <Suspense fallback={<CarmenLoadingScreen variant="card" className="flex-1" />}>
           <SeoGeoDepartment clientFilter={clientFilter} tenantId={tenantId} />
         </Suspense>
       ) : (

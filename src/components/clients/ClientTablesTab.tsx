@@ -18,7 +18,7 @@ import { ClientDashboardPanel } from "@/components/clients/ClientDashboardPanel"
 import { ClientReportScheduleSettings } from "@/components/clients/ClientReportScheduleSettings";
 import { getIntegrationIcon } from "@/lib/integrationIcons";
 import { fetchAccessibleDashboards } from "@/lib/crmDashboards";
-import { reportQueryOptions } from "@/lib/reportQueryOptions";
+import { reportQueryOptions, refetchOnMountIfEmpty } from "@/lib/reportQueryOptions";
 import { prefetchDashboardView, prefetchReportTableView } from "@/lib/prefetchReportChunks";
 import { toast } from "sonner";
 
@@ -56,8 +56,8 @@ export function ClientTablesTab({ clientId, clientName }: ClientTablesTabProps) 
     },
     enabled: !!tenantId && !!clientId,
     ...reportQueryOptions<any[]>(),
-    // Linked reports can change from Dynamic Tables; don't show a stale persisted empty list.
-    refetchOnMount: "always",
+    // Bust empty linked lists after permission grants; keep warm cache otherwise.
+    refetchOnMount: refetchOnMountIfEmpty,
   });
 
   // All tenant tables — only for the link-table picker
@@ -324,7 +324,7 @@ export function ClientTablesTab({ clientId, clientName }: ClientTablesTabProps) 
 
       {/* Collapsible link section */}
       {showLinkSection && (
-        <div className="space-y-3 p-3 bg-muted/30 rounded-lg border">
+        <div className="space-y-3 p-3 bg-card rounded-lg border">
           {/* Table selector */}
           <div className="flex flex-col items-end gap-1">
             <span className="text-muted-foreground text-xs flex items-center gap-1">

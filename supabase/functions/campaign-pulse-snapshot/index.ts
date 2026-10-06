@@ -16,25 +16,40 @@ import {
   tableMatchesServices,
   worstPulseStatus,
 } from '../_shared/campaign-pulse.ts'
+import { cachedLastMetaActivity, fetchLastMetaCampaignActivity } from '../_shared/fbInsights.ts'
 import { normalizeNotifyPhone } from '../_shared/carmen-notify-target.ts'
 import {
   buildPulsePreviewMessage,
   mergePulseDeliveryPlans,
   planCampaignerPulseDeliveries,
   planTeamManagerPulseDeliveries,
+  findCampaignersMissingPulsePhone,
+  buildPulseMissingPhoneAlert,
+  filterPulsePlansByCampaignerName,
+  filterMissingPhoneCampaignersByName,
   scopeSnapshotsForPlan,
   type PulseDeliveryPlan,
 } from '../_shared/pulse-delivery.ts'
-
+import { deliverInstantPulseAlerts } from '../_shared/pulse-instant-alerts.ts'
+import {
+  buildPulseCampaignRows,
+  classifyPulseCampaignGoal,
+} from '../_shared/pulse-campaign-goals.mjs'
+import { aiChatJSON } from '../_shared/ai.ts'
+import { loadPulseSettings } from '../_shared/pulse-settings.mjs'
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!
 const SERVICE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
 const json = (body: unknown, status = 200) =>
   new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } })
 const round = (value: number | null, digits = 2) =>
   value === null ? null : Math.round(value * 10 ** digits) / 10 ** digits
-
-const META_GRAPH_VERSION = 'v21.0'
-const META_ACTIVITY_OBJECTS = new Set(['CAMPAIGN', 'AD_SET', 'AD'])
+const jerusalemYmd = (value = new Date()) =>
+  new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Asia/Jerusalem',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).format(value)
 
 function clientCampaignServices(client: any): Set<string> {
   return servicesFromClient(client?.services)
@@ -53,52 +68,6 @@ async function getMetaToken(supabase: any, tenantId: string): Promise<string | n
     if (source.data?.api_key) data = { ...data, api_key: source.data.api_key }
   }
   return data?.api_key || null
-}
-
-async function getLastMetaCampaignChange(
-  token: string | null,
-  adAccountId: string | null,
-): Promise<{ at: string | null; type: string | null; actor: string | null; object: string | null; availability: string }> {
-  if (!adAccountId) return { at: null, type: null, actor: null, object: null, availability: 'ad_account_not_connected' }
-  if (!token) return { at: null, type: null, actor: null, object: null, availability: 'meta_token_unavailable' }
-  const controller = new AbortController()
-  const timer = setTimeout(() => controller.abort(), 2500)
-  try {
-    const account = String(adAccountId).replace(/^act_/, '')
-    const since = new Date(Date.now() - 30 * 86400000).toISOString()
-    const params = new URLSearchParams({
-      fields: 'event_time,date_time_in_timezone,event_type,translated_event_type,actor_name,object_id,object_name,object_type',
-      add_children: 'true',
-      since,
-      limit: '100',
-      access_token: token,
-    })
-    const response = await fetch(
-      `https://graph.facebook.com/${META_GRAPH_VERSION}/act_${account}/activities?${params}`,
-      { signal: controller.signal },
-    )
-    const payload = await response.json()
-    if (!response.ok || payload?.error || !Array.isArray(payload?.data)) {
-      console.warn('[campaign-pulse] Meta activities unavailable', account, payload?.error?.code || response.status)
-      return { at: null, type: null, actor: null, object: null, availability: 'meta_api_unavailable' }
-    }
-    const latest = payload.data
-      .filter((activity: any) => META_ACTIVITY_OBJECTS.has(String(activity?.object_type || '').toUpperCase()))
-      .sort((a: any, b: any) => new Date(b.event_time || b.date_time_in_timezone || 0).getTime() - new Date(a.event_time || a.date_time_in_timezone || 0).getTime())[0]
-    if (!latest) return { at: null, type: null, actor: null, object: null, availability: 'no_campaign_change_in_30d' }
-    return {
-      at: latest.event_time || latest.date_time_in_timezone || null,
-      type: latest.translated_event_type || latest.event_type || null,
-      actor: latest.actor_name || null,
-      object: latest.object_name || latest.object_id || null,
-      availability: 'available',
-    }
-  } catch (error) {
-    console.warn('[campaign-pulse] Meta activities error', error instanceof Error ? error.message : String(error))
-    return { at: null, type: null, actor: null, object: null, availability: 'meta_api_unavailable' }
-  } finally {
-    clearTimeout(timer)
-  }
 }
 
 function bearerAuthorized(authHeader: string | null): boolean {
@@ -125,10 +94,11 @@ function bearerAuthorized(authHeader: string | null): boolean {
 async function queuePulseWhatsApp(
   supabase: any,
   tenantId: string,
+  tenantSlug: string,
   message: string,
   chatId: string | null,
 ): Promise<boolean> {
-  if (isPulseDeliveryExcludedPhone(chatId)) return false
+  if (isPulseDeliveryExcludedPhone(chatId, tenantSlug)) return false
   const delivery = await supabase.rpc('claude_notify_david', {
     p_message: message,
     p_tenant: tenantId,
@@ -137,9 +107,15 @@ async function queuePulseWhatsApp(
   return !delivery.error && delivery.data?.queued === true
 }
 
+async function runDailyClientRetention(_supabase: any, _tenantId?: string) {
+  // Paused until David defines the situations. Do not queue WhatsApp.
+  return { mode: 'retention_daily', enabled: false, sent: false, queued: false }
+}
+
 async function loadTeamManagerDeliveryPlans(
   supabase: any,
   tenantId: string,
+  tenantSlug: string,
   snapshots: Array<{ client_id: string; agency_id?: string | null }>,
 ): Promise<PulseDeliveryPlan[]> {
   const { data: roles } = await supabase
@@ -175,12 +151,14 @@ async function loadTeamManagerDeliveryPlans(
       phone: profile.campaigners?.phone || null,
       agency_ids: agenciesByUser.get(profile.id) || [],
     })),
+    tenantSlug,
   )
 }
 
 async function deliverScopedPulseRecipients(
   supabase: any,
   tenantId: string,
+  tenantSlug: string,
   snapshots: any[],
   dashboardUrl: string,
   plans: PulseDeliveryPlan[],
@@ -191,17 +169,18 @@ async function deliverScopedPulseRecipients(
   const deliveries: any[] = []
   for (const plan of plans) {
     const recipientPhone = normalizeNotifyPhone(plan.phone)
-    if (!recipientPhone || skipPhones.has(recipientPhone) || isPulseDeliveryExcludedPhone(recipientPhone)) continue
+    if (!recipientPhone || skipPhones.has(recipientPhone) || isPulseDeliveryExcludedPhone(recipientPhone, tenantSlug)) continue
 
     const scoped = scopeSnapshotsForPlan(snapshots, plan)
     if (!scoped.length) continue
 
     const scopedDigest = buildPulseWhatsAppDigest(scoped, dashboardUrl)
-    const previewTarget = isPulseDeliveryExcludedPhone(previewPhone) ? null : previewPhone
+    const previewTarget = isPulseDeliveryExcludedPhone(previewPhone, tenantSlug) ? null : previewPhone
     if (previewTarget) {
       const previewQueued = await queuePulseWhatsApp(
         supabase,
         tenantId,
+        tenantSlug,
         buildPulsePreviewMessage(plan.name, scopedDigest),
         previewTarget,
       )
@@ -217,7 +196,7 @@ async function deliverScopedPulseRecipients(
 
     if (previewOnly) continue
 
-    const queued = await queuePulseWhatsApp(supabase, tenantId, scopedDigest, recipientPhone)
+    const queued = await queuePulseWhatsApp(supabase, tenantId, tenantSlug, scopedDigest, recipientPhone)
     deliveries.push({
       type: plan.role,
       recipient: plan.name,
@@ -237,17 +216,23 @@ Deno.serve(async (req) => {
   const supabase = createClient(SUPABASE_URL, SERVICE_KEY)
   let body: any = {}
   try { body = await req.json() } catch { /* empty cron body */ }
+  if (body.retention_daily === true) {
+    const retention = await runDailyClientRetention(supabase, body.tenant_id)
+    return json(retention, retention.error ? 500 : 200)
+  }
   // Only explicit deliver:true may send WhatsApp — sync crons refresh snapshots only.
   const deliveryRequested = body.deliver === true
   const manualDeliveryBypass =
     body.force_delivery === true && body.source === 'approved_manual_trigger'
   const previewOnlyDelivery =
     body.preview_only === true && body.source === 'approved_manual_trigger'
-  let settingsQuery = supabase.from('tenant_heartbeat_settings')
-    .select('tenant_id, campaign_pulse_enabled, campaign_pulse_last_sent_at, campaign_pulse_phone, campaign_pulse_deliver_to_campaigners, campaign_pulse_deliver_to_team_managers, campaign_pulse_preview_phone')
-  if (body.tenant_id) settingsQuery = settingsQuery.eq('tenant_id', body.tenant_id)
-  const { data: settings, error: settingsError } = await settingsQuery
+  const campaignerNameFilter =
+    manualDeliveryBypass && typeof body.campaigner_name === 'string'
+      ? body.campaigner_name.trim()
+      : null
+  const { data: settings, error: settingsError, legacySchema } = await loadPulseSettings(supabase, body.tenant_id)
   if (settingsError) return json({ error: settingsError.message }, 500)
+  if (legacySchema) console.warn('[campaign-pulse] pulse_alert_rules missing; instant alerts disabled until schema deployment')
 
   const results: any[] = []
   for (const setting of settings || []) {
@@ -323,7 +308,7 @@ Deno.serve(async (req) => {
     const clientIds = campaignClients.map((client: any) => client.id)
     const tableResult = clientIds.length
       ? await supabase.from('crm_tables')
-          .select('id, client_id, integration_type, integration_settings, campaign_active, last_sync_at')
+          .select('id, client_id, integration_type, category, integration_settings, campaign_active, last_sync_at')
           .in('client_id', clientIds)
           .in('integration_type', [...CAMPAIGN_TABLE_TYPES])
       : { data: [], error: null }
@@ -382,10 +367,12 @@ Deno.serve(async (req) => {
     const now = new Date()
     const d7 = new Date(now); d7.setDate(d7.getDate() - 7)
     const d14 = new Date(now); d14.setDate(d14.getDate() - 14)
-    const d30 = new Date(now); d30.setDate(d30.getDate() - 30)
+    const d35 = new Date(now); d35.setDate(d35.getDate() - 35)
     const d7Str = d7.toISOString().slice(0, 10)
     const d14Str = d14.toISOString().slice(0, 10)
+    const d30 = new Date(now); d30.setDate(d30.getDate() - 30)
     const d30Str = d30.toISOString().slice(0, 10)
+    const d35Str = d35.toISOString().slice(0, 10)
     const snapshots: any[] = []
     for (const client of reportableClients) {
       try {
@@ -398,20 +385,23 @@ Deno.serve(async (req) => {
         const adAccountId = tableSettings.ad_account_id || tableSettings.account_id || tableSettings.meta_account_id || null
         let lastMetaChange = { at: null as string | null, type: null as string | null, actor: null as string | null, object: null as string | null, availability: 'not_applicable' }
         if (metaTable) {
-          if (adAccountId && metaToken && metaActivityCalls < MAX_META_ACTIVITY_CALLS) {
+          const cachedActivity = cachedLastMetaActivity(tableSettings)
+          if (cachedActivity) {
+            lastMetaChange = cachedActivity
+          } else if (adAccountId && metaToken && metaActivityCalls < MAX_META_ACTIVITY_CALLS) {
             metaActivityCalls += 1
-            lastMetaChange = await getLastMetaCampaignChange(metaToken, adAccountId)
+            lastMetaChange = await fetchLastMetaCampaignActivity(metaToken, adAccountId)
           } else if (adAccountId && metaToken) {
             lastMetaChange = { at: null, type: null, actor: null, object: null, availability: 'meta_api_skipped_budget' }
           } else {
-            lastMetaChange = await getLastMetaCampaignChange(metaToken, adAccountId)
+            lastMetaChange = await fetchLastMetaCampaignActivity(metaToken, adAccountId)
           }
         }
         let records: any[] = []
         if (tableIds.length) {
           const filtered = await supabase.from('crm_records').select('table_id, data')
             .in('table_id', tableIds)
-            .filter('data->>date', 'gte', d30Str)
+            .filter('data->>date', 'gte', d35Str)
             .limit(5000)
           if (!filtered.error && (filtered.data?.length || 0) > 0) {
             records = filtered.data || []
@@ -428,11 +418,23 @@ Deno.serve(async (req) => {
             }
           }
         }
-        const tableTypeById = new Map(activeTables.map((table: any) => [table.id, table.integration_type]))
+        const tableById = new Map(activeTables.map((table: any) => [table.id, table]))
         const recordsForGoal = (goal: 'leads' | 'ecommerce') =>
-          records.filter((row: any) => integrationTypeToGoal(tableTypeById.get(row.table_id)) === goal)
+          records.filter((row: any) => {
+            const table = tableById.get(row.table_id)
+            return classifyPulseCampaignGoal(row.data || {}, {
+              integration_type: table?.integration_type,
+              integration_settings: table?.integration_settings || {},
+              category: table?.category,
+            }).goal === goal
+          })
         const leadRecords = recordsForGoal('leads')
         const ecommerceRecords = recordsForGoal('ecommerce')
+        const campaignBreakdown = buildPulseCampaignRows({
+          records,
+          tables: activeTables,
+          nowYmd: jerusalemYmd(now),
+        })
         const recent = records.filter((row: any) => row.data?.date && row.data.date >= d30Str)
         const goalMode = detectCampaignGoalMode(activeTables)
         const leadMetrics = computeGoalMetricsFromRecords(leadRecords, 'leads', d7Str, d14Str)
@@ -452,11 +454,11 @@ Deno.serve(async (req) => {
         const latestCall = latestCallByClient.get(client.id) || null
         const lastClientCallAt = clientCallDataAvailable ? (latestCall?.last_client_call_at || null) : undefined
         const stoppedCount = stoppedByClient.get(client.id) || 0
-        const leadTables = activeTables.filter((table: any) => integrationTypeToGoal(table.integration_type) === 'leads')
-        const ecommerceTables = activeTables.filter((table: any) => integrationTypeToGoal(table.integration_type) === 'ecommerce')
+        const leadTables = activeTables.filter((table: any) => integrationTypeToGoal(table.integration_type, table) === 'leads')
+        const ecommerceTables = activeTables.filter((table: any) => integrationTypeToGoal(table.integration_type, table) === 'ecommerce')
         const leadClassification = classifyCampaignPulseStatus({
           activeTables: leadTables,
-          hasConfiguredCampaignTable: configuredForClient.some((table: any) => integrationTypeToGoal(table.integration_type) === 'leads'),
+          hasConfiguredCampaignTable: configuredForClient.some((table: any) => integrationTypeToGoal(table.integration_type, table) === 'leads'),
           recentRecordCount: leadRecords.filter((row: any) => row.data?.date && row.data.date >= d30Str).length,
           isEcommerce: false,
           spend7: leadMetrics.spend,
@@ -470,7 +472,7 @@ Deno.serve(async (req) => {
         })
         const ecommerceClassification = classifyCampaignPulseStatus({
           activeTables: ecommerceTables,
-          hasConfiguredCampaignTable: configuredForClient.some((table: any) => integrationTypeToGoal(table.integration_type) === 'ecommerce'),
+          hasConfiguredCampaignTable: configuredForClient.some((table: any) => integrationTypeToGoal(table.integration_type, table) === 'ecommerce'),
           recentRecordCount: ecommerceRecords.filter((row: any) => row.data?.date && row.data.date >= d30Str).length,
           isEcommerce: true,
           spend7: ecommerceMetrics.spend,
@@ -484,14 +486,24 @@ Deno.serve(async (req) => {
         })
         const leadStatus = goalMode === 'ecommerce' ? null : leadClassification.status
         const ecommerceStatus = goalMode === 'leads' ? null : ecommerceClassification.status
-        const status = goalMode === 'hybrid'
+        const legacyStatus = goalMode === 'hybrid'
           ? worstPulseStatus(leadClassification.status, ecommerceClassification.status)
           : goalMode === 'ecommerce'
             ? ecommerceClassification.status
             : leadClassification.status
+        const campaignStatus = campaignBreakdown.reduce(
+          (current: any, campaign: any) => worstPulseStatus(current, campaign.status),
+          'healthy',
+        )
+        const status = campaignBreakdown.length
+          ? worstPulseStatus(legacyStatus === 'critical' && leadRecords.length === 0 ? 'healthy' : legacyStatus, campaignStatus)
+          : legacyStatus
         const flags = Array.from(new Set([
           ...(goalMode !== 'ecommerce' ? leadClassification.flags : []),
           ...(goalMode !== 'leads' ? ecommerceClassification.flags : []),
+          ...campaignBreakdown
+            .filter((campaign: any) => campaign.status !== 'healthy')
+            .map((campaign: any) => `${campaign.campaign_name}: ${campaign.status_reason}`),
         ]))
         const stalePlatforms = Array.from(new Set([
           ...leadClassification.stalePlatforms,
@@ -529,6 +541,7 @@ Deno.serve(async (req) => {
           roas_change_pct: round(roasChange, 1),
           lead_goal_status: leadStatus,
           ecommerce_goal_status: ecommerceStatus,
+          campaign_breakdown: campaignBreakdown,
           flags, source: 'synced_crm',
           last_meta_change_at: lastMetaChange.at,
           last_meta_change_type: lastMetaChange.type,
@@ -550,6 +563,7 @@ Deno.serve(async (req) => {
           cpl_7d: null, cpl_change_pct: null, purchases_7d: 0,
           revenue_7d: 0, roas_7d: null, roas_change_pct: null,
           lead_goal_status: 'no_data', ecommerce_goal_status: null,
+          campaign_breakdown: [],
           flags: ['שגיאה בחישוב דופק — נסה שוב'],
           source: 'synced_crm',
           last_meta_change_at: null, last_meta_change_type: null,
@@ -576,10 +590,15 @@ Deno.serve(async (req) => {
       const rows = snapshots.map(({ client_name: _c, agency_name: _a, ...row }) => row)
       let { error } = await supabase.from('campaign_pulse_snapshots')
         .upsert(rows, { onConflict: 'tenant_id,client_id' })
-      if (error && /last_client_call/.test(error.message)) {
-        // Columns not deployed yet — persist the pulse without the call fields.
-        console.warn('[campaign-pulse] client call columns missing, writing without them')
-        const legacyRows = rows.map(({ last_client_call_at: _at, last_client_call_by: _by, ...row }) => row)
+      if (error && /last_client_call|campaign_breakdown/.test(error.message)) {
+        // Additive columns may lag an Edge deployment — keep the legacy snapshot available.
+        console.warn('[campaign-pulse] additive snapshot columns missing, writing legacy rows')
+        const legacyRows = rows.map(({
+          last_client_call_at: _at,
+          last_client_call_by: _by,
+          campaign_breakdown: _campaigns,
+          ...row
+        }) => row)
         const retry = await supabase.from('campaign_pulse_snapshots')
           .upsert(legacyRows, { onConflict: 'tenant_id,client_id' })
         error = retry.error
@@ -588,6 +607,40 @@ Deno.serve(async (req) => {
     }
     const { data: tenantRow } = await supabase.from('tenants').select('slug').eq('id', tenantId).maybeSingle()
     const tenantSlug = tenantRow?.slug || tenantId
+    let instantAlerts = { sent: 0, skipped: 0, candidates: 0, analyzed: 0 }
+    if (snapshots.length) {
+      try {
+        instantAlerts = await deliverInstantPulseAlerts({
+          supabase,
+          tenantId,
+          tenantSlug,
+          pulsePhone: setting.campaign_pulse_phone,
+          snapshots,
+          criticalIssues,
+          rules: setting.pulse_alert_rules,
+          queueWhatsApp: (message, chatId) =>
+            queuePulseWhatsApp(supabase, tenantId, tenantSlug, message, chatId),
+          analyzeException: async (candidate) => {
+            const evidence = JSON.stringify(candidate.evidence || {})
+            return await aiChatJSON<{
+              confirmed: boolean
+              summary?: string | null
+              recommended_check?: string | null
+            }>([
+              'את מאמתת מועמד חריגה שכבר סונן דטרמיניסטית. אל תבצעי ניתוח מתקדם ואל תמציאי נתונים.',
+              'אשרי רק אם הראיות מראות חריגה מתמשכת מיעד מאושר או הוצאה ללא תוצאות.',
+              'החזירי JSON בלבד: {"confirmed":boolean,"summary":"משפט קצר","recommended_check":"בדיקה אחת"}.',
+              `לקוח: ${candidate.client_name}`,
+              `קמפיין: ${candidate.campaign_key || 'לא ידוע'}`,
+              `סיבה: ${candidate.message}`,
+              `ראיות: ${evidence}`,
+            ].join('\n'))
+          },
+        })
+      } catch (instantAlertError) {
+        console.warn('[campaign-pulse] instant alerts failed', tenantId, instantAlertError)
+      }
+    }
     const dashboardUrl = buildPulseDashboardAbsoluteUrl(tenantSlug)
     const digest = buildPulseWhatsAppDigest(snapshots, dashboardUrl, criticalIssues)
     let sent = false
@@ -608,15 +661,15 @@ Deno.serve(async (req) => {
       )
 
       // Full-tenant digest to the configured management phone (e.g. Felix on DMM).
-      if (!previewOnlyDelivery && setting.campaign_pulse_phone) {
-        sent = await queuePulseWhatsApp(supabase, tenantId, digest, setting.campaign_pulse_phone)
+      if (!previewOnlyDelivery && setting.campaign_pulse_phone && !campaignerNameFilter) {
+        sent = await queuePulseWhatsApp(supabase, tenantId, tenantSlug, digest, setting.campaign_pulse_phone)
         if (!sent) {
           console.error('Failed to queue full campaign pulse via Carmen Direct')
         }
       }
 
       const deliverToCampaigners = setting.campaign_pulse_deliver_to_campaigners === true
-      const deliverToManagers = setting.campaign_pulse_deliver_to_team_managers === true
+      const deliverToManagers = setting.campaign_pulse_deliver_to_team_managers === true && !campaignerNameFilter
       if (deliverToCampaigners || deliverToManagers) {
         const snapshotClientIds = snapshots.map((snapshot) => snapshot.client_id)
         const plans: PulseDeliveryPlan[] = []
@@ -626,17 +679,48 @@ Deno.serve(async (req) => {
             supabase.from('client_team').select('campaigner_id, client_id').in('client_id', snapshotClientIds),
             supabase.from('campaigners').select('id, full_name, phone').eq('tenant_id', tenantId).eq('active', true),
           ])
-          plans.push(...planCampaignerPulseDeliveries(snapshots, links || [], campaigners || []))
+          plans.push(...planCampaignerPulseDeliveries(snapshots, links || [], campaigners || [], tenantSlug))
+
+          const missingPhoneCampaigners = filterMissingPhoneCampaignersByName(
+            findCampaignersMissingPulsePhone(
+              snapshots,
+              links || [],
+              campaigners || [],
+              tenantSlug,
+            ),
+            campaignerNameFilter,
+          )
+          if (!previewOnlyDelivery && missingPhoneCampaigners.length && setting.campaign_pulse_phone) {
+            const alertMessage = buildPulseMissingPhoneAlert(missingPhoneCampaigners, { tenantLabel: tenantSlug })
+            const alertQueued = await queuePulseWhatsApp(
+              supabase,
+              tenantId,
+              tenantSlug,
+              alertMessage,
+              setting.campaign_pulse_phone,
+            )
+            scopedDeliveries.push({
+              type: 'missing_phone_alert',
+              campaigners: missingPhoneCampaigners.map((row) => row.name),
+              manager_phone: setting.campaign_pulse_phone,
+              queued: alertQueued,
+            })
+            if (alertQueued) sent = true
+          }
         }
 
         if (deliverToManagers) {
-          plans.push(...await loadTeamManagerDeliveryPlans(supabase, tenantId, snapshots))
+          plans.push(...await loadTeamManagerDeliveryPlans(supabase, tenantId, tenantSlug, snapshots))
         }
 
-        const mergedPlans = mergePulseDeliveryPlans(plans)
+        const mergedPlans = filterPulsePlansByCampaignerName(
+          mergePulseDeliveryPlans(plans),
+          campaignerNameFilter || '',
+        )
         const recipientDeliveries = await deliverScopedPulseRecipients(
           supabase,
           tenantId,
+          tenantSlug,
           snapshots,
           dashboardUrl,
           mergedPlans,
@@ -662,17 +746,19 @@ Deno.serve(async (req) => {
       actions_taken: [{
         type: 'deterministic_campaign_pulse',
         sent,
-        ai_used: false,
+        ai_used: instantAlerts.analyzed > 0,
         external_api_calls: metaActivityCalls,
         dashboard_url: dashboardUrl,
         clients_checked: snapshots.length,
         scoped_deliveries: scopedDeliveries,
+        instant_alerts: instantAlerts,
       }],
       summary: digest, duration_ms: Date.now() - started,
     })
     results.push({
       tenant_id: tenantId,
       clients: snapshots.length,
+      instant_alerts: instantAlerts,
       onboarding_clients: onboardingClients.length,
       onboarding_open_tasks: onboardingClients.reduce((total: number, client: any) => total + client.open_tasks.length, 0),
       sent,
@@ -680,9 +766,10 @@ Deno.serve(async (req) => {
       delivery_channel: 'carmen_direct',
       delivery_requested: deliveryRequested,
       skipped_duplicate_delivery: deliveryRequested && setting.campaign_pulse_enabled && !manualDeliveryBypass && !deliveryClaimed,
-      ai_used: false,
+      ai_used: instantAlerts.analyzed > 0,
       external_api_calls: metaActivityCalls,
     })
   }
-  return json({ success: true, results })
+  const success = results.every(result => !result.error)
+  return json({ success, results, schema_degraded: legacySchema }, success ? 200 : 500)
 })

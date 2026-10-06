@@ -30,8 +30,39 @@ export type ExecutionGoalRow = {
   owner_user_id?: string | null;
   progress_percent?: number | null;
   execution_mode: boolean;
+  autonomous_mode?: boolean;
+  engine_status?: string | null;
+  objective?: string | null;
+  iteration_count?: number | null;
+  next_run_at?: string | null;
   created_at: string;
   updated_at: string;
+};
+
+export type UnifiedGoalCreateArgs = {
+  tenantId: string;
+  title: string;
+  description?: string;
+  dueDate?: string;
+  priority?: string;
+  completionCriteria?: string;
+  nextAction?: string;
+  ownerUserId?: string | null;
+  actorUserId?: string | null;
+  /** When true, enables autonomous worker loop + structured success criteria. */
+  autonomous?: boolean;
+  objective?: string;
+  constraints?: Record<string, unknown>;
+  scope?: Record<string, unknown>;
+  riskLevel?: string;
+  successCriteria?: Array<{
+    key?: string;
+    description: string;
+    required?: boolean;
+    verification_type?: string;
+    evidence_required?: string;
+  }>;
+  agentId?: string | null;
 };
 
 export async function logGoalEvent(
@@ -76,21 +107,27 @@ export async function findDuplicateGoals(
     .sort((a, b) => b.score - a.score);
 }
 
-export async function createExecutionGoal(
-  supabase: { from: (t: string) => any },
-  args: {
-    tenantId: string;
-    title: string;
-    description?: string;
-    dueDate?: string;
-    priority?: string;
-    completionCriteria?: string;
-    nextAction?: string;
-    ownerUserId?: string | null;
-    actorUserId?: string | null;
-  },
-): Promise<ExecutionGoalRow> {
-  const { data, error } = await supabase.from("goals").insert({
+export function isAutonomousSchemaError(error: unknown): boolean {
+  const row = error as { message?: string; code?: string };
+  const msg = String(row?.message || error || "").toLowerCase();
+  const code = String(row?.code || "");
+  return (
+    code === "42703" ||
+    code === "42P01" ||
+    code === "PGRST204" ||
+    msg.includes("does not exist") ||
+    msg.includes("unknown column") ||
+    msg.includes("autonomous_mode") ||
+    msg.includes("goal_success_criteria")
+  );
+}
+
+function buildExecutionGoalRow(
+  args: UnifiedGoalCreateArgs,
+  autonomous: boolean,
+  now: string,
+): Record<string, unknown> {
+  const row: Record<string, unknown> = {
     tenant_id: args.tenantId,
     title: args.title.trim(),
     description: args.description ?? null,
@@ -100,18 +137,105 @@ export async function createExecutionGoal(
     next_action: args.nextAction ?? null,
     owner_user_id: args.ownerUserId ?? null,
     owner_type: "agent",
-    status: "active",
+    owner_id: autonomous ? "carmen" : null,
+    status: autonomous ? "in_progress" : "active",
     execution_mode: true,
     progress_percent: 0,
-  }).select("*").single();
+  };
+  if (!autonomous) return row;
+  return {
+    ...row,
+    autonomous_mode: true,
+    objective: args.objective?.trim() || args.title.trim(),
+    engine_status: "PLANNING",
+    constraints: args.constraints ?? {},
+    scope: args.scope ?? {},
+    risk_level: args.riskLevel ?? "READ",
+    agent_id: args.agentId ?? null,
+    next_run_at: now,
+    plan: [],
+  };
+}
+
+/** Single entry point for Command Center goals — manual execution or autonomous engine. */
+export async function createUnifiedGoal(
+  supabase: { from: (t: string) => any },
+  args: UnifiedGoalCreateArgs,
+): Promise<{
+  goal: ExecutionGoalRow;
+  criteria?: unknown[];
+  autonomous_deferred?: boolean;
+  notice?: string;
+}> {
+  const now = new Date().toISOString();
+  const wantsAutonomous = !!args.autonomous;
+
+  if (wantsAutonomous) {
+    const { data, error } = await supabase.from("goals")
+      .insert(buildExecutionGoalRow(args, true, now))
+      .select("*")
+      .single();
+
+    if (!error) {
+      let criteriaRows: unknown[] = [];
+      try {
+        const { seedSuccessCriteria } = await import("./autonomous-goal-engine.ts");
+        criteriaRows = await seedSuccessCriteria(supabase, {
+          tenantId: args.tenantId,
+          goalId: data.id,
+          title: args.title,
+          completionCriteria: args.completionCriteria,
+          successCriteria: args.successCriteria,
+        });
+      } catch (criteriaError) {
+        if (!isAutonomousSchemaError(criteriaError)) throw criteriaError;
+        await supabase.from("goals").delete().eq("id", data.id);
+        return await createUnifiedGoal(supabase, { ...args, autonomous: false });
+      }
+
+      await logGoalEvent(supabase, {
+        goalId: data.id,
+        tenantId: args.tenantId,
+        eventType: "autonomous_goal_created",
+        actorUserId: args.actorUserId,
+        detail: { engine_status: "PLANNING", criteria_count: criteriaRows.length },
+      });
+      return { goal: data as ExecutionGoalRow, criteria: criteriaRows };
+    }
+
+    if (!isAutonomousSchemaError(error)) throw error;
+  }
+
+  const { data, error } = await supabase.from("goals")
+    .insert(buildExecutionGoalRow(args, false, now))
+    .select("*")
+    .single();
   if (error) throw error;
+
   await logGoalEvent(supabase, {
     goalId: data.id,
     tenantId: args.tenantId,
     eventType: "created",
     actorUserId: args.actorUserId,
+    detail: wantsAutonomous ? { autonomous_requested: true, autonomous_deferred: true } : {},
   });
-  return data as ExecutionGoalRow;
+
+  return {
+    goal: data as ExecutionGoalRow,
+    criteria: [],
+    autonomous_deferred: wantsAutonomous,
+    notice: wantsAutonomous
+      ? "היעד נוצר במצב ידני — מנוע אוטונומי יופעל אחרי עדכון Staging (מיגרציה)."
+      : undefined,
+  };
+}
+
+export async function createExecutionGoal(
+  supabase: { from: (t: string) => any },
+  args: Omit<UnifiedGoalCreateArgs, "autonomous">,
+): Promise<ExecutionGoalRow> {
+  const { goal } = await createUnifiedGoal(supabase, { ...args, autonomous: false });
+  return goal;
 }
 
 export async function addGoalMilestone(
@@ -242,7 +366,7 @@ export async function getGoalExecutionReport(
   const openTask = (tasks || []).find((t: { status: string }) => t.status !== "done");
   if (openTask) nextActions.push(`משימה: ${openTask.title}`);
 
-  return {
+  const report: Record<string, unknown> = {
     goal,
     progress_percent: progress,
     milestones: milestones || [],
@@ -254,4 +378,15 @@ export async function getGoalExecutionReport(
     needs_david_approval: (pendingApprovals || []).length,
     next_three_actions: nextActions.slice(0, 3),
   };
+
+  if (goal?.autonomous_mode) {
+    try {
+      const { getAutonomousGoalStatus } = await import("./autonomous-goal-engine.ts");
+      report.autonomous_engine = await getAutonomousGoalStatus(supabase, tenantId, goalId);
+    } catch {
+      report.autonomous_engine = null;
+    }
+  }
+
+  return report;
 }

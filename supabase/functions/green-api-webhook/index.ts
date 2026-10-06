@@ -5,6 +5,10 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.3';
 import { handleCarmenMessage, fetchKnownEntityNames } from '../_shared/carmen.ts';
 import { resolveGroupParticipantPhone } from '../_shared/carmen-group-sender.ts';
+import {
+  isCarmenManusGroup,
+  observeManusGroupMember,
+} from '../_shared/carmen-observe-group-member.ts';
 import { aiTranscribe, aiCleanTranscript } from '../_shared/ai.ts';
 import {
   VOICE_STATUSES,
@@ -1117,6 +1121,29 @@ Deno.serve(async (req) => {
         direction: isOutgoing ? 'outbound' : 'inbound',
       });
 
+      // Map members only when this group is in Carmen's Manus catalog.
+      // Never invoke Carmen from Green when manus_wa is active (below).
+      if (isIncoming && participantPhone) {
+        try {
+          const manusGroup = await isCarmenManusGroup(
+            supabaseClient, tenantId, groupId, groupChatId,
+          );
+          if (manusGroup) {
+            const observed = await observeManusGroupMember(supabaseClient, {
+              tenantId,
+              groupId,
+              groupChatId,
+              phone: participantPhone,
+              whatsappName: senderData.senderName || null,
+              source: 'green_api_enrichment',
+            });
+            console.log('[green-api group] manus member observed', observed);
+          }
+        } catch (observeErr) {
+          console.warn('[green-api group] member observe failed (non-fatal):', observeErr);
+        }
+      }
+
 
       // Forward to linked team channels
       const forwardedSenderName = isOutgoing ? connectionDisplayName : senderData.senderName;
@@ -1526,6 +1553,25 @@ Deno.serve(async (req) => {
     // ===========================
     let carmenOutcome: string | null = null;
     let isKnownBotGroupMessage = false;
+    let skipCarmenForManusOwner = false;
+    try {
+      const { data: manusOwner } = await supabaseClient
+        .from('tenant_integrations')
+        .select('id')
+        .eq('tenant_id', tenantId)
+        .eq('integration_type', 'manus_wa')
+        .eq('is_active', true)
+        .limit(1)
+        .maybeSingle();
+      skipCarmenForManusOwner = Boolean(manusOwner?.id);
+      if (skipCarmenForManusOwner) {
+        console.log('[green-api] skipping Carmen — manus_wa owns replies for this tenant', {
+          tenantId, integrationId: manusOwner.id,
+        });
+      }
+    } catch (err) {
+      console.error('[green-api] manus_wa ownership check failed:', err);
+    }
     if (isGroup && isIncoming && sourcePhoneNumber) {
       try {
         const sourceTail = sourcePhoneNumber.slice(-9);
@@ -1549,10 +1595,11 @@ Deno.serve(async (req) => {
         console.error('[green-api] bot sender check failed:', err);
       }
     }
-    // Carmen runs per the automation pinned to THIS Green API integration.
+    // Carmen runs per the automation pinned to THIS Green API integration —
+    // but only when Manus is NOT the Carmen owner for the tenant.
     // Groups are supported — the internal `group_requires_explicit_scope` guard
     // ensures Carmen only replies in groups that the automation explicitly targets.
-    if ((isIncoming || isManualOutgoing) && !isKnownBotGroupMessage) {
+    if ((isIncoming || isManualOutgoing) && !isKnownBotGroupMessage && !skipCarmenForManusOwner) {
       try {
         // A manual outgoing message inside a group is still a GROUP turn. Keep
         // the group chat id for scope/history, but pass the real participant

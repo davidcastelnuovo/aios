@@ -19,14 +19,16 @@ import { Label } from "@/components/ui/label";
 import { format } from "date-fns";
 import { he } from "date-fns/locale";
 import { cn } from "@/lib/utils";
-import { FileSpreadsheet, Facebook, TrendingUp, TrendingDown, Minus, Globe, Search, BarChart3, CalendarIcon, ChevronDown, Phone, FileText } from "lucide-react";
+import { FileSpreadsheet, Facebook, TrendingUp, TrendingDown, Minus, Globe, Search, BarChart3, CalendarIcon, ChevronDown, ChevronLeft, Phone, FileText } from "lucide-react";
 import { PublicSeoView } from "@/components/dynamic-tables/PublicSeoView";
 import { PublicMaskyooCallsCard } from "@/components/dynamic-tables/PublicMaskyooCallsCard";
 import { PublicGscView } from "@/components/dynamic-tables/PublicGscView";
 import { PublicSeoMonthlyWorkView } from "@/components/dynamic-tables/PublicSeoMonthlyWorkView";
 import { GoogleAnalyticsDashboard } from "@/components/dynamic-tables/GoogleAnalyticsDashboard";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Tabs, TabsContent } from "@/components/ui/tabs";
+import { ResponsiveTabsList, type ResponsiveTabItem } from "@/components/ui/responsive-tabs-list";
 import { computeGaOrganicByMonth } from "@/components/dynamic-tables/seo/computeGaOrganicByMonth";
+import { parseSharedReportTabs, type SharedReportTabVisibility } from "@/lib/sharedReportTabs";
 import {
   getAddToCartFromData,
   getAdsPurchasesFromData,
@@ -40,6 +42,8 @@ import { ManualROICard } from "@/components/dynamic-tables/ManualROICard";
 import { useQueryClient } from "@tanstack/react-query";
 import { SHARED_TABLE_DATE_FILTERS } from "@/lib/dashboardDateFilters";
 import { AdsEntityLevelTabs } from "@/components/reports/AdsEntityLevelTabs";
+import { WeeklyCampaignComparison } from "@/components/reports/WeeklyCampaignComparison";
+import { getCurrencySymbol } from "@/lib/currency";
 import {
   ADS_ENTITY_LEVEL_LABELS,
   aggregateFacebookRecordsAtLevel,
@@ -107,6 +111,8 @@ export default function SharedTable() {
   const [isCustomOpen, setIsCustomOpen] = useState(false);
   const [seoShareLocked, setSeoShareLocked] = useState(false);
   const [adsEntityLevel, setAdsEntityLevel] = useState<AdsEntityLevel>('campaign');
+  const [monthlyWorkFullPage, setMonthlyWorkFullPage] = useState(false);
+  const [adsReportView, setAdsReportView] = useState<"summary" | "weekly">("summary");
   const queryClient = useQueryClient();
 
   const dateQueryKey = seoShareLocked
@@ -195,6 +201,26 @@ export default function SharedTable() {
       : (tableCampaignType === 'ecommerce' ? 'ecommerce' : 'leads');
   const forceLeadsOnly = tableMode === 'leads';
   const forceEcommerceOnly = tableMode === 'ecommerce';
+
+  const { data: weeklyData, isPending: weeklyPending } = useQuery({
+    queryKey: ['shared-table', shareToken, 'last_365_days', 'weekly'],
+    queryFn: async () => {
+      const query = new URLSearchParams({
+        token: shareToken!,
+        date_filter: 'last_365_days',
+        seo_part: 'core',
+      });
+      const baseUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/public-table`;
+      const res = await fetch(`${baseUrl}?${query}`, {
+        headers: { apikey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY },
+      });
+      if (!res.ok) throw new Error(await res.text());
+      return res.json();
+    },
+    enabled: !!shareToken && isAdsPlatform(integrationType || '') && adsReportView === 'weekly',
+    staleTime: 5 * 60_000,
+    retry: false,
+  });
 
   // Records to feed into KPI/aggregation logic. We intentionally do NOT
   // pre-filter by report_type here so the public shared view stays
@@ -346,13 +372,14 @@ export default function SharedTable() {
     const maskyooSnapshots = data.maskyoo_snapshots || [];
     const maskyooPeriod = data.maskyoo_period || null;
     const periodLabel = maskyooPeriod ? `${maskyooPeriod.start} – ${maskyooPeriod.end}` : undefined;
-    const hasGa = gaRecords.length > 0;
-    const hasGsc = gscRecords.length > 0;
-    const gscPending = isSeoShare && gscLoading && !hasGsc;
-    const hasMaskyoo = maskyooSnapshots.length > 0;
+    // Per-report tab visibility, set in the share dialog.
+    const sharedTabs = parseSharedReportTabs(data.table.integration_settings);
+    const hasGa = gaRecords.length > 0 && sharedTabs.ga;
+    const hasGsc = gscRecords.length > 0 && sharedTabs.gsc;
+    const gscPending = isSeoShare && gscLoading && !hasGsc && sharedTabs.gsc;
     const seoMonthly = (data as any).seo_monthly || null;
-    const hasMonthlyWork = Array.isArray(seoMonthly?.months) && seoMonthly.months.length > 0;
-    const showTabs = true;
+    const hasMonthlyWork =
+      Array.isArray(seoMonthly?.months) && seoMonthly.months.length > 0 && sharedTabs.monthly_work;
 
     // Derive monthly NON-PAID GA sessions for the SEO traffic chart — using the
     // shared helper so the public viewer matches the internal SeoDashboardView 1:1.
@@ -384,6 +411,24 @@ export default function SharedTable() {
       }));
     })();
 
+    // The monthly work report opens as its own page, so the client reads it
+    // without the dashboard chrome around it.
+    if (monthlyWorkFullPage) {
+      return (
+        <PublicSeoMonthlyWorkView
+          fullPage
+          onBack={() => setMonthlyWorkFullPage(false)}
+          clientName={seoMonthly?.client_name || data.table.name}
+          domain={seoMonthly?.domain || ((data.table.integration_settings as any)?.targetDomain as string)}
+          months={hasMonthlyWork ? seoMonthly.months : []}
+          shareToken={seoMonthly?.share_token || null}
+          ahrefsReports={data.ahrefs_reports || []}
+          forceRelevant={(data as any).seo_keyword_relevance?.force_relevant || []}
+          forceIrrelevant={(data as any).seo_keyword_relevance?.force_irrelevant || []}
+        />
+      );
+    }
+
     return (
       <div className="min-h-screen bg-background" dir="rtl">
         <div className="w-full max-w-7xl mx-auto p-4 md:p-6 space-y-6">
@@ -394,87 +439,46 @@ export default function SharedTable() {
             </div>
           </div>
 
-          <Tabs defaultValue="seo" className="w-full">
-            <TabsList className="w-full justify-start gap-1">
-              <TabsTrigger value="seo" className="gap-1.5">
-                <TrendingUp className="h-4 w-4" />
-                SEO
-              </TabsTrigger>
-              {hasGsc && (
-                <TabsTrigger value="gsc" className="gap-1.5">
-                  <Search className="h-4 w-4" />
-                  Search Console
-                </TabsTrigger>
-              )}
-              {gscPending && (
-                <TabsTrigger value="gsc" className="gap-1.5" disabled>
-                  <Search className="h-4 w-4 animate-pulse" />
-                  Search Console…
-                </TabsTrigger>
-              )}
-              {hasGa && (
-                <TabsTrigger value="ga" className="gap-1.5">
-                  <BarChart3 className="h-4 w-4" />
-                  Analytics
-                </TabsTrigger>
-              )}
-              <TabsTrigger value="maskyoo" className="gap-1.5">
-                <Phone className="h-4 w-4" />
-                שיחות מסקיו
-              </TabsTrigger>
-              <TabsTrigger value="monthly-work" className="gap-1.5">
-                <FileText className="h-4 w-4" />
-                עבודה שבוצעה
-              </TabsTrigger>
-            </TabsList>
+          {hasMonthlyWork && (
+            <Button
+              type="button"
+              onClick={() => {
+                setMonthlyWorkFullPage(true);
+                window.scrollTo({ top: 0 });
+              }}
+              className="h-auto w-full justify-between gap-3 rounded-2xl bg-emerald-600 px-5 py-4 text-white shadow-lg shadow-emerald-600/20 hover:bg-emerald-700 sm:px-7 sm:py-5"
+            >
+              <span className="flex items-center gap-3 text-right">
+                <FileText className="h-6 w-6 shrink-0 sm:h-7 sm:w-7" />
+                <span className="flex flex-col">
+                  <span className="text-base font-bold leading-tight sm:text-xl">דוח עבודה שנעשתה</span>
+                  <span className="text-xs font-normal text-emerald-50 sm:text-sm">
+                    כל מה שקודם באתר החודש — תוכן, קישורים ושיפורים
+                  </span>
+                </span>
+              </span>
+              <ChevronLeft className="h-6 w-6 shrink-0" />
+            </Button>
+          )}
 
-            <TabsContent value="seo" className="space-y-4">
-              {gscPending && (
-                <p className="text-sm text-muted-foreground">טוען נתוני Search Console…</p>
-              )}
-              <PublicSeoView
-                tableName={data.table.name}
-                reports={data.ahrefs_reports || []}
-                gscData={gscAggregated}
-                gscMultiPeriod={data.gsc_multi_period || null}
-                gaOrganicByMonth={gaOrganicByMonth}
-                initialLangFilter={(data.table.integration_settings as any)?.linkedGscLangFilter || 'all'}
-                clientId={(data.table as any).client_id || null}
-                forceRelevant={(data as any).seo_keyword_relevance?.force_relevant || []}
-                forceIrrelevant={(data as any).seo_keyword_relevance?.force_irrelevant || []}
-              />
-            </TabsContent>
-
-            {hasGsc && (
-              <TabsContent value="gsc">
-                <PublicGscView records={gscRecords} />
-              </TabsContent>
-            )}
-
-            {hasGa && (
-              <TabsContent value="ga">
-                <GoogleAnalyticsDashboard records={gaRecords} />
-              </TabsContent>
-            )}
-
-            <TabsContent value="maskyoo">
-              <PublicMaskyooCallsCard snapshots={maskyooSnapshots} periodLabel={periodLabel} />
-            </TabsContent>
-
-            <TabsContent value="monthly-work">
-              <PublicSeoMonthlyWorkView
-                clientName={seoMonthly?.client_name || data.table.name}
-                domain={seoMonthly?.domain || (data.table.integration_settings as any)?.targetDomain}
-                months={hasMonthlyWork ? seoMonthly.months : []}
-                shareToken={seoMonthly?.share_token || null}
-                ahrefsReports={data.ahrefs_reports || []}
-                forceRelevant={(data as any).seo_keyword_relevance?.force_relevant || []}
-                forceIrrelevant={(data as any).seo_keyword_relevance?.force_irrelevant || []}
-              />
-            </TabsContent>
-          </Tabs>
-
-
+          <AhrefsSharedReportTabs
+            hasGsc={hasGsc}
+            hasGa={hasGa}
+            gscPending={gscPending}
+            gscRecords={gscRecords}
+            gaRecords={gaRecords}
+            gscAggregated={gscAggregated}
+            gaOrganicByMonth={gaOrganicByMonth}
+            maskyooSnapshots={maskyooSnapshots}
+            periodLabel={periodLabel}
+            tableName={data.table.name}
+            tableSettings={(data.table.integration_settings as any) || {}}
+            clientId={(data.table as any).client_id || null}
+            ahrefsReports={data.ahrefs_reports || []}
+            gscMultiPeriod={data.gsc_multi_period || null}
+            seoKeywordRelevance={(data as any).seo_keyword_relevance}
+            sharedTabs={sharedTabs}
+          />
         </div>
       </div>
     );
@@ -575,8 +579,36 @@ export default function SharedTable() {
           </DropdownMenu>
         </div>
 
+        {isAdsPlatform(integrationType || '') && (
+          <Tabs value={adsReportView} onValueChange={(value) => setAdsReportView(value as "summary" | "weekly")}>
+            <ResponsiveTabsList
+              items={[
+                { value: "summary", label: "הדוח" },
+                { value: "weekly", label: "השוואה שבועית", icon: BarChart3 },
+              ]}
+              value={adsReportView}
+              onValueChange={(value) => setAdsReportView(value as "summary" | "weekly")}
+              mobileLabel="בחר תצוגה"
+            />
+          </Tabs>
+        )}
+
+        {isAdsPlatform(integrationType || '') && adsReportView === "weekly" && (
+          <WeeklyCampaignComparison
+            records={weeklyData?.records || []}
+            defaultSource={integrationType as "facebook_insights" | "facebook_ecommerce" | "google_ads"}
+            currency={getCurrencySymbol((data?.table?.integration_settings as any)?.currency)}
+            isLoading={weeklyPending}
+            sourceModes={{
+              facebook_insights: forceLeadsOnly ? "leads" : undefined,
+              facebook_ecommerce: "ecommerce",
+              google_ads: tableMode,
+            }}
+          />
+        )}
+
         {/* Summary Cards for integration tables */}
-        {isIntegrationTable && summary && (
+        {isIntegrationTable && summary && (!isAdsPlatform(integrationType || '') || adsReportView === "summary") && (
           <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
             {isAdsPlatform(integrationType!) && (
               <Card className="bg-gradient-to-br from-blue-50 to-blue-100 dark:from-blue-950 dark:to-blue-900">
@@ -665,7 +697,7 @@ export default function SharedTable() {
           </div>
         )}
 
-        {isAdsPlatform(integrationType || '') && (data?.records?.length ?? 0) > 0 && (
+        {isAdsPlatform(integrationType || '') && adsReportView === "summary" && (data?.records?.length ?? 0) > 0 && (
           <div className="mb-4">
             <AdsEntityLevelTabs
               value={adsEntityLevel}
@@ -674,7 +706,7 @@ export default function SharedTable() {
           </div>
         )}
 
-        {isAdsPlatform(integrationType || '') && adsEntityLevel !== 'campaign' && filteredRecords.length === 0 && (data?.records?.length ?? 0) > 0 && (
+        {isAdsPlatform(integrationType || '') && adsReportView === "summary" && adsEntityLevel !== 'campaign' && filteredRecords.length === 0 && (data?.records?.length ?? 0) > 0 && (
           <Card className="mb-4 border-dashed">
             <CardContent className="py-8 text-center text-sm text-muted-foreground" dir="rtl">
               אין עדיין נתונים ברמת {ADS_ENTITY_LEVEL_LABELS[adsEntityLevel]} בקישור זה.
@@ -683,7 +715,7 @@ export default function SharedTable() {
         )}
 
         {/* Campaign Breakdown for Ads platforms - Ecommerce */}
-        {isAdsPlatform(integrationType || '') && campaignSummary.ecommerce?.length > 0 && (
+        {isAdsPlatform(integrationType || '') && adsReportView === "summary" && campaignSummary.ecommerce?.length > 0 && (
           <Card>
             <CardHeader>
               <CardTitle>קמפייני איקומרס</CardTitle>
@@ -748,7 +780,7 @@ export default function SharedTable() {
         )}
 
         {/* Campaign Breakdown for Ads platforms - Leads */}
-        {isAdsPlatform(integrationType || '') && campaignSummary.leads?.length > 0 && (
+        {isAdsPlatform(integrationType || '') && adsReportView === "summary" && campaignSummary.leads?.length > 0 && (
           <Card>
             <CardHeader>
               <CardTitle>קמפייני לידים</CardTitle>
@@ -802,7 +834,7 @@ export default function SharedTable() {
         )}
 
         {/* Manual ROI summary — viewers can fill in closures & revenue */}
-        {isAdsPlatform(integrationType || '') && summary && (summary.hasLeads || campaignSummary.leads.length > 0) && (
+        {isAdsPlatform(integrationType || '') && adsReportView === "summary" && summary && (summary.hasLeads || campaignSummary.leads.length > 0) && (
           <ManualROICard
             tableId={data.table.id}
             spend={campaignSummary.leads.reduce((s: number, c: any) => s + c.spend, 0) || summary.spend}
@@ -913,5 +945,121 @@ export default function SharedTable() {
         </p>
       </div>
     </div>
+  );
+}
+
+function AhrefsSharedReportTabs({
+  hasGsc,
+  hasGa,
+  gscPending,
+  gscRecords,
+  gaRecords,
+  gscAggregated,
+  gaOrganicByMonth,
+  maskyooSnapshots,
+  periodLabel,
+  tableName,
+  tableSettings,
+  clientId,
+  ahrefsReports,
+  gscMultiPeriod,
+  seoKeywordRelevance,
+  sharedTabs,
+}: {
+  hasGsc: boolean;
+  hasGa: boolean;
+  gscPending: boolean;
+  gscRecords: any[];
+  gaRecords: any[];
+  gscAggregated: any[];
+  gaOrganicByMonth: any[];
+  maskyooSnapshots: any[];
+  periodLabel?: string;
+  tableName: string;
+  tableSettings: Record<string, unknown>;
+  clientId: string | null;
+  ahrefsReports: any[];
+  gscMultiPeriod: any;
+  seoKeywordRelevance?: { force_relevant?: string[]; force_irrelevant?: string[] };
+  sharedTabs: SharedReportTabVisibility;
+}) {
+  const [activeTab, setActiveTab] = useState("seo");
+
+  const tabItems = useMemo((): ResponsiveTabItem[] => {
+    const items: ResponsiveTabItem[] = [];
+    if (sharedTabs.seo) {
+      items.push({ value: "seo", label: "SEO", icon: TrendingUp });
+    }
+    if (hasGsc) {
+      items.push({ value: "gsc", label: "Search Console", icon: Search });
+    } else if (gscPending) {
+      items.push({
+        value: "gsc",
+        label: "Search Console…",
+        icon: Search,
+        disabled: true,
+      });
+    }
+    if (hasGa) {
+      items.push({ value: "ga", label: "Analytics", icon: BarChart3 });
+    }
+    if (sharedTabs.maskyoo) {
+      items.push({ value: "maskyoo", label: "שיחות מסקיו", icon: Phone });
+    }
+    return items;
+  }, [hasGsc, hasGa, gscPending, sharedTabs]);
+
+  useEffect(() => {
+    if (!tabItems.some((item) => item.value === activeTab && !item.disabled)) {
+      setActiveTab(tabItems.find((item) => !item.disabled)?.value || "seo");
+    }
+  }, [activeTab, tabItems]);
+
+  return (
+    <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+      <ResponsiveTabsList
+        items={tabItems}
+        value={activeTab}
+        onValueChange={setActiveTab}
+        mobileLabel="בחר דוח SEO"
+      />
+
+      {sharedTabs.seo && (
+        <TabsContent value="seo" className="space-y-4">
+          {gscPending && (
+            <p className="text-sm text-muted-foreground">טוען נתוני Search Console…</p>
+          )}
+          <PublicSeoView
+            tableName={tableName}
+            reports={ahrefsReports}
+            gscData={gscAggregated}
+            gscMultiPeriod={gscMultiPeriod}
+            gaOrganicByMonth={gaOrganicByMonth}
+            initialLangFilter={(tableSettings.linkedGscLangFilter as string) || "all"}
+            clientId={clientId}
+            forceRelevant={seoKeywordRelevance?.force_relevant || []}
+            forceIrrelevant={seoKeywordRelevance?.force_irrelevant || []}
+          />
+        </TabsContent>
+      )}
+
+      {hasGsc && (
+        <TabsContent value="gsc">
+          <PublicGscView records={gscRecords} />
+        </TabsContent>
+      )}
+
+      {hasGa && (
+        <TabsContent value="ga">
+          <GoogleAnalyticsDashboard records={gaRecords} />
+        </TabsContent>
+      )}
+
+      {sharedTabs.maskyoo && (
+        <TabsContent value="maskyoo">
+          <PublicMaskyooCallsCard snapshots={maskyooSnapshots} periodLabel={periodLabel} />
+        </TabsContent>
+      )}
+    </Tabs>
   );
 }

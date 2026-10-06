@@ -4,7 +4,11 @@ import {
   aggregateFacebookCampaignsFromRecords,
   classifyFacebookCampaignTotals,
   classifyFacebookRecord,
+  effectiveFacebookCampaignType,
   facebookTableUsesMixedRows,
+  getLeadsFromData,
+  getMessagingLeadsFromData,
+  isFacebookMessagingLeadRecord,
   groupFacebookCampaigns,
   summarizeFacebookCampaignGroup,
   getAddToCartFromData,
@@ -223,4 +227,36 @@ test('summarizeFacebookCampaignGroup totals match campaign rows for All-tab brea
   assert.equal(summary.revenue, 3012);
   assert.equal(summary.addToCart, 49);
   assert.equal(summary.roas, 3012 / 729);
+});
+
+test('WhatsApp campaigns stored as traffic render as leads (אלהם פארמה pattern)', () => {
+  const row = {
+    campaign_name: 'מעורבות | 18.8 - וואטסאפ',
+    campaign_type: 'traffic',
+    optimization_goal: 'LINK_CLICKS',
+    campaign_objective: 'OUTCOME_ENGAGEMENT',
+    clicks: 394,
+    spend: 250,
+    conversations: 12,
+    result_kind: 'conversations',
+    results: 12,
+  };
+  assert.equal(isFacebookMessagingLeadRecord(row), true);
+  assert.equal(effectiveFacebookCampaignType(row), 'lead');
+  assert.equal(getMessagingLeadsFromData(row), 12);
+  assert.equal(getLeadsFromData(row), 12);
+  assert.equal(classifyFacebookRecord(row), 'leads');
+  const grouped = groupFacebookCampaigns([{
+    name: row.campaign_name,
+    impressions: 8950,
+    clicks: 394,
+    spend: 250,
+    leads: 12,
+    purchases: 0,
+    purchase_value: 0,
+    add_to_cart: 0,
+    campaign_type: effectiveFacebookCampaignType(row),
+  }]);
+  assert.equal(grouped.traffic.length, 0);
+  assert.equal(grouped.leads.length, 1);
 });

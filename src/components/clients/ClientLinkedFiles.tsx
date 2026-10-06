@@ -45,7 +45,7 @@ export function ClientLinkedFiles({ clientId, leadId, tenantId }: ClientLinkedFi
           href={file.file_url}
           target="_blank"
           rel="noopener noreferrer"
-          className="flex items-center gap-2 p-2 rounded-lg border hover:bg-muted/50 transition-colors"
+          className="flex items-center gap-2 p-2 rounded-lg border bg-card hover:bg-muted/40 transition-colors"
         >
           {getIcon(file.file_type)}
           <div className="flex-1 min-w-0">

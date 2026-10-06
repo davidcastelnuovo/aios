@@ -12,6 +12,7 @@ import { Switch } from "@/components/ui/switch";
 import { toast } from "sonner";
 import { Building2, Loader2, ShieldCheck } from "lucide-react";
 import logo from "@/assets/logo.png";
+import { resolveAppHomePath } from "@/lib/appHomePath";
 
 const signUpSchema = z.object({
   fullName: z.string().trim().min(2, "שם חייב להכיל לפחות 2 תווים").max(100, "שם ארוך מדי"),
@@ -66,15 +67,22 @@ export default function SignUp() {
       }
 
       toast.success("הארגון נוצר בהצלחה! מיד תועבר למערכת");
-      
-      // If user is already logged in, skip re-login
+
+      const goToHome = async (userId: string) => {
+        const homePath = await resolveAppHomePath(userId);
+        if (homePath) {
+          navigate(homePath, { replace: true });
+          return;
+        }
+        navigate("/auth", { replace: true });
+      };
+
       const { data: { session } } = await supabase.auth.getSession();
       if (session?.user) {
-        navigate("/");
+        await goToHome(session.user.id);
         return;
       }
 
-      // Sign in the user (for new accounts)
       const { error: signInError } = await supabase.auth.signInWithPassword({
         email: formData.email,
         password: formData.password,
@@ -84,8 +92,12 @@ export default function SignUp() {
         throw new Error("נוצר חשבון אך התחברות נכשלה. נסה להתחבר מחדש.");
       }
 
-      // Redirect to dashboard
-      navigate("/");
+      const { data: { session: signedInSession } } = await supabase.auth.getSession();
+      if (signedInSession?.user) {
+        await goToHome(signedInSession.user.id);
+      } else {
+        navigate("/auth", { replace: true });
+      }
     } catch (error: any) {
       console.error("Signup error:", error);
       toast.error(error.message || "שגיאה ביצירת החשבון");

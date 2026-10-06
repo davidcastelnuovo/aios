@@ -19,7 +19,8 @@ import { Plus, FileText, Upload, Send, Eye, Trash2, CheckCircle, Clock, XCircle,
 import { format } from "date-fns";
 import SignatureFieldPlacer, { getRecipientColor, type SignaturePosition } from "@/components/signatures/SignatureFieldPlacer";
 import { SignatureLinkShareButtons } from "@/components/signatures/SignatureLinkShareButtons";
-import { type DocumentField, parseDocumentFields } from "@/components/signatures/signatureFieldTypes";
+import { type DocumentField, parseDocumentFields, getFieldPlacerLabel } from "@/components/signatures/signatureFieldTypes";
+import { isFieldRequired } from "@/lib/signatureFieldGuide";
 import SignatureContactPicker from "@/components/signatures/SignatureContactPicker";
 import { buildFieldPrefill, type SignatureContactDetails } from "@/components/signatures/signatureContactUtils";
 import { sanitizeFileName } from "@/lib/sanitizeFileName";
@@ -30,6 +31,7 @@ import { SignatureDocumentFieldEditor } from "@/components/signatures/SignatureD
 import { SendSignatureDialog } from "@/components/signatures/SendSignatureDialog";
 import { mediaKindFromFile, detectMediaKind } from "@/components/signatures/signatureDocumentMedia";
 import { SignatureOriginalFileLink } from "@/components/signatures/SignatureOriginalFileLink";
+import { SignedSignatureReview } from "@/components/signatures/SignedSignatureReview";
 
 interface Recipient {
   name: string;
@@ -68,7 +70,7 @@ const eventLabels: Record<string, string> = {
 };
 
 export default function Signatures() {
-  const { tenantId } = useCurrentTenant();
+  const { tenantId, isActiveTenantDbSynced } = useCurrentTenant();
   const { userId } = useCurrentUser();
   const queryClient = useQueryClient();
   const [isCreateOpen, setIsCreateOpen] = useState(false);
@@ -89,6 +91,9 @@ export default function Signatures() {
   const skipDialogResetRef = useRef(false);
   const [searchParams, setSearchParams] = useSearchParams();
   const [editingDoc, setEditingDoc] = useState<any>(null);
+  const [renameDoc, setRenameDoc] = useState<{ id: string; title: string; content?: string | null; is_template?: boolean } | null>(null);
+  const [renameTitle, setRenameTitle] = useState("");
+  const [renameContent, setRenameContent] = useState("");
   const [sendDialogDoc, setSendDialogDoc] = useState<any>(null);
   const [sendDialogRecipient, setSendDialogRecipient] = useState<{
     name?: string;
@@ -97,9 +102,13 @@ export default function Signatures() {
     firstName?: string;
     lastName?: string;
   } | undefined>();
+  const [listFilter, setListFilter] = useState<"all" | "templates" | "documents">("all");
 
-  const canEditDocFields = (doc: { status: string; file_url?: string | null }) =>
-    doc.status === "draft" && !!doc.file_url;
+  const canEditDocFields = (doc: { status: string; is_template?: boolean; file_url?: string | null }) =>
+    (doc.status === "draft" || !!doc.is_template) && !!doc.file_url;
+
+  const canSendFromDoc = (doc: { status: string; is_template?: boolean; file_url?: string | null; content?: string | null }) =>
+    !!doc.is_template || (doc.status === "draft" && !!(doc.file_url || doc.content));
 
   const openFieldEditor = (doc: any) => {
     if (!canEditDocFields(doc)) {
@@ -127,6 +136,23 @@ export default function Signatures() {
     },
     enabled: !!tenantId,
   });
+
+  const { data: freshDoc } = useQuery({
+    queryKey: ["signature-document", selectedDoc?.id],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("signature_documents")
+        .select("*")
+        .eq("id", selectedDoc.id)
+        .single();
+      if (error) throw error;
+      return data;
+    },
+    enabled: isViewOpen && !!selectedDoc?.id,
+    refetchInterval: (query) =>
+      query.state.data?.status === "completed" && !query.state.data?.signed_file_url ? 4000 : false,
+  });
+  const viewedDoc = freshDoc ?? selectedDoc;
 
   // Fetch recipients for selected doc
   const { data: docRecipients } = useQuery({
@@ -274,7 +300,12 @@ export default function Signatures() {
       queryClient.invalidateQueries({ queryKey: ["signature-documents", tenantId] });
 
       if (result.isTemplate) {
-        toast.success("התבנית נשמרה");
+        toast.success("התבנית נשמרה — אפשר לשלוח אותה שוב לכל חותם");
+        setShowPlacement(false);
+        resetForm();
+        setIsCreateOpen(false);
+        openSendDialog({ id: result.doc.id, title, is_template: true });
+        return;
       } else {
         setShowPlacement(false);
         resetForm();
@@ -322,6 +353,66 @@ export default function Signatures() {
     },
   });
 
+  const renameTemplateMutation = useMutation({
+    mutationFn: async () => {
+      if (!renameDoc || !renameTitle.trim()) throw new Error("נא למלא שם לתבנית");
+      const patch = {
+        title: renameTitle.trim(),
+        template_name: renameTitle.trim(),
+        content: renameContent,
+        updated_at: new Date().toISOString(),
+      };
+      let { error } = await supabase.from("signature_documents").update(patch).eq("id", renameDoc.id);
+      if (error?.message?.includes("template_name")) {
+        const { template_name: _name, ...withoutName } = patch;
+        ({ error } = await supabase.from("signature_documents").update(withoutName).eq("id", renameDoc.id));
+      }
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["signature-documents", tenantId] });
+      toast.success("התבנית עודכנה");
+      setRenameDoc(null);
+    },
+    onError: (err: Error) => toast.error(err.message || "שמירת התבנית נכשלה"),
+  });
+
+  const saveAsTemplateMutation = useMutation({
+    mutationFn: async (doc: {
+      title: string;
+      content?: string | null;
+      file_url?: string | null;
+      document_type?: string | null;
+      document_fields?: unknown;
+    }) => {
+      if (!tenantId || !userId) throw new Error("Missing tenant or user");
+      return insertSignatureDocument({
+        tenant_id: tenantId,
+        title: doc.title,
+        content: doc.content ?? null,
+        file_url: doc.file_url ?? null,
+        document_type: doc.document_type ?? "uploaded",
+        status: "draft",
+        created_by: userId,
+        is_template: true,
+        template_name: doc.title,
+        ...(Array.isArray(doc.document_fields) && doc.document_fields.length > 0
+          ? { document_fields: doc.document_fields as any }
+          : {}),
+      });
+    },
+    onSuccess: (created, doc) => {
+      queryClient.invalidateQueries({ queryKey: ["signature-documents", tenantId] });
+      queryClient.invalidateQueries({ queryKey: ["signature-source-documents", tenantId] });
+      toast.success("נשמרה תבנית לשימוש חוזר");
+      setListFilter("templates");
+      if (created) {
+        openSendDialog({ id: created.id, title: doc.title, is_template: true });
+      }
+    },
+    onError: (err: Error) => toast.error(err.message || "שמירת התבנית נכשלה"),
+  });
+
   const updateFieldsMutation = useMutation({
     mutationFn: async ({
       doc,
@@ -332,7 +423,10 @@ export default function Signatures() {
       fields: DocumentField[];
       thenSend?: boolean;
     }) => {
-      const result = await updateSignatureDocumentFields(doc.id, fields);
+      const result = await updateSignatureDocumentFields(doc.id, fields, {
+        title: doc.title,
+        isTemplate: !!doc.is_template,
+      });
       return { doc, thenSend: !!thenSend, ...result };
     },
     onSuccess: async ({ doc, thenSend, savedDocumentFields }) => {
@@ -362,13 +456,13 @@ export default function Signatures() {
     onError: (err: Error) => toast.error(err.message || "שגיאה בשמירת שדות"),
   });
 
-  const handleEditSaveOnly = async (fields: DocumentField[]) => {
-    if (!editingDoc) return;
+  const handleEditSaveOnly = async (fields: DocumentField[], nextTitle: string) => {
+    if (!editingDoc || !nextTitle.trim()) return;
     try {
       await updateFieldsMutation.mutateAsync({
         doc: {
           id: editingDoc.id,
-          title: editingDoc.title,
+          title: nextTitle.trim(),
           is_template: editingDoc.is_template,
         },
         fields,
@@ -379,13 +473,13 @@ export default function Signatures() {
     }
   };
 
-  const handleEditSaveOrSend = async (fields: DocumentField[]) => {
-    if (!editingDoc) return;
+  const handleEditSaveOrSend = async (fields: DocumentField[], nextTitle: string) => {
+    if (!editingDoc || !nextTitle.trim()) return;
     try {
       await updateFieldsMutation.mutateAsync({
         doc: {
           id: editingDoc.id,
-          title: editingDoc.title,
+          title: nextTitle.trim(),
           is_template: editingDoc.is_template,
         },
         fields,
@@ -400,7 +494,7 @@ export default function Signatures() {
     const editId = searchParams.get("edit");
     if (!editId || !documents?.length) return;
     const doc = documents.find((d) => d.id === editId);
-    if (doc?.status === "draft" && doc.file_url) {
+    if (doc && canEditDocFields(doc)) {
       setEditingDoc(doc);
       setIsViewOpen(false);
     }
@@ -495,6 +589,10 @@ export default function Signatures() {
         queryClient.invalidateQueries({ queryKey: ["signature-documents", tenantId] });
         queryClient.invalidateQueries({ queryKey: ["signature-events", result.documentId] });
         queryClient.invalidateQueries({ queryKey: ["signature-recipients", result.documentId] });
+        if (sendDialogDoc?.is_template) {
+          toast.success("נוצר מסמך חדש מהתבנית — התבנית נשארה לשימוש חוזר");
+          return;
+        }
         setSelectedDoc((prev: any) =>
           prev && (prev.id === result.documentId || prev.id === sendDialogDoc?.id)
             ? { ...prev, id: result.documentId, status: "pending" }
@@ -503,6 +601,14 @@ export default function Signatures() {
       }}
     />
   );
+
+  if (tenantId && !isActiveTenantDbSynced) {
+    return (
+      <div className="flex min-h-[40vh] items-center justify-center text-muted-foreground" dir="rtl">
+        מסנכרן ארגון...
+      </div>
+    );
+  }
 
   if (editingDoc?.file_url) {
     return (
@@ -609,7 +715,7 @@ export default function Signatures() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold text-foreground">חתימות דיגיטליות</h1>
-          <p className="text-muted-foreground">ניהול מסמכים וחתימות דיגיטליות</p>
+          <p className="text-muted-foreground">תבנית נשארת בטיוטה. שליחה ממנה יוצרת מסמך חדש לחותם — אפשר לשלוח שוב לאנשים נוספים.</p>
         </div>
         <Dialog open={isCreateOpen} onOpenChange={(open) => {
           setIsCreateOpen(open);
@@ -757,7 +863,9 @@ export default function Signatures() {
                   checked={isTemplate}
                   onCheckedChange={(v) => setIsTemplate(!!v)}
                 />
-                <Label htmlFor="is-template" className="cursor-pointer">שמור כתבנית לשימוש חוזר (מלידים / אוטומציות)</Label>
+                <Label htmlFor="is-template" className="cursor-pointer">
+                  שמור כתבנית — כל שליחה יוצרת מסמך חדש לחותם, והתבנית נשארת
+                </Label>
               </div>
               {isTemplate && (
                 <div>
@@ -840,6 +948,24 @@ export default function Signatures() {
         </Dialog>
       </div>
 
+      <div className="flex flex-wrap gap-2">
+        {([
+          { id: "all", label: "הכל" },
+          { id: "templates", label: "תבניות" },
+          { id: "documents", label: "מסמכים שנשלחו" },
+        ] as const).map((tab) => (
+          <Button
+            key={tab.id}
+            type="button"
+            size="sm"
+            variant={listFilter === tab.id ? "default" : "outline"}
+            onClick={() => setListFilter(tab.id)}
+          >
+            {tab.label}
+          </Button>
+        ))}
+      </div>
+
       {/* Stats */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         {[
@@ -865,18 +991,36 @@ export default function Signatures() {
       {/* Documents Table */}
       <Card>
         <CardHeader>
-          <CardTitle>מסמכים</CardTitle>
+          <CardTitle>
+            {listFilter === "templates" ? "תבניות" : listFilter === "documents" ? "מסמכים שנשלחו" : "מסמכים"}
+          </CardTitle>
         </CardHeader>
         <CardContent>
-          {isLoading ? (
-            <p className="text-center text-muted-foreground py-8">טוען...</p>
-          ) : !documents?.length ? (
-            <div className="text-center py-12">
-              <FileText className="h-12 w-12 text-muted-foreground mx-auto mb-3" />
-              <p className="text-muted-foreground">אין מסמכים עדיין</p>
-              <p className="text-sm text-muted-foreground">לחץ על "מסמך חדש" כדי להתחיל</p>
-            </div>
-          ) : (
+          {(() => {
+            const visibleDocs = (documents ?? []).filter((doc) => {
+              if (listFilter === "templates") return !!doc.is_template;
+              if (listFilter === "documents") return !doc.is_template;
+              return true;
+            });
+            if (isLoading) {
+              return <p className="text-center text-muted-foreground py-8">טוען...</p>;
+            }
+            if (!visibleDocs.length) {
+              return (
+                <div className="text-center py-12">
+                  <FileText className="h-12 w-12 text-muted-foreground mx-auto mb-3" />
+                  <p className="text-muted-foreground">
+                    {listFilter === "templates" ? "אין תבניות עדיין" : "אין מסמכים עדיין"}
+                  </p>
+                  <p className="text-sm text-muted-foreground">
+                    {listFilter === "templates"
+                      ? "צור מסמך חדש וסמן «שמור כתבנית», או פתח מסמך קיים ובחר «שמור כתבנית»"
+                      : "לחץ על \"מסמך חדש\" כדי להתחיל"}
+                  </p>
+                </div>
+              );
+            }
+            return (
             <Table>
               <TableHeader>
                 <TableRow>
@@ -888,7 +1032,7 @@ export default function Signatures() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {documents.map(doc => {
+                {visibleDocs.map(doc => {
                   const status = statusLabels[doc.status] || statusLabels.draft;
                   const StatusIcon = statusIcons[doc.status] || FileText;
                   return (
@@ -920,24 +1064,52 @@ export default function Signatures() {
                           >
                             <Eye className="h-4 w-4" />
                           </Button>
-                          {canEditDocFields(doc) && (
+                          {doc.is_template && canEditDocFields(doc) && (
+                            <Button variant="outline" size="sm" title="ערוך את התבנית" onClick={() => openFieldEditor(doc)}>
+                              <Pencil className="h-4 w-4 text-primary" />
+                              <span className="mr-1">ערוך תבנית</span>
+                            </Button>
+                          )}
+                          {doc.is_template && !doc.file_url && (
                             <Button
-                              variant="ghost"
-                              size="icon"
-                              title="ערוך שדות"
-                              onClick={() => openFieldEditor(doc)}
+                              variant="outline"
+                              size="sm"
+                              title="ערוך שם ותוכן"
+                              onClick={() => {
+                                setRenameDoc(doc);
+                                setRenameTitle(doc.title);
+                                setRenameContent(doc.content || "");
+                              }}
                             >
+                              <Pencil className="h-4 w-4 text-primary" />
+                              <span className="mr-1">ערוך תבנית</span>
+                            </Button>
+                          )}
+                          {!doc.is_template && canEditDocFields(doc) && (
+                            <Button variant="ghost" size="icon" title="ערוך שדות" onClick={() => openFieldEditor(doc)}>
                               <Pencil className="h-4 w-4 text-primary" />
                             </Button>
                           )}
-                          {doc.status === "draft" && (
+                          {canSendFromDoc(doc) && (
                             <Button
-                              variant="ghost"
-                              size="icon"
-                              title="שלח לחתימה"
+                              variant={doc.is_template ? "outline" : "ghost"}
+                              size={doc.is_template ? "sm" : "icon"}
+                              title={doc.is_template ? "שלח לחתימה מתבנית" : "שלח לחתימה"}
                               onClick={() => openSendDialog(doc)}
                             >
                               <Send className="h-4 w-4 text-primary" />
+                              {doc.is_template && <span className="mr-1">שלח מתבנית</span>}
+                            </Button>
+                          )}
+                          {!doc.is_template && !!doc.file_url && (
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              title="שמור כתבנית לשימוש חוזר"
+                              disabled={saveAsTemplateMutation.isPending}
+                              onClick={() => saveAsTemplateMutation.mutate(doc)}
+                            >
+                              <Copy className="h-4 w-4" />
                             </Button>
                           )}
                           {doc.status === "draft" && (
@@ -956,17 +1128,23 @@ export default function Signatures() {
                 })}
               </TableBody>
             </Table>
-          )}
+            );
+          })()}
         </CardContent>
       </Card>
 
       {/* View Document Dialog */}
       <Dialog open={isViewOpen} onOpenChange={(open) => { setIsViewOpen(open); if (!open) setLastSentLinks([]); }}>
-        <DialogContent className="max-w-2xl max-h-[90vh] overflow-x-hidden overflow-y-auto min-w-0" dir="rtl">
+        <DialogContent className={`${viewedDoc?.status === "completed" ? "max-w-4xl" : "max-w-2xl"} max-h-[90vh] overflow-x-hidden overflow-y-auto min-w-0`} dir="rtl">
           <DialogHeader>
-            <DialogTitle>{selectedDoc?.title}</DialogTitle>
+            <DialogTitle className="flex items-center gap-2">
+              {viewedDoc?.title}
+              {viewedDoc?.is_template && <Badge variant="secondary">תבנית</Badge>}
+            </DialogTitle>
           </DialogHeader>
-          {selectedDoc && (
+          {viewedDoc?.status === "completed" ? (
+            <SignedSignatureReview doc={viewedDoc} signers={docRecipients ?? []} tenantId={tenantId} />
+          ) : selectedDoc && (
             <div className="space-y-4">
               {/* Document Content */}
               {selectedDoc.document_type === "created" && selectedDoc.content && (
@@ -1017,7 +1195,10 @@ export default function Signatures() {
                   <CardContent>
                     <div className="flex flex-wrap gap-2">
                       {parseDocumentFields(selectedDoc.document_fields).map((f) => (
-                        <Badge key={f.id} variant="outline">{f.label}</Badge>
+                        <Badge key={f.id} variant="outline">
+                          {f.label || getFieldPlacerLabel(f.type)}
+                          {isFieldRequired(f) ? " · חובה" : " · לא חובה"}
+                        </Badge>
                       ))}
                     </div>
                   </CardContent>
@@ -1098,7 +1279,7 @@ export default function Signatures() {
                       {docEvents.map((ev: any) => (
                         <div key={ev.id} className="flex items-center justify-between text-sm border-b pb-2 last:border-0">
                           <div>
-                            <span className="font-medium">{eventLabels[ev.event_type] || ev.event_type}</span>
+                            <span className="font-medium">{ev.event_type === "sent" && ev.metadata?.channel === "link" ? "קישור לחתימה הוכן" : eventLabels[ev.event_type] || ev.event_type}</span>
                             {ev.signature_recipients?.name && (
                               <span className="text-muted-foreground"> — {ev.signature_recipients.name}</span>
                             )}
@@ -1113,28 +1294,65 @@ export default function Signatures() {
                 </CardContent>
               </Card>
 
-              {selectedDoc.status === "draft" && canEditDocFields(selectedDoc) && (
-                <div className="flex justify-end gap-2">
+              <div className="flex flex-wrap justify-end gap-2">
+                {selectedDoc.is_template && canEditDocFields(selectedDoc) && (
+                  <Button variant="secondary" onClick={() => openFieldEditor(selectedDoc)}>
+                    <Pencil className="h-4 w-4 ml-2" />
+                    ערוך תבנית
+                  </Button>
+                )}
+                {selectedDoc.is_template && !selectedDoc.file_url && (
+                  <Button variant="secondary" onClick={() => { setRenameDoc(selectedDoc); setRenameTitle(selectedDoc.title); setRenameContent(selectedDoc.content || ""); }}>
+                    <Pencil className="h-4 w-4 ml-2" />
+                    ערוך תבנית
+                  </Button>
+                )}
+                {!selectedDoc.is_template && canEditDocFields(selectedDoc) && (
                   <Button variant="secondary" onClick={() => openFieldEditor(selectedDoc)}>
                     <Pencil className="h-4 w-4 ml-2" />
                     ערוך שדות
                   </Button>
-                  {!selectedDoc.is_template && (
-                    <Button onClick={() => { openSendDialog(selectedDoc); setIsViewOpen(false); }}>
-                      <Send className="h-4 w-4 ml-2" />
-                      שלח לחתימה
-                    </Button>
-                  )}
-                  {selectedDoc.is_template && (
-                    <Button onClick={() => { openSendDialog(selectedDoc); setIsViewOpen(false); }}>
-                      <Send className="h-4 w-4 ml-2" />
-                      שלח לחתימה מתבנית
-                    </Button>
-                  )}
-                </div>
-              )}
+                )}
+                {!selectedDoc.is_template && selectedDoc.file_url && (
+                  <Button
+                    variant="outline"
+                    disabled={saveAsTemplateMutation.isPending}
+                    onClick={() => saveAsTemplateMutation.mutate(selectedDoc)}
+                  >
+                    <Copy className="h-4 w-4 ml-2" />
+                    שמור כתבנית
+                  </Button>
+                )}
+                {canSendFromDoc(selectedDoc) && (
+                  <Button onClick={() => { openSendDialog(selectedDoc); setIsViewOpen(false); }}>
+                    <Send className="h-4 w-4 ml-2" />
+                    {selectedDoc.is_template ? "שלח לחתימה מתבנית" : "שלח לחתימה"}
+                  </Button>
+                )}
+              </div>
             </div>
           )}
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={!!renameDoc} onOpenChange={(open) => { if (!open) setRenameDoc(null); }}>
+        <DialogContent dir="rtl">
+          <DialogHeader>
+            <DialogTitle>עריכת תבנית</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3">
+            <div className="space-y-2">
+              <Label>שם התבנית</Label>
+              <Input value={renameTitle} onChange={(event) => setRenameTitle(event.target.value)} />
+            </div>
+            <div className="space-y-2">
+              <Label>תוכן המסמך</Label>
+              <Textarea value={renameContent} onChange={(event) => setRenameContent(event.target.value)} rows={8} />
+            </div>
+            <Button disabled={!renameTitle.trim() || renameTemplateMutation.isPending} onClick={() => renameTemplateMutation.mutate()}>
+              {renameTemplateMutation.isPending ? "שומר..." : "שמור תבנית"}
+            </Button>
+          </div>
         </DialogContent>
       </Dialog>
 

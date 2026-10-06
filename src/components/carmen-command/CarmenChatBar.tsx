@@ -1,6 +1,11 @@
 import { forwardRef, useCallback, useEffect, useImperativeHandle, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Headphones, Loader2, Mic, MicOff, Paperclip, Play, Send, Square, Volume2, VolumeX, AudioLines, X, File as FileIcon, Image as ImageIcon } from "lucide-react";
+import { Headphones, Loader2, Mic, MicOff, Paperclip, Play, Plus, Send, Square, Volume2, VolumeX, AudioLines, X, File as FileIcon, Image as ImageIcon } from "lucide-react";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
@@ -10,7 +15,13 @@ import { ChatMessageRow } from "./ChatMessageRow";
 import { ChatTopicRail } from "./ChatTopicRail";
 import { ThinkingGalaxy } from "./ThinkingGalaxy";
 import type { BrainChannel } from "./useBrainChannel";
-import { AGENT_SPRITES, filterMessagesForRoute, seatKeyFromRoute } from "@/lib/agentSeats";
+import {
+  AGENT_SPRITES,
+  conversationsForRoute,
+  filterMessagesForRoute,
+  lastConversationStorageKeyForSeat,
+  seatKeyFromRoute,
+} from "@/lib/agentSeats";
 import { hudStage, routeForRestoredChat } from "@/lib/agentChannelRouting";
 import { composerLockedForChat, lastConversationStorageKey, streamAppliesToActive, topicIsLive, type TopicChat } from "@/lib/chatTopics";
 import type { ConversationChannelStatus, HudStage } from "@/lib/agentChannelRouting";
@@ -292,12 +303,16 @@ export const CarmenChatBar = forwardRef<CarmenChatBarHandle, CarmenChatBarProps>
       return null;
     };
 
-    const rememberConv = (id: string | null | undefined) => {
+    const rememberConv = (id: string | null | undefined, seatSlug?: string) => {
       if (!id) return;
       conversationIdRef.current = id;
       setConversationId(id);
       onConversationIdChange?.(id);
-      if (tenantId) localStorage.setItem(lastConversationStorageKey(tenantId), id);
+      if (tenantId) {
+        const seat = seatSlug || brain.selected.slug || "cursor";
+        localStorage.setItem(lastConversationStorageKey(tenantId), id);
+        localStorage.setItem(lastConversationStorageKeyForSeat(tenantId, seat), id);
+      }
     };
 
     const streamInternal = useCallback(async (
@@ -436,7 +451,7 @@ export const CarmenChatBar = forwardRef<CarmenChatBarHandle, CarmenChatBarProps>
 
       let boundId = activeId;
       try {
-        const history = messages
+        const history = filterMessagesForRoute(messages, sendRoute)
           .filter(m => m.role === "user" || m.role === "assistant")
           .map(m => ({ role: m.role, content: m.content ?? "" }));
         const route = sendRoute;
@@ -457,6 +472,15 @@ export const CarmenChatBar = forwardRef<CarmenChatBarHandle, CarmenChatBarProps>
         if (routed.stream) {
           await streamInternal(agentText, history, boundId || "", ctxMeta);
           if (mode === "transcribe_only") logTranscribeOnlyEvent("text_response", { stream: true });
+        } else if (routed.inline_reply && streamAppliesToActive(boundId, conversationIdRef.current)) {
+          setMessages(prev => [...prev, {
+            role: "assistant",
+            content: routed.inline_reply,
+            speaker: routed.kind,
+            channel: routed.kind,
+            ...tagChatTurn("typed"),
+          }]);
+          scrollDown();
         } else if (streamAppliesToActive(boundId, conversationIdRef.current)) {
           setMessages(prev => [...prev, {
             role: "tool_call",
@@ -535,7 +559,7 @@ export const CarmenChatBar = forwardRef<CarmenChatBarHandle, CarmenChatBarProps>
       if (!question.trim() || !tenantId) return "לא התקבלה שאלה.";
       setMessages(prev => [...prev, { role: "tool_call", tool: `מוח: ${brain.selected.label} · ${question.slice(0, 60)}` }]);
       try {
-        const history = messages
+        const history = filterMessagesForRoute(messages, brain.selected)
           .filter(m => m.role === "user" || m.role === "assistant")
           .map(m => ({ role: m.role, content: m.content ?? "" }))
           .slice(-24);
@@ -903,7 +927,10 @@ export const CarmenChatBar = forwardRef<CarmenChatBarHandle, CarmenChatBarProps>
       setStreamingText("");
       setHistory(false);
       brain.setStatus("idle");
-      if (tenantId) localStorage.removeItem(lastConversationStorageKey(tenantId));
+      if (tenantId) {
+        localStorage.removeItem(lastConversationStorageKey(tenantId));
+        localStorage.removeItem(lastConversationStorageKeyForSeat(tenantId, brain.selected.slug));
+      }
     }, [learnFromConversation, tenantId, brain]);
 
     const loadConversation = useCallback(async (conv: TopicChat) => {
@@ -954,17 +981,52 @@ export const CarmenChatBar = forwardRef<CarmenChatBarHandle, CarmenChatBarProps>
     });
 
     const restoredRef = useRef(false);
+    const seatSlugRef = useRef(brain.selected.slug);
+    const routeScopedConversations = conversationsForRoute(
+      pastConversations ?? [],
+      brain.selected,
+      brain.routes,
+    );
+
     useEffect(() => {
       if (!tenantId || restoredRef.current || conversationIdRef.current) return;
-      const last = localStorage.getItem(lastConversationStorageKey(tenantId));
-      const hit = pastConversations?.find((c) => c.id === last);
+      const seat = brain.selected.slug || "cursor";
+      const last =
+        localStorage.getItem(lastConversationStorageKeyForSeat(tenantId, seat))
+        || localStorage.getItem(lastConversationStorageKey(tenantId));
+      const hit = conversationsForRoute(pastConversations ?? [], brain.selected, brain.routes)
+        .find((c) => c.id === last);
       if (hit) {
         restoredRef.current = true;
         loadConversation(hit);
       } else if (pastConversations) {
         restoredRef.current = true;
       }
-    }, [tenantId, pastConversations, loadConversation]);
+    }, [tenantId, pastConversations, loadConversation, brain.selected, brain.routes]);
+
+    /** Switching seats must open that seat's thread — never keep Carmen lines inside Cursor Direct. */
+    useEffect(() => {
+      const nextSlug = brain.selected.slug;
+      const prevSlug = seatSlugRef.current;
+      if (prevSlug === nextSlug) return;
+      seatSlugRef.current = nextSlug;
+      if (!tenantId) return;
+
+      const scoped = conversationsForRoute(pastConversations ?? [], brain.selected, brain.routes);
+      const saved = localStorage.getItem(lastConversationStorageKeyForSeat(tenantId, nextSlug));
+      const hit = scoped.find((c) => c.id === saved) || scoped[0];
+      if (hit) {
+        if (hit.id !== conversationIdRef.current) loadConversation(hit);
+        return;
+      }
+      conversationIdRef.current = null;
+      setConversationId(null);
+      onConversationIdChange?.(null);
+      setMessages([]);
+      setStreamingText("");
+      setIsStreaming(false);
+      brain.setStatus("idle");
+    }, [brain.selected.slug, brain.selected, brain.routes, tenantId, pastConversations, loadConversation, brain, onConversationIdChange]);
 
     /* ---------- Mute (keep the conversation, stop listening) ---------- */
 
@@ -1055,11 +1117,11 @@ export const CarmenChatBar = forwardRef<CarmenChatBarHandle, CarmenChatBarProps>
 
     return (
       <div className="cc-panel cc-talkbar flex h-full min-h-0 flex-col overflow-hidden">
-        <div className="cc-talkbar-shell min-h-0 flex-1">
+        <div className={`cc-talkbar-shell min-h-0 flex-1${historyVisible ? " cc-talkbar-shell--with-rail" : ""}`}>
         {historyVisible && (
           <ChatTopicRail
-            className="is-overlay"
-            items={pastConversations ?? []}
+            items={routeScopedConversations}
+            routes={brain.routes}
             activeId={conversationId}
             onSelect={(conv) => { loadConversation(conv); }}
             onNew={startNewConversation}
@@ -1072,8 +1134,8 @@ export const CarmenChatBar = forwardRef<CarmenChatBarHandle, CarmenChatBarProps>
                 {isSidecar
                   ? "תיאורי מה לתקן במסך שאתה רואה. כרמן מקבלת את הנתיב וההקשר. 'שלחי לפיתוח' / 'תריצי דרך קרסר' → Cursor."
                   : isShared
-                    ? "מרחב משותף — כולם שומעים, ורואים גם תקשורת בין האייג׳נטים."
-                    : "שיחה ישירה — רק אתה והאייג׳נט שנבחר."}
+                    ? "מרחב משותף (קולבוריישן) — כולם שומעים, ורואים גם תקשורת בין האייג׳נטים. נפתח רק כאן."
+                    : "שיחה ישירה — רק אתה והאייג׳נט שנבחר. בלי הודעות מכרמן או ממושבים אחרים."}
               </p>
             )}
             {visibleMessages.map((m, i) => (
@@ -1138,12 +1200,77 @@ export const CarmenChatBar = forwardRef<CarmenChatBarHandle, CarmenChatBarProps>
             className="hidden"
             onChange={(e) => { void handleAttachmentPick(e.target.files); }}
           />
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <button
+                type="button"
+                title="עוד אפשרויות"
+                disabled={composerBusy && !isSidecar}
+                className="order-1 flex h-11 w-11 shrink-0 items-center justify-center rounded-lg border border-[var(--cc-line)] text-[var(--cc-text-dim)] transition-colors hover:border-[var(--cc-line-strong)] hover:text-[var(--cc-accent)] disabled:opacity-40 sm:hidden"
+              >
+                <Plus className="h-5 w-5" />
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent
+              align="start"
+              side="top"
+              dir="rtl"
+              className="cc-root z-[120] w-[min(18rem,calc(100vw-1.5rem))] border-[var(--cc-line)] bg-[rgba(8,16,34,0.98)] p-3 text-[var(--cc-text)]"
+            >
+              <button
+                type="button"
+                onClick={() => fileInputRef.current?.click()}
+                disabled={composerBusy || attachments.length >= COMMAND_CENTER_MAX_FILES}
+                className="flex w-full items-center gap-2 rounded-md border border-[var(--cc-line)] px-3 py-2 text-sm text-[var(--cc-text)] transition-colors hover:border-[var(--cc-line-strong)] hover:text-[var(--cc-accent)] disabled:opacity-40"
+              >
+                {uploadingAttachments ? <Loader2 className="h-4 w-4 animate-spin" /> : <Paperclip className="h-4 w-4 shrink-0" />}
+                צרף קובץ או תמונה
+              </button>
+              {!isSidecar && (
+                <>
+                  <label className="mt-3 block text-[10px] font-medium text-[var(--cc-text-dim)]">מצב מיקרופון</label>
+                  <select
+                    value={micCaptureMode}
+                    onChange={(e) => selectMicCaptureMode(e.target.value as MicCaptureMode)}
+                    title="מצב מיקרופון"
+                    className="mt-1 h-10 w-full rounded-md border border-[var(--cc-line)] bg-[rgba(5,10,22,0.6)] px-2 text-sm text-[var(--cc-text)] outline-none"
+                    disabled={isConvMode || isTranscribeRecording || isTranscribing}
+                  >
+                    {(Object.keys(MIC_CAPTURE_MODE_LABELS) as MicCaptureMode[]).map((mode) => (
+                      <option key={mode} value={mode}>{MIC_CAPTURE_MODE_LABELS[mode]}</option>
+                    ))}
+                  </select>
+                  <label className="mt-3 block text-[10px] font-medium text-[var(--cc-text-dim)]">קול כרמן</label>
+                  <div className="mt-1 flex items-center gap-2">
+                    <Headphones className="h-4 w-4 shrink-0 text-[var(--cc-accent)]" />
+                    <select
+                      value={selectedVoice}
+                      onChange={e => selectVoice(e.target.value as CarmenVoice)}
+                      title="קול"
+                      className="h-10 min-w-0 flex-1 rounded-md border border-[var(--cc-line)] bg-[rgba(5,10,22,0.6)] px-2 text-sm text-[var(--cc-text)] outline-none"
+                    >
+                      {CARMEN_VOICES.map(voice => <option key={voice.id} value={voice.id}>{voice.label}</option>)}
+                    </select>
+                    <button
+                      type="button"
+                      onClick={previewVoice}
+                      disabled={isPreviewingVoice}
+                      title="דוגמה"
+                      className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md border border-[var(--cc-line)] text-[var(--cc-text-dim)] hover:text-[var(--cc-accent)] disabled:opacity-50"
+                    >
+                      {isPreviewingVoice ? <Loader2 className="h-4 w-4 animate-spin" /> : <Play className="h-4 w-4" />}
+                    </button>
+                  </div>
+                </>
+              )}
+            </DropdownMenuContent>
+          </DropdownMenu>
           <button
             type="button"
             onClick={() => fileInputRef.current?.click()}
             disabled={composerBusy || attachments.length >= COMMAND_CENTER_MAX_FILES}
             title="צרף קובץ או תמונה"
-            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg border border-[var(--cc-line)] text-[var(--cc-text-dim)] transition-colors hover:border-[var(--cc-line-strong)] hover:text-[var(--cc-accent)] disabled:opacity-40"
+            className="hidden h-11 w-11 shrink-0 items-center justify-center rounded-lg border border-[var(--cc-line)] text-[var(--cc-text-dim)] transition-colors hover:border-[var(--cc-line-strong)] hover:text-[var(--cc-accent)] disabled:opacity-40 sm:flex"
           >
             {uploadingAttachments ? <Loader2 className="h-4 w-4 animate-spin" /> : <Paperclip className="h-4 w-4" />}
           </button>
@@ -1152,7 +1279,7 @@ export const CarmenChatBar = forwardRef<CarmenChatBarHandle, CarmenChatBarProps>
               onClick={handleMicClick}
               disabled={isTranscribing}
               title={isTranscribeRecording ? "עצור הקלטה" : "מיקרופון לתמלול"}
-              className={`cc-mic flex h-11 w-11 shrink-0 items-center justify-center rounded-full border transition-all ${
+              className={`cc-mic order-3 flex h-11 w-11 shrink-0 items-center justify-center rounded-full border transition-all sm:order-none ${
                 isTranscribeRecording
                   ? "border-[var(--cc-crit)] bg-[rgba(248,113,113,0.15)] text-[var(--cc-crit)]"
                   : isTranscribing
@@ -1170,19 +1297,6 @@ export const CarmenChatBar = forwardRef<CarmenChatBarHandle, CarmenChatBarProps>
             </button>
           ) : (
             <>
-          <div className="flex h-11 shrink-0 items-center gap-1 rounded-lg border border-[var(--cc-line)] bg-[rgba(5,10,22,0.6)] px-2 sm:hidden">
-            <select
-              value={micCaptureMode}
-              onChange={(e) => selectMicCaptureMode(e.target.value as MicCaptureMode)}
-              title="מצב מיקרופון"
-              className="max-w-[96px] bg-transparent text-[11px] text-[var(--cc-text)] outline-none"
-              disabled={isConvMode || isTranscribeRecording || isTranscribing}
-            >
-              {(Object.keys(MIC_CAPTURE_MODE_LABELS) as MicCaptureMode[]).map((mode) => (
-                <option key={mode} value={mode}>{MIC_CAPTURE_MODE_LABELS[mode]}</option>
-              ))}
-            </select>
-          </div>
           <div className="hidden h-11 shrink-0 items-center gap-1 rounded-lg border border-[var(--cc-line)] bg-[rgba(5,10,22,0.6)] px-2 sm:flex">
             <select
               value={micCaptureMode}
@@ -1218,7 +1332,7 @@ export const CarmenChatBar = forwardRef<CarmenChatBarHandle, CarmenChatBarProps>
                 ? (isTranscribeRecording ? "עצור הקלטה" : "מיקרופון לתמלול בלבד")
                 : (isConvMode ? "סיים שיחה חיה" : "שיחה חיה")
             }
-            className={`cc-mic flex h-11 w-11 shrink-0 items-center justify-center rounded-full border transition-all ${
+            className={`cc-mic order-3 flex h-11 w-11 shrink-0 items-center justify-center rounded-full border transition-all sm:order-none ${
               isConvMode || isTranscribeRecording
                 ? "border-[var(--cc-crit)] bg-[rgba(248,113,113,0.15)] text-[var(--cc-crit)]"
                 : isTranscribing
@@ -1241,7 +1355,7 @@ export const CarmenChatBar = forwardRef<CarmenChatBarHandle, CarmenChatBarProps>
               <button
                 onClick={toggleMute}
                 title={isMuted ? "מיקרופון" : "השתק מיקרופון"}
-                className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full border transition-all ${
+                className={`order-4 flex h-10 w-10 shrink-0 items-center justify-center rounded-full border transition-all sm:order-none ${
                   isMuted
                     ? "border-[var(--cc-warn)] bg-[rgba(251,191,36,0.15)] text-[var(--cc-warn)]"
                     : "border-[var(--cc-line)] text-[var(--cc-text-dim)] hover:text-[var(--cc-accent)]"
@@ -1252,7 +1366,7 @@ export const CarmenChatBar = forwardRef<CarmenChatBarHandle, CarmenChatBarProps>
               <button
                 onClick={toggleOutputMute}
                 title={isOutputMuted ? "השמע" : "השתק כרמן"}
-                className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full border transition-all ${
+                className={`order-4 flex h-10 w-10 shrink-0 items-center justify-center rounded-full border transition-all sm:order-none ${
                   isOutputMuted
                     ? "border-[var(--cc-warn)] bg-[rgba(251,191,36,0.15)] text-[var(--cc-warn)]"
                     : "border-[var(--cc-line)] text-[var(--cc-text-dim)] hover:text-[var(--cc-accent)]"
@@ -1271,12 +1385,12 @@ export const CarmenChatBar = forwardRef<CarmenChatBarHandle, CarmenChatBarProps>
             onKeyDown={e => { if (e.key === "Enter") sendText(input); }}
             placeholder={composerPlaceholder}
             disabled={isTranscribeRecording || isTranscribing || (!isSidecar && isConvMode)}
-            className="h-11 min-w-0 flex-1 rounded-lg border border-[var(--cc-line)] bg-[rgba(5,10,22,0.6)] px-3 text-sm outline-none placeholder:text-[var(--cc-text-dim)] focus:border-[var(--cc-line-strong)]"
+            className="order-2 h-11 min-w-0 flex-1 rounded-lg border border-[var(--cc-line)] bg-[rgba(5,10,22,0.6)] px-3 text-sm outline-none placeholder:text-[var(--cc-text-dim)] focus:border-[var(--cc-line-strong)] sm:order-none"
           />
           <button
             onClick={() => sendText(input)}
             disabled={!canSend || composerBusy}
-            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-[var(--cc-accent-dim)] text-white transition-opacity hover:opacity-90 disabled:opacity-40"
+            className="order-5 flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-[var(--cc-accent-dim)] text-white transition-opacity hover:opacity-90 disabled:opacity-40 sm:order-none"
             title="שליחה"
           >
             {thisChatBusy ? <ThinkingGalaxy size="sm" /> : <Send className="h-4 w-4" />}

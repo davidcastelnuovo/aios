@@ -20,38 +20,32 @@ function normalizeHref(href: string | null | undefined): string | null {
   }
 }
 
-/**
- * Capture each `.seo-monthly-slideshow` child of the stack and write a
- * landscape PDF (one slide per page). Anchor tags become clickable PDF links.
- */
-export async function downloadSeoMonthlySlideshowPdf(
-  stackEl: HTMLElement,
-  filename: string,
-): Promise<void> {
-  const slides = Array.from(
-    stackEl.querySelectorAll<HTMLElement>(".seo-monthly-slideshow"),
+/** Build a portrait PDF from the continuous report, one landing-page section per page. */
+export async function createSeoMonthlyReportPdf(reportEl: HTMLElement): Promise<Blob> {
+  const sections = Array.from(
+    reportEl.querySelectorAll<HTMLElement>(".seo-report-section"),
   );
-  if (slides.length === 0) throw new Error("No slides to export");
+  if (sections.length === 0) throw new Error("No report sections to export");
 
   const { jsPDF } = await import("jspdf");
-  const pdf = new jsPDF({ orientation: "landscape", unit: "mm", format: "a4" });
+  const pdf = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
   const pageWidth = pdf.internal.pageSize.getWidth();
   const pageHeight = pdf.internal.pageSize.getHeight();
 
-  for (let i = 0; i < slides.length; i++) {
-    const node = slides[i];
+  for (let i = 0; i < sections.length; i++) {
+    const node = sections[i];
     // Ensure fonts/layout are settled before capture
     await new Promise((r) => requestAnimationFrame(() => r(null)));
     const dataUrl = await toPng(node, {
       cacheBust: true,
       pixelRatio: 2,
-      backgroundColor: "#071820",
-      width: 1280,
-      height: 720,
+      backgroundColor: i % 2 === 0 ? "#f6f8f5" : "#ffffff",
+      width: 1120,
+      height: node.scrollHeight,
       style: {
         transform: "none",
-        width: "1280px",
-        height: "720px",
+        width: "1120px",
+        height: `${node.scrollHeight}px`,
       },
     });
 
@@ -61,11 +55,10 @@ export async function downloadSeoMonthlySlideshowPdf(
     const pngDataUrl = await readBlobAsDataUrl(blob);
 
     if (i > 0) pdf.addPage();
-    // Fit 16:9 slide into landscape A4 with small margins
-    const margin = 6;
+    const margin = 8;
     const maxW = pageWidth - margin * 2;
     const maxH = pageHeight - margin * 2;
-    const slideRatio = 1280 / 720;
+    const slideRatio = 1120 / node.scrollHeight;
     let w = maxW;
     let h = w / slideRatio;
     if (h > maxH) {
@@ -77,23 +70,42 @@ export async function downloadSeoMonthlySlideshowPdf(
     pdf.addImage(pngDataUrl, "PNG", x, y, w, h, undefined, "FAST");
 
     // Map visible <a href> boxes onto the placed image so PDF links work.
-    const slideRect = node.getBoundingClientRect();
-    if (slideRect.width > 0 && slideRect.height > 0) {
+    const sectionRect = node.getBoundingClientRect();
+    if (sectionRect.width > 0 && sectionRect.height > 0) {
       const anchors = Array.from(node.querySelectorAll<HTMLAnchorElement>("a[href]"));
       for (const anchor of anchors) {
         const href = normalizeHref(anchor.getAttribute("href") || anchor.href);
         if (!href) continue;
         const rect = anchor.getBoundingClientRect();
         if (rect.width < 2 || rect.height < 2) continue;
-        const linkX = x + ((rect.left - slideRect.left) / slideRect.width) * w;
-        const linkY = y + ((rect.top - slideRect.top) / slideRect.height) * h;
-        const linkW = (rect.width / slideRect.width) * w;
-        const linkH = (rect.height / slideRect.height) * h;
+        const linkX = x + ((rect.left - sectionRect.left) / sectionRect.width) * w;
+        const linkY = y + ((rect.top - sectionRect.top) / sectionRect.height) * h;
+        const linkW = (rect.width / sectionRect.width) * w;
+        const linkH = (rect.height / sectionRect.height) * h;
         pdf.link(linkX, linkY, linkW, linkH, { url: href });
       }
     }
   }
 
+  return pdf.output("blob");
+}
+
+export function downloadPdfBlob(blob: Blob, filename: string): void {
   const safe = filename.toLowerCase().endsWith(".pdf") ? filename : `${filename}.pdf`;
-  pdf.save(safe);
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement("a");
+  anchor.href = url;
+  anchor.download = safe;
+  document.body.appendChild(anchor);
+  anchor.click();
+  anchor.remove();
+  window.setTimeout(() => URL.revokeObjectURL(url), 1_000);
+}
+
+export async function downloadSeoMonthlySlideshowPdf(
+  reportEl: HTMLElement,
+  filename: string,
+): Promise<void> {
+  const blob = await createSeoMonthlyReportPdf(reportEl);
+  downloadPdfBlob(blob, filename);
 }

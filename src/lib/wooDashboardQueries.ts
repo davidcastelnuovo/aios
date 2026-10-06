@@ -1,10 +1,11 @@
 import type { QueryClient } from "@tanstack/react-query";
-import { format, subDays, startOfWeek } from "date-fns";
+import { format, subDays } from "date-fns";
 import { supabase } from "@/integrations/supabase/client";
 import {
   getJerusalemDashboardDateRange,
   jerusalemDateRangeToIso,
 } from "@/lib/calendarTimeZone";
+import { getDashboardDateRange } from "@/lib/dashboardDateFilters";
 import {
   aggregateOrdersByAttribution,
   summarizeGoogleAttributedWooOrders,
@@ -68,82 +69,27 @@ export function getWooDashboardDateRangeIso(
   return jerusalemDateRangeToIso(startDate, endDate);
 }
 
-/** ISO range aligned with DynamicTableView client-side date filters. */
+/**
+ * ISO range aligned with the dashboard / DynamicTableView date filters.
+ *
+ * Delegates to `getDashboardDateRange` rather than repeating the presets: a private
+ * copy of the switch is how "70 יום אחרונים" ended up silently falling back to the
+ * 30-day window here while the ads panels showed 70 days.
+ */
 export function getDynamicTableDateRangeIso(
   dateFilter: string,
   customFrom?: Date | null,
   customTo?: Date | null,
 ): { start: string; end: string } | null {
   if (dateFilter === 'all') return null;
+  if (dateFilter === 'custom' && !(customFrom && customTo)) return null;
 
-  const now = new Date();
-  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-  let startDate: string | null = null;
-  let endDate: string | null = null;
-
-  switch (dateFilter) {
-    case 'today':
-      startDate = endDate = format(today, 'yyyy-MM-dd');
-      break;
-    case 'yesterday': {
-      const d = subDays(today, 1);
-      startDate = endDate = format(d, 'yyyy-MM-dd');
-      break;
-    }
-    case 'this_week':
-      startDate = format(startOfWeek(today, { weekStartsOn: 0 }), 'yyyy-MM-dd');
-      endDate = format(today, 'yyyy-MM-dd');
-      break;
-    case 'last_week': {
-      const endLW = subDays(startOfWeek(today, { weekStartsOn: 0 }), 1);
-      startDate = format(subDays(endLW, 6), 'yyyy-MM-dd');
-      endDate = format(endLW, 'yyyy-MM-dd');
-      break;
-    }
-    case 'last_7_days':
-      startDate = format(subDays(today, 7), 'yyyy-MM-dd');
-      endDate = format(subDays(today, 1), 'yyyy-MM-dd');
-      break;
-    case 'last_14_days':
-      startDate = format(subDays(today, 14), 'yyyy-MM-dd');
-      endDate = format(subDays(today, 1), 'yyyy-MM-dd');
-      break;
-    case 'last_30_days':
-      startDate = format(subDays(today, 30), 'yyyy-MM-dd');
-      endDate = format(subDays(today, 1), 'yyyy-MM-dd');
-      break;
-    case 'this_month':
-      startDate = format(new Date(now.getFullYear(), now.getMonth(), 1), 'yyyy-MM-dd');
-      endDate = format(today, 'yyyy-MM-dd');
-      break;
-    case 'last_month': {
-      const lm = new Date(now.getFullYear(), now.getMonth() - 1, 1);
-      startDate = format(lm, 'yyyy-MM-dd');
-      endDate = format(new Date(now.getFullYear(), now.getMonth(), 0), 'yyyy-MM-dd');
-      break;
-    }
-    case 'last_90_days':
-      startDate = format(subDays(today, 90), 'yyyy-MM-dd');
-      endDate = format(subDays(today, 1), 'yyyy-MM-dd');
-      break;
-    case 'last_180_days':
-      startDate = format(subDays(today, 180), 'yyyy-MM-dd');
-      endDate = format(subDays(today, 1), 'yyyy-MM-dd');
-      break;
-    case 'last_365_days':
-      startDate = format(subDays(today, 365), 'yyyy-MM-dd');
-      endDate = format(subDays(today, 1), 'yyyy-MM-dd');
-      break;
-    case 'custom':
-      if (customFrom && customTo) {
-        startDate = format(customFrom, 'yyyy-MM-dd');
-        endDate = format(customTo, 'yyyy-MM-dd');
-      }
-      break;
-    default:
-      startDate = format(subDays(today, 30), 'yyyy-MM-dd');
-      endDate = format(subDays(today, 1), 'yyyy-MM-dd');
-  }
+  const { startDate, endDate } = getDashboardDateRange(
+    dateFilter,
+    new Date(),
+    customFrom ? format(customFrom, 'yyyy-MM-dd') : null,
+    customTo ? format(customTo, 'yyyy-MM-dd') : null,
+  );
 
   if (!startDate || !endDate) return null;
 

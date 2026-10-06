@@ -1,0 +1,43 @@
+name: Pulse Sanaia trial (auto on trigger file)
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/triggers/pulse-sanaia-trial'
+
+jobs:
+  send:
+    runs-on: ubuntu-latest
+    env:
+      SUPABASE_ACCESS_TOKEN: ${{ secrets.BASE_ACCESS_TOKEN }}
+      PROJECT_REF: zvoijyneresvkadpprel
+      SUPABASE_URL: https://zvoijyneresvkadpprel.supabase.co
+      DMM_TENANT: 6ad8f321-25db-4a04-8e44-e57a7c8961b2
+    steps:
+      - name: Resolve production service key
+        shell: bash
+        run: |
+          set -euo pipefail
+          KEYS="$(curl --fail --silent --show-error \
+            -H "Authorization: Bearer $SUPABASE_ACCESS_TOKEN" \
+            "https://api.supabase.com/v1/projects/$PROJECT_REF/api-keys")"
+          SERVICE_KEY="$(jq -r '.[] | select(.name == "service_role") | .api_key' <<<"$KEYS")"
+          if [ -z "$SERVICE_KEY" ] || [ "$SERVICE_KEY" = "null" ]; then
+            echo "Could not resolve the service_role key" >&2
+            exit 1
+          fi
+          echo "::add-mask::$SERVICE_KEY"
+          echo "SUPABASE_SERVICE_ROLE_KEY=$SERVICE_KEY" >> "$GITHUB_ENV"
+
+      - name: Send scoped pulse to campaigner שנאיה (DMM)
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl --fail --silent --show-error -X POST \
+            "$SUPABASE_URL/functions/v1/campaign-pulse-snapshot" \
+            -H "Authorization: Bearer $SUPABASE_SERVICE_ROLE_KEY" \
+            -H "Content-Type: application/json" \
+            -d '{"tenant_id":"'"$DMM_TENANT"'","deliver":true,"force_delivery":true,"preview_only":false,"source":"approved_manual_trigger","campaigner_name":"שנאיה"}' \
+            | tee /tmp/pulse-sanaia-trial.json
+          echo
