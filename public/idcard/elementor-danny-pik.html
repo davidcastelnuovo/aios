@@ -1,6 +1,6 @@
 <!--
   Elementor → ווידג'ט HTML — הדבק את כל הקובץ (link, div, style, script).
-  הרקע מוטמע בקוד. vCard: https://pdpsagot.co.il/wp-content/uploads/danny-pik-3795155.vcf
+  קובץ איש קשר: https://pdpsagot.co.il/wp-content/uploads/danny-pik-3795155.vcf
 -->
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -430,6 +430,14 @@
 
   pinShareButton();
   window.addEventListener("resize", pinShareButton);
+
+  document.querySelectorAll(".js-save-contact").forEach(function (link) {
+    link.setAttribute("href", VCARD_URL);
+    link.addEventListener("click", function (event) {
+      event.preventDefault();
+      window.location.href = VCARD_URL;
+    });
+  });
 
   function bgUrl() {
     var root = document.querySelector(".danny-pik-vcard");
