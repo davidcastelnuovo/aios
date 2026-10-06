@@ -64,7 +64,7 @@ JSONB ב-`ai_conversations.messages` נשמר בתקופת המעבר.
 
 1. **Workspace Agent פעיל (Published)** ב-ChatGPT — אם הסוכן היה Draft / לא פעיל, ה-trigger מחזיר שגיאה ולא רץ.
 2. **Trigger + Token** מההגדרות של הסוכן → Edge secrets (`CHATGPT_WORK_AGENT_*` או `CODEX_WORK_AGENT_*`).
-3. **MCP** על הסוכן: URL `{SUPABASE_URL}/functions/v1/agent-channel-mcp`, Bearer = `AGENT_CHANNEL_MCP_BEARER` (אותו ערך ב-Edge). כלי חובה: `reply_to_aios_session`.
+3. **החזרת תשובה ל-AIOS — בלי MCP ב-ChatGPT.** לרוב אין מסך MCP בסוכן Work Mode. AIOS מדביק לכל הודעה בלוק `DELIVER THE ANSWER BACK TO AIOS` עם **HTTP POST** ל-`agent-channel-callback` (Bearer חד-פעמי). זה מספיק. MCP (`agent-channel-mcp`) הוא אופציונלי לסוכנים שיודעים לקרוא לו.
 4. **Staging:** להעתיק סודות עם `copy-edge-secrets-to-staging` (allowlist כולל `CHATGPT_WORK_*`) — הסקריפט `scripts/sync-agent-credentials.py` מסנכרן גם אותם.
 5. **בדיקה:** Command Center → `channel_health` — `seats.codex.open_chat` / `codex.probe.ok` (GET על ה-trigger id).
 
