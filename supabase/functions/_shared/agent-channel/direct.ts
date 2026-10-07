@@ -234,7 +234,11 @@ export async function launchParliamentSeat(
   throw new Error(`Parliament seat not supported: ${provider}`);
 }
 
-export async function launchClaude(ctx: SendContext, extraPrompt?: string): Promise<SendResult> {
+export async function launchClaude(
+  ctx: SendContext,
+  extraPrompt?: string,
+  options?: { sessionMetadata?: Record<string, unknown> },
+): Promise<SendResult> {
   const routineId = Deno.env.get("CLAUDE_ROUTINE_ID") || "";
   const routineToken = Deno.env.get("CLAUDE_ROUTINE_TOKEN") || "";
   if (!routineId || !routineToken) throw new Error("Claude Direct is not configured (CLAUDE_ROUTINE_ID / CLAUDE_ROUTINE_TOKEN).");
@@ -246,6 +250,7 @@ export async function launchClaude(ctx: SendContext, extraPrompt?: string): Prom
     brain_route_id: ctx.route.id,
     provider: "claude",
     status: "running",
+    metadata: options?.sessionMetadata,
   });
   const token = await mintCallbackToken({
     sessionId: session.id,
@@ -289,6 +294,7 @@ export async function launchClaude(ctx: SendContext, extraPrompt?: string): Prom
     external_session_id: url || session.id,
     external_url: url || null,
     status: "running",
+    metadata: options?.sessionMetadata,
   });
   await logChannelAction(sb, {
     tenantId: ctx.tenantId,
