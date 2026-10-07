@@ -1333,7 +1333,7 @@ Deno.serve(async (req) => {
           messageText,
         });
         if (direct.handled) {
-          await fetch(`${Deno.env.get('SUPABASE_URL')}/functions/v1/send-manus-wa-message`, {
+          if (direct.ack) await fetch(`${Deno.env.get('SUPABASE_URL')}/functions/v1/send-manus-wa-message`, {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
