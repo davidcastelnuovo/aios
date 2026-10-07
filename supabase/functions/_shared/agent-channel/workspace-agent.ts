@@ -6,7 +6,13 @@ export function workspaceAgentCreds(
   provider: WorkspaceProvider,
   env: Record<string, string | undefined> = {},
 ): { triggerId: string; accessToken: string } {
-  const chatgptTrigger = String(env.CHATGPT_WORK_AGENT_TRIGGER_ID || env.CHATGPT_WORK_AGENT_WORKFLOW_ID || "").trim();
+  const chatgptTrigger = String(
+    env.CHATGPT_WORK_AGENT_TRIGGER_ID ||
+      env.CHATGPT_WORK_AGENT_API_TRIGGER_ID ||
+      env.WORKSPACE_AGENT_TRIGGER_ID ||
+      env.CHATGPT_WORK_AGENT_WORKFLOW_ID ||
+      "",
+  ).trim();
   const chatgptToken = String(env.CHATGPT_WORK_AGENT_TOKEN || env.CHATGPT_WORK_AGENT_ACCESS_TOKEN || "").trim();
   if (provider === "codex") {
     return {
@@ -21,28 +27,154 @@ export function workspaceConversationKey(provider: WorkspaceProvider, conversati
   return `aios:${provider}:${conversationId}`;
 }
 
-/** Trigger id copied from the agent's Triggers tab. Current ids are UUIDs; legacy ids use `agtch_…`. */
+const WORKSPACE_API_BASE = "https://api.chatgpt.com/v1";
+
+/** Normalize secret value from Supabase (trim, strip wrapping quotes). */
+export function normalizeWorkspaceTriggerId(triggerId: string): string {
+  return String(triggerId || "").trim().replace(/^["']|["']$/g, "");
+}
+
+/** Public API trigger id from the agent's **API channel** (`agtch_…`), not About-tab `agt_…`. */
 export function validateWorkspaceTriggerId(triggerId: string): string | null {
-  const id = String(triggerId || "").trim();
+  const id = normalizeWorkspaceTriggerId(triggerId);
   if (!id) return "חסר Trigger ID.";
   if (id.startsWith("agt_") && !id.startsWith("agtch_")) {
     return (
       "שמת Agent ID (agt_…) במקום Trigger ID. בבuilder של הסוכן: Add channel → API, שמור ו-Publish, והעתק agtch_… ל-CHATGPT_WORK_AGENT_TRIGGER_ID."
     );
   }
-  const legacyTriggerId = /^agtch_[a-z0-9]+$/i.test(id);
-  const uuidTriggerId = /^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i.test(id);
-  if (!legacyTriggerId && !uuidTriggerId) {
-    return "Trigger ID חייב להיות UUID מלשונית Triggers, או מזהה legacy שמתחיל ב-agtch_.";
+  if (!id.startsWith("agtch_")) {
+    return "Trigger ID חייב להתחיל ב-agtch_ (ערוץ API של Workspace Agent).";
   }
   return null;
+}
+
+export function assertWorkspaceAccessToken(accessToken: string): string | null {
+  const token = String(accessToken || "").trim();
+  if (!token) return "חסר Workspace Agent access token (CHATGPT_WORK_AGENT_TOKEN).";
+  if (token.startsWith("sk-")) {
+    return (
+      "זה נראה כמו OpenAI Platform key (sk-…). צריך ChatGPT Workspace Agent access token מ-Admin → Access tokens (scope Workspace Agents)."
+    );
+  }
+  return null;
+}
+
+export function workspaceAgentTriggerUrl(triggerId: string): string {
+  const id = normalizeWorkspaceTriggerId(triggerId);
+  return `${WORKSPACE_API_BASE}/workspace_agents/${encodeURIComponent(id)}/trigger`;
+}
+
+export type WorkspaceTriggerResult =
+  | { ok: true; status: number; conversationUrl: string | null; runId: string | null }
+  | { ok: false; status: number; error: string };
+
+
+export type WorkspaceRunState = "queued" | "in_progress" | "suspended" | "completed" | "failed";
+
+export type WorkspaceRunResult =
+  | { ok: true; status: number; state: WorkspaceRunState; errorCode: string | null }
+  | { ok: false; status: number; error: string };
+
+export function workspaceAgentRunUrl(triggerId: string, runId: string): string {
+  const id = normalizeWorkspaceTriggerId(triggerId);
+  return `${WORKSPACE_API_BASE}/workspace_agents/${encodeURIComponent(id)}/runs/${encodeURIComponent(String(runId || "").trim())}`;
+}
+
+/** Read the real async run state after the trigger endpoint returned 202. */
+export async function fetchWorkspaceAgentRun(args: {
+  triggerId: string;
+  accessToken: string;
+  runId: string;
+}): Promise<WorkspaceRunResult> {
+  const triggerId = normalizeWorkspaceTriggerId(args.triggerId);
+  const triggerProblem = validateWorkspaceTriggerId(triggerId);
+  if (triggerProblem) return { ok: false, status: 0, error: triggerProblem };
+  const tokenProblem = assertWorkspaceAccessToken(args.accessToken);
+  if (tokenProblem) return { ok: false, status: 0, error: tokenProblem };
+  const runId = String(args.runId || "").trim();
+  if (!runId) return { ok: false, status: 0, error: "Workspace Agent run id is missing." };
+
+  const resp = await fetch(workspaceAgentRunUrl(triggerId, runId), {
+    headers: { Authorization: `Bearer ${String(args.accessToken).trim()}` },
+  });
+  const raw = await resp.text();
+  if (!resp.ok) {
+    return { ok: false, status: resp.status, error: formatWorkspaceTriggerError(resp.status, raw) };
+  }
+
+  let data: Record<string, unknown>;
+  try {
+    data = JSON.parse(raw) as Record<string, unknown>;
+  } catch {
+    return { ok: false, status: resp.status, error: "Workspace Agent returned an invalid run status payload." };
+  }
+  const state = String(data.status || "") as WorkspaceRunState;
+  if (!["queued", "in_progress", "suspended", "completed", "failed"].includes(state)) {
+    return { ok: false, status: resp.status, error: `Unknown Workspace Agent run status: ${state || "empty"}` };
+  }
+  const error = data.error && typeof data.error === "object"
+    ? data.error as Record<string, unknown>
+    : null;
+  return {
+    ok: true,
+    status: resp.status,
+    state,
+    errorCode: error ? String(error.code || "") || null : null,
+  };
+}
+
+/** POST /v1/workspace_agents/{agtch_…}/trigger — OpenAI Workspace Agents API. */
+export async function triggerWorkspaceAgentRun(args: {
+  triggerId: string;
+  accessToken: string;
+  conversationKey: string;
+  input: string;
+  idempotencyKey: string;
+  includeRunStatusBeta?: boolean;
+}): Promise<WorkspaceTriggerResult> {
+  const triggerId = normalizeWorkspaceTriggerId(args.triggerId);
+  const triggerProblem = validateWorkspaceTriggerId(triggerId);
+  if (triggerProblem) return { ok: false, status: 0, error: triggerProblem };
+  const tokenProblem = assertWorkspaceAccessToken(args.accessToken);
+  if (tokenProblem) return { ok: false, status: 0, error: tokenProblem };
+
+  const headers: Record<string, string> = {
+    Authorization: `Bearer ${String(args.accessToken).trim()}`,
+    "Content-Type": "application/json",
+    "Idempotency-Key": args.idempotencyKey,
+  };
+  if (args.includeRunStatusBeta !== false) {
+    headers["OpenAI-Beta"] = "workspace_agent_runs=v1";
+  }
+
+  const resp = await fetch(workspaceAgentTriggerUrl(triggerId), {
+    method: "POST",
+    headers,
+    body: JSON.stringify({
+      conversation_key: args.conversationKey,
+      input: args.input,
+    }),
+  });
+  const raw = await resp.text();
+  if (resp.status < 200 || resp.status >= 300) {
+    return { ok: false, status: resp.status, error: formatWorkspaceTriggerError(resp.status, raw) };
+  }
+
+  let data: Record<string, unknown> = {};
+  if (raw.trim()) {
+    try { data = JSON.parse(raw) as Record<string, unknown>; } catch { /* 202 may be empty in some modes */ }
+  }
+  const conversationUrl = String(data.conversation_url || data.url || "") || null;
+  const runId = String(data.agent_trigger_run_id || data.id || "") || null;
+  return { ok: true, status: resp.status, conversationUrl, runId };
 }
 
 export function formatWorkspaceTriggerError(status: number, raw: string): string {
   const detail = raw.slice(0, 280);
   if (status === 404 || /not_found|not found/i.test(detail)) {
     return (
-      "ChatGPT לא מוצא את ה-trigger (404). בדוק: (1) ה-ID הועתק מלשונית Triggers, (2) הסוכן Published, (3) TRIGGER_ID + TOKEN ב-Supabase נוצרו יחד עבור הסוכן הזה, (4) הטוקן עם scope Workspace Agents."
+      "ChatGPT לא מוצא את ה-trigger (404). בדוק: (1) ערוץ API עם agtch_… בבuilder, (2) הסוכן Published, (3) TRIGGER_ID + TOKEN ב-Supabase תואמים לסוכן הזה, (4) הטוקן עם scope Workspace Agents."
     );
   }
   if (status === 401 || status === 403) {
@@ -54,31 +186,20 @@ export function formatWorkspaceTriggerError(status: number, raw: string): string
   return `ChatGPT Workspace trigger ${status}: ${detail}`;
 }
 
+/** Config-only health check (does not enqueue a run). */
 export async function probeWorkspaceAgent(
   provider: WorkspaceProvider,
   env: Record<string, string | undefined> = {},
-): Promise<{ ok: boolean; status?: number; error?: string }> {
+): Promise<{ ok: boolean; status?: number; error?: string; trigger_id_prefix?: string }> {
   const { triggerId, accessToken } = workspaceAgentCreds(provider, env);
-  if (!triggerId || !accessToken) {
-    return { ok: false, error: "missing trigger id or token" };
+  const id = normalizeWorkspaceTriggerId(triggerId);
+  const triggerProblem = validateWorkspaceTriggerId(id);
+  if (triggerProblem) {
+    return { ok: false, error: triggerProblem, trigger_id_prefix: id.slice(0, 6) || undefined };
   }
-  try {
-    const resp = await fetch(
-      `https://api.chatgpt.com/v1/workspace_agents/${encodeURIComponent(triggerId)}`,
-      {
-        method: "GET",
-        headers: {
-          Authorization: `Bearer ${accessToken}`,
-          "OpenAI-Beta": "workspace_agent_runs=v1",
-        },
-      },
-    );
-    if (resp.ok) return { ok: true, status: resp.status };
-    const raw = await resp.text();
-    return { ok: false, status: resp.status, error: raw.slice(0, 200) };
-  } catch (e: any) {
-    return { ok: false, error: String(e?.message ?? e) };
-  }
+  const tokenProblem = assertWorkspaceAccessToken(accessToken);
+  if (tokenProblem) return { ok: false, error: tokenProblem, trigger_id_prefix: id.slice(0, 10) };
+  return { ok: true, status: 200, trigger_id_prefix: id.slice(0, 10) };
 }
 
 export function missingWorkspaceMessage(provider: WorkspaceProvider): string {
