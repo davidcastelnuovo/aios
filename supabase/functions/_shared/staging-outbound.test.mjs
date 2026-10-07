@@ -27,6 +27,15 @@ test('own database, analytics reads and inference stay usable', () => {
     assert.equal(outboundAllowed(url, method, own), true);
   }
 });
+test('workspace agent triggers and health probes accept UUID and legacy ids only', () => {
+  for (const [url, method] of [
+    ['https://api.chatgpt.com/v1/workspace_agents/bd01c76c-0d82-4966-bf48-f4002fb4d4f0/trigger', 'POST'],
+    ['https://api.chatgpt.com/v1/workspace_agents/bd01c76c-0d82-4966-bf48-f4002fb4d4f0', 'GET'],
+    ['https://api.chatgpt.com/v1/workspace_agents/agtch_abc123/trigger', 'POST'],
+    ['https://api.chatgpt.com/v1/workspace_agents/agtch_abc123', 'HEAD'],
+  ]) assert.equal(outboundAllowed(url, method, own), true, url);
+  assert.equal(outboundAllowed('https://api.chatgpt.com/v1/workspace_agents/not-a-trigger/trigger', 'POST', own), false);
+});
 test('guard never calls network for blocked request and disables redirect bypass', async () => {
   const calls = [];
   const runtime = { fetch: async (...args) => { calls.push(args); return new Response('{}'); } };

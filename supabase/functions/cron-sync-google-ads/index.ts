@@ -219,8 +219,17 @@ Deno.serve(async (req) => {
       if (operational_only) {
         return postSync({ table_id: table.id, operational_only: true });
       }
-      const settings = (table.integration_settings || {}) as { scheduled_history_from?: string };
-      const plan = planScheduledSyncWindows(jerusalemToday(), settings.scheduled_history_from);
+      const settings = (table.integration_settings || {}) as {
+        scheduled_history_from?: string;
+        scheduled_synced_through?: string;
+        scheduled_lookback_on?: string;
+      };
+      const plan = planScheduledSyncWindows(
+        jerusalemToday(),
+        settings.scheduled_history_from,
+        settings.scheduled_synced_through,
+        settings.scheduled_lookback_on,
+      );
       if (plan.catchup) {
         const chunk = await postSync({
           table_id: table.id,
@@ -235,6 +244,8 @@ Deno.serve(async (req) => {
         table_id: table.id,
         start_date: plan.refresh.startDate,
         end_date: plan.refresh.endDate,
+        scheduled_synced_through: plan.syncedThrough,
+        scheduled_lookback_on: plan.lookbackOn,
         ...(plan.catchup ? {} : { scheduled_history_from: plan.historyFrom }),
       });
     };

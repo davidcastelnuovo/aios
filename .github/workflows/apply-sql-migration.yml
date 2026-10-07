@@ -49,6 +49,7 @@ on:
       - 'supabase/ops/apply_copywriter_inspiration_library.sql'
       - 'supabase/ops/fix_client_contacts_insert_rls.sql'
       - 'supabase/ops/fix_client_contacts_select_rls.sql'
+      - 'supabase/ops/fix_client_credentials_select_rls.sql'
       - 'supabase/ops/fix_campaigner_client_delete_rls.sql'
       - 'supabase/ops/fix_team_member_report_dashboard_access.sql'
       - 'supabase/ops/apply_client_dashboard_entity_route_skin.sql'
@@ -67,6 +68,8 @@ on:
       - 'supabase/ops/merge_same_email_campaigners_production.sql'
       - 'supabase/ops/merge_assigned_campaigner_production.sql'
       - 'supabase/ops/apply_morning_report_sync_production.sql'
+      - 'supabase/ops/apply_lead_status_updates_production.sql'
+      - 'supabase/ops/recover_promo_eyal_lead_updates_production.sql'
 
 jobs:
   apply:

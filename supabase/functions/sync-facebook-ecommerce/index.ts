@@ -41,7 +41,16 @@ Deno.serve(async (req) => {
     );
 
     const requestBody = await req.json();
-    const { table_id, _internal_cron, start_date, end_date, scheduled_history_from, update_last_sync = true } = requestBody;
+    const {
+      table_id,
+      _internal_cron,
+      start_date,
+      end_date,
+      scheduled_history_from,
+      scheduled_synced_through,
+      scheduled_lookback_on,
+      update_last_sync = true,
+    } = requestBody;
 
     // Auth: skip user check when called internally by cron
     let userId: string | null = null;
@@ -354,6 +363,12 @@ Deno.serve(async (req) => {
           last_campaign_updated_at: lastCampaignUpdatedAt,
           ...(typeof scheduled_history_from === 'string' && isoDate.test(scheduled_history_from)
             ? { scheduled_history_from }
+            : {}),
+          ...(typeof scheduled_synced_through === 'string' && isoDate.test(scheduled_synced_through)
+            ? { scheduled_synced_through }
+            : {}),
+          ...(typeof scheduled_lookback_on === 'string' && isoDate.test(scheduled_lookback_on)
+            ? { scheduled_lookback_on }
             : {}),
         }
       })

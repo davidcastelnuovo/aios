@@ -60,8 +60,17 @@ Deno.serve(async (req) => {
 
     for (const table of tables) {
       try {
-        const settings = (table.integration_settings || {}) as { scheduled_history_from?: string };
-        const plan = planScheduledSyncWindows(today, settings.scheduled_history_from);
+        const settings = (table.integration_settings || {}) as {
+          scheduled_history_from?: string;
+          scheduled_synced_through?: string;
+          scheduled_lookback_on?: string;
+        };
+        const plan = planScheduledSyncWindows(
+          today,
+          settings.scheduled_history_from,
+          settings.scheduled_synced_through,
+          settings.scheduled_lookback_on,
+        );
         if (plan.catchup) {
           const chunk = await postSync({
             table_id: table.id,
@@ -79,6 +88,8 @@ Deno.serve(async (req) => {
           table_id: table.id,
           start_date: plan.refresh.startDate,
           end_date: plan.refresh.endDate,
+          scheduled_synced_through: plan.syncedThrough,
+          scheduled_lookback_on: plan.lookbackOn,
           ...(plan.catchup ? {} : { scheduled_history_from: plan.historyFrom }),
         });
         console.log(`[cron] ${table.name} (${table.id}): ${refreshed.status}`, refreshed.body?.records_synced ?? refreshed.body?.error);

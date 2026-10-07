@@ -13,7 +13,9 @@ import {
   type OpenChatProvider,
 } from "./sticky-agent.ts";
 import {
+  formatWorkspaceTriggerError,
   missingWorkspaceMessage,
+  validateWorkspaceTriggerId,
   workspaceAgentCreds,
   workspaceConversationKey,
   type WorkspaceProvider,
@@ -331,6 +333,12 @@ export async function launchWorkspaceAgent(
     parliament_round: parliament?.round ?? null,
   });
 
+  const triggerProblem = validateWorkspaceTriggerId(triggerId);
+  if (triggerProblem) {
+    await completeSession(sb, session.id, "failed");
+    throw new Error(triggerProblem);
+  }
+
   if (!triggerId || !accessToken) {
     await logChannelAction(sb, {
       tenantId: ctx.tenantId,
@@ -383,7 +391,7 @@ export async function launchWorkspaceAgent(
   const raw = await resp.text();
   if (!resp.ok) {
     await completeSession(sb, session.id, "failed");
-    throw new Error(`ChatGPT Workspace trigger ${resp.status}: ${raw.slice(0, 300)}`);
+    throw new Error(formatWorkspaceTriggerError(resp.status, raw));
   }
   let data: any = {};
   try { data = JSON.parse(raw); } catch { /* ignore */ }

@@ -21,6 +21,39 @@ export function workspaceConversationKey(provider: WorkspaceProvider, conversati
   return `aios:${provider}:${conversationId}`;
 }
 
+/** Trigger id copied from the agent's Triggers tab. Current ids are UUIDs; legacy ids use `agtch_…`. */
+export function validateWorkspaceTriggerId(triggerId: string): string | null {
+  const id = String(triggerId || "").trim();
+  if (!id) return "חסר Trigger ID.";
+  if (id.startsWith("agt_") && !id.startsWith("agtch_")) {
+    return (
+      "שמת Agent ID (agt_…) במקום Trigger ID. בבuilder של הסוכן: Add channel → API, שמור ו-Publish, והעתק agtch_… ל-CHATGPT_WORK_AGENT_TRIGGER_ID."
+    );
+  }
+  const legacyTriggerId = /^agtch_[a-z0-9]+$/i.test(id);
+  const uuidTriggerId = /^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i.test(id);
+  if (!legacyTriggerId && !uuidTriggerId) {
+    return "Trigger ID חייב להיות UUID מלשונית Triggers, או מזהה legacy שמתחיל ב-agtch_.";
+  }
+  return null;
+}
+
+export function formatWorkspaceTriggerError(status: number, raw: string): string {
+  const detail = raw.slice(0, 280);
+  if (status === 404 || /not_found|not found/i.test(detail)) {
+    return (
+      "ChatGPT לא מוצא את ה-trigger (404). בדוק: (1) ה-ID הועתק מלשונית Triggers, (2) הסוכן Published, (3) TRIGGER_ID + TOKEN ב-Supabase נוצרו יחד עבור הסוכן הזה, (4) הטוקן עם scope Workspace Agents."
+    );
+  }
+  if (status === 401 || status === 403) {
+    return "טוקן Workspace Agents לא תקף או בלי הרשאה לסוכן הזה. צור token חדש ב-Admin → Access tokens.";
+  }
+  if (status === 409) {
+    return "הסוכן לא במצב runnable (409). נסה שוב או בדוק שהסוכן Published.";
+  }
+  return `ChatGPT Workspace trigger ${status}: ${detail}`;
+}
+
 export async function probeWorkspaceAgent(
   provider: WorkspaceProvider,
   env: Record<string, string | undefined> = {},

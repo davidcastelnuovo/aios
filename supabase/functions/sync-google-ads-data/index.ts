@@ -128,6 +128,8 @@ Deno.serve(async (req) => {
       start_date,
       end_date,
       scheduled_history_from,
+      scheduled_synced_through,
+      scheduled_lookback_on,
       update_last_sync = true,
     } = await req.json();
     
@@ -1110,6 +1112,12 @@ Deno.serve(async (req) => {
     if (update_last_sync !== false) settingsPatch.last_sync_at = syncedAt;
     if (typeof scheduled_history_from === 'string' && isoDate.test(scheduled_history_from)) {
       settingsPatch.scheduled_history_from = scheduled_history_from;
+    }
+    if (typeof scheduled_synced_through === 'string' && isoDate.test(scheduled_synced_through)) {
+      settingsPatch.scheduled_synced_through = scheduled_synced_through;
+    }
+    if (typeof scheduled_lookback_on === 'string' && isoDate.test(scheduled_lookback_on)) {
+      settingsPatch.scheduled_lookback_on = scheduled_lookback_on;
     }
     if (Object.keys(settingsPatch).length > 0) {
       await patchIntegrationSettings(
