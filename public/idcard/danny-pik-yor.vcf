@@ -1,0 +1,11 @@
+BEGIN:VCARD
+VERSION:3.0
+PRODID:-//PD Psagot//Contact//HE
+N;CHARSET=UTF-8:פיק;דני;;;
+FN;CHARSET=UTF-8:דני פיק יו"ר
+TITLE;CHARSET=UTF-8:יו"ר
+ORG;CHARSET=UTF-8:פ.ד. פסגות
+TEL;TYPE=CELL,VOICE:052-3795155
+EMAIL;TYPE=INTERNET,WORK:danny@pdpsagot.co.il
+URL;TYPE=WORK:https://www.pdpsagot.co.il
+END:VCARD
