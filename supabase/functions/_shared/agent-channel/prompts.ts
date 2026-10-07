@@ -1,5 +1,77 @@
 import type { ChannelAttachment, ChannelProvider } from "./types.ts";
 
+export function aiosEnvironmentLabel(): "staging" | "production" {
+  const env = String(Deno.env.get("APP_ENV") || Deno.env.get("VITE_APP_ENV") || "").toLowerCase();
+  return env === "staging" ? "staging" : "production";
+}
+
+export function agentChannelMcpConnectionName(env?: "staging" | "production"): string {
+  return (env ?? aiosEnvironmentLabel()) === "staging"
+    ? "AIOS Agent Channel — Staging"
+    : "AIOS Agent Channel — Production";
+}
+
+export function supabaseProjectRef(): string {
+  const url = typeof Deno === "undefined" ? "" : String(Deno.env.get("SUPABASE_URL") || "");
+  return url.match(/^https:\/\/([a-z0-9]+)\.supabase\.co/)?.[1] || "";
+}
+
+/** Official Workspace Agent API input for Codex Direct (async trigger + MCP reply). */
+export function buildCodexWorkspaceAgentInput(args: {
+  userText: string;
+  conversationId: string;
+  sessionId: string;
+  tenantId: string;
+  environment?: "staging" | "production";
+  parliamentRound?: number | null;
+  attachments?: ChannelAttachment[];
+  projectRef?: string;
+}): string {
+  const env = args.environment ?? aiosEnvironmentLabel();
+  const mcp = agentChannelMcpConnectionName(env);
+  const projectRef = args.projectRef ?? supabaseProjectRef();
+  const roundLine = args.parliamentRound != null
+    ? `parliament_round: ${args.parliamentRound}\n`
+    : "";
+  return (
+    `[AIOS Command Center · Codex Direct]\n\n` +
+    `You are AIOS Codex Direct. Complete the user's task in the Workspace and return the complete result to AIOS.\n\n` +
+    `Answer it yourself. Do not forward it to Cursor, Carmen, or another agent.\n\n` +
+    `User request:\n${String(args.userText || "").trim() || "(no text — see attached files)"}` +
+    `${attachmentBlock(args.attachments)}\n\n` +
+    `--- AIOS DELIVERY METADATA ---\n` +
+    `conversation_id: ${args.conversationId}\n` +
+    `session_id: ${args.sessionId}\n` +
+    `origin: codex\n` +
+    `tenant_id: ${args.tenantId}\n` +
+    roundLine +
+    `environment: ${env}\n` +
+    (projectRef ? `supabase_project_ref: ${projectRef}\n` : "") +
+    `\nAIOS_ENVELOPE_JSON: ${JSON.stringify({
+      conversation_id: args.conversationId,
+      session_id: args.sessionId,
+      origin: "codex",
+      tenant_id: args.tenantId,
+      environment: env,
+      supabase_project_ref: projectRef || null,
+      mcp_connection: mcp,
+      parliament_round: args.parliamentRound ?? null,
+    })}\n\n` +
+    `--- REQUIRED DELIVERY ---\n` +
+    `When the task is complete, call reply_to_aios_session exactly once with:\n` +
+    `- conversation_id from above\n` +
+    `- session_id from above\n` +
+    `- origin from above\n` +
+    `- tenant_id from above\n` +
+    `- content containing the complete answer to the user\n` +
+    `- a unique idempotency_key\n` +
+    (args.parliamentRound != null ? `- parliament_round when supplied\n` : "") +
+    `\nBecause this is ${env === "production" ? "Production" : "Staging"}, use only ${mcp}.\n` +
+    `Do not return secrets, callback tokens, environment variables, or authentication headers.\n` +
+    `Do not send the same answer to both Staging and Production MCP connections.\n`
+  );
+}
+
 function attachmentBlock(attachments: ChannelAttachment[] | undefined): string {
   if (!attachments?.length) return "";
   const lines = attachments.map((a) => {

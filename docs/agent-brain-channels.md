@@ -63,8 +63,8 @@ JSONB ב-`ai_conversations.messages` נשמר בתקופת המעבר.
 ### חיבור Codex (Work Mode) — צד ChatGPT
 
 1. **Workspace Agent פעיל (Published)** ב-ChatGPT — אם הסוכן היה Draft / לא פעיל, ה-trigger מחזיר שגיאה ולא רץ.
-2. **Trigger ID + Secret** מלשונית Triggers של הסוכן → Edge secrets (`CHATGPT_WORK_AGENT_*` או `CODEX_WORK_AGENT_*`).
-3. **החזרת תשובה ל-AIOS — בלי MCP ב-ChatGPT.** לרוב אין מסך MCP בסוכן Work Mode. AIOS מדביק לכל הודעה בלוק `DELIVER THE ANSWER BACK TO AIOS` עם **HTTP POST** ל-`agent-channel-callback` (Bearer חד-פעמי). זה מספיק. MCP (`agent-channel-mcp`) הוא אופציונלי לסוכנים שיודעים לקרוא לו.
+2. **Trigger ID + Token** מלשונית Triggers (UUID; `agtch_…` נתמך כ-legacy) → Edge secrets (`CHATGPT_WORK_AGENT_*` או `CODEX_WORK_AGENT_*`).
+3. **Codex Direct — Workspace Agent API.** `POST …/workspace_agents/{triggerId}/trigger` עם `conversation_key`=`aios:codex:{conversation_id}` ו-`input` לפי `buildCodexWorkspaceAgentInput`. תשובה חוזרת דרך **`reply_to_aios_session`** על **AIOS Agent Channel — Production** או **Staging** (לפי `APP_ENV`) — לא לערבב. ב-Production אין לשים callback tokens ב-`input`.
 4. **Staging:** להעתיק סודות עם `copy-edge-secrets-to-staging` (allowlist כולל `CHATGPT_WORK_*`) — הסקריפט `scripts/sync-agent-credentials.py` מסנכרן גם אותם.
 5. **בדיקה:** Command Center → `channel_health` — `seats.codex.open_chat` / `codex.probe.ok` (GET על ה-trigger id).
 
