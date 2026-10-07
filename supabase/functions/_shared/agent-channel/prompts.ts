@@ -19,6 +19,7 @@ export function buildCodexWorkspaceAgentInput(args: {
   tenantId: string;
   environment?: "staging" | "production";
   parliamentRound?: number | null;
+  attachments?: ChannelAttachment[];
 }): string {
   const env = args.environment ?? aiosEnvironmentLabel();
   const mcp = agentChannelMcpConnectionName(env);
@@ -28,7 +29,9 @@ export function buildCodexWorkspaceAgentInput(args: {
   return (
     `[AIOS Command Center · Codex Direct]\n\n` +
     `You are AIOS Codex Direct. Complete the user's task in the Workspace and return the complete result to AIOS.\n\n` +
-    `User request:\n${args.userText}\n\n` +
+    `Answer it yourself. Do not forward it to Cursor, Carmen, or another agent.\n\n` +
+    `User request:\n${String(args.userText || "").trim() || "(no text — see attached files)"}` +
+    `${attachmentBlock(args.attachments)}\n\n` +
     `--- AIOS DELIVERY METADATA ---\n` +
     `conversation_id: ${args.conversationId}\n` +
     `session_id: ${args.sessionId}\n` +

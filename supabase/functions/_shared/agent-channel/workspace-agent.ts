@@ -77,6 +77,8 @@ export async function triggerWorkspaceAgentRun(args: {
   input: string;
   idempotencyKey: string;
   includeRunStatusBeta?: boolean;
+  timeoutMs?: number;
+  fetchImpl?: typeof fetch;
 }): Promise<WorkspaceTriggerResult> {
   const triggerId = normalizeWorkspaceTriggerId(args.triggerId);
   const triggerProblem = validateWorkspaceTriggerId(triggerId);
@@ -93,15 +95,42 @@ export async function triggerWorkspaceAgentRun(args: {
     headers["OpenAI-Beta"] = "workspace_agent_runs=v1";
   }
 
-  const resp = await fetch(workspaceAgentTriggerUrl(triggerId), {
-    method: "POST",
-    headers,
-    body: JSON.stringify({
-      conversation_key: args.conversationKey,
-      input: args.input,
-    }),
+  if (!String(args.input || "").trim()) {
+    return { ok: false, status: 0, error: "input ריק — לא נשלח trigger ל-ChatGPT." };
+  }
+  const fetchImpl = args.fetchImpl ?? fetch;
+  const timeoutMs = args.timeoutMs ?? 25_000;
+  const body = JSON.stringify({
+    conversation_key: args.conversationKey,
+    input: args.input,
   });
-  const raw = await resp.text();
+
+  let resp: Response | null = null;
+  let raw = "";
+  let lastError = "";
+  // Same Idempotency-Key on retry: the API returns the original accepted outcome instead of queueing twice.
+  for (let attempt = 0; attempt < 2; attempt++) {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), timeoutMs);
+    try {
+      resp = await fetchImpl(workspaceAgentTriggerUrl(triggerId), {
+        method: "POST",
+        headers,
+        body,
+        signal: controller.signal,
+      });
+      raw = await resp.text();
+    } catch (e) {
+      resp = null;
+      lastError = (e as Error)?.name === "AbortError"
+        ? `ChatGPT לא ענה תוך ${Math.round(timeoutMs / 1000)} שניות`
+        : `שגיאת רשת מול ChatGPT: ${(e as Error)?.message ?? e}`;
+    } finally {
+      clearTimeout(timer);
+    }
+    if (resp && resp.status < 500) break;
+  }
+  if (!resp) return { ok: false, status: 0, error: lastError };
   if (resp.status < 200 || resp.status >= 300) {
     return { ok: false, status: resp.status, error: formatWorkspaceTriggerError(resp.status, raw) };
   }

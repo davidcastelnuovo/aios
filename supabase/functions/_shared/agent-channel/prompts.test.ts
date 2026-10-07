@@ -32,3 +32,17 @@ test("Codex workspace input selects Staging MCP by project ref", () => {
   assert.match(input, /environment: staging/);
   assert.match(input, /parliament_round: 2/);
 });
+
+test("Codex workspace input carries attachments and forbids forwarding", () => {
+  const input = buildCodexWorkspaceAgentInput({
+    userText: "",
+    conversationId: "c",
+    sessionId: "s",
+    tenantId: "t",
+    environment: "production",
+    attachments: [{ type: "image", name: "a.png", url: "https://x/a.png" } as any],
+  });
+  assert.match(input, /no text — see attached files/);
+  assert.match(input, /a\.png → https:\/\/x\/a\.png/);
+  assert.match(input, /Do not forward it to Cursor/);
+});

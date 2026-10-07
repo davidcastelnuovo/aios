@@ -375,6 +375,7 @@ export async function launchWorkspaceAgent(
       sessionId: session.id,
       tenantId: ctx.tenantId,
       parliamentRound: parliament?.round ?? null,
+      attachments: ctx.attachments,
     });
   } else {
     const token = await mintCallbackToken({
@@ -404,6 +405,19 @@ export async function launchWorkspaceAgent(
   });
   if (!triggered.ok) {
     await completeSession(sb, session.id, "failed");
+    await logChannelAction(sb, {
+      tenantId: ctx.tenantId,
+      agentId: ctx.agentId,
+      action: `channel_send_${provider}`,
+      details: {
+        conversation_id: ctx.conversationId,
+        session_id: session.id,
+        http_status: triggered.status,
+        input_chars: input.length,
+      },
+      status: "error",
+      error: triggered.error,
+    });
     throw new Error(triggered.error);
   }
   const runId = triggered.runId || "";
