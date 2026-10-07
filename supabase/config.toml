@@ -59,6 +59,11 @@ verify_jwt = false
 [functions.carmen-mcp]
 verify_jwt = false
 
+# Carmen's tools without her LLM, for coding agents (Claude/Cursor Direct). Validates its own
+# CARMEN_TOOLS_MCP_BEARER (header or ?key=); claude.ai connectors cannot send a Supabase JWT.
+[functions.carmen-tools-mcp]
+verify_jwt = false
+
 # Shared read-only architecture graph MCP. It validates its own bearer token.
 [functions.system-graph-mcp]
 verify_jwt = false
