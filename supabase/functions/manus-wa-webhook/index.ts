@@ -4,6 +4,7 @@
 // redeploy trigger: refuse Carmen turns without a canonical chat_id (2026-08-27b)
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.3';
 import { findCarmenSessionAutomation, groupMessageInvokesCarmen, handleCarmenMessage } from '../_shared/carmen.ts';
+import { routeWhatsAppDirect } from '../_shared/agent-channel/whatsapp-direct.ts';
 import { aiTranscribe, aiCleanTranscript } from '../_shared/ai.ts';
 import {
   VOICE_STATUSES,
@@ -1319,6 +1320,39 @@ Deno.serve(async (req) => {
     const carmenTargetPhone = privateTarget.phone || counterpartPhone;
     const chatIdForCarmen = privateTarget.chatId || `${carmenTargetPhone}@c.us`;
     const senderName = (payload.senderName || payload.fromName || null) as string | null;
+
+    // Direct channels: "קלוד ..." / "קרסר ..." from the owner's own phone skip Carmen
+    // and go straight to Claude Direct / Cursor Direct. Replies come back to this chat.
+    if (!pairedFromGreenApi) {
+      try {
+        const direct = await routeWhatsAppDirect({
+          tenantId,
+          integrationId: integ.id,
+          connectionUserId,
+          senderPhone: carmenTargetPhone,
+          messageText,
+        });
+        if (direct.handled) {
+          await fetch(`${Deno.env.get('SUPABASE_URL')}/functions/v1/send-manus-wa-message`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''}`,
+            },
+            body: JSON.stringify({
+              integrationId: integ.id,
+              tenantId,
+              phoneNumber: carmenTargetPhone,
+              senderUserId: connectionUserId,
+              message: direct.ack,
+            }),
+          }).catch((err) => console.error('[manus-wa] direct ack error:', err));
+          return ok({ received: true, direct: direct.provider });
+        }
+      } catch (err) {
+        console.error('[manus-wa] direct channel error:', err);
+      }
+    }
 
     // OUTBOUND-TO-THIRD-PARTY GUARD: David's phone is the Manus gateway, so every
     // outbound message he sends to any contact flows through this webhook. If the
