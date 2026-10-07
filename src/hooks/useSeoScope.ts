@@ -129,8 +129,30 @@ export function useSeoScope(clientId: string | undefined) {
           .in("integration_type", ["google_search_console", "google_analytics"]);
 
         const all = relatedTables || [];
-        gaTables = all.filter((t) => t.integration_type === "google_analytics");
-        gscTables = all.filter((t) => t.integration_type === "google_search_console");
+        const settingsClientId = (table: { integration_settings?: unknown }) => {
+          const settings = (table.integration_settings || {}) as Record<string, unknown>;
+          const id = settings.clientId ?? settings.client_id;
+          return typeof id === "string" ? id : null;
+        };
+        const seoSettings = (seoTable?.integration_settings || {}) as Record<string, unknown>;
+        const savedGaId = typeof seoSettings.linkedGaTableId === "string" ? seoSettings.linkedGaTableId : null;
+        const savedGscId = typeof seoSettings.linkedGscTableId === "string" ? seoSettings.linkedGscTableId : null;
+        // Keep this client's tables (any accessible tenant) plus the explicitly
+        // saved link. Do not offer every Analytics property in the tenant —
+        // a link to another client's table 403s for campaigners.
+        const forThisClient = (
+          table: { id: string; client_id?: string | null; integration_settings?: unknown },
+          savedId: string | null,
+        ) =>
+          table.client_id === clientId ||
+          settingsClientId(table) === clientId ||
+          (!!savedId && table.id === savedId);
+        gaTables = all.filter(
+          (t) => t.integration_type === "google_analytics" && forThisClient(t, savedGaId),
+        );
+        gscTables = all.filter(
+          (t) => t.integration_type === "google_search_console" && forThisClient(t, savedGscId),
+        );
       }
 
       return {
