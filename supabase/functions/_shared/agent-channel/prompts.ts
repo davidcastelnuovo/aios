@@ -11,6 +11,11 @@ export function agentChannelMcpConnectionName(env?: "staging" | "production"): s
     : "AIOS Agent Channel — Production";
 }
 
+export function supabaseProjectRef(): string {
+  const url = typeof Deno === "undefined" ? "" : String(Deno.env.get("SUPABASE_URL") || "");
+  return url.match(/^https:\/\/([a-z0-9]+)\.supabase\.co/)?.[1] || "";
+}
+
 /** Official Workspace Agent API input for Codex Direct (async trigger + MCP reply). */
 export function buildCodexWorkspaceAgentInput(args: {
   userText: string;
@@ -20,9 +25,11 @@ export function buildCodexWorkspaceAgentInput(args: {
   environment?: "staging" | "production";
   parliamentRound?: number | null;
   attachments?: ChannelAttachment[];
+  projectRef?: string;
 }): string {
   const env = args.environment ?? aiosEnvironmentLabel();
   const mcp = agentChannelMcpConnectionName(env);
+  const projectRef = args.projectRef ?? supabaseProjectRef();
   const roundLine = args.parliamentRound != null
     ? `parliament_round: ${args.parliamentRound}\n`
     : "";
@@ -38,7 +45,18 @@ export function buildCodexWorkspaceAgentInput(args: {
     `origin: codex\n` +
     `tenant_id: ${args.tenantId}\n` +
     roundLine +
-    `environment: ${env}\n\n` +
+    `environment: ${env}\n` +
+    (projectRef ? `supabase_project_ref: ${projectRef}\n` : "") +
+    `\nAIOS_ENVELOPE_JSON: ${JSON.stringify({
+      conversation_id: args.conversationId,
+      session_id: args.sessionId,
+      origin: "codex",
+      tenant_id: args.tenantId,
+      environment: env,
+      supabase_project_ref: projectRef || null,
+      mcp_connection: mcp,
+      parliament_round: args.parliamentRound ?? null,
+    })}\n\n` +
     `--- REQUIRED DELIVERY ---\n` +
     `When the task is complete, call reply_to_aios_session exactly once with:\n` +
     `- conversation_id from above\n` +

@@ -9,12 +9,24 @@ test("Codex workspace input uses MCP delivery without secrets", () => {
     sessionId: "sess-1",
     tenantId: "tenant-1",
     environment: "production",
+    projectRef: "zvoijyneresvkadpprel",
   });
   assert.match(input, /\[AIOS Command Center · Codex Direct\]/);
   assert.match(input, /AIOS Agent Channel — Production/);
   assert.match(input, /reply_to_aios_session exactly once/);
   assert.match(input, /conversation_id: conv-1/);
   assert.match(input, /environment: production/);
+  const envelope = JSON.parse(input.match(/AIOS_ENVELOPE_JSON: (.+)/)![1]);
+  assert.deepEqual(envelope, {
+    conversation_id: "conv-1",
+    session_id: "sess-1",
+    origin: "codex",
+    tenant_id: "tenant-1",
+    environment: "production",
+    supabase_project_ref: "zvoijyneresvkadpprel",
+    mcp_connection: "AIOS Agent Channel — Production",
+    parliament_round: null,
+  });
   assert.doesNotMatch(input, /Authorization: Bearer/);
   assert.doesNotMatch(input, /agent-channel-callback/);
 });
