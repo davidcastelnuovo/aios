@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -7,6 +7,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { formatGscCtrPercent } from "@/lib/gscFormat";
+import { gscQueriesMatch, top20DisplayPosition, visibleGscPosition } from "@/lib/gscPosition";
+import { useSeoKeywordRelevance } from "@/hooks/useSeoKeywordRelevance";
 import {
   Select,
   SelectContent,
@@ -30,6 +32,19 @@ interface SearchConsoleDashboardProps {
   onLangFilterChange?: (lang: LangFilter) => void;
   /** Ahrefs (or other) tracked phrases — seed the GSC "במעקב" list. */
   seedTrackedKeywords?: string[];
+  /** Client id, so manual "לא רלוונטי" marks hide the same phrases as Top 20. */
+  relevancePersistKey?: string;
+  /**
+   * Queries whose Search Console position is inside the top 20.
+   * The SEO tab merges these so they show up in Top 20, not only here.
+   */
+  onTop20Queries?: (rows: Array<{
+    keyword: string;
+    clicks: number;
+    impressions: number;
+    ctr: number;
+    position: number;
+  }>) => void;
 }
 
 interface AggregatedData {
@@ -65,6 +80,8 @@ export function SearchConsoleDashboard({
   initialLangFilter,
   onLangFilterChange,
   seedTrackedKeywords = [],
+  relevancePersistKey,
+  onTop20Queries,
 }: SearchConsoleDashboardProps) {
   // Default: sort by position ascending (best rank = lowest number = first)
   const [sortBy, setSortBy] = useState<string>("position");
@@ -76,6 +93,14 @@ export function SearchConsoleDashboard({
   const [langFilter, setLangFilterState] = useState<LangFilter>(initialLangFilter ?? 'all');
   const [showTrackedOnly, setShowTrackedOnly] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const { forceIrrelevant } = useSeoKeywordRelevance(relevancePersistKey);
+  const seedKey = seedTrackedKeywords.join("\u0001");
+  const rankOpts = useMemo(
+    () => ({ tracked: seedTrackedKeywords, forceIrrelevant }),
+    // seedTrackedKeywords is rebuilt by the parent; seedKey is its stable signature.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [seedKey, forceIrrelevant],
+  );
 
   // Sync if parent changes saved value
   useEffect(() => {
@@ -86,7 +111,6 @@ export function SearchConsoleDashboard({
   }, [initialLangFilter]);
 
   // Seed / refresh from Ahrefs tracked list whenever the parent sends a new set.
-  const seedKey = seedTrackedKeywords.join("\u0001");
   useEffect(() => {
     if (!seedTrackedKeywords || seedTrackedKeywords.length === 0) return;
     setTrackedKeywords((prev) => {
@@ -143,6 +167,22 @@ export function SearchConsoleDashboard({
 
   // Compute language counts (over all queries, before search filter)
   const allQueries = aggregatedData?.queries || [];
+
+  useEffect(() => {
+    if (!onTop20Queries) return;
+    const rows = allQueries.flatMap((q) => {
+      const position = top20DisplayPosition(q.position);
+      if (position == null || !q.query) return [];
+      return [{
+        keyword: q.query,
+        clicks: q.clicks,
+        impressions: q.impressions,
+        ctr: q.ctr,
+        position,
+      }];
+    });
+    onTop20Queries(rows);
+  }, [aggregatedData, onTop20Queries]);
   const langCounts = (() => {
     let he = 0, en = 0;
     for (const r of allQueries) {
@@ -165,17 +205,21 @@ export function SearchConsoleDashboard({
       });
     }
     if (showTrackedOnly && trackedKeywords.length > 0) {
-      const trackedNorm = trackedKeywords.map(k => k.toLowerCase().trim()).filter(Boolean);
-      rows = rows.filter((r) => {
-        const q = (r.query || "").toLowerCase();
-        return trackedNorm.some((t) => q === t || q.includes(t) || t.includes(q));
-      });
+      rows = rows.filter((r) => trackedKeywords.some((t) => gscQueriesMatch(r.query, t)));
     }
     if (searchFilter.trim()) {
       const q = searchFilter.toLowerCase();
       rows = rows.filter(r => r.query.toLowerCase().includes(q));
     }
     rows.sort((a, b) => {
+      if (sortBy === "position") {
+        const aShown = visibleGscPosition(a.query, a.position, rankOpts);
+        const bShown = visibleGscPosition(b.query, b.position, rankOpts);
+        if (aShown == null && bShown == null) return 0;
+        if (aShown == null) return 1;
+        if (bShown == null) return -1;
+        return sortOrder === "desc" ? bShown - aShown : aShown - bShown;
+      }
       const aVal = a[sortBy as keyof typeof a] as number;
       const bVal = b[sortBy as keyof typeof b] as number;
       return sortOrder === "desc" ? bVal - aVal : aVal - bVal;
@@ -192,12 +236,7 @@ export function SearchConsoleDashboard({
 
   // Find tracked keywords in the full GSC set (not the filtered table rows)
   const trackedKeywordsData = trackedKeywords.map(keyword => {
-    const normalizedKeyword = keyword.toLowerCase().trim();
-    const matchingQuery = allQueries.find(q => 
-      q.query.toLowerCase() === normalizedKeyword ||
-      q.query.toLowerCase().includes(normalizedKeyword) ||
-      normalizedKeyword.includes(q.query.toLowerCase())
-    );
+    const matchingQuery = allQueries.find((q) => gscQueriesMatch(q.query, keyword));
     
     return {
       keyword,
@@ -352,7 +391,7 @@ export function SearchConsoleDashboard({
               <Target className="h-4 w-4 text-green-500" />
               <span className="text-sm text-muted-foreground">CTR ממוצע</span>
             </div>
-            <p className="text-2xl font-bold mt-1">{totals.avgCtr.toFixed(2)}%</p>
+            <p className="text-2xl font-bold mt-1">{formatGscCtrPercent(totals.avgCtr) ?? "—"}</p>
           </CardContent>
         </Card>
         <Card>
@@ -468,9 +507,12 @@ export function SearchConsoleDashboard({
                           <span className="text-muted-foreground text-xs">CTR</span>
                           <p className="font-medium">{formatGscCtrPercent(item.data.ctr) ?? "—"}</p>
                         </div>
-                        <Badge variant={item.data.position <= 10 ? "default" : item.data.position <= 20 ? "secondary" : "outline"}>
-                          {item.data.position.toFixed(1)}
-                        </Badge>
+                        <GscRankBadge
+                          query={item.keyword}
+                          position={item.data.position}
+                          tracked={rankOpts.tracked}
+                          forceIrrelevant={rankOpts.forceIrrelevant}
+                        />
                       </div>
                     ) : (
                       <Badge variant="outline" className="text-destructive border-destructive">
@@ -595,15 +637,12 @@ export function SearchConsoleDashboard({
                       {query.query.length > 60 ? query.query.substring(0, 60) + '...' : query.query}
                     </td>
                     <td className="text-center py-2 px-3">
-                      <span className={cn(
-                        "inline-flex items-center justify-center px-2 py-0.5 rounded-full text-xs font-medium",
-                        query.position <= 3 ? "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400" :
-                        query.position <= 10 ? "bg-primary/10 text-primary" :
-                        query.position <= 20 ? "bg-muted text-muted-foreground" :
-                        "text-muted-foreground"
-                      )}>
-                        {query.position.toFixed(1)}
-                      </span>
+                      <GscRankBadge
+                        query={query.query}
+                        position={query.position}
+                        tracked={rankOpts.tracked}
+                        forceIrrelevant={rankOpts.forceIrrelevant}
+                      />
                     </td>
                     <td className="text-center py-2 px-3">{formatNumber(query.clicks)}</td>
                     <td className="text-center py-2 px-3">{formatNumber(query.impressions)}</td>
@@ -616,5 +655,32 @@ export function SearchConsoleDashboard({
         </CardContent>
       </Card>
     </div>
+  );
+}
+
+function GscRankBadge({
+  query,
+  position,
+  tracked,
+  forceIrrelevant,
+}: {
+  query: string;
+  position: number;
+  tracked?: Array<{ keyword?: string } | string>;
+  forceIrrelevant?: string[];
+}) {
+  const shown = visibleGscPosition(query, position, { tracked, forceIrrelevant });
+  if (shown == null) {
+    return <span className="text-xs text-muted-foreground" title="לא בטופ 20">—</span>;
+  }
+  return (
+    <span className={cn(
+      "inline-flex items-center justify-center px-2 py-0.5 rounded-full text-xs font-medium",
+      shown <= 3 ? "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400" :
+      shown <= 10 ? "bg-primary/10 text-primary" :
+      "bg-muted text-muted-foreground",
+    )}>
+      {shown.toFixed(1)}
+    </span>
   );
 }

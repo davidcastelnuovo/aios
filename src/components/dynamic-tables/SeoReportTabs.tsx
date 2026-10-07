@@ -1,4 +1,4 @@
-import { useMemo, useState, useEffect } from "react";
+import { useMemo, useState, useEffect, useCallback, useRef } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Tabs, TabsContent } from "@/components/ui/tabs";
@@ -10,7 +10,7 @@ import { SeoDashboardView } from "./SeoDashboardView";
 import { SearchConsoleDashboard } from "./SearchConsoleDashboard";
 import { GoogleAnalyticsDashboard } from "./GoogleAnalyticsDashboard";
 import { GoogleAnalyticsTableDialog } from "./GoogleAnalyticsTableDialog";
-import { GscIntegration } from "./seo/GscIntegration";
+import { GscIntegration, type GscKeywordData } from "./seo/GscIntegration";
 import { resolveAnalyticsReportMode } from "@/lib/analyticsReportMode";
 import { TrendingUp, Search, BarChart3, Settings2, RefreshCw, Plus, Phone, FileText } from "lucide-react";
 import { MaskyooSiblingCard } from "./MaskyooSiblingCard";
@@ -280,6 +280,14 @@ export function SeoReportTabs({ tenantId, clientId }: SeoReportTabsProps) {
     !!savedGscSiteUrl;
 
   const [activeTab, setActiveTab] = useState("seo");
+  const [gscTop20Rows, setGscTop20Rows] = useState<GscKeywordData[]>([]);
+  const gscTop20Sig = useRef("");
+  const handleTop20Queries = useCallback((rows: GscKeywordData[]) => {
+    const sig = rows.map((row) => `${row.keyword}\t${row.position}`).join("\n");
+    if (gscTop20Sig.current === sig) return;
+    gscTop20Sig.current = sig;
+    setGscTop20Rows(rows);
+  }, []);
 
   const seoTabItems = useMemo((): ResponsiveTabItem[] => {
     const items: ResponsiveTabItem[] = [
@@ -341,11 +349,12 @@ export function SeoReportTabs({ tenantId, clientId }: SeoReportTabsProps) {
             }}
             initialLangFilter={savedGscLangFilter}
             onLangFilterChange={(v) => saveLinkMutation.mutate({ key: 'linkedGscLangFilter', value: v })}
+            extraGscRows={gscTop20Rows}
           />
         </TabsContent>
 
         {hasGsc && (
-          <TabsContent value="gsc">
+          <TabsContent value="gsc" forceMount className="data-[state=inactive]:hidden">
             {Array.isArray(gscUserIntegrations) && gscUserIntegrations.length > 0 && (
               <Card className="mb-3 border-primary/20">
                 <CardContent className="p-3">
@@ -403,6 +412,8 @@ export function SeoReportTabs({ tenantId, clientId }: SeoReportTabsProps) {
                   initialLangFilter={savedGscLangFilter}
                   onLangFilterChange={(v) => saveLinkMutation.mutate({ key: 'linkedGscLangFilter', value: v })}
                   seedTrackedKeywords={ahrefsTrackedKeywords}
+                  relevancePersistKey={clientId}
+                  onTop20Queries={handleTop20Queries}
                 />
               </div>
             ) : (
@@ -428,6 +439,8 @@ export function SeoReportTabs({ tenantId, clientId }: SeoReportTabsProps) {
                   showIntegrationSelector={false}
                   initialLangFilter={savedGscLangFilter}
                   resolvedFallback={resolvedGsc}
+                  trackedKeywords={ahrefsTrackedKeywords}
+                  relevancePersistKey={clientId}
                   onLangFilterChange={(v) => saveLinkMutation.mutate({ key: 'linkedGscLangFilter', value: v })}
                   onSiteSelected={(siteUrl) => {
                     if (siteUrl && siteUrl !== savedGscSiteUrl) {

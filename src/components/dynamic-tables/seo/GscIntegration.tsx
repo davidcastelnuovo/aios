@@ -14,6 +14,8 @@ import { Link2, RefreshCw, Search, MousePointerClick, Eye, Target, ChevronsUpDow
 import { cn } from "@/lib/utils";
 import { normalizeSeoDomain, seoDomainsMatch } from "@/lib/seoDomain";
 import { formatGscCtrPercent, gscCtrAsPercent } from "@/lib/gscFormat";
+import { visibleGscPosition } from "@/lib/gscPosition";
+import { useSeoKeywordRelevance } from "@/hooks/useSeoKeywordRelevance";
 
 export type GscDateRange = '28d' | '3m' | '12m';
 
@@ -71,6 +73,10 @@ interface GscIntegrationProps {
     siteUrl: string | null;
     ownerEmail?: string | null;
   } | null;
+  /** Tracked phrases used to decide which ranks belong in Top 20. */
+  trackedKeywords?: string[];
+  /** Client id for the same manual relevance marks as the Top 20 tab. */
+  relevancePersistKey?: string;
 }
 
 const DATE_RANGE_DAYS: Record<GscDateRange, number> = {
@@ -130,6 +136,8 @@ export function GscIntegration({
   initialLangFilter,
   onLangFilterChange,
   resolvedFallback,
+  trackedKeywords,
+  relevancePersistKey,
 }: GscIntegrationProps) {
   const queryClient = useQueryClient();
   const forceLiveNextRef = useRef(false);
@@ -851,6 +859,8 @@ export function GscIntegration({
             data={gscData}
             initialLangFilter={initialLangFilter}
             onLangFilterChange={onLangFilterChange}
+            trackedKeywords={trackedKeywords}
+            relevancePersistKey={relevancePersistKey}
           />
         </CardContent>
       )}
@@ -873,11 +883,20 @@ function GscQueriesTable({
   data,
   initialLangFilter,
   onLangFilterChange,
+  trackedKeywords = [],
+  relevancePersistKey,
 }: {
   data: GscKeywordData[];
   initialLangFilter?: LangFilter;
   onLangFilterChange?: (lang: LangFilter) => void;
+  trackedKeywords?: string[];
+  relevancePersistKey?: string;
 }) {
+  const { forceIrrelevant } = useSeoKeywordRelevance(relevancePersistKey);
+  const rankOpts = useMemo(
+    () => ({ tracked: trackedKeywords, forceIrrelevant }),
+    [trackedKeywords, forceIrrelevant],
+  );
   const [sortBy, setSortBy] = useState<keyof GscKeywordData>("position");
   const [sortOrder, setSortOrder] = useState<"asc" | "desc">("asc");
   const [searchFilter, setSearchFilter] = useState("");
@@ -922,11 +941,19 @@ function GscQueriesTable({
       filtered = filtered.filter(row => row.keyword.toLowerCase().includes(q));
     }
     return filtered.slice().sort((a, b) => {
+      if (sortBy === "position") {
+        const aShown = visibleGscPosition(a.keyword, a.position, rankOpts);
+        const bShown = visibleGscPosition(b.keyword, b.position, rankOpts);
+        if (aShown == null && bShown == null) return 0;
+        if (aShown == null) return 1;
+        if (bShown == null) return -1;
+        return sortOrder === "desc" ? bShown - aShown : aShown - bShown;
+      }
       const aVal = a[sortBy] as number;
       const bVal = b[sortBy] as number;
       return sortOrder === "desc" ? bVal - aVal : aVal - bVal;
     });
-  }, [data, sortBy, sortOrder, searchFilter, langFilter]);
+  }, [data, sortBy, sortOrder, searchFilter, langFilter, rankOpts]);
 
   const formatNumber = (num: number) => new Intl.NumberFormat('he-IL').format(num);
 
@@ -1036,15 +1063,22 @@ function GscQueriesTable({
                   {row.keyword}
                 </td>
                 <td className="text-center py-1.5 px-3">
-                  <span className={cn(
-                    "inline-flex items-center justify-center px-2 py-0.5 rounded-full text-xs font-medium",
-                    row.position <= 3 ? "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400" :
-                    row.position <= 10 ? "bg-primary/10 text-primary" :
-                    row.position <= 20 ? "bg-muted text-muted-foreground" :
-                    "text-muted-foreground"
-                  )}>
-                    {row.position.toFixed(1)}
-                  </span>
+                  {(() => {
+                    const shown = visibleGscPosition(row.keyword, row.position, rankOpts);
+                    if (shown == null) {
+                      return <span className="text-xs text-muted-foreground" title="לא בטופ 20">—</span>;
+                    }
+                    return (
+                      <span className={cn(
+                        "inline-flex items-center justify-center px-2 py-0.5 rounded-full text-xs font-medium",
+                        shown <= 3 ? "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400" :
+                        shown <= 10 ? "bg-primary/10 text-primary" :
+                        "bg-muted text-muted-foreground"
+                      )}>
+                        {shown.toFixed(1)}
+                      </span>
+                    );
+                  })()}
                 </td>
                 <td className="text-center py-1.5 px-3">{formatNumber(row.clicks)}</td>
                 <td className="text-center py-1.5 px-3">{formatNumber(row.impressions)}</td>
