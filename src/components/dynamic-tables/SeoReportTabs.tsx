@@ -177,7 +177,7 @@ export function SeoReportTabs({ tenantId, clientId }: SeoReportTabsProps) {
   });
 
   // Fetch GA records for selected table (daily_source, daily, top_pages, traffic_source, event_total)
-  const { data: gaRecordsRaw } = useQuery({
+  const { data: gaRecordsRaw, isError: gaRecordsError, isSuccess: gaRecordsSuccess } = useQuery({
     queryKey: ['crm-records', selectedGaTableId],
     queryFn: async () => {
       if (!selectedGaTableId) return [];
@@ -248,10 +248,19 @@ export function SeoReportTabs({ tenantId, clientId }: SeoReportTabsProps) {
 
   // Auto-sync GA if table is selected but has no records
   useEffect(() => {
-    if (selectedGaTableId && gaRecords && gaRecords.length === 0 && !syncGaMutation.isPending) {
+    // A denied foreign Analytics table comes back as an error with no rows.
+    // Do not treat that as "needs sync" — syncing it would write the other client's property.
+    if (
+      selectedGaTableId &&
+      gaRecordsSuccess &&
+      !gaRecordsError &&
+      gaRecords &&
+      gaRecords.length === 0 &&
+      !syncGaMutation.isPending
+    ) {
       syncGaMutation.mutate(selectedGaTableId);
     }
-  }, [selectedGaTableId, gaRecords]);
+  }, [selectedGaTableId, gaRecords, gaRecordsSuccess, gaRecordsError]);
 
   // Check GSC/GA integration access across ALL accessible tenants (shared agency).
   // RLS still gates what the user can actually see, but we no longer restrict by

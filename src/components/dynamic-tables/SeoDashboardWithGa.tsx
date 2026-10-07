@@ -2,7 +2,7 @@ import { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { SeoDashboardView } from "./SeoDashboardView";
-import { resolveSeoLinkedGscSiteUrl } from "@/lib/seoDomain";
+import { resolveLinkedCrmTableId, resolveSeoLinkedGscSiteUrl } from "@/lib/seoDomain";
 
 interface SeoDashboardWithGaProps {
   tenantId: string;
@@ -77,9 +77,12 @@ export function SeoDashboardWithGa({ tenantId, clientId }: SeoDashboardWithGaPro
   });
 
   const linkedGaTableId = useMemo(() => {
-    const fromSettings = (seoTable?.integration_settings as any)?.linkedGaTableId;
-    return fromSettings || gaTableByClient?.id || "";
-  }, [seoTable, gaTableByClient]);
+    const fromSettings = (seoTable?.integration_settings as any)?.linkedGaTableId as string | undefined;
+    const candidates = gaTableByClient?.id
+      ? [{ id: gaTableByClient.id, client_id: clientId }]
+      : [];
+    return resolveLinkedCrmTableId(fromSettings, candidates, clientId) || fromSettings || "";
+  }, [seoTable, gaTableByClient, clientId]);
 
   // Fetch GA records (channel_group + monthly_organic + daily_source) for the linked table
   const { data: gaRecords = [] } = useQuery({
