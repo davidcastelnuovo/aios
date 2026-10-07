@@ -27,6 +27,11 @@ test('own database, analytics reads and inference stay usable', () => {
     assert.equal(outboundAllowed(url, method, own), true);
   }
 });
+test('Claude Direct can fire a routine but not manage routines', () => {
+  assert.equal(outboundAllowed('https://api.anthropic.com/v1/claude_code/routines/trig_01EMLfUVZhWHw5PJxPtgdb7x/fire', 'POST', own), true);
+  assert.equal(outboundAllowed('https://api.anthropic.com/v1/claude_code/routines/trig_01EMLfUVZhWHw5PJxPtgdb7x', 'POST', own), false);
+  assert.equal(outboundAllowed('https://api.anthropic.com/v1/claude_code/routines', 'POST', own), false);
+});
 test('guard never calls network for blocked request and disables redirect bypass', async () => {
   const calls = [];
   const runtime = { fetch: async (...args) => { calls.push(args); return new Response('{}'); } };

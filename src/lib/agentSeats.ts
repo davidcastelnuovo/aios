@@ -37,6 +37,7 @@ export const RAIL_SEAT_ORDER: AgentSeatKey[] = [
   "cursor",
   "grok",
   "codex",
+  "claude",
 ];
 
 export function seatKeyFromRoute(route: BrainRoute | null | undefined): AgentSeatKey {
