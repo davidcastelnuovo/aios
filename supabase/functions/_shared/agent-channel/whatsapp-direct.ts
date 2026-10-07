@@ -132,15 +132,15 @@ export async function routeWhatsAppDirect(args: {
   return { handled: true, provider: command.provider, ack: `נשלח ל-${label} ✅ התשובה תגיע לכאן.` };
 }
 
-/** Send an agent's callback reply back to the WhatsApp chat that asked for it. */
+/** Send an agent's callback reply back to the WhatsApp chat that asked for it. null = not a WhatsApp session. */
 export async function deliverWhatsAppReply(
   sessionMetadata: unknown,
   tenantId: string,
   provider: string,
   content: string,
-): Promise<boolean> {
+): Promise<boolean | null> {
   const target = (sessionMetadata as any)?.reply_whatsapp as WhatsAppReplyTarget | undefined;
-  if (!target?.integration_id || !target.phone_number || !target.connection_user_id) return false;
+  if (!target?.integration_id || !target.phone_number || !target.connection_user_id) return null;
   const res = await fetch(`${Deno.env.get("SUPABASE_URL")}/functions/v1/send-manus-wa-message`, {
     method: "POST",
     headers: {
