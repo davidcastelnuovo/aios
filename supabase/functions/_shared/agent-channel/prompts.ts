@@ -44,6 +44,7 @@ export function buildCodexWorkspaceAgentInput(args: {
     `- conversation_id from above\n` +
     `- session_id from above\n` +
     `- origin from above\n` +
+    `- tenant_id from above\n` +
     `- content containing the complete answer to the user\n` +
     `- a unique idempotency_key\n` +
     (args.parliamentRound != null ? `- parliament_round when supplied\n` : "") +

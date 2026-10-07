@@ -19,6 +19,7 @@ const TOOLS = [
       properties: {
         conversation_id: { type: "string" },
         session_id: { type: "string" },
+        tenant_id: { type: "string" },
         origin: { type: "string", description: "cursor | grok | codex | claude | chatgpt | parliament" },
         content: { type: "string", description: "Full answer to show David in Carmen's chat." },
         idempotency_key: { type: "string" },
@@ -35,6 +36,7 @@ const TOOLS = [
       properties: {
         conversation_id: { type: "string" },
         session_id: { type: "string" },
+        tenant_id: { type: "string" },
         origin: { type: "string" },
         content: { type: "string" },
       },
@@ -50,6 +52,7 @@ const TOOLS = [
       properties: {
         conversation_id: { type: "string" },
         session_id: { type: "string" },
+        tenant_id: { type: "string" },
         origin: { type: "string" },
         content: { type: "string", description: "What needs approval and why." },
       },
@@ -80,13 +83,14 @@ function bearerFrom(req: Request): string | undefined {
 }
 
 async function handleTool(name: string, args: Record<string, any>): Promise<string> {
-  const conversationId = String(args?.conversation_id ?? "").trim();
-  const content = String(args?.content ?? "").trim();
+  const conversationId = String(args?.conversation_id ?? args?.conversationId ?? "").trim();
+  const content = String(args?.content ?? args?.message ?? "").trim();
   if (!conversationId || !content) throw new Error("conversation_id and content are required");
 
   const sb = serviceClient();
-  const sessionId = String(args?.session_id ?? "").trim();
+  const sessionId = String(args?.session_id ?? args?.sessionId ?? "").trim();
   const session = sessionId ? await loadSession(sb, sessionId) : null;
+  const tenantId = String(args?.tenant_id ?? args?.tenantId ?? "").trim() || session?.tenant_id;
   const origin = resolveCallbackOrigin(args?.origin, session?.provider);
 
   const eventType =
@@ -94,9 +98,9 @@ async function handleTool(name: string, args: Record<string, any>): Promise<stri
     name === "request_aios_approval" ? "approval_request" : "message";
 
   const payload: CallbackPayload = {
-    tenant_id: session?.tenant_id,
+    tenant_id: tenantId,
     conversation_id: conversationId,
-    session_id: sessionId || undefined,
+    session_id: session ? sessionId : undefined,
     origin,
     content,
     event_type: eventType,
