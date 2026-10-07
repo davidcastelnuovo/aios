@@ -1,7 +1,7 @@
 <!--
   Elementor → ווידג'ט HTML — הדבק את כל הקובץ (link, div, style, script).
   כרטיס עם לוגו פ.ד. פסגות במקום השם.
-  קובץ איש קשר: https://pdpsagot.co.il/wp-content/uploads/danny-pick-logo.vcf
+  קובץ איש קשר: https://pdpsagot.co.il/wp-content/uploads/danny-pik-logo-he.vcf
 -->
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -21,7 +21,7 @@
 
         <ul class="contacts">
           <li>
-            <a href="tel:+972523795155">
+            <a href="tel:0523795155">
               <span class="icon-ring" aria-hidden="true">
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75">
                   <path
@@ -30,7 +30,7 @@
                 </svg>
               </span>
               <span class="sep" aria-hidden="true"></span>
-              <span class="contact-value contact-value--ltr">+972 52-379-5155</span>
+              <span class="contact-value contact-value--ltr">052-3795155</span>
             </a>
           </li>
           <li>
@@ -55,11 +55,11 @@
                 </svg>
               </span>
               <span class="sep" aria-hidden="true"></span>
-              <span class="contact-value contact-value--ltr">WhatsApp</span>
+              <span class="contact-value contact-value--he">וואטסאפ</span>
             </a>
           </li>
           <li>
-            <a class="js-save-contact" href="https://pdpsagot.co.il/wp-content/uploads/danny-pick-logo.vcf">
+            <a class="js-save-contact" href="https://pdpsagot.co.il/wp-content/uploads/danny-pik-logo-he.vcf">
               <span class="icon-ring" aria-hidden="true">
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75">
                   <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
@@ -69,7 +69,7 @@
                 </svg>
               </span>
               <span class="sep" aria-hidden="true"></span>
-              <span class="contact-value contact-value--ltr">Save Contact</span>
+              <span class="contact-value contact-value--he">שמירה באנשי קשר</span>
             </a>
           </li>
         </ul>
@@ -370,14 +370,14 @@
 </style>
 <script>
 (function () {
-  var VCARD_URL = "https://pdpsagot.co.il/wp-content/uploads/danny-pick-logo.vcf";
+  var VCARD_URL = "https://pdpsagot.co.il/wp-content/uploads/danny-pik-logo-he.vcf";
 
   function shareText() {
     return (
-      "Danny Pick\n" +
-      "+972 52-379-5155\n" +
+      "דני פיק\n" +
+      "052-3795155\n" +
       "danny@pdpsagot.co.il\n\n" +
-      "Save contact:\n" +
+      "שמירת איש קשר:\n" +
       VCARD_URL
     );
   }
@@ -507,7 +507,7 @@
     ctx.textAlign = "right";
     ctx.direction = "ltr";
     ctx.font = "800 58px Heebo, sans-serif";
-    ctx.fillText("+972 52-379-5155", right, lineY + 74);
+    ctx.fillText("052-3795155", right, lineY + 74);
     ctx.font = "800 48px Heebo, sans-serif";
     ctx.fillText("danny@pdpsagot.co.il", right, lineY + 142);
     var blob = await new Promise(function (resolve) { canvas.toBlob(resolve, "image/jpeg", 0.9); });
