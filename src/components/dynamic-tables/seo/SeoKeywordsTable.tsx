@@ -28,6 +28,7 @@ import { Tabs, TabsContent } from "@/components/ui/tabs";
 import { ResponsiveTabsList, type ResponsiveTabItem } from "@/components/ui/responsive-tabs-list";
 import { cn } from "@/lib/utils";
 import { formatGscCtrPercent } from "@/lib/gscFormat";
+import { keywordTop20Rank } from "@/lib/gscPosition";
 import {
   filterRelevantKeywords,
   normalizeKeywordPhrase,
@@ -664,16 +665,23 @@ export function SeoKeywordsTable({
       return aPos - bPos;
     });
 
-  const top20Raw = useMemo(
-    () =>
-      sortByPosition(
-        rawAllKeywords.filter((k) => {
-          const rank = keywordRank(k);
-          return rank != null && rank <= 20;
-        }),
-      ),
-    [rawAllKeywords],
-  );
+  const top20Raw = useMemo(() => {
+    const ranked = rawAllKeywords.flatMap((k) => {
+      const rank = keywordTop20Rank(k);
+      if (!rank) return [];
+      const already =
+        k.position === rank.position &&
+        (rank.source !== "gsc" || k._position_source === "gsc" || k._source === "gsc");
+      if (already) return [k];
+      return [{
+        ...k,
+        position: rank.position,
+        ahrefs_position: k.ahrefs_position ?? k.position,
+        _position_source: "gsc" as const,
+      }];
+    });
+    return sortByPosition(ranked);
+  }, [rawAllKeywords]);
 
   const top20 = useMemo(
     () =>
