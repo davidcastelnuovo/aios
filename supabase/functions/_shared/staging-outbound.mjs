@@ -31,6 +31,8 @@ export function outboundAllowed(url, method, ownOrigin) {
     (['GET', 'HEAD'].includes(verb) && workspaceProbePath.test(target.pathname))
   )) return true;
   if (verb === 'POST' && target.hostname === 'api.cursor.com' && /^\/v0\/agents(?:\/[^/]+\/followup)?$/.test(target.pathname)) return true;
+  // Claude Direct: fire one configured Claude Code routine (no other Anthropic management API).
+  if (verb === 'POST' && target.hostname === 'api.anthropic.com' && /^\/v1\/claude_code\/routines\/trig_[A-Za-z0-9]+\/fire$/.test(target.pathname)) return true;
   if (verb === 'POST' && target.hostname === 'googleads.googleapis.com' && /\/googleAds:search(Stream)?$/.test(target.pathname)) return true;
   if (verb === 'POST' && target.hostname === 'analyticsdata.googleapis.com' && /:(runReport|batchRunReports|runRealtimeReport)$/.test(target.pathname)) return true;
   if (!['GET', 'HEAD'].includes(verb)) return false;
