@@ -12,6 +12,7 @@ import {
 import { onParliamentCallback } from "./parliament.ts";
 import { completeDevTaskFromAgentReply } from "../dev-tasks.ts";
 import { persistMeetingSummaryReply } from "../meeting-summary-cursor.ts";
+import { deliverWhatsAppReply } from "./whatsapp-direct.ts";
 
 async function resolveSession(
   sb: ReturnType<typeof serviceClient>,
@@ -76,6 +77,14 @@ export async function ingestChannelReply(payload: CallbackPayload): Promise<{ du
       await persistMeetingSummaryReply(sb, session.metadata, content);
     } catch (e) {
       console.warn("[agent-channel] meeting summary save:", (e as Error)?.message ?? e);
+    }
+  }
+
+  if (!duplicate && eventType === "message" && session) {
+    try {
+      await deliverWhatsAppReply(session.metadata, tenantId, origin, content);
+    } catch (e) {
+      console.warn("[agent-channel] whatsapp reply:", (e as Error)?.message ?? e);
     }
   }
 
