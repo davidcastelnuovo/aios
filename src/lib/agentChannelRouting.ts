@@ -127,6 +127,8 @@ export function billingNoteForRoute(provider?: string | null): string | null {
       return "כרמן ישיר · סוכן Cursor חדש לכל משימה";
     case "codex":
       return "Codex Direct · ChatGPT Workspace / Work Mode";
+    case "claude":
+      return "Claude Direct · סשן קבוע";
     case "chatgpt":
       return "ChatGPT Workspace · Work Mode";
     case "internal":
