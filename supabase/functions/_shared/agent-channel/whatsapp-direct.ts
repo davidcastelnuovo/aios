@@ -28,7 +28,7 @@ export async function routeWhatsAppDirect(args: {
   connectionUserId: string;
   senderPhone: string;
   messageText: string;
-}): Promise<{ handled: false } | { handled: true; provider: WhatsAppDirectProvider; ack: string | null }> {
+}): Promise<{ handled: false } | { handled: true; provider: WhatsAppDirectProvider; ack: string }> {
   const command = parseWhatsAppDirectCommand(args.messageText);
   if (!command || !args.connectionUserId) return { handled: false };
 
@@ -129,8 +129,7 @@ export async function routeWhatsAppDirect(args: {
     return { handled: true, provider: command.provider, ack: `לא הצלחתי לשלוח ל-${label}: ${reason}` };
   }
 
-  // Success stays silent: the only WhatsApp reply is the agent's own answer.
-  return { handled: true, provider: command.provider, ack: null };
+  return { handled: true, provider: command.provider, ack: `נשלח ל-${label} ✅ התשובה תגיע לכאן.` };
 }
 
 /** Send an agent's callback reply back to the WhatsApp chat that asked for it. null = not a WhatsApp session. */
