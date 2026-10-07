@@ -4,7 +4,7 @@ import { grokUsesExistingWebhook } from "./cloud-errors.ts";
 import { createCloudAgent, followUpCloudAgent, cursorApiKey } from "./cursor-api.ts";
 import { fireGrokBotWebhook } from "./grok-webhook.ts";
 import { mintCallbackToken } from "./hmac.ts";
-import { buildCallbackInstructions, wrapDirectPrompt } from "./prompts.ts";
+import { buildCallbackInstructions, buildCodexWorkspaceAgentInput, wrapDirectPrompt } from "./prompts.ts";
 import {
   allowCreateNewCloudAgent,
   collectOpenChatIds,
@@ -13,14 +13,24 @@ import {
   type OpenChatProvider,
 } from "./sticky-agent.ts";
 import {
-  formatWorkspaceTriggerError,
+  assertWorkspaceAccessToken,
+  fetchWorkspaceAgentRun,
   missingWorkspaceMessage,
+  triggerWorkspaceAgentRun,
   validateWorkspaceTriggerId,
   workspaceAgentCreds,
   workspaceConversationKey,
   type WorkspaceProvider,
 } from "./workspace-agent.ts";
-import { completeSession, logChannelAction, serviceClient, upsertRunningSession } from "./store.ts";
+import {
+  completeSession,
+  insertMessage,
+  loadSession,
+  logChannelAction,
+  serviceClient,
+  setConversationStatus,
+  upsertRunningSession,
+} from "./store.ts";
 import { codexOpenAiApiEnabled, runtimeEnv } from "../carmen-brain-flags.ts";
 import { launchCodexViaOpenAiApi } from "./codex-api.ts";
 
@@ -36,6 +46,103 @@ const MAX_TEXT = 100_000;
 
 function clip(text: string, max = MAX_TEXT): string {
   return text.length > max ? text.slice(0, max) : text;
+}
+
+
+function delay(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function reportWorkspaceRunFailure(args: {
+  sb: ReturnType<typeof serviceClient>;
+  tenantId: string;
+  conversationId: string;
+  sessionId: string;
+  provider: WorkspaceProvider;
+  runId: string;
+  reason: "failed" | "missing_callback";
+  errorCode?: string | null;
+}): Promise<void> {
+  const current = await loadSession(args.sb, args.sessionId);
+  if (!current || current.status === "completed" || current.status === "cancelled") return;
+
+  await completeSession(args.sb, args.sessionId, "failed");
+  await setConversationStatus(args.sb, args.conversationId, "error");
+  const content = args.reason === "failed"
+    ? "הריצה של Codex נכשלה בתוך ChatGPT לפני שהסוכן החזיר תשובה ל-AIOS. אפשר לנסות שוב; פרטי הריצה נשמרו לאבחון."
+    : "הריצה של Codex הסתיימה ב-ChatGPT בלי להחזיר תשובה ל-AIOS. אפשר לנסות שוב; פרטי הריצה נשמרו לאבחון.";
+  await insertMessage(args.sb, {
+    tenant_id: args.tenantId,
+    conversation_id: args.conversationId,
+    role: "assistant",
+    speaker: args.provider,
+    channel: args.provider,
+    content,
+    idempotency_key: `workspace-run:${args.runId}:${args.reason}`,
+    metadata: {
+      origin: args.provider,
+      workspace_run_id: args.runId,
+      workspace_run_status: args.reason,
+      ...(args.errorCode ? { workspace_error_code: args.errorCode } : {}),
+    },
+  });
+}
+
+async function monitorWorkspaceRun(args: {
+  sb: ReturnType<typeof serviceClient>;
+  tenantId: string;
+  conversationId: string;
+  sessionId: string;
+  provider: WorkspaceProvider;
+  triggerId: string;
+  accessToken: string;
+  runId: string;
+}): Promise<void> {
+  for (let attempt = 0; attempt < 40; attempt += 1) {
+    await delay(attempt === 0 ? 750 : 1_500);
+    const result = await fetchWorkspaceAgentRun({
+      triggerId: args.triggerId,
+      accessToken: args.accessToken,
+      runId: args.runId,
+    });
+    if (!result.ok) {
+      await logChannelAction(args.sb, {
+        tenantId: args.tenantId,
+        action: `channel_run_monitor_${args.provider}`,
+        details: { conversation_id: args.conversationId, session_id: args.sessionId, run_id: args.runId },
+        status: "warn",
+        error: result.error,
+      });
+      return;
+    }
+    if (result.state === "failed") {
+      await reportWorkspaceRunFailure({ ...args, reason: "failed", errorCode: result.errorCode });
+      return;
+    }
+    if (result.state === "completed") {
+      await delay(1_500);
+      await reportWorkspaceRunFailure({ ...args, reason: "missing_callback" });
+      return;
+    }
+  }
+
+  await logChannelAction(args.sb, {
+    tenantId: args.tenantId,
+    action: `channel_run_monitor_${args.provider}`,
+    details: { conversation_id: args.conversationId, session_id: args.sessionId, run_id: args.runId },
+    status: "warn",
+    error: "Workspace Agent run did not reach a terminal state during the monitoring window",
+  });
+}
+
+function scheduleWorkspaceRunMonitor(task: Promise<void>): void {
+  const edgeRuntime = (globalThis as {
+    EdgeRuntime?: { waitUntil?: (promise: Promise<unknown>) => void };
+  }).EdgeRuntime;
+  const guarded = task.catch((error) => {
+    console.error("[workspace-agent-monitor]", error instanceof Error ? error.message : String(error));
+  });
+  if (edgeRuntime?.waitUntil) edgeRuntime.waitUntil(guarded);
 }
 
 function modelIdFor(provider: CloudDirectProvider): string {
@@ -333,12 +440,6 @@ export async function launchWorkspaceAgent(
     parliament_round: parliament?.round ?? null,
   });
 
-  const triggerProblem = validateWorkspaceTriggerId(triggerId);
-  if (triggerProblem) {
-    await completeSession(sb, session.id, "failed");
-    throw new Error(triggerProblem);
-  }
-
   if (!triggerId || !accessToken) {
     await logChannelAction(sb, {
       tenantId: ctx.tenantId,
@@ -361,42 +462,58 @@ export async function launchWorkspaceAgent(
     };
   }
 
-  const token = await mintCallbackToken({
-    sessionId: session.id,
-    conversationId: ctx.conversationId,
-    tenantId: ctx.tenantId,
-  });
-  const input =
-    (extraPrompt || wrapDirectPrompt({ origin: provider, userText: ctx.content, history: ctx.history, attachments: ctx.attachments })) +
-    buildCallbackInstructions({
-      origin: provider,
+  const triggerProblem = validateWorkspaceTriggerId(triggerId);
+  if (triggerProblem) {
+    await completeSession(sb, session.id, "failed");
+    throw new Error(triggerProblem);
+  }
+  const tokenProblem = assertWorkspaceAccessToken(accessToken);
+  if (tokenProblem) {
+    await completeSession(sb, session.id, "failed");
+    throw new Error(tokenProblem);
+  }
+
+  let input: string;
+  if (provider === "codex" && !extraPrompt) {
+    input = buildCodexWorkspaceAgentInput({
+      userText: ctx.content,
       conversationId: ctx.conversationId,
       sessionId: session.id,
       tenantId: ctx.tenantId,
-      token,
-      parliamentRound: parliament?.round,
-      readOnly: !!parliament,
+      parliamentRound: parliament?.round ?? null,
     });
-
-  const resp = await fetch(`https://api.chatgpt.com/v1/workspace_agents/${encodeURIComponent(triggerId)}/trigger`, {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${accessToken}`,
-      "Content-Type": "application/json",
-      "Idempotency-Key": ctx.idempotencyKey,
-      "OpenAI-Beta": "workspace_agent_runs=v1",
-    },
-    body: JSON.stringify({ conversation_key: conversationKey, input: clip(input, 32_000) }),
-  });
-  const raw = await resp.text();
-  if (!resp.ok) {
-    await completeSession(sb, session.id, "failed");
-    throw new Error(formatWorkspaceTriggerError(resp.status, raw));
+  } else {
+    const token = await mintCallbackToken({
+      sessionId: session.id,
+      conversationId: ctx.conversationId,
+      tenantId: ctx.tenantId,
+    });
+    input =
+      (extraPrompt || wrapDirectPrompt({ origin: provider, userText: ctx.content, history: ctx.history, attachments: ctx.attachments })) +
+      buildCallbackInstructions({
+        origin: provider,
+        conversationId: ctx.conversationId,
+        sessionId: session.id,
+        tenantId: ctx.tenantId,
+        token,
+        parliamentRound: parliament?.round,
+        readOnly: !!parliament,
+      });
   }
-  let data: any = {};
-  try { data = JSON.parse(raw); } catch { /* ignore */ }
-  const runId = String(data?.agent_trigger_run_id || data?.id || "");
-  const url = String(data?.url || data?.conversation_url || "");
+
+  const triggered = await triggerWorkspaceAgentRun({
+    triggerId,
+    accessToken,
+    conversationKey,
+    input: clip(input, 32_000),
+    idempotencyKey: ctx.idempotencyKey,
+  });
+  if (!triggered.ok) {
+    await completeSession(sb, session.id, "failed");
+    throw new Error(triggered.error);
+  }
+  const runId = triggered.runId || "";
+  const url = triggered.conversationUrl || "";
   await upsertRunningSession(sb, {
     tenant_id: ctx.tenantId,
     conversation_id: ctx.conversationId,
@@ -415,6 +532,18 @@ export async function launchWorkspaceAgent(
     action: `channel_send_${provider}`,
     details: { conversation_id: ctx.conversationId, session_id: session.id, run_id: runId, url },
   });
+  if (runId) {
+    scheduleWorkspaceRunMonitor(monitorWorkspaceRun({
+      sb,
+      tenantId: ctx.tenantId,
+      conversationId: ctx.conversationId,
+      sessionId: session.id,
+      provider,
+      triggerId,
+      accessToken,
+      runId,
+    }));
+  }
   return {
     ok: true,
     kind: provider,
