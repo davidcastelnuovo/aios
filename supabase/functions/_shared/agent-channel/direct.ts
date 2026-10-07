@@ -91,6 +91,7 @@ async function reportWorkspaceRunFailure(args: {
 async function monitorWorkspaceRun(args: {
   sb: ReturnType<typeof serviceClient>;
   tenantId: string;
+  agentId: string | null;
   conversationId: string;
   sessionId: string;
   provider: WorkspaceProvider;
@@ -108,6 +109,7 @@ async function monitorWorkspaceRun(args: {
     if (!result.ok) {
       await logChannelAction(args.sb, {
         tenantId: args.tenantId,
+        agentId: args.agentId,
         action: `channel_run_monitor_${args.provider}`,
         details: { conversation_id: args.conversationId, session_id: args.sessionId, run_id: args.runId },
         status: "warn",
@@ -128,6 +130,7 @@ async function monitorWorkspaceRun(args: {
 
   await logChannelAction(args.sb, {
     tenantId: args.tenantId,
+    agentId: args.agentId,
     action: `channel_run_monitor_${args.provider}`,
     details: { conversation_id: args.conversationId, session_id: args.sessionId, run_id: args.runId },
     status: "warn",
@@ -536,6 +539,7 @@ export async function launchWorkspaceAgent(
     scheduleWorkspaceRunMonitor(monitorWorkspaceRun({
       sb,
       tenantId: ctx.tenantId,
+      agentId: ctx.agentId,
       conversationId: ctx.conversationId,
       sessionId: session.id,
       provider,
