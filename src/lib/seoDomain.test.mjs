@@ -58,6 +58,18 @@ test("resolveLinkedCrmTableId ignores stale saved ids", () => {
   assert.equal(resolveLinkedCrmTableId("ga-live", candidates, "client-1"), "ga-live");
 });
 
+test("resolveLinkedCrmTableId prefers this client's table over another client's saved link", () => {
+  const candidates = [
+    { id: "ga-other", client_id: "other-client" },
+    { id: "ga-own", client_id: "client-1" },
+  ];
+  assert.equal(resolveLinkedCrmTableId("ga-other", candidates, "client-1"), "ga-own");
+  assert.equal(
+    resolveLinkedCrmTableId("ga-other", [{ id: "ga-other", client_id: "other-client" }], "client-1"),
+    "ga-other",
+  );
+});
+
 test("selectSeoTableForClient prefers domain match over null-domain duplicate", () => {
   const picked = selectSeoTableForClient(
     [

@@ -252,8 +252,11 @@ export function looksLikeSeoDomain(value?: string | null): boolean {
 type LinkedTableLike = { id: string; client_id?: string | null };
 
 /**
- * Pick a linked GA/GSC crm_table for an SEO dashboard. A saved id that no
- * longer exists (deleted table / stale settings) must not block auto-match.
+ * Pick a linked GA/GSC crm_table for an SEO dashboard.
+ * A saved id that no longer exists must not block auto-match.
+ * A saved id that belongs to a different client must not win when this client
+ * already has its own table — crm-records denies that foreign table to anyone
+ * who cannot open the other client, so the report renders with no data.
  */
 export function resolveLinkedCrmTableId(
   savedId: string | null | undefined,
@@ -261,9 +264,15 @@ export function resolveLinkedCrmTableId(
   clientId: string,
 ): string {
   const list = candidates || [];
-  if (savedId && list.some((t) => t.id === savedId)) return savedId;
-  const byClient = list.find((t) => t.client_id === clientId);
-  if (byClient) return byClient.id;
+  const sameClient = list.filter((t) => t.client_id === clientId);
+  if (savedId) {
+    const saved = list.find((t) => t.id === savedId);
+    if (saved) {
+      const savedIsOtherClient = !!saved.client_id && saved.client_id !== clientId;
+      if (!savedIsOtherClient || sameClient.length === 0) return saved.id;
+    }
+  }
+  if (sameClient.length > 0) return sameClient[0].id;
   if (list.length === 1) return list[0].id;
   return "";
 }
