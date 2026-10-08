@@ -32,7 +32,9 @@ jobs:
           DB_PASSWORD: ${{ secrets.STAGING_DB_PASSWORD }}
         run: |
           supabase link --project-ref "$PROJECT_REF" --password "$DB_PASSWORD"
-          ./scripts/gen-types.sh --linked
+          # Invoke the pinned CLI directly: scripts/gen-types.sh comes from the PR head
+          # and must not run while the shared token and DB password are in scope.
+          supabase gen types typescript --linked > src/integrations/supabase/types.ts
 
       - name: Fail if committed types are stale
         run: |

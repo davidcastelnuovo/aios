@@ -9,16 +9,6 @@ on:
   pull_request:
     branches: [develop, main]
     types: [opened, synchronize, reopened, labeled, unlabeled]
-    paths:
-      - "supabase/migrations/**"
-      - "supabase/functions/**"
-      - "supabase/config.toml"
-      - "scripts/*edge*"
-      - "scripts/staging-only-functions.json"
-      - ".github/workflows/deploy-staging.yml"
-      - ".github/workflows/_db_migrate.yml"
-      - ".github/workflows/_check_types.yml"
-      - ".github/workflows/deploy-edge-reusable.yml"
   workflow_dispatch: {}
 
 permissions:
@@ -28,7 +18,10 @@ permissions:
 jobs:
   resolve:
     name: Resolve changes
-    if: github.event_name != 'pull_request' || github.head_ref != 'develop'
+    if: >
+      github.event_name != 'pull_request' ||
+      !(github.head_ref == 'develop' && github.base_ref == 'main' &&
+        github.event.pull_request.head.repo.full_name == github.repository)
     runs-on: ubuntu-latest
     outputs:
       migrations: ${{ steps.filter.outputs.migrations || 'true' }}
@@ -130,7 +123,11 @@ jobs:
   comment:
     name: Update PR comment
     needs: [resolve, migrate, types, functions]
-    if: always() && needs.resolve.result == 'success' && github.event_name == 'pull_request'
+    if: >
+      always() &&
+      needs.resolve.result == 'success' &&
+      github.event_name == 'pull_request' &&
+      (needs.resolve.outputs.migrations == 'true' || needs.resolve.outputs.functions == 'true')
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4

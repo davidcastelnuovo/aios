@@ -1,15 +1,35 @@
 name: Deploy Staging (develop)
 
-# Re-applies migrations after a merge to develop. `supabase db push` skips what
-# a labelled PR already applied, so this only catches what was merged without
-# a staging deploy. Edge functions are handled by deploy-staging-edge-functions.yml.
+# Keeps Staging on `develop`. A push re-applies migrations (`supabase db push` skips
+# what a labelled PR already applied, so this only catches what was merged without a
+# staging deploy) and redeploys changed edge functions. sync-develop-from-main.yml
+# calls it for the bot push that GitHub does not trigger workflows for; that call and
+# manual dispatch deploy edge functions only.
 
 on:
   push:
     branches: [develop]
     paths:
       - "supabase/migrations/**"
+      - "supabase/functions/**"
+      - "supabase/config.toml"
+      - "supabase/ops/*staging*.sql"
+      - "scripts/*edge*"
+      - "scripts/*staging*"
+      - ".github/workflows/deploy-staging-develop.yml"
       - ".github/workflows/_db_migrate.yml"
+      - ".github/workflows/deploy*edge*.yml"
+  workflow_dispatch:
+    inputs:
+      function_name:
+        description: "Function names; empty reconciles all changes since last successful deployment"
+        type: string
+        default: ""
+  workflow_call:
+    inputs:
+      source_sha:
+        type: string
+        required: true
 
 permissions:
   contents: read
@@ -19,8 +39,52 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  resolve:
+    name: Resolve changes
+    runs-on: ubuntu-latest
+    outputs:
+      migrations: ${{ steps.filter.outputs.migrations || 'false' }}
+      functions: ${{ steps.filter.outputs.functions || 'true' }}
+    steps:
+      - uses: actions/checkout@v4
+        if: github.event_name == 'push'
+
+      - uses: dorny/paths-filter@v3
+        id: filter
+        if: github.event_name == 'push'
+        with:
+          filters: |
+            migrations:
+              - 'supabase/migrations/**'
+              - '.github/workflows/_db_migrate.yml'
+            functions:
+              - 'supabase/functions/**'
+              - 'supabase/config.toml'
+              - 'supabase/ops/*staging*.sql'
+              - 'scripts/*edge*'
+              - 'scripts/*staging*'
+              - '.github/workflows/deploy*edge*.yml'
+
   migrate:
+    needs: resolve
+    if: needs.resolve.outputs.migrations == 'true'
     uses: ./.github/workflows/_db_migrate.yml
     with:
       target: staging
+    secrets: inherit
+
+  functions:
+    # Functions can depend on the migrations, so a failed migration blocks them.
+    needs: [resolve, migrate]
+    if: >
+      always() &&
+      needs.resolve.outputs.functions == 'true' &&
+      needs.migrate.result != 'failure' && needs.migrate.result != 'cancelled'
+    uses: ./.github/workflows/deploy-edge-reusable.yml
+    permissions:
+      contents: write
+    with:
+      environment: staging
+      source_sha: ${{ inputs.source_sha || github.sha }}
+      function_names: ${{ inputs.function_name || '' }}
     secrets: inherit

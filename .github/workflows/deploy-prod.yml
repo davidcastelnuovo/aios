@@ -51,7 +51,7 @@ jobs:
     if: needs.resolve.outputs.migrations == 'true'
     uses: ./.github/workflows/_db_migrate.yml
     with:
-      target: prod
+      target: production
     secrets: inherit
 
   functions:

@@ -86,7 +86,7 @@ The following setup is documented for these environments; Vercel variables, Supa
 - Staging auth allows `http://localhost:8080` and `https://*.vercel.app`; email signup autoconfirm is on
 - WhatsApp send paths go through `IntegrationGuard`
 - Staging / Preview / Dev visual banner via `VITE_APP_ENV`
-- `deploy-staging-edge-functions.yml` runs on matching **`develop` pushes**, manual dispatch, and reusable workflow calls from the main-to-develop sync
+- `deploy-staging-develop.yml` runs on matching **`develop` pushes**, manual dispatch, and reusable workflow calls from the main-to-develop sync (edge functions only for the last two)
 
 ## Code, data and deployment synchronization
 
@@ -166,7 +166,7 @@ Lazy snapshot renderers keep full report/export code out of the client-card entr
 
 Workflow files define automation triggers; this document defines the environment model and operational constraints. Confirm external service state separately before claiming a deployment or data sync is healthy.
 
-- Check `.github/workflows/sync-develop-from-main.yml`, `deploy-staging-edge-functions.yml`, `deploy-edge-function.yml`, and `sync-staging-data.yml` for current triggers and path filters.
+- Check `.github/workflows/sync-develop-from-main.yml`, `deploy-staging-develop.yml`, `deploy-edge-function.yml`, and `sync-staging-data.yml` for current triggers and path filters.
 
 ## Database and edge-function deploys (label-gated)
 
@@ -174,7 +174,7 @@ Migrations in `supabase/migrations/**` are applied with `supabase db push`; the 
 
 - **PR into `develop` (or a hotfix into `main`) that changes `supabase/migrations/**` or `supabase/functions/**`:** must hold the `staging` label (`Deploy Staging` → `Require staging label` fails otherwise). Only one open PR can hold the label (`staging-lock.yml`). The label deploys the PR's migrations and edge functions to Staging and checks `src/integrations/supabase/types.ts` against the staging schema (check-only — regenerate with `scripts/gen-types.sh` and commit).
 - **`develop` → `main` release PRs** are exempt: Staging already runs `develop`.
-- **Push to `develop`:** `deploy-staging-develop.yml` re-applies migrations (idempotent); `deploy-staging-edge-functions.yml` redeploys functions.
+- **Push to `develop`:** `deploy-staging-develop.yml` re-applies migrations (idempotent) and redeploys functions.
 - **Push to `main`:** `deploy-prod.yml` pushes migrations to Production, then deploys functions. The `production` GitHub environment's required reviewer is the `מאשר לפרודקשן` gate.
 - **Drift recovery:** comment `/db-fix` or `/db-force-push` on a labelled PR. Dry-run migration history first with Actions → **Supabase migration dry run**.
 

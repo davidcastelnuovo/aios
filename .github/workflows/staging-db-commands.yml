@@ -92,23 +92,23 @@ jobs:
       # The job name comes from how deploy-staging.yml calls the reusable _db_migrate.yml
       # workflow: "<calling job id> / <called job's name>". If either changes, this
       # lookup silently stops matching.
-      - name: Find the latest failed staging-push run for this PR
+      - name: Find the failed staging-push job in the latest run for this commit
         id: find
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           REPO: ${{ github.repository }}
           BRANCH: ${{ needs.authorize.outputs.head_ref }}
+          HEAD_SHA: ${{ needs.authorize.outputs.head_sha }}
         run: |
           set -euo pipefail
+          # Only the newest run for the current head commit counts: a failure on an
+          # older commit, or one a later run already fixed, must not drive a repair.
+          RUN_ID=$(gh run list --repo "$REPO" --workflow deploy-staging.yml --branch "$BRANCH" --event pull_request --commit "$HEAD_SHA" --limit 1 --json databaseId --jq '.[0].databaseId // empty')
           JOB_ID=""
-          for RUN_ID in $(gh run list --repo "$REPO" --workflow deploy-staging.yml --branch "$BRANCH" --event pull_request --json databaseId --jq '.[].databaseId'); do
-            FOUND=$(gh api "repos/$REPO/actions/runs/$RUN_ID/jobs" --paginate \
+          if [[ -n "$RUN_ID" ]]; then
+            JOB_ID=$(gh api "repos/$REPO/actions/runs/$RUN_ID/jobs" --paginate \
               --jq '.jobs[] | select(.name == "migrate / Push migrations (staging)" and .conclusion == "failure") | .id' | head -n1)
-            if [[ -n "$FOUND" ]]; then
-              JOB_ID="$FOUND"
-              break
-            fi
-          done
+          fi
 
           if [[ -z "$JOB_ID" ]]; then
             echo "found=false" >> "$GITHUB_OUTPUT"
