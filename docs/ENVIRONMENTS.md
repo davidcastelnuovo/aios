@@ -154,7 +154,7 @@ How we keep them working:
 3. **Health probe.** Command Center calls `agent-channel-send` `action=channel_health`. If the key is rejected, the HUD shows a banner. After a copy, hashes of the allowlist should match Production; no function redeploy is required.
 4. **After a copy:** from Preview → Command Center, send a one-word ping on Cursor Direct or the table. Expect `agent_channel_sessions.external_url` and no 401.
 
-Local `pnpm dev` is frontend-only and uses the active Vite environment. The tracked `.env` still points away from Staging, so never use it for local test data; override `VITE_SUPABASE_URL`, `VITE_SUPABASE_PUBLISHABLE_KEY`, and `VITE_SUPABASE_PROJECT_ID` with AIOS Staging values through `.env.local` or an exported `.envrc`, and set `VITE_APP_ENV=staging`. Removing that unsafe tracked default is covered by AIO-47.
+Local `pnpm dev` is frontend-only and talks to the remote Supabase project selected by the active Vite environment. The tracked `.env` points to Production, so override `VITE_SUPABASE_URL`, `VITE_SUPABASE_PUBLISHABLE_KEY`, and `VITE_SUPABASE_PROJECT_ID` with AIOS Staging values through `.env.local` or an exported `.envrc`, and set `VITE_APP_ENV=staging`. Restart `pnpm dev`, confirm the effective Supabase URL is the Staging project and the amber environment frame is visible, then create test data. Removing the unsafe tracked default is covered by AIO-47.
 
 ## Report loading
 
