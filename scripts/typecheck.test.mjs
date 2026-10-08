@@ -4,7 +4,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { test } from 'node:test';
 import ts from 'typescript';
-import { approvingMaintainer, baselineAdditions, collectDiagnostics, compareDiagnostics, snapshot, validateBaseline } from './typecheck.mjs';
+import { approvingMaintainer, baselineAdditions, collectDiagnostics, compareDiagnostics, normalizeDiagnosticMessage, snapshot, validateBaseline } from './typecheck.mjs';
 
 const error = { file: 'src/example.ts', code: 2322, message: "Type 'string' is not assignable to type 'number'.", source: 'value', line: 1, column: 7 };
 const baseline = diagnostics => ({ schemaVersion: 1, config: 'tsconfig.app.json', typescriptVersion: ts.version, diagnostics: snapshot(diagnostics) });
@@ -30,6 +30,37 @@ test('diagnostic counts cannot conceal duplicate additions or resolved errors', 
 test('source changes distinguish errors with identical messages', () => {
   const replacement = { ...error, source: 'otherValue' };
   assert.deepEqual(compareDiagnostics([replacement], snapshot([error])).added, [replacement]);
+});
+
+test('embedded checkout paths match between local and CI without masking different modules', () => {
+  const message = root => `Could not find a declaration file for module 'papaparse'. '${root}/node_modules/papaparse/papaparse.js' implicitly has an 'any' type.`;
+  const local = normalizeDiagnosticMessage(message('/workspace/aios'), '/workspace/aios');
+  const ci = normalizeDiagnosticMessage(message('/home/runner/work/aios/aios'), '/home/runner/work/aios/aios');
+  assert.equal(local, ci);
+  assert.equal(normalizeDiagnosticMessage(message('C:/work/aios'), 'C:\\work\\aios'), local);
+  assert.equal(compareDiagnostics([{ ...error, code: 7016, message: ci }], snapshot([{ ...error, code: 7016, message: local }])).added.length, 0);
+  assert.notEqual(normalizeDiagnosticMessage(message('/workspace/aios').replace('/papaparse/papaparse.js', '/other/other.js'), '/workspace/aios'), local);
+  assert.equal(normalizeDiagnosticMessage("'/workspace/aios-other/file.ts'", '/workspace/aios'), "'/workspace/aios-other/file.ts'");
+});
+
+test('real missing-declaration diagnostics remain identical across different checkout directories', () => {
+  const dirs = [fs.mkdtempSync(path.join(os.tmpdir(), 'aio-local-')), fs.mkdtempSync(path.join(os.tmpdir(), 'aio-ci-'))];
+  try {
+    for (const dir of dirs) {
+      fs.mkdirSync(path.join(dir, 'src'));
+      fs.writeFileSync(path.join(dir, 'tsconfig.app.json'), JSON.stringify({
+        compilerOptions: { strict: true, types: [], skipLibCheck: true }, include: ['src'],
+      }));
+      fs.writeFileSync(path.join(dir, 'src/helpers.js'), 'exports.value = 1;\n');
+      fs.writeFileSync(path.join(dir, 'src/example.ts'), 'import { value } from "./helpers";\nexport const copy = value;\n');
+    }
+    const local = collectDiagnostics(dirs[0]);
+    const ci = collectDiagnostics(dirs[1]);
+    assert.equal(local.length, 1);
+    assert.equal(local[0].code, 7016);
+    assert.match(local[0].message, /\.\/src\/helpers\.js/);
+    assert.deepEqual(compareDiagnostics(ci, snapshot(local)), { added: [], resolved: [] });
+  } finally { for (const dir of dirs) fs.rmSync(dir, { recursive: true, force: true }); }
 });
 
 test('baseline review is required for creation, increases, replacements, and compiler upgrades', () => {

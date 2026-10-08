@@ -202,7 +202,7 @@
     {
       "file": "src/components/analytics/ImportAnalyticsDialog.tsx",
       "code": 7016,
-      "message": "Could not find a declaration file for module 'papaparse'. '/workspace/aios/node_modules/.pnpm/papaparse@5.5.3/node_modules/papaparse/papaparse.js' implicitly has an 'any' type.\n  Try `npm i --save-dev @types/papaparse` if it exists or add a new declaration (.d.ts) file containing `declare module 'papaparse';`",
+      "message": "Could not find a declaration file for module 'papaparse'. './node_modules/.pnpm/papaparse@5.5.3/node_modules/papaparse/papaparse.js' implicitly has an 'any' type.\n  Try `npm i --save-dev @types/papaparse` if it exists or add a new declaration (.d.ts) file containing `declare module 'papaparse';`",
       "source": "\"papaparse\"",
       "count": 1
     },
@@ -377,7 +377,7 @@
     {
       "file": "src/components/chat/ChatView.tsx",
       "code": 7016,
-      "message": "Could not find a declaration file for module '@/lib/chatThreadIdentity.mjs'. '/workspace/aios/src/lib/chatThreadIdentity.mjs' implicitly has an 'any' type.",
+      "message": "Could not find a declaration file for module '@/lib/chatThreadIdentity.mjs'. './src/lib/chatThreadIdentity.mjs' implicitly has an 'any' type.",
       "source": "\"@/lib/chatThreadIdentity.mjs\"",
       "count": 1
     },
@@ -545,7 +545,7 @@
     {
       "file": "src/components/dynamic-tables/SearchConsoleDashboard.tsx",
       "code": 7016,
-      "message": "Could not find a declaration file for module 'papaparse'. '/workspace/aios/node_modules/.pnpm/papaparse@5.5.3/node_modules/papaparse/papaparse.js' implicitly has an 'any' type.\n  Try `npm i --save-dev @types/papaparse` if it exists or add a new declaration (.d.ts) file containing `declare module 'papaparse';`",
+      "message": "Could not find a declaration file for module 'papaparse'. './node_modules/.pnpm/papaparse@5.5.3/node_modules/papaparse/papaparse.js' implicitly has an 'any' type.\n  Try `npm i --save-dev @types/papaparse` if it exists or add a new declaration (.d.ts) file containing `declare module 'papaparse';`",
       "source": "\"papaparse\"",
       "count": 1
     },
@@ -762,14 +762,14 @@
     {
       "file": "src/components/forms/ImportLeadsCSV.tsx",
       "code": 7016,
-      "message": "Could not find a declaration file for module 'papaparse'. '/workspace/aios/node_modules/.pnpm/papaparse@5.5.3/node_modules/papaparse/papaparse.js' implicitly has an 'any' type.\n  Try `npm i --save-dev @types/papaparse` if it exists or add a new declaration (.d.ts) file containing `declare module 'papaparse';`",
+      "message": "Could not find a declaration file for module 'papaparse'. './node_modules/.pnpm/papaparse@5.5.3/node_modules/papaparse/papaparse.js' implicitly has an 'any' type.\n  Try `npm i --save-dev @types/papaparse` if it exists or add a new declaration (.d.ts) file containing `declare module 'papaparse';`",
       "source": "\"papaparse\"",
       "count": 1
     },
     {
       "file": "src/components/forms/ImportLeadsWithMapping.tsx",
       "code": 7016,
-      "message": "Could not find a declaration file for module 'papaparse'. '/workspace/aios/node_modules/.pnpm/papaparse@5.5.3/node_modules/papaparse/papaparse.js' implicitly has an 'any' type.\n  Try `npm i --save-dev @types/papaparse` if it exists or add a new declaration (.d.ts) file containing `declare module 'papaparse';`",
+      "message": "Could not find a declaration file for module 'papaparse'. './node_modules/.pnpm/papaparse@5.5.3/node_modules/papaparse/papaparse.js' implicitly has an 'any' type.\n  Try `npm i --save-dev @types/papaparse` if it exists or add a new declaration (.d.ts) file containing `declare module 'papaparse';`",
       "source": "\"papaparse\"",
       "count": 1
     },
@@ -804,7 +804,7 @@
     {
       "file": "src/components/InteractiveCalendar.tsx",
       "code": 7016,
-      "message": "Could not find a declaration file for module 'react-big-calendar'. '/workspace/aios/node_modules/.pnpm/react-big-calendar@1.19.4_react-dom@18.3.1_react@18.3.1__react@18.3.1/node_modules/react-big-calendar/lib/index.js' implicitly has an 'any' type.\n  Try `npm i --save-dev @types/react-big-calendar` if it exists or add a new declaration (.d.ts) file containing `declare module 'react-big-calendar';`",
+      "message": "Could not find a declaration file for module 'react-big-calendar'. './node_modules/.pnpm/react-big-calendar@1.19.4_react-dom@18.3.1_react@18.3.1__react@18.3.1/node_modules/react-big-calendar/lib/index.js' implicitly has an 'any' type.\n  Try `npm i --save-dev @types/react-big-calendar` if it exists or add a new declaration (.d.ts) file containing `declare module 'react-big-calendar';`",
       "source": "\"react-big-calendar\"",
       "count": 1
     },
@@ -1231,7 +1231,7 @@
     {
       "file": "src/components/tasks/WeeklyTaskBoard.tsx",
       "code": 7016,
-      "message": "Could not find a declaration file for module 'canvas-confetti'. '/workspace/aios/node_modules/.pnpm/canvas-confetti@1.9.4/node_modules/canvas-confetti/src/confetti.js' implicitly has an 'any' type.\n  Try `npm i --save-dev @types/canvas-confetti` if it exists or add a new declaration (.d.ts) file containing `declare module 'canvas-confetti';`",
+      "message": "Could not find a declaration file for module 'canvas-confetti'. './node_modules/.pnpm/canvas-confetti@1.9.4/node_modules/canvas-confetti/src/confetti.js' implicitly has an 'any' type.\n  Try `npm i --save-dev @types/canvas-confetti` if it exists or add a new declaration (.d.ts) file containing `declare module 'canvas-confetti';`",
       "source": "\"canvas-confetti\"",
       "count": 1
     },
@@ -1574,7 +1574,7 @@
     {
       "file": "src/lib/carmenAccessAutomation.ts",
       "code": 7016,
-      "message": "Could not find a declaration file for module './carmenPrivatePhoneAllowlist.mjs'. '/workspace/aios/src/lib/carmenPrivatePhoneAllowlist.mjs' implicitly has an 'any' type.",
+      "message": "Could not find a declaration file for module './carmenPrivatePhoneAllowlist.mjs'. './src/lib/carmenPrivatePhoneAllowlist.mjs' implicitly has an 'any' type.",
       "source": "\"./carmenPrivatePhoneAllowlist.mjs\"",
       "count": 1
     },
@@ -1588,7 +1588,7 @@
     {
       "file": "src/lib/carmenManusGroups.ts",
       "code": 7016,
-      "message": "Could not find a declaration file for module './carmenManusGroupsSync.mjs'. '/workspace/aios/src/lib/carmenManusGroupsSync.mjs' implicitly has an 'any' type.",
+      "message": "Could not find a declaration file for module './carmenManusGroupsSync.mjs'. './src/lib/carmenManusGroupsSync.mjs' implicitly has an 'any' type.",
       "source": "\"./carmenManusGroupsSync.mjs\"",
       "count": 1
     },
@@ -1721,14 +1721,14 @@
     {
       "file": "src/lib/pulseAttentionMatrix.ts",
       "code": 7016,
-      "message": "Could not find a declaration file for module '../../supabase/functions/_shared/pulse-attention-matrix.mjs'. '/workspace/aios/supabase/functions/_shared/pulse-attention-matrix.mjs' implicitly has an 'any' type.",
+      "message": "Could not find a declaration file for module '../../supabase/functions/_shared/pulse-attention-matrix.mjs'. './supabase/functions/_shared/pulse-attention-matrix.mjs' implicitly has an 'any' type.",
       "source": "\"../../supabase/functions/_shared/pulse-attention-matrix.mjs\"",
       "count": 1
     },
     {
       "file": "src/lib/pulseCampaignGoals.ts",
       "code": 7016,
-      "message": "Could not find a declaration file for module '../../supabase/functions/_shared/pulse-campaign-goals.mjs'. '/workspace/aios/supabase/functions/_shared/pulse-campaign-goals.mjs' implicitly has an 'any' type.",
+      "message": "Could not find a declaration file for module '../../supabase/functions/_shared/pulse-campaign-goals.mjs'. './supabase/functions/_shared/pulse-campaign-goals.mjs' implicitly has an 'any' type.",
       "source": "\"../../supabase/functions/_shared/pulse-campaign-goals.mjs\"",
       "count": 1
     },
@@ -2253,7 +2253,7 @@
     {
       "file": "src/pages/Leads.tsx",
       "code": 7016,
-      "message": "Could not find a declaration file for module 'canvas-confetti'. '/workspace/aios/node_modules/.pnpm/canvas-confetti@1.9.4/node_modules/canvas-confetti/src/confetti.js' implicitly has an 'any' type.\n  Try `npm i --save-dev @types/canvas-confetti` if it exists or add a new declaration (.d.ts) file containing `declare module 'canvas-confetti';`",
+      "message": "Could not find a declaration file for module 'canvas-confetti'. './node_modules/.pnpm/canvas-confetti@1.9.4/node_modules/canvas-confetti/src/confetti.js' implicitly has an 'any' type.\n  Try `npm i --save-dev @types/canvas-confetti` if it exists or add a new declaration (.d.ts) file containing `declare module 'canvas-confetti';`",
       "source": "\"canvas-confetti\"",
       "count": 1
     },
@@ -2316,7 +2316,7 @@
     {
       "file": "src/pages/RankTrackingProject.tsx",
       "code": 7016,
-      "message": "Could not find a declaration file for module 'papaparse'. '/workspace/aios/node_modules/.pnpm/papaparse@5.5.3/node_modules/papaparse/papaparse.js' implicitly has an 'any' type.\n  Try `npm i --save-dev @types/papaparse` if it exists or add a new declaration (.d.ts) file containing `declare module 'papaparse';`",
+      "message": "Could not find a declaration file for module 'papaparse'. './node_modules/.pnpm/papaparse@5.5.3/node_modules/papaparse/papaparse.js' implicitly has an 'any' type.\n  Try `npm i --save-dev @types/papaparse` if it exists or add a new declaration (.d.ts) file containing `declare module 'papaparse';`",
       "source": "\"papaparse\"",
       "count": 1
     },

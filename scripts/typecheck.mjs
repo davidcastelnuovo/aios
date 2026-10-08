@@ -7,6 +7,13 @@ export const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '
 export const baselinePath = path.join(root, 'scripts/typecheck-baseline.json');
 const config = 'tsconfig.app.json';
 
+export function normalizeDiagnosticMessage(message, projectRoot) {
+  // TypeScript embeds absolute paths in some messages (notably TS7016).
+  // Keep the module path meaningful while removing checkout-specific prefixes.
+  const prefix = ts.normalizePath(projectRoot).replace(/\/$/, '') + '/';
+  return message.replaceAll(prefix, './');
+}
+
 // A multiset catches duplicate additions and equal-total replacements. Locations
 // are only used for reporting, so inserting lines does not invalidate the debt.
 export function diagnosticKey(diagnostic) {
@@ -98,7 +105,7 @@ export function collectDiagnostics(projectRoot = root) {
     // Configuration/global errors and sources outside the frontend must never
     // become allowed debt (missing files, compiler options, missing libraries).
     const file = d.file && path.relative(projectRoot, d.file.fileName).split(path.sep).join('/');
-    const message = ts.flattenDiagnosticMessageText(d.messageText, '\n');
+    const message = normalizeDiagnosticMessage(ts.flattenDiagnosticMessageText(d.messageText, '\n'), projectRoot);
     if (!file?.startsWith('src/') || d.start === undefined) {
       throw new Error(`Compiler configuration failure: ${file ?? config} TS${d.code}: ${message}`);
     }

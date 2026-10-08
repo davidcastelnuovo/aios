@@ -13,6 +13,8 @@ lockfile; CI uses Node 24 and pnpm 9.
 file paths, diagnostic codes, full messages, and the diagnostic's source span
 (whitespace normalized). Line and column numbers are printed for new errors but
 excluded from identity, so moving existing source down a file does not fail.
+Absolute checkout paths embedded in messages are made repository-relative, so
+the same diagnostics match in local and CI checkouts.
 Counts detect additional copies; identity detects replacements even when the
 total error count is unchanged. Identical diagnostics on identical source spans
 within one file are indistinguishable except by count. A rename, changed message,
