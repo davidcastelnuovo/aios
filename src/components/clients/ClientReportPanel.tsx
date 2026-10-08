@@ -37,6 +37,7 @@ import { ReportEmailSenderSelect, type ReportEmailSender } from "./ReportEmailSe
 import { syncReportTable, waitForSnapshotReady } from "@/lib/reportSync";
 import { downloadReportPdf } from "@/lib/reportPdf";
 import { getReportLastSyncAt } from "@/lib/reportQueryOptions";
+import { getAdAccountUrl } from "@/lib/adAccountUrl";
 import { ReportDataFreshness } from "@/components/reports/ReportDataFreshness";
 import {
   buildDefaultReportRecipientEmails,
@@ -84,23 +85,6 @@ function writeSnapshotCache(tableId: string, dataUrl: string) {
   } catch {
     /* localStorage full */
   }
-}
-
-function getAdAccountUrl(table: any): string | null {
-  const settings = table?.integration_settings || {};
-  const type = table?.integration_type;
-  if (type === "facebook_insights" || type === "facebook_ecommerce") {
-    const id = String(settings.ad_account_id || "").replace(/^act_/, "");
-    if (!id) return null;
-    return `https://business.facebook.com/adsmanager/manage/campaigns?act=${id}`;
-  }
-  if (type === "google_ads") {
-    // Google Ads tables store the account under customer_id (not ad_account_id).
-    const id = String(settings.customer_id || settings.ad_account_id || "").replace(/-/g, "");
-    if (!id) return null;
-    return `https://ads.google.com/aw/overview?__e=${id}`;
-  }
-  return null;
 }
 
 function generateReadableToken(tableName: string): string {
