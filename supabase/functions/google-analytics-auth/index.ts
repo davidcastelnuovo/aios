@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { gaHostsMatch, listedPropertyMatchesDomain, normalizeGaHost } from "../_shared/gaDomain.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -265,17 +266,50 @@ serve(async (req) => {
     }
 
     try {
-      const { integrationId } = await req.json();
+      const body = await req.json();
+      const integrationId = body?.integrationId;
+      const matchDomain = body?.matchDomain;
+      const domainQuery = typeof matchDomain === "string" ? matchDomain.trim() : "";
+      // A domain search looks at several logins. It must not flip their
+      // reconnect flag or overwrite the stored token metadata.
+      const probe = body?.probe === true;
       
       const supabase = createClient(
         Deno.env.get('SUPABASE_URL') ?? '',
         Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
       );
 
+      const supabaseUser = createClient(
+        Deno.env.get('SUPABASE_URL') ?? '',
+        Deno.env.get('SUPABASE_ANON_KEY') ?? '',
+        { global: { headers: { Authorization: authHeader } } },
+      );
+      const { data: userData, error: userError } = await supabaseUser.auth.getUser();
+      const user = userData?.user;
+      if (userError || !user) {
+        return new Response(
+          JSON.stringify({ error: 'Unauthorized' }),
+          { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+
+      const { data: allowed, error: permissionError } = await supabase.rpc(
+        'user_has_integration_permission',
+        { p_user_id: user.id, p_integration_id: integrationId },
+      );
+      if (permissionError || !allowed) {
+        return new Response(
+          JSON.stringify({ error: 'Integration not found or access denied', properties: [] }),
+          { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+
       const { data: integration, error: integrationError } = await supabase
         .from('tenant_integrations')
         .select('*')
         .eq('id', integrationId)
+        .eq('integration_type', 'google_analytics')
+        .eq('is_active', true)
         .single();
 
       if (integrationError || !integration) {
@@ -283,7 +317,7 @@ serve(async (req) => {
       }
 
       let accessToken = integration.api_key;
-      const settings = integration.settings as any;
+      let settings = integration.settings as any;
       const ownerEmail = settings?.google_email || null;
 
       const refreshAccessToken = async (): Promise<{ ok: boolean; reason?: string }> => {
@@ -302,11 +336,12 @@ serve(async (req) => {
         if (refreshData.access_token) {
           accessToken = refreshData.access_token;
           const newExpiresAt = new Date(Date.now() + (refreshData.expires_in * 1000)).toISOString();
+          settings = { ...settings, expires_at: newExpiresAt };
           await supabase
             .from('tenant_integrations')
             .update({
               api_key: accessToken,
-              settings: { ...settings, expires_at: newExpiresAt },
+              settings,
             })
             .eq('id', integrationId);
           return { ok: true };
@@ -319,11 +354,30 @@ serve(async (req) => {
         await refreshAccessToken();
       }
 
-      // Fetch GA4 properties using Admin API
-      const fetchAccounts = () =>
-        fetch('https://analyticsadmin.googleapis.com/v1beta/accountSummaries', {
-          headers: { Authorization: `Bearer ${accessToken}` },
+      // accountSummaries returns 50 accounts when pageSize is omitted.
+      // Ask for the API maximum (200) and follow nextPageToken so a login
+      // with 100+ accounts is not cut off after the first page.
+      const fetchAccounts = async () => {
+        const accountSummaries: any[] = [];
+        let pageToken = '';
+        for (let page = 0; page < 20; page++) {
+          const url = new URL('https://analyticsadmin.googleapis.com/v1beta/accountSummaries');
+          url.searchParams.set('pageSize', '200');
+          if (pageToken) url.searchParams.set('pageToken', pageToken);
+          const response = await fetch(url.toString(), {
+            headers: { Authorization: `Bearer ${accessToken}` },
+          });
+          const data: any = await response.clone().json().catch(() => ({}));
+          if (!response.ok || data?.error) return response;
+          accountSummaries.push(...(data.accountSummaries || []));
+          pageToken = data.nextPageToken || '';
+          if (!pageToken) break;
+        }
+        return new Response(JSON.stringify({ accountSummaries }), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
         });
+      };
 
       let accountsResponse = await fetchAccounts();
       let accountsData: any = await accountsResponse.json().catch(() => ({}));
@@ -337,6 +391,7 @@ serve(async (req) => {
       // Persist the broken state so the settings page shows the red
       // "reconnect needed" state — not only when a data sync fails.
       const markNeedsReauth = async (reason: string) => {
+        if (probe) return;
         try {
           await supabase
             .from('tenant_integrations')
@@ -423,21 +478,51 @@ serve(async (req) => {
         }
       }
 
+      // A domain that is not the property title lives on the web stream URL.
+      // Only scan streams when the caller is resolving a domain and the
+      // account/property names did not already match.
+      if (domainQuery && !properties.some((property) => listedPropertyMatchesDomain(property, domainQuery))) {
+        const wantedHost = normalizeGaHost(domainQuery);
+        let exact = false;
+        for (let index = 0; index < properties.length && !exact; index += 8) {
+          const batch = properties.slice(index, index + 8);
+          await Promise.all(batch.map(async (property) => {
+            try {
+              const response = await fetch(
+                `https://analyticsadmin.googleapis.com/v1beta/${property.id}/dataStreams?pageSize=20`,
+                { headers: { Authorization: `Bearer ${accessToken}` } },
+              );
+              if (!response.ok) return;
+              const data = await response.json().catch(() => ({}));
+              for (const stream of data.dataStreams || []) {
+                const uri = stream?.webStreamData?.defaultUri;
+                if (!uri || !gaHostsMatch(uri, domainQuery)) continue;
+                property.websiteUrl = uri;
+                if (normalizeGaHost(uri) === wantedHost) exact = true;
+              }
+            } catch (_e) { /* this property has no readable stream */ }
+          }));
+        }
+      }
+
       // Cache the fresh list so the UI can fall back to it if a future call
       // fails, and clear any stale reconnect flag — this call just succeeded.
-      try {
-        await supabase
-          .from('tenant_integrations')
-          .update({
-            settings: {
-              ...settings,
-              available_properties: properties,
-              needs_reauth: false,
-              reauth_reason: null,
-            },
-          })
-          .eq('id', integrationId);
-      } catch (_e) { /* non-fatal */ }
+      // Domain search (probe) only reads; it leaves each login's settings alone.
+      if (!probe) {
+        try {
+          await supabase
+            .from('tenant_integrations')
+            .update({
+              settings: {
+                ...settings,
+                available_properties: properties,
+                needs_reauth: false,
+                reauth_reason: null,
+              },
+            })
+            .eq('id', integrationId);
+        } catch (_e) { /* non-fatal */ }
+      }
 
       return new Response(
         JSON.stringify({ properties, owner_email: ownerEmail }),

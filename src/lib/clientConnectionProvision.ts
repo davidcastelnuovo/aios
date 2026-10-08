@@ -1,3 +1,4 @@
+import { pickGaPropertyForDomain } from "@/lib/gaPropertyMatch";
 import { normalizeSeoDomain, seoDomainsMatch } from "@/lib/seoDomain";
 import type { ChannelFieldKey } from "@/config/clientChannels";
 
@@ -54,28 +55,4 @@ export function pickGscSiteForDomain(
   return match?.siteUrl || null;
 }
 
-/** Best GA4 property id whose display name looks like the domain. */
-export function pickGaPropertyForDomain(
-  properties: Array<{ id?: string; name?: string; displayName?: string }>,
-  domain: string,
-): string | null {
-  const host = normalizeSeoDomain(domain);
-  if (!host || !properties?.length) return null;
-
-  const scored = properties
-    .map((p) => {
-      const id = String(p.id || "").trim();
-      const name = String(p.name || p.displayName || "").trim();
-      if (!id) return null;
-      const nameHost = normalizeSeoDomain(name);
-      let score = 0;
-      if (nameHost && seoDomainsMatch(nameHost, host)) score = 3;
-      else if (name.toLowerCase().includes(host)) score = 2;
-      else if (host.includes(nameHost) && nameHost.length >= 4) score = 1;
-      return score > 0 ? { id, score } : null;
-    })
-    .filter(Boolean) as Array<{ id: string; score: number }>;
-
-  scored.sort((a, b) => b.score - a.score);
-  return scored[0]?.id || null;
-}
+export { pickGaPropertyForDomain };
