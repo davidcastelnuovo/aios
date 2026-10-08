@@ -1,11 +1,11 @@
 name: Deploy Supabase Edge Function
+
+# Manual only. Automatic production deploys on push to main run from deploy-prod.yml
+# so they can wait for database migrations.
 permissions:
   contents: write
 
 on:
-  push:
-    branches: [main]
-    paths: ['supabase/functions/**', 'supabase/config.toml', 'scripts/*edge*', 'scripts/staging-only-functions.json', '.github/workflows/deploy*edge*.yml']
   workflow_dispatch:
     inputs:
       function_name:

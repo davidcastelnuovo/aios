@@ -1,0 +1,69 @@
+name: _db_migrate
+
+on:
+  workflow_call:
+    inputs:
+      target:
+        description: "staging or production"
+        required: true
+        type: string
+    outputs:
+      migrate_status:
+        description: "Outcome of the migration push step (success/failure)"
+        value: ${{ jobs.migrate.outputs.migrate_status }}
+
+permissions:
+  contents: read
+
+jobs:
+  migrate:
+    name: Push migrations (${{ inputs.target }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment: ${{ inputs.target }}
+    # Serialize `db push` per target across every caller (PR runs, develop pushes).
+    concurrency:
+      group: db-migrate-${{ inputs.target }}
+      cancel-in-progress: false
+    outputs:
+      migrate_status: ${{ steps.push.outcome }}
+
+    steps:
+      - name: Validate target
+        run: |
+          case "${{ inputs.target }}" in
+            staging|production) ;;
+            *) echo "Invalid target: ${{ inputs.target }}"; exit 1 ;;
+          esac
+
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+
+      - uses: supabase/setup-cli@v1
+        with:
+          version: 2.116.0
+
+      - name: Push migrations
+        id: push
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.BASE_ACCESS_TOKEN }}
+          TARGET: ${{ inputs.target }}
+          PROD_REF: ${{ vars.PROD_PROJECT_REF }}
+          STAGING_REF: ${{ vars.STAGING_PROJECT_REF }}
+          PROD_PASSWORD: ${{ secrets.PROD_DB_PASSWORD }}
+          STAGING_PASSWORD: ${{ secrets.STAGING_DB_PASSWORD }}
+        run: |
+          set -euo pipefail
+          # Pick the target's own settings; never fall back to the other project.
+          if [ "$TARGET" = production ]; then
+            PROJECT_REF="$PROD_REF"; DB_PASSWORD="$PROD_PASSWORD"
+          else
+            PROJECT_REF="$STAGING_REF"; DB_PASSWORD="$STAGING_PASSWORD"
+          fi
+          if [ -z "$PROJECT_REF" ] || [ -z "$DB_PASSWORD" ]; then
+            echo "::error::Missing project ref or database password for $TARGET."
+            exit 1
+          fi
+          supabase link --project-ref "$PROJECT_REF" --password "$DB_PASSWORD"
+          supabase db push --password "$DB_PASSWORD"

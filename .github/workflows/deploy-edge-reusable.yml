@@ -14,6 +14,14 @@ on:
       base_revision:
         type: string
         default: ''
+      # 'pr' deploys a labelled PR head to Staging: the head need not be the
+      # develop tip, and the edge-deployed-staging tag is left untouched.
+      mode:
+        type: string
+        default: 'branch'
+      base_ref:
+        type: string
+        default: 'develop'
 permissions:
   contents: write
 concurrency:
@@ -25,6 +33,7 @@ jobs:
   deploy:
     runs-on: ubuntu-latest
     timeout-minutes: 90
+    environment: ${{ inputs.environment }}
     env:
       SUPABASE_ACCESS_TOKEN: ${{ secrets.BASE_ACCESS_TOKEN }}
       PROJECT_REF: ${{ inputs.environment == 'staging' && (secrets.SUPABASE_STAGING_PROJECT_ID || 'mzjsuvatrzhciojmbbbm') || 'zvoijyneresvkadpprel' }}
@@ -33,6 +42,8 @@ jobs:
       DEPLOY_FUNCTIONS: ${{ inputs.function_names }}
       SOURCE_SHA: ${{ inputs.source_sha }}
       BOOTSTRAP_BEFORE: ${{ inputs.base_revision }}
+      DEPLOY_MODE: ${{ inputs.mode }}
+      BASE_REF: ${{ inputs.base_ref }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -50,6 +61,11 @@ jobs:
           set -euo pipefail
           BRANCH=main
           if [ "$DEPLOY_ENV" = staging ]; then BRANCH=develop; fi
+          if [ "$DEPLOY_MODE" = pr ]; then
+            git fetch origin "$BASE_REF"
+            echo "DEPLOY_BEFORE=$(git merge-base HEAD "origin/$BASE_REF")" >> "$GITHUB_ENV"
+            exit 0
+          fi
           git fetch origin "$BRANCH" --tags
           if [ "$(git rev-parse HEAD)" != "$(git rev-parse origin/$BRANCH)" ]; then
             echo "::error::This revision is no longer the environment head. Run the current revision."
@@ -80,9 +96,16 @@ jobs:
           set -euo pipefail
           RECOVERED=$(python3 scripts/verify-staging-containment.py --deployment-base)
           if [ -n "$RECOVERED" ] && git cat-file -e "$RECOVERED^{commit}" 2>/dev/null; then
-            git merge-base --is-ancestor "$RECOVERED" HEAD
-            echo "DEPLOY_BEFORE=$RECOVERED" >> "$GITHUB_ENV"
-            echo "Resuming from deployed sources; containment verification remains required."
+            if git merge-base --is-ancestor "$RECOVERED" HEAD; then
+              echo "DEPLOY_BEFORE=$RECOVERED" >> "$GITHUB_ENV"
+              echo "Resuming from deployed sources; containment verification remains required."
+            else
+              # The recorded source is outside this revision's history (a closed or
+              # squash/rebase-merged PR, or another PR's functions). An empty base makes
+              # the planner redeploy every function; containment is verified afterwards.
+              echo "DEPLOY_BEFORE=" >> "$GITHUB_ENV"
+              echo "Recorded revision is outside this revision's history; redeploying all functions."
+            fi
           fi
       - name: Deploy complete source bundles
         run: |
@@ -106,7 +129,7 @@ jobs:
         run: |
           python3 scripts/verify-staging-containment.py
       - name: Record successful revision
-        if: inputs.function_names == ''
+        if: inputs.function_names == '' && inputs.mode != 'pr'
         run: |
           set -euo pipefail
           git tag -f "edge-deployed-$DEPLOY_ENV" "$SOURCE_SHA"
@@ -115,7 +138,7 @@ jobs:
 
   mirror:
     needs: deploy
-    if: inputs.environment == 'staging' && inputs.function_names == ''
+    if: inputs.environment == 'staging' && inputs.function_names == '' && inputs.mode != 'pr'
     runs-on: ubuntu-latest
     timeout-minutes: 60
     concurrency:

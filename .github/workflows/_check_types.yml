@@ -1,0 +1,44 @@
+name: _check_types
+
+# Fails when src/integrations/supabase/types.ts differs from what the staging
+# schema generates. Check-only: it never commits, so no GitHub App is needed.
+
+on:
+  workflow_call:
+
+permissions:
+  contents: read
+
+jobs:
+  check-types:
+    name: Check Supabase types match staging schema
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment: staging
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+
+      - uses: supabase/setup-cli@v1
+        with:
+          version: 2.116.0
+
+      - name: Generate types from staging schema
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.BASE_ACCESS_TOKEN }}
+          PROJECT_REF: ${{ vars.STAGING_PROJECT_REF }}
+          DB_PASSWORD: ${{ secrets.STAGING_DB_PASSWORD }}
+        run: |
+          supabase link --project-ref "$PROJECT_REF" --password "$DB_PASSWORD"
+          # Invoke the pinned CLI directly: scripts/gen-types.sh comes from the PR head
+          # and must not run while the shared token and DB password are in scope.
+          supabase gen types typescript --linked > src/integrations/supabase/types.ts
+
+      - name: Fail if committed types are stale
+        run: |
+          if ! git diff --exit-code -- src/integrations/supabase/types.ts; then
+            echo "::error::src/integrations/supabase/types.ts is out of sync with the staging schema. Regenerate with ./scripts/gen-types.sh --local (or --linked after 'supabase link' to staging) and commit the result."
+            exit 1
+          fi

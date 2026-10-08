@@ -1,0 +1,149 @@
+name: Deploy Staging
+
+# PRs that change supabase/migrations/** or supabase/functions/** must hold the
+# `staging` label (one PR at a time, see staging-lock.yml). The label deploys the
+# PR's migrations and edge functions to the Staging project before merge.
+# develop -> main release PRs are exempt: Staging already runs develop.
+
+on:
+  pull_request:
+    branches: [develop, main]
+    types: [opened, synchronize, reopened, labeled, unlabeled]
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  resolve:
+    name: Resolve changes
+    if: >
+      github.event_name != 'pull_request' ||
+      !(github.head_ref == 'develop' && github.base_ref == 'main' &&
+        github.event.pull_request.head.repo.full_name == github.repository)
+    runs-on: ubuntu-latest
+    outputs:
+      migrations: ${{ steps.filter.outputs.migrations || 'true' }}
+      functions: ${{ steps.filter.outputs.functions || 'true' }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dorny/paths-filter@v3
+        id: filter
+        if: github.event_name != 'workflow_dispatch'
+        with:
+          filters: |
+            migrations:
+              - 'supabase/migrations/**'
+            functions:
+              - 'supabase/functions/**'
+              - 'supabase/config.toml'
+              - 'scripts/*edge*'
+              - 'scripts/staging-only-functions.json'
+
+  gate:
+    name: Require staging label
+    needs: resolve
+    if: >
+      github.event_name == 'pull_request' &&
+      (needs.resolve.outputs.migrations == 'true' || needs.resolve.outputs.functions == 'true')
+    runs-on: ubuntu-latest
+    steps:
+      - name: Fail if this PR changes migrations or edge functions without the staging label
+        if: ${{ !contains(github.event.pull_request.labels.*.name, 'staging') }}
+        run: |
+          echo "::error::This PR changes supabase/migrations/** or supabase/functions/** but does not hold the 'staging' label. Add the 'staging' label to acquire the staging lock and deploy it to Staging before this can merge."
+          exit 1
+
+  check-lock:
+    name: Verify staging lock ownership
+    needs: resolve
+    if: github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'staging')
+    runs-on: ubuntu-latest
+    outputs:
+      is_holder: ${{ steps.check.outputs.is_holder }}
+    steps:
+      - name: Confirm no other open PR currently holds the staging label
+        id: check
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+          PR: ${{ github.event.pull_request.number }}
+          HAS_CHANGES: ${{ needs.resolve.outputs.migrations == 'true' || needs.resolve.outputs.functions == 'true' }}
+        run: |
+          set -euo pipefail
+          OTHERS=$(gh pr list --repo "$REPO" --label staging --state open --json number \
+            --jq "[.[] | select(.number != $PR)] | length")
+          IS_HOLDER=$([[ "$OTHERS" -eq 0 ]] && echo true || echo false)
+          echo "is_holder=$IS_HOLDER" >> "$GITHUB_OUTPUT"
+
+          if [[ "$IS_HOLDER" == "false" && "$HAS_CHANGES" == "true" ]]; then
+            echo "::error::This PR changes migrations or edge functions and holds the 'staging' label, but another open PR already holds the staging lock. Nothing will be deployed until that PR merges or releases the label."
+            exit 1
+          fi
+
+  migrate:
+    needs: [resolve, gate, check-lock]
+    if: >
+      always() &&
+      needs.resolve.result == 'success' &&
+      needs.resolve.outputs.migrations == 'true' &&
+      (github.event_name != 'pull_request' || (needs.check-lock.result == 'success' && needs.check-lock.outputs.is_holder == 'true'))
+    uses: ./.github/workflows/_db_migrate.yml
+    with:
+      target: staging
+    secrets: inherit
+
+  types:
+    needs: migrate
+    if: always() && needs.migrate.result == 'success'
+    uses: ./.github/workflows/_check_types.yml
+    secrets: inherit
+
+  functions:
+    # Functions can depend on the migrations, so a failed migration blocks them.
+    needs: [resolve, gate, check-lock, migrate]
+    if: >
+      always() &&
+      needs.resolve.result == 'success' &&
+      needs.resolve.outputs.functions == 'true' &&
+      needs.migrate.result != 'failure' && needs.migrate.result != 'cancelled' &&
+      (github.event_name != 'pull_request' || (needs.check-lock.result == 'success' && needs.check-lock.outputs.is_holder == 'true'))
+    uses: ./.github/workflows/deploy-edge-reusable.yml
+    permissions:
+      contents: write
+    with:
+      environment: staging
+      source_sha: ${{ github.event.pull_request.head.sha || github.sha }}
+      mode: ${{ github.event_name == 'pull_request' && 'pr' || 'branch' }}
+      base_ref: ${{ github.base_ref || 'develop' }}
+    secrets: inherit
+
+  comment:
+    name: Update PR comment
+    needs: [resolve, gate, check-lock, migrate, types, functions]
+    if: >
+      always() &&
+      needs.resolve.result == 'success' &&
+      github.event_name == 'pull_request' &&
+      (needs.resolve.outputs.migrations == 'true' || needs.resolve.outputs.functions == 'true')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Post combined status
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR: ${{ github.event.pull_request.number }}
+          REPO: ${{ github.repository }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          TARGET: staging
+          MIGRATE_RESULT: ${{ needs.migrate.outputs.migrate_status || needs.migrate.result }}
+          FUNCTIONS_RESULT: ${{ needs.functions.result }}
+          TYPES_RESULT: ${{ needs.types.result }}
+          MIGRATIONS_CHANGED: ${{ needs.resolve.outputs.migrations }}
+          FUNCTIONS_CHANGED: ${{ needs.resolve.outputs.functions }}
+          GATE_RESULT: ${{ needs.gate.result }}
+          LOCK_RESULT: ${{ needs.check-lock.result }}
+          LOCK_IS_HOLDER: ${{ needs.check-lock.outputs.is_holder }}
+        run: .github/scripts/post-deploy-comment.sh
