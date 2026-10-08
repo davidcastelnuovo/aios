@@ -440,6 +440,13 @@ Deno.serve(async (req) => {
       return new Response(JSON.stringify({ success: !failed, result, approval_id }), { status: failed ? 400 : 200, headers: corsHeaders });
     }
 
+    // Carmen tools a coding agent called directly (carmen-tools-mcp): run-ai-agent executes
+    // the approved call with the requester's scope and records the outcome on the row.
+    if (row.action_type === 'agent_direct_tool') {
+      const r = await invokeEdgeFn('run-ai-agent', { direct_tool: { action: 'execute_approved', approval_id, approved_by } });
+      return new Response(JSON.stringify({ success: r.ok, result: r.json?.result ?? r.json, approval_id }), { status: r.ok ? 200 : 400, headers: corsHeaders });
+    }
+
     const route = TOOL_TO_FUNCTION[row.tool_name];
     if (!route) return new Response(JSON.stringify({ error: 'unknown_tool', tool_name: row.tool_name }), { status: 400, headers: corsHeaders });
 
