@@ -2,6 +2,8 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import ts from 'typescript';
+import { compareDiagnostics, snapshot, validateBaseline } from './typecheck-policy.mjs';
+export { approvingMaintainer, baselineAdditions, compareDiagnostics, diagnosticKey, snapshot, validateBaseline } from './typecheck-policy.mjs';
 
 export const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 export const baselinePath = path.join(root, 'scripts/typecheck-baseline.json');
@@ -12,82 +14,6 @@ export function normalizeDiagnosticMessage(message, projectRoot) {
   // Keep the module path meaningful while removing checkout-specific prefixes.
   const prefix = ts.normalizePath(projectRoot).replace(/\/$/, '') + '/';
   return message.replaceAll(prefix, './');
-}
-
-// A multiset catches duplicate additions and equal-total replacements. Locations
-// are only used for reporting, so inserting lines does not invalidate the debt.
-export function diagnosticKey(diagnostic) {
-  return JSON.stringify([diagnostic.file, diagnostic.code, diagnostic.message, diagnostic.source]);
-}
-
-export function snapshot(diagnostics) {
-  const entries = new Map();
-  for (const { file, code, message, source } of diagnostics) {
-    const entry = { file, code, message, source };
-    const key = diagnosticKey(entry);
-    const previous = entries.get(key);
-    entries.set(key, { ...entry, count: (previous?.count ?? 0) + 1 });
-  }
-  return [...entries.values()].sort((a, b) => diagnosticKey(a).localeCompare(diagnosticKey(b), 'en'));
-}
-
-export function validateBaseline(baseline) {
-  if (baseline?.schemaVersion !== 1 || baseline.config !== config ||
-      typeof baseline.typescriptVersion !== 'string' || !Array.isArray(baseline.diagnostics)) {
-    throw new Error('Invalid TypeScript baseline metadata.');
-  }
-  const keys = new Set();
-  for (const entry of baseline.diagnostics) {
-    if (typeof entry.file !== 'string' || !entry.file.startsWith('src/') ||
-        !Number.isInteger(entry.code) || typeof entry.message !== 'string' ||
-        typeof entry.source !== 'string' || !Number.isSafeInteger(entry.count) || entry.count < 1 ||
-        keys.has(diagnosticKey(entry))) {
-      throw new Error('Invalid or duplicate TypeScript baseline diagnostic.');
-    }
-    keys.add(diagnosticKey(entry));
-  }
-  return baseline;
-}
-
-export function compareDiagnostics(current, baseline) {
-  const allowed = new Map(baseline.map(entry => [diagnosticKey(entry), entry.count]));
-  const added = [];
-  for (const diagnostic of current) {
-    const key = diagnosticKey(diagnostic);
-    const remaining = allowed.get(key) ?? 0;
-    if (remaining > 0) allowed.set(key, remaining - 1);
-    else added.push(diagnostic);
-  }
-  const resolved = baseline.flatMap(entry => {
-    const count = allowed.get(diagnosticKey(entry)) ?? 0;
-    return count ? [{ ...entry, count }] : [];
-  });
-  return { added, resolved };
-}
-
-export function baselineAdditions(current, previous) {
-  validateBaseline(current);
-  if (!previous) return true;
-  validateBaseline(previous);
-  if (current.typescriptVersion !== previous.typescriptVersion) return true;
-  const counts = new Map(previous.diagnostics.map(entry => [diagnosticKey(entry), entry.count]));
-  return current.diagnostics.some(entry => entry.count > (counts.get(diagnosticKey(entry)) ?? 0));
-}
-
-export async function approvingMaintainer(reviews, headSha, permissionFor) {
-  const latest = new Map();
-  for (const review of reviews) {
-    if (['APPROVED', 'CHANGES_REQUESTED', 'DISMISSED'].includes(review.state)) {
-      latest.set(review.user.login, review);
-    }
-  }
-  for (const review of latest.values()) {
-    if (review.state !== 'APPROVED' || review.commit_id !== headSha) continue;
-    if (['admin', 'maintain', 'write'].includes(await permissionFor(review.user.login))) {
-      return review.user.login;
-    }
-  }
-  return null;
 }
 
 export function collectDiagnostics(projectRoot = root) {
@@ -119,17 +45,23 @@ export function collectDiagnostics(projectRoot = root) {
 }
 
 export function run(args = process.argv.slice(2)) {
+  let projectRoot = root;
+  if (args[0] === '--project' && args.length === 2) {
+    projectRoot = path.resolve(args[1]);
+    args = []; // External projects can only be checked, never updated.
+  }
+  const projectBaselinePath = path.join(projectRoot, 'scripts/typecheck-baseline.json');
   if (args.length > 1 || (args.length && !['--update', '--accept-new'].includes(args[0]))) {
-    throw new Error('Usage: pnpm typecheck [--update | --accept-new]');
+    throw new Error('Usage: pnpm typecheck [--update | --accept-new | --project PATH]');
   }
   const acceptNew = args[0] === '--accept-new';
-  const baseline = fs.existsSync(baselinePath)
-    ? validateBaseline(JSON.parse(fs.readFileSync(baselinePath, 'utf8'))) : null;
+  const baseline = fs.existsSync(projectBaselinePath)
+    ? validateBaseline(JSON.parse(fs.readFileSync(projectBaselinePath, 'utf8'))) : null;
   if (!baseline && !acceptNew) throw new Error('Missing baseline; initial capture requires --accept-new and PR review.');
   if (baseline && baseline.typescriptVersion !== ts.version && !acceptNew) {
     throw new Error(`Compiler version changed: baseline ${baseline.typescriptVersion}, installed ${ts.version}. Review a new baseline explicitly.`);
   }
-  const current = collectDiagnostics();
+  const current = collectDiagnostics(projectRoot);
   const { added, resolved } = compareDiagnostics(current, baseline?.diagnostics ?? []);
   for (const d of added) console.error(`${d.file}:${d.line}:${d.column} TS${d.code}: ${d.message}`);
   if (added.length && !acceptNew) {
@@ -137,7 +69,7 @@ export function run(args = process.argv.slice(2)) {
     return 1;
   }
   if (args[0]) {
-    fs.writeFileSync(baselinePath, JSON.stringify({
+    fs.writeFileSync(projectBaselinePath, JSON.stringify({
       schemaVersion: 1, typescriptVersion: ts.version, config, diagnostics: snapshot(current),
     }, null, 2) + '\n');
     console.log(`Captured ${current.length} diagnostic(s) with TypeScript ${ts.version}.${acceptNew ? ' Baseline additions require maintainer approval in CI.' : ''}`);

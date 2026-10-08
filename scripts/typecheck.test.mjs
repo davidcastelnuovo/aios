@@ -4,7 +4,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { test } from 'node:test';
 import ts from 'typescript';
-import { approvingMaintainer, baselineAdditions, collectDiagnostics, compareDiagnostics, normalizeDiagnosticMessage, snapshot, validateBaseline } from './typecheck.mjs';
+import { approvingMaintainer, baselineAdditions, collectDiagnostics, compareDiagnostics, normalizeDiagnosticMessage, run, snapshot, validateBaseline } from './typecheck.mjs';
 
 const error = { file: 'src/example.ts', code: 2322, message: "Type 'string' is not assignable to type 'number'.", source: 'value', line: 1, column: 7 };
 const baseline = diagnostics => ({ schemaVersion: 1, config: 'tsconfig.app.json', typescriptVersion: ts.version, diagnostics: snapshot(diagnostics) });
@@ -89,6 +89,38 @@ test('baseline approval requires a current, undismissed maintainer review', asyn
   }
   assert.equal(await approvingMaintainer([approved, { ...approved, state: 'COMMENTED' }], 'head', async () => 'write'), 'reviewer');
   await assert.rejects(approvingMaintainer([approved], 'head', async () => { throw new Error('API unavailable'); }));
+  const outside = { ...approved, user: { login: 'outside' } };
+  const permissionFor = async login => {
+    if (login === 'outside') throw Object.assign(new Error('Not a collaborator'), { status: 404 });
+    return 'write';
+  };
+  assert.equal(await approvingMaintainer([outside, approved], 'head', permissionFor), 'reviewer');
+  assert.equal(await approvingMaintainer([outside], 'head', permissionFor), null);
+  await assert.rejects(approvingMaintainer([outside, approved], 'head', async () => {
+    throw Object.assign(new Error('Forbidden'), { status: 403 });
+  }));
+});
+
+test('trusted checker checks an external project without executing its checker or updating its baseline', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'aio-untrusted-project-'));
+  try {
+    fs.mkdirSync(path.join(dir, 'src'));
+    fs.mkdirSync(path.join(dir, 'scripts'));
+    fs.writeFileSync(path.join(dir, 'tsconfig.app.json'), JSON.stringify({
+      compilerOptions: { strict: true, types: [], skipLibCheck: true }, include: ['src'],
+    }));
+    fs.writeFileSync(path.join(dir, 'src/example.ts'), 'export const value: number = "text";\n');
+    fs.writeFileSync(path.join(dir, 'scripts/typecheck.mjs'), 'throw new Error("PR checker must not execute");\n');
+    fs.writeFileSync(path.join(dir, 'scripts/typecheck-policy.mjs'), 'throw new Error("PR policy must not execute");\n');
+    const file = path.join(dir, 'scripts/typecheck-baseline.json');
+    const captured = JSON.stringify(baseline(collectDiagnostics(dir)));
+    fs.writeFileSync(file, captured);
+    assert.equal(run(['--project', dir]), 0);
+    assert.equal(fs.readFileSync(file, 'utf8'), captured);
+    assert.throws(() => run(['--project', dir, '--accept-new']), /Usage/);
+    fs.writeFileSync(file, JSON.stringify(baseline([])));
+    assert.equal(run(['--project', dir]), 1);
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
 });
 
 test('real compiler checks the full frontend, tracks locations, and handles shifted lines', () => {
