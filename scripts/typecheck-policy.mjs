@@ -79,4 +79,3 @@ export async function approvingMaintainer(reviews, headSha, permissionFor) {
   }
   return null;
 }
-
