@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { formatGscCtrPercent } from "@/lib/gscFormat";
-import { gscQueriesMatch, top20DisplayPosition, visibleGscPosition } from "@/lib/gscPosition";
+import { gscQueriesMatch, top20DisplayPosition, trackedQueryPosition } from "@/lib/gscPosition";
 import { useSeoKeywordRelevance } from "@/hooks/useSeoKeywordRelevance";
 import {
   Select,
@@ -96,10 +96,13 @@ export function SearchConsoleDashboard({
   const { forceIrrelevant } = useSeoKeywordRelevance(relevancePersistKey);
   const seedKey = seedTrackedKeywords.join("\u0001");
   const rankOpts = useMemo(
-    () => ({ tracked: seedTrackedKeywords, forceIrrelevant }),
-    // seedTrackedKeywords is rebuilt by the parent; seedKey is its stable signature.
+    () => ({
+      tracked: trackedKeywords.length > 0 ? trackedKeywords : seedTrackedKeywords,
+      forceIrrelevant,
+    }),
+    // trackedKeywords is filled from the seed list after mount.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [seedKey, forceIrrelevant],
+    [seedKey, trackedKeywords, forceIrrelevant],
   );
 
   // Sync if parent changes saved value
@@ -213,8 +216,8 @@ export function SearchConsoleDashboard({
     }
     rows.sort((a, b) => {
       if (sortBy === "position") {
-        const aShown = visibleGscPosition(a.query, a.position, rankOpts);
-        const bShown = visibleGscPosition(b.query, b.position, rankOpts);
+        const aShown = trackedQueryPosition(a.query, a.position, rankOpts);
+        const bShown = trackedQueryPosition(b.query, b.position, rankOpts);
         if (aShown == null && bShown == null) return 0;
         if (aShown == null) return 1;
         if (bShown == null) return -1;
@@ -669,7 +672,7 @@ function GscRankBadge({
   tracked?: Array<{ keyword?: string } | string>;
   forceIrrelevant?: string[];
 }) {
-  const shown = visibleGscPosition(query, position, { tracked, forceIrrelevant });
+  const shown = trackedQueryPosition(query, position, { tracked, forceIrrelevant });
   if (shown == null) {
     return <span className="text-xs text-muted-foreground" title="לא בטופ 20">—</span>;
   }

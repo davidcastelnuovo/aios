@@ -28,7 +28,7 @@ import { Tabs, TabsContent } from "@/components/ui/tabs";
 import { ResponsiveTabsList, type ResponsiveTabItem } from "@/components/ui/responsive-tabs-list";
 import { cn } from "@/lib/utils";
 import { formatGscCtrPercent } from "@/lib/gscFormat";
-import { keywordTop20Rank } from "@/lib/gscPosition";
+import { keywordDisplayPosition, keywordTop20Rank } from "@/lib/gscPosition";
 import {
   filterRelevantKeywords,
   normalizeKeywordPhrase,
@@ -130,6 +130,7 @@ function KeywordRow({
   const gscClicks = kw.gsc_clicks != null ? Number(kw.gsc_clicks) : null;
   const ahrefsTraffic = kw.traffic != null ? Number(kw.traffic) : null;
   const displayClicks = gscClicks && gscClicks > 0 ? gscClicks : (ahrefsTraffic && ahrefsTraffic > 0 ? ahrefsTraffic : gscClicks);
+  const shownRank = keywordDisplayPosition(kw);
 
   return (
     <tr className={cn("border-b last:border-0 hover:bg-muted/30", dimmed && "opacity-55 bg-muted/20")}>
@@ -179,12 +180,12 @@ function KeywordRow({
         </span>
       </td>
       <td className="p-3 text-center">
-        {kw.position != null ? (
+        {shownRank != null ? (
           <span className="inline-flex items-center gap-1">
-            <Badge variant={kw.position <= 3 ? 'default' : kw.position <= 10 ? 'secondary' : 'outline'} className="font-mono">
-              {fmt(kw.position)}
+            <Badge variant={shownRank.position <= 3 ? 'default' : shownRank.position <= 10 ? 'secondary' : 'outline'} className="font-mono">
+              {fmt(shownRank.position)}
             </Badge>
-            {kw._position_source === 'gsc' && (
+            {shownRank.source === 'gsc' && (
               <Badge variant="outline" className="text-[9px] px-1 py-0 font-normal text-blue-600 border-blue-300" title="מיקום ממוצע מ-Google Search Console">GSC</Badge>
             )}
           </span>

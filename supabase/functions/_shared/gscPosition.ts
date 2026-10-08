@@ -6,11 +6,18 @@ export function finiteRank(value: unknown): number | null {
   return n;
 }
 
+/** Any real rank, including outside the top 20. Zero and blank stay empty. */
+export function displayRank(value: unknown): number | null {
+  const n = finiteRank(value);
+  if (n == null) return null;
+  return Math.round(n * 10) / 10;
+}
+
 /** Numeric position is a Top 20 rank. Anything worse stays blank. */
 export function top20DisplayPosition(value: unknown): number | null {
-  const n = finiteRank(value);
+  const n = displayRank(value);
   if (n == null || n > 20) return null;
-  return Math.round(n * 10) / 10;
+  return n;
 }
 
 export type RankSource = "ahrefs" | "gsc";
