@@ -34,6 +34,7 @@ import {
 } from "@/lib/seoKeywordRelevance";
 import { useSeoKeywordRelevance } from "@/hooks/useSeoKeywordRelevance";
 import { clusterKeywords, type KeywordCluster } from "@/lib/seoKeywordClusters";
+import { finiteRank, top20Rank } from "@/lib/seoTopKeywords";
 import { toast } from "sonner";
 
 const HEBREW_REGEX = /[\u0590-\u05FF]/;
@@ -108,6 +109,7 @@ function KeywordRow({
   onMarkRelevant,
   onMarkIrrelevant,
   showIrrelevantAction,
+  rankMode = "default",
 }: {
   kw: any;
   show3Month?: boolean;
@@ -119,13 +121,23 @@ function KeywordRow({
   onMarkIrrelevant?: (keyword: string) => void;
   /** Show "לא רלוונטי" even when the row is not dimmed. */
   showIrrelevantAction?: boolean;
+  /** Top 20 shows the Search Console rank, not the Ahrefs rank. */
+  rankMode?: "default" | "gsc-top20";
 }) {
-  const posChangeMonth = kw.position_prev_month != null && kw.position != null
-    ? kw.position_prev_month - kw.position : null;
-  const posChange3m = kw.position_3month != null && kw.position != null
-    ? kw.position_3month - kw.position : null;
-  const posChangeYear = kw.position_yearly != null && kw.position != null
-    ? kw.position_yearly - kw.position : null;
+  const gscRank = finiteRank(kw.gsc_position);
+  const ahrefsRank = finiteRank(kw.position);
+  const useGscRank = rankMode === "gsc-top20" && gscRank != null;
+  const shownRank = useGscRank ? gscRank : (ahrefsRank ?? gscRank);
+  const shownFromGsc = useGscRank || (ahrefsRank == null && gscRank != null);
+  // Month-over-month deltas stay on the Ahrefs series. A GSC rank with no
+  // Ahrefs position can still use the GSC history already stored there.
+  const deltaRank = useGscRank && ahrefsRank != null ? null : shownRank;
+  const posChangeMonth = deltaRank != null && kw.position_prev_month != null
+    ? kw.position_prev_month - deltaRank : null;
+  const posChange3m = deltaRank != null && kw.position_3month != null
+    ? kw.position_3month - deltaRank : null;
+  const posChangeYear = deltaRank != null && kw.position_yearly != null
+    ? kw.position_yearly - deltaRank : null;
   const gscClicks = kw.gsc_clicks != null ? Number(kw.gsc_clicks) : null;
   const ahrefsTraffic = kw.traffic != null ? Number(kw.traffic) : null;
   const displayClicks = gscClicks && gscClicks > 0 ? gscClicks : (ahrefsTraffic && ahrefsTraffic > 0 ? ahrefsTraffic : gscClicks);
@@ -178,12 +190,12 @@ function KeywordRow({
         </span>
       </td>
       <td className="p-3 text-center">
-        {kw.position != null ? (
+        {shownRank != null ? (
           <span className="inline-flex items-center gap-1">
-            <Badge variant={kw.position <= 3 ? 'default' : kw.position <= 10 ? 'secondary' : 'outline'} className="font-mono">
-              {fmt(kw.position)}
+            <Badge variant={shownRank <= 3 ? 'default' : shownRank <= 10 ? 'secondary' : 'outline'} className="font-mono">
+              {fmt(shownRank)}
             </Badge>
-            {kw._position_source === 'gsc' && (
+            {shownFromGsc && (
               <Badge variant="outline" className="text-[9px] px-1 py-0 font-normal text-blue-600 border-blue-300" title="מיקום ממוצע מ-Google Search Console">GSC</Badge>
             )}
           </span>
@@ -245,6 +257,7 @@ function KeywordTable({
   onMarkIrrelevant,
   showIrrelevantAction,
   hideSearch,
+  rankMode = "default",
 }: {
   keywords: any[];
   title: string;
@@ -258,6 +271,7 @@ function KeywordTable({
   onMarkIrrelevant?: (keyword: string) => void;
   showIrrelevantAction?: boolean;
   hideSearch?: boolean;
+  rankMode?: "default" | "gsc-top20";
 }) {
   const [search, setSearch] = useState("");
   const filtered = useMemo(() => {
@@ -337,6 +351,7 @@ function KeywordTable({
                     showYearly={showYearly}
                     showPrevMonth={showPrevMonth}
                     showGsc={showGsc}
+                    rankMode={rankMode}
                     dimmed={dimmed}
                     onMarkRelevant={onMarkRelevant}
                     onMarkIrrelevant={onMarkIrrelevant}
@@ -524,7 +539,7 @@ export function SeoKeywordsTable({
     const mergeFields = [
       'position', 'position_prev_month', 'position_3month', 'position_yearly',
       'traffic', 'volume', 'kd', 'cpc', 'url',
-      'gsc_clicks', 'gsc_impressions', 'gsc_ctr',
+      'gsc_clicks', 'gsc_impressions', 'gsc_ctr', 'gsc_position',
       '_position_source', '_source',
     ];
     const out: any[] = [];
@@ -652,10 +667,7 @@ export function SeoKeywordsTable({
     });
   }, [effectiveTracked, langFilter, applyRelevanceFilter, irrelevantSet, forceIrrelevantSet]);
 
-  const keywordRank = (k: any): number | null => {
-    const rank = k?.position ?? k?.gsc_position ?? null;
-    return typeof rank === "number" && Number.isFinite(rank) ? rank : null;
-  };
+  const keywordRank = (k: any): number | null => finiteRank(k?.position) ?? finiteRank(k?.gsc_position);
 
   const sortByPosition = (arr: any[]) =>
     [...arr].sort((a, b) => {
@@ -666,12 +678,12 @@ export function SeoKeywordsTable({
 
   const top20Raw = useMemo(
     () =>
-      sortByPosition(
-        rawAllKeywords.filter((k) => {
-          const rank = keywordRank(k);
-          return rank != null && rank <= 20;
-        }),
-      ),
+      rawAllKeywords
+        .filter((k) => {
+          const ranked = top20Rank(k);
+          return ranked != null && ranked.rank <= 20;
+        })
+        .sort((a, b) => (top20Rank(a)?.rank ?? 999) - (top20Rank(b)?.rank ?? 999)),
     [rawAllKeywords],
   );
 
@@ -923,6 +935,7 @@ export function SeoKeywordsTable({
               showYearly={showYearly}
               showPrevMonth
               showGsc={hasGscData}
+              rankMode="gsc-top20"
               dimmedSet={allDimmed}
               {...markProps}
             />
