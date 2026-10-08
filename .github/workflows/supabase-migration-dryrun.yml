@@ -1,0 +1,38 @@
+name: Supabase migration dry run
+
+# Read-only: compares supabase/migrations with the target project's migration
+# history so drift can be spotted before relying on the automatic pipeline.
+
+on:
+  workflow_dispatch:
+    inputs:
+      target:
+        description: "staging or prod"
+        required: true
+        type: choice
+        options: [staging, prod]
+
+permissions:
+  contents: read
+
+jobs:
+  dry-run:
+    name: Dry run (${{ inputs.target }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: supabase/setup-cli@v1
+        with:
+          version: 2.116.0
+
+      - name: List history and dry-run push
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.BASE_ACCESS_TOKEN }}
+          PROJECT_REF: ${{ inputs.target == 'prod' && vars.PROD_PROJECT_REF || vars.STAGING_PROJECT_REF }}
+          DB_PASSWORD: ${{ inputs.target == 'prod' && secrets.PROD_DB_PASSWORD || secrets.STAGING_DB_PASSWORD }}
+        run: |
+          supabase link --project-ref "$PROJECT_REF" --password "$DB_PASSWORD"
+          supabase migration list --password "$DB_PASSWORD"
+          supabase db push --dry-run --password "$DB_PASSWORD"

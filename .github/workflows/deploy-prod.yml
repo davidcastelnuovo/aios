@@ -1,0 +1,70 @@
+name: Deploy Prod
+
+# Runs on every push to main that touches Supabase sources. The `production`
+# GitHub environment's required-reviewer rule is the approval gate (migrations
+# pause here; functions wait for migrations when both changed).
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "supabase/migrations/**"
+      - "supabase/functions/**"
+      - "supabase/config.toml"
+      - "scripts/*edge*"
+      - "scripts/staging-only-functions.json"
+      - ".github/workflows/deploy-prod.yml"
+      - ".github/workflows/_db_migrate.yml"
+      - ".github/workflows/deploy-edge-reusable.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deploy-prod
+  cancel-in-progress: false
+
+jobs:
+  resolve:
+    name: Resolve changes
+    runs-on: ubuntu-latest
+    outputs:
+      migrations: ${{ steps.filter.outputs.migrations }}
+      functions: ${{ steps.filter.outputs.functions }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            migrations:
+              - 'supabase/migrations/**'
+            functions:
+              - 'supabase/functions/**'
+              - 'supabase/config.toml'
+              - 'scripts/*edge*'
+              - 'scripts/staging-only-functions.json'
+
+  migrate:
+    needs: resolve
+    if: needs.resolve.outputs.migrations == 'true'
+    uses: ./.github/workflows/_db_migrate.yml
+    with:
+      target: prod
+    secrets: inherit
+
+  functions:
+    needs: [resolve, migrate]
+    if: >
+      always() &&
+      needs.resolve.outputs.functions == 'true' &&
+      needs.migrate.result != 'failure' && needs.migrate.result != 'cancelled'
+    uses: ./.github/workflows/deploy-edge-reusable.yml
+    permissions:
+      contents: write
+    with:
+      environment: production
+      source_sha: ${{ github.sha }}
+      base_revision: ${{ github.event.before }}
+    secrets: inherit
