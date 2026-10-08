@@ -64,7 +64,7 @@ feature/* or fix/*
 
 | Git | Deploy | Data |
 | --- | --- | --- |
-| local | `pnpm dev` | Active `VITE_*` values from `.env` / `.env.local` or exported `.envrc`; use AIOS Staging |
+| local | `pnpm dev` | Override the tracked `.env` with Staging values in `.env.local` or an exported `.envrc` |
 | `feature/*` | Vercel Preview | AIOS Staging (every Preview deploy) |
 | `develop` | Persistent Staging | AIOS Staging Supabase |
 | `main` | Production | Production Supabase |
@@ -154,7 +154,7 @@ How we keep them working:
 3. **Health probe.** Command Center calls `agent-channel-send` `action=channel_health`. If the key is rejected, the HUD shows a banner. After a copy, hashes of the allowlist should match Production; no function redeploy is required.
 4. **After a copy:** from Preview → Command Center, send a one-word ping on Cursor Direct or the table. Expect `agent_channel_sessions.external_url` and no 401.
 
-Local `pnpm dev` is frontend-only and uses the active Vite environment. Point `VITE_SUPABASE_URL`, `VITE_SUPABASE_PUBLISHABLE_KEY`, and `VITE_SUPABASE_PROJECT_ID` at AIOS Staging through `.env.local` or exported `.envrc` values, and set `VITE_APP_ENV=staging`.
+Local `pnpm dev` is frontend-only and uses the active Vite environment. The tracked `.env` still points away from Staging, so never use it for local test data; override `VITE_SUPABASE_URL`, `VITE_SUPABASE_PUBLISHABLE_KEY`, and `VITE_SUPABASE_PROJECT_ID` with AIOS Staging values through `.env.local` or an exported `.envrc`, and set `VITE_APP_ENV=staging`. Removing that unsafe tracked default is covered by AIO-47.
 
 ## Report loading
 
