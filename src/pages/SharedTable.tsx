@@ -29,6 +29,7 @@ import { Tabs, TabsContent } from "@/components/ui/tabs";
 import { ResponsiveTabsList, type ResponsiveTabItem } from "@/components/ui/responsive-tabs-list";
 import { computeGaOrganicByMonth } from "@/components/dynamic-tables/seo/computeGaOrganicByMonth";
 import { parseSharedReportTabs, type SharedReportTabVisibility } from "@/lib/sharedReportTabs";
+import { aggregateGscQueryRows } from "@/lib/gscPosition";
 import {
   getAddToCartFromData,
   getAdsPurchasesFromData,
@@ -385,29 +386,23 @@ export default function SharedTable() {
     // shared helper so the public viewer matches the internal SeoDashboardView 1:1.
     const gaOrganicByMonth = computeGaOrganicByMonth(gaRecords);
 
-    // Aggregate GSC records per keyword (sum clicks/impressions, weighted-average position by impressions).
+    // Impression-weighted position. Days with position 0 are not a rank.
     const gscAggregated = (() => {
       if (!hasGsc) return [];
-      const acc = new Map<string, { clicks: number; impressions: number; positionWeighted: number }>();
-      for (const rec of gscRecords) {
+      return aggregateGscQueryRows(gscRecords.map((rec: any) => {
         const d = rec.data || rec;
-        const kw = String(d.query || d.keyword || "").trim();
-        if (!kw) continue;
-        const clicks = Number(d.clicks) || 0;
-        const impressions = Number(d.impressions) || 0;
-        const position = Number(d.position) || 0;
-        const cur = acc.get(kw) || { clicks: 0, impressions: 0, positionWeighted: 0 };
-        cur.clicks += clicks;
-        cur.impressions += impressions;
-        cur.positionWeighted += position * impressions;
-        acc.set(kw, cur);
-      }
-      return Array.from(acc.entries()).map(([keyword, v]) => ({
-        keyword,
-        clicks: v.clicks,
-        impressions: v.impressions,
-        ctr: v.impressions > 0 ? Math.round((v.clicks / v.impressions) * 10000) / 100 : 0,
-        position: v.impressions > 0 ? Math.round((v.positionWeighted / v.impressions) * 10) / 10 : 0,
+        return {
+          query: d.query || d.keyword || "",
+          clicks: d.clicks,
+          impressions: d.impressions,
+          position: d.position,
+        };
+      })).map((row) => ({
+        keyword: row.query,
+        clicks: row.clicks,
+        impressions: row.impressions,
+        ctr: row.impressions > 0 ? Math.round(row.ctr * 10000) / 100 : 0,
+        position: row.position,
       }));
     })();
 

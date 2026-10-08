@@ -2,6 +2,7 @@
 // domain and persist it via the ahrefs-webhook so all downstream side-effects
 // (SEO crm_table auto-creation, crm_records seeding) happen in one place.
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { mergeTrackedKeywordRows } from "../_shared/gscPosition.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -289,6 +290,26 @@ Deno.serve(async (req) => {
       return { tracked, source: tracked[0]?._source ?? null };
     };
 
+    // Rank Tracker can fail and leave a keyword list with no positions.
+    // Keep ranks already stored on earlier reports for this domain.
+    const fillTrackedFromHistory = async (rows: any[]) => {
+      const { data: prevReports } = await supabase
+        .from("ahrefs_reports")
+        .select("report_data, domain")
+        .eq("tenant_id", client.tenant_id)
+        .eq("client_id", client.id)
+        .order("report_date", { ascending: false })
+        .limit(20);
+      const all = (prevReports as any[]) || [];
+      const sameDomain = all.filter((r) => normalizeDomain(r.domain) === domain);
+      const history = sameDomain.length > 0 ? sameDomain : all;
+      let filled = Array.isArray(rows) ? rows : [];
+      for (const prev of history) {
+        filled = mergeTrackedKeywordRows(prev?.report_data?.tracked_keywords, filled);
+      }
+      return filled;
+    };
+
     // ============ tracked_only mode ============
     // Skip all paid Site Explorer calls and only refresh tracked_keywords.
     // Merges into the latest existing ahrefs_report for client+domain (does not
@@ -310,7 +331,8 @@ Deno.serve(async (req) => {
       resolvedMode = resolved.mode;
       resolvedProtocol = resolved.protocol;
 
-      const { tracked, source } = await fetchTrackedKeywords(projectId);
+      const { tracked: fetchedTracked, source } = await fetchTrackedKeywords(projectId);
+      const tracked = await fillTrackedFromHistory(fetchedTracked);
 
       // Find latest existing report to merge into
       const { data: latestReports } = await supabase
@@ -578,23 +600,13 @@ Deno.serve(async (req) => {
       }
     }
 
-    // Never wipe previously-synced tracked keywords when Rank Tracker returns empty.
-    if (tracked_keywords.length === 0) {
-      const { data: prevReports } = await supabase
-        .from("ahrefs_reports")
-        .select("report_data, domain")
-        .eq("tenant_id", client.tenant_id)
-        .eq("client_id", client.id)
-        .order("report_date", { ascending: false })
-        .limit(20);
-      const prev = ((prevReports as any[]) || []).find((r: any) => normalizeDomain(r.domain) === domain)
-        || ((prevReports as any[]) || [])[0];
-      const prevTracked = prev?.report_data?.tracked_keywords;
-      if (Array.isArray(prevTracked) && prevTracked.length > 0) {
-        tracked_keywords = prevTracked;
-        trackedSource = "preserved-previous";
-        console.log(`Preserved ${tracked_keywords.length} tracked_keywords from previous report`);
-      }
+    // Never wipe previously-synced tracked keywords or their ranks when a later
+    // sync only returns the keyword list (management project keywords).
+    const beforeFill = tracked_keywords.length;
+    tracked_keywords = await fillTrackedFromHistory(tracked_keywords);
+    if (beforeFill === 0 && tracked_keywords.length > 0) {
+      trackedSource = "preserved-previous";
+      console.log(`Preserved ${tracked_keywords.length} tracked_keywords from previous report`);
     }
 
     // When Site Explorer returns no organic rows but Rank Tracker has phrases, mirror

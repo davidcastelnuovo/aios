@@ -1,5 +1,6 @@
 import { Card, CardContent } from "@/components/ui/card";
 import { ArrowUp, ArrowDown, Minus } from "lucide-react";
+import { keywordTop20Rank } from "@/lib/gscPosition";
 
 interface SeoSnapshotCardsProps {
   snapshot: Record<string, any>;
@@ -40,8 +41,11 @@ function countAtOrBelow(kws: Array<any> | undefined, maxPos: number): number {
   if (!Array.isArray(kws)) return 0;
   let n = 0;
   for (const kw of kws) {
-    const p = kw?.position ?? kw?.best_position ?? kw?.gsc_position;
-    if (typeof p === "number" && p >= 1 && p <= maxPos) n++;
+    const rank = keywordTop20Rank(kw) ?? keywordTop20Rank({
+      position: kw?.best_position,
+      gsc_position: kw?.gsc_position,
+    });
+    if (rank && rank.position >= 1 && rank.position <= maxPos) n++;
   }
   return n;
 }

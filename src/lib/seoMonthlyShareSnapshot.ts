@@ -6,6 +6,7 @@ import {
   sanitizeSeoMonthlyWork,
 } from "@/lib/seoMonthlyWork";
 import { filterRelevantKeywords } from "@/lib/seoKeywordRelevance";
+import { resolveTop20Rank } from "@/lib/gscPosition";
 
 export type SeoShareMetric = {
   key: string;
@@ -315,10 +316,13 @@ export function buildSeoMonthlyShareSnapshot(opts: {
       const key = row.keyword.toLowerCase();
       const base = baseByKw.get(key);
       const ahrefs = ahrefsByKw.get(key);
-      const position = Number.isFinite(Number(row.position)) ? Number(row.position) : null;
+      const rank = resolveTop20Rank({
+        gscPosition: row.position,
+        ahrefsPosition: ahrefs?.position,
+      });
       byKw.set(key, {
         keyword: row.keyword,
-        position: position != null ? Math.round(position * 10) / 10 : (ahrefs?.position ?? null),
+        position: rank?.position ?? null,
         volume: ahrefs?.volume ?? null,
         prevPosition: ahrefs?.prevPosition ?? null,
         url: ahrefs?.url,
