@@ -1,0 +1,23 @@
+name: Deploy Supabase Edge Function
+
+# Manual only. Automatic production deploys on push to main run from deploy-prod.yml
+# so they can wait for database migrations.
+permissions:
+  contents: write
+
+on:
+  workflow_dispatch:
+    inputs:
+      function_name:
+        description: 'Function names; empty reconciles all changes since last successful deployment'
+        type: string
+        default: ''
+jobs:
+  deploy:
+    uses: ./.github/workflows/deploy-edge-reusable.yml
+    with:
+      environment: production
+      source_sha: ${{ github.sha }}
+      function_names: ${{ inputs.function_name || '' }}
+      base_revision: ${{ github.event.before || '' }}
+    secrets: inherit
