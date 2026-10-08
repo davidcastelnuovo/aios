@@ -46,8 +46,18 @@ test("select staff by Hebrew name", () => {
 
 test("ambiguous name returns candidates (no silent pick)", () => {
   const dupes = [
-    { id: "a", full_name: "דני", phone: "0501111111", entity_type: "campaigner" },
-    { id: "b", full_name: "דני", phone: "0502222222", entity_type: "sales_person" },
+    {
+      id: "a",
+      full_name: "דני",
+      phone: "0501111111",
+      entity_type: "campaigner",
+    },
+    {
+      id: "b",
+      full_name: "דני",
+      phone: "0502222222",
+      entity_type: "sales_person",
+    },
   ];
   const { match, ambiguous, reason } = selectStaffMatch(dupes, { name: "דני" });
   assert.equal(match, null);

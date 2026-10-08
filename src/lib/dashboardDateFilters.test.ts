@@ -11,7 +11,10 @@ const NOW = new Date(2026, 8, 18);
 
 const presetLists = [
   ["COMBINED_DASHBOARD_DATE_FILTERS", COMBINED_DASHBOARD_DATE_FILTERS],
-  ["SHARED_COMBINED_DASHBOARD_DATE_FILTERS", SHARED_COMBINED_DASHBOARD_DATE_FILTERS],
+  [
+    "SHARED_COMBINED_DASHBOARD_DATE_FILTERS",
+    SHARED_COMBINED_DASHBOARD_DATE_FILTERS,
+  ],
   ["SHARED_TABLE_DATE_FILTERS", SHARED_TABLE_DATE_FILTERS],
 ] as const;
 
@@ -24,7 +27,8 @@ test("every offered preset resolves to its own window", () => {
 
   for (const [listName, presets] of presetLists) {
     for (const { value } of presets) {
-      if (value === "custom" || value === "all" || value === "last_30_days") continue;
+      if (value === "custom" || value === "all" || value === "last_30_days")
+        continue;
       const range = getDashboardDateRange(value, NOW);
       assert.notDeepEqual(
         range,
@@ -45,7 +49,12 @@ test("the 70-day dashboard preset reaches back further than the 30-day one", () 
 });
 
 test("all requested long-range presets are offered on every report surface", () => {
-  const requested = ["last_60_days", "last_90_days", "last_120_days", "last_365_days"];
+  const requested = [
+    "last_60_days",
+    "last_90_days",
+    "last_120_days",
+    "last_365_days",
+  ];
   for (const [listName, presets] of presetLists) {
     const values = new Set(presets.map(({ value }) => value));
     for (const value of requested) {
@@ -53,15 +62,30 @@ test("all requested long-range presets are offered on every report surface", () 
     }
   }
 
-  assert.equal(getDashboardDateRange("last_60_days", NOW).startDate, "2026-07-20");
-  assert.equal(getDashboardDateRange("last_90_days", NOW).startDate, "2026-06-20");
-  assert.equal(getDashboardDateRange("last_120_days", NOW).startDate, "2026-05-21");
-  assert.equal(getDashboardDateRange("last_365_days", NOW).startDate, "2025-09-18");
+  assert.equal(
+    getDashboardDateRange("last_60_days", NOW).startDate,
+    "2026-07-20",
+  );
+  assert.equal(
+    getDashboardDateRange("last_90_days", NOW).startDate,
+    "2026-06-20",
+  );
+  assert.equal(
+    getDashboardDateRange("last_120_days", NOW).startDate,
+    "2026-05-21",
+  );
+  assert.equal(
+    getDashboardDateRange("last_365_days", NOW).startDate,
+    "2025-09-18",
+  );
 });
 
 test("a custom range is used verbatim", () => {
-  assert.deepEqual(getDashboardDateRange("custom", NOW, "2026-05-01", "2026-05-31"), {
-    startDate: "2026-05-01",
-    endDate: "2026-05-31",
-  });
+  assert.deepEqual(
+    getDashboardDateRange("custom", NOW, "2026-05-01", "2026-05-31"),
+    {
+      startDate: "2026-05-01",
+      endDate: "2026-05-31",
+    },
+  );
 });

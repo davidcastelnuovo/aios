@@ -1,5 +1,11 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -14,7 +20,11 @@ import {
   disconnectDirectGoogleCalendar,
   CalendarProvider,
 } from "@/lib/calendarApi";
-import { findUnifiedCalendarConnectionId, listenForUnifiedConnection, openUnifiedCalendarConnection } from "@/lib/unifiedCalendarConnection";
+import {
+  findUnifiedCalendarConnectionId,
+  listenForUnifiedConnection,
+  openUnifiedCalendarConnection,
+} from "@/lib/unifiedCalendarConnection";
 import { toast } from "sonner";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Calendar, Plus, Unplug, Loader2, ArrowRightLeft } from "lucide-react";
@@ -35,7 +45,10 @@ export function CalendarIframeSettings() {
 
   // Provider toggle state
   const [provider, setProvider] = useState<CalendarProvider>(() => {
-    return (localStorage.getItem(PROVIDER_STORAGE_KEY) as CalendarProvider) || "direct";
+    return (
+      (localStorage.getItem(PROVIDER_STORAGE_KEY) as CalendarProvider) ||
+      "direct"
+    );
   });
 
   const calendarRef = useRef<HTMLDivElement | null>(null);
@@ -49,7 +62,9 @@ export function CalendarIframeSettings() {
     const newProvider: CalendarProvider = useUnified ? "unified" : "direct";
     setProvider(newProvider);
     localStorage.setItem(PROVIDER_STORAGE_KEY, newProvider);
-    queryClient.invalidateQueries({ queryKey: ["calendar-status", userId, tenantId] });
+    queryClient.invalidateQueries({
+      queryKey: ["calendar-status", userId, tenantId],
+    });
     queryClient.invalidateQueries({ queryKey: ["calendar-events", tenantId] });
   };
 
@@ -73,8 +88,12 @@ export function CalendarIframeSettings() {
       listenerCleanupRef.current?.();
       listenerCleanupRef.current = listenForUnifiedConnection(() => {
         listenerCleanupRef.current = null;
-        queryClient.invalidateQueries({ queryKey: ["calendar-status", userId, tenantId] });
-        queryClient.invalidateQueries({ queryKey: ["calendar-events", tenantId] });
+        queryClient.invalidateQueries({
+          queryKey: ["calendar-status", userId, tenantId],
+        });
+        queryClient.invalidateQueries({
+          queryKey: ["calendar-events", tenantId],
+        });
         toast.success("היומן חובר בהצלחה דרך Unified!");
       });
       await openUnifiedCalendarConnection({ tenantId });
@@ -91,23 +110,34 @@ export function CalendarIframeSettings() {
     mutationFn: async () => {
       const { authUrl } = await initDirectGoogleAuth();
       // Open popup for OAuth
-      const popup = window.open(authUrl, "google-calendar-auth", "width=600,height=700");
+      const popup = window.open(
+        authUrl,
+        "google-calendar-auth",
+        "width=600,height=700",
+      );
       return new Promise<void>((resolve, reject) => {
         const handler = (event: MessageEvent) => {
           if (event.data?.type === "calendar_connected") {
             window.removeEventListener("message", handler);
-            queryClient.invalidateQueries({ queryKey: ["calendar-status", userId, tenantId] });
-            queryClient.invalidateQueries({ queryKey: ["calendar-events", tenantId] });
+            queryClient.invalidateQueries({
+              queryKey: ["calendar-status", userId, tenantId],
+            });
+            queryClient.invalidateQueries({
+              queryKey: ["calendar-events", tenantId],
+            });
             toast.success("היומן חובר בהצלחה ישירות לגוגל!");
             resolve();
           }
         };
         window.addEventListener("message", handler);
         // Timeout after 5 minutes
-        setTimeout(() => {
-          window.removeEventListener("message", handler);
-          reject(new Error("Timeout"));
-        }, 5 * 60 * 1000);
+        setTimeout(
+          () => {
+            window.removeEventListener("message", handler);
+            reject(new Error("Timeout"));
+          },
+          5 * 60 * 1000,
+        );
       });
     },
     onError: (error) => {
@@ -122,13 +152,21 @@ export function CalendarIframeSettings() {
       const integrationId = await findUnifiedCalendarConnectionId(tenantId);
       if (!integrationId) throw new Error("לא נמצא חיבור יומן פעיל לניתוק.");
       const { error } = await supabase.functions.invoke("unified-connections", {
-        body: { action: "delete", tenant_id: tenantId, connection_id: integrationId },
+        body: {
+          action: "delete",
+          tenant_id: tenantId,
+          connection_id: integrationId,
+        },
       });
       if (error) throw error;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["calendar-status", userId, tenantId] });
-      queryClient.invalidateQueries({ queryKey: ["calendar-events", tenantId] });
+      queryClient.invalidateQueries({
+        queryKey: ["calendar-status", userId, tenantId],
+      });
+      queryClient.invalidateQueries({
+        queryKey: ["calendar-events", tenantId],
+      });
       toast.success("הלוח השנה נותק בהצלחה");
     },
     onError: (error) => {
@@ -142,8 +180,12 @@ export function CalendarIframeSettings() {
       await disconnectDirectGoogleCalendar();
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["calendar-status", userId, tenantId] });
-      queryClient.invalidateQueries({ queryKey: ["calendar-events", tenantId] });
+      queryClient.invalidateQueries({
+        queryKey: ["calendar-status", userId, tenantId],
+      });
+      queryClient.invalidateQueries({
+        queryKey: ["calendar-events", tenantId],
+      });
       toast.success("הלוח השנה נותק בהצלחה");
     },
     onError: (error) => {
@@ -153,7 +195,12 @@ export function CalendarIframeSettings() {
 
   // Add event mutation
   const addEventMutation = useMutation({
-    mutationFn: async (eventData: { summary: string; description?: string; start: string; end?: string }) => {
+    mutationFn: async (eventData: {
+      summary: string;
+      description?: string;
+      start: string;
+      end?: string;
+    }) => {
       if (!tenantId) throw new Error("No tenant");
       return await addCalendarEvent(eventData, { tenantId, provider });
     },
@@ -179,16 +226,30 @@ export function CalendarIframeSettings() {
     const endISO = eventEnd
       ? new Date(eventEnd).toISOString()
       : new Date(new Date(eventStart).getTime() + 60 * 60 * 1000).toISOString();
-    addEventMutation.mutate({ summary: eventSummary, description: eventDescription, start: startISO, end: endISO });
+    addEventMutation.mutate({
+      summary: eventSummary,
+      description: eventDescription,
+      start: startISO,
+      end: endISO,
+    });
   };
 
   const isConnected = connectionStatus?.connected === true;
-  const isConnecting = provider === "unified" ? connectUnifiedMutation.isPending : connectDirectMutation.isPending;
-  const isDisconnecting = provider === "unified" ? disconnectUnifiedMutation.isPending : disconnectDirectMutation.isPending;
+  const isConnecting =
+    provider === "unified"
+      ? connectUnifiedMutation.isPending
+      : connectDirectMutation.isPending;
+  const isDisconnecting =
+    provider === "unified"
+      ? disconnectUnifiedMutation.isPending
+      : disconnectDirectMutation.isPending;
 
   useEffect(() => {
     if (isConnected && calendarRef.current) {
-      calendarRef.current.scrollIntoView({ behavior: "smooth", block: "start" });
+      calendarRef.current.scrollIntoView({
+        behavior: "smooth",
+        block: "start",
+      });
     }
   }, [isConnected]);
 
@@ -272,9 +333,13 @@ export function CalendarIframeSettings() {
                 : "חבר את חשבון Google שלך דרך Unified כדי להוסיף אירועים ללוח השנה"}
             </p>
             <Button onClick={handleConnect} disabled={isConnecting}>
-              {isConnecting && <Loader2 className="h-4 w-4 animate-spin ml-2" />}
+              {isConnecting && (
+                <Loader2 className="h-4 w-4 animate-spin ml-2" />
+              )}
               <Calendar className="h-4 w-4 ml-2" />
-              {provider === "direct" ? "התחבר ישירות לגוגל" : "התחבר דרך Unified"}
+              {provider === "direct"
+                ? "התחבר ישירות לגוגל"
+                : "התחבר דרך Unified"}
             </Button>
           </div>
         ) : (
@@ -291,8 +356,14 @@ export function CalendarIframeSettings() {
             </Alert>
 
             <div className="flex gap-2">
-              <Button variant="destructive" onClick={handleDisconnect} disabled={isDisconnecting}>
-                {isDisconnecting && <Loader2 className="h-4 w-4 animate-spin ml-2" />}
+              <Button
+                variant="destructive"
+                onClick={handleDisconnect}
+                disabled={isDisconnecting}
+              >
+                {isDisconnecting && (
+                  <Loader2 className="h-4 w-4 animate-spin ml-2" />
+                )}
                 <Unplug className="h-4 w-4 ml-2" />
                 נתק יומן
               </Button>
@@ -332,15 +403,28 @@ export function CalendarIframeSettings() {
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2">
                     <Label htmlFor="event-start">תאריך והשעה התחלה *</Label>
-                    <Input id="event-start" type="datetime-local" value={eventStart} onChange={(e) => setEventStart(e.target.value)} />
+                    <Input
+                      id="event-start"
+                      type="datetime-local"
+                      value={eventStart}
+                      onChange={(e) => setEventStart(e.target.value)}
+                    />
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="event-end">תאריך והשעה סיום</Label>
-                    <Input id="event-end" type="datetime-local" value={eventEnd} onChange={(e) => setEventEnd(e.target.value)} />
+                    <Input
+                      id="event-end"
+                      type="datetime-local"
+                      value={eventEnd}
+                      onChange={(e) => setEventEnd(e.target.value)}
+                    />
                   </div>
                 </div>
                 <div className="flex gap-2">
-                  <Button onClick={handleAddEvent} disabled={addEventMutation.isPending}>
+                  <Button
+                    onClick={handleAddEvent}
+                    disabled={addEventMutation.isPending}
+                  >
                     <Plus className="h-4 w-4 ml-2" />
                     הוסף אירוע
                   </Button>

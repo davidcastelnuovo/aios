@@ -6,7 +6,11 @@ interface DataStatsProps {
 
 export function DataStats({ data }: DataStatsProps) {
   if (!data || data.length === 0) {
-    return <p className="text-sm text-muted-foreground text-center py-4">אין נתונים להצגה</p>;
+    return (
+      <p className="text-sm text-muted-foreground text-center py-4">
+        אין נתונים להצגה
+      </p>
+    );
   }
 
   return (

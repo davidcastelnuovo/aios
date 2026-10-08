@@ -46,32 +46,34 @@ export default function Products() {
   const { selectedAgency } = useAgency();
   const [showAddForm, setShowAddForm] = useState(false);
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
-  const [deletingProductId, setDeletingProductId] = useState<string | null>(null);
+  const [deletingProductId, setDeletingProductId] = useState<string | null>(
+    null,
+  );
 
   const { data: products = [], isLoading } = useQuery({
     queryKey: ["products", tenantId, selectedAgency],
     queryFn: async () => {
       if (!tenantId) return [];
-      
+
       // Get tenant's own products
       const { data: ownProducts, error: ownError } = await supabase
         .from("products")
         .select("*, agencies(name)")
         .eq("tenant_id", tenantId)
         .order("name");
-      
+
       if (ownError) throw ownError;
-      
+
       // Get products from shared agencies
       const { data: sharedAccess, error: sharedError } = await supabase
         .from("agency_tenant_access")
         .select("agency_id")
         .eq("accessing_tenant_id", tenantId);
-      
+
       if (sharedError) throw sharedError;
-      
-      const sharedAgencyIds = sharedAccess?.map(a => a.agency_id) || [];
-      
+
+      const sharedAgencyIds = sharedAccess?.map((a) => a.agency_id) || [];
+
       let sharedProducts = [];
       if (sharedAgencyIds.length > 0) {
         const { data: shared, error: sharedProdError } = await supabase
@@ -79,17 +81,17 @@ export default function Products() {
           .select("*, agencies(name)")
           .in("agency_id", sharedAgencyIds)
           .order("name");
-        
+
         if (sharedProdError) throw sharedProdError;
         sharedProducts = shared || [];
       }
-      
+
       // Mark products as owned or shared
       const marked = [
-        ...(ownProducts || []).map(p => ({ ...p, is_owned: true })),
-        ...sharedProducts.map(p => ({ ...p, is_owned: false }))
+        ...(ownProducts || []).map((p) => ({ ...p, is_owned: true })),
+        ...sharedProducts.map((p) => ({ ...p, is_owned: false })),
       ];
-      
+
       return marked as Product[];
     },
     enabled: !!tenantId,
@@ -99,7 +101,8 @@ export default function Products() {
     let result = products;
     if (selectedAgency && selectedAgency !== "all") {
       result = result.filter(
-        (product) => product.agency_id === null || product.agency_id === selectedAgency
+        (product) =>
+          product.agency_id === null || product.agency_id === selectedAgency,
       );
     }
     return result;
@@ -107,11 +110,8 @@ export default function Products() {
 
   const deleteMutation = useMutation({
     mutationFn: async (id: string) => {
-      const { error } = await supabase
-        .from("products")
-        .delete()
-        .eq("id", id);
-      
+      const { error } = await supabase.from("products").delete().eq("id", id);
+
       if (error) throw error;
     },
     onSuccess: () => {
@@ -126,9 +126,9 @@ export default function Products() {
   });
 
   const formatPrice = (price: number) => {
-    return new Intl.NumberFormat('he-IL', {
-      style: 'currency',
-      currency: 'ILS',
+    return new Intl.NumberFormat("he-IL", {
+      style: "currency",
+      currency: "ILS",
     }).format(price);
   };
 
@@ -179,7 +179,9 @@ export default function Products() {
                     <div className="flex items-center gap-2">
                       {product.name}
                       {!product.is_owned && (
-                        <Badge variant="secondary" className="text-xs">משותף</Badge>
+                        <Badge variant="secondary" className="text-xs">
+                          משותף
+                        </Badge>
                       )}
                     </div>
                   </TableCell>
@@ -190,7 +192,9 @@ export default function Products() {
                         {product.agencies.name}
                       </div>
                     ) : (
-                      <span className="text-xs text-muted-foreground">כללי</span>
+                      <span className="text-xs text-muted-foreground">
+                        כללי
+                      </span>
                     )}
                   </TableCell>
                   <TableCell className="text-muted-foreground">
@@ -253,7 +257,9 @@ export default function Products() {
           <AlertDialogFooter>
             <AlertDialogCancel>ביטול</AlertDialogCancel>
             <AlertDialogAction
-              onClick={() => deletingProductId && deleteMutation.mutate(deletingProductId)}
+              onClick={() =>
+                deletingProductId && deleteMutation.mutate(deletingProductId)
+              }
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
             >
               מחק

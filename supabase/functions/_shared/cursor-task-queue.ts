@@ -6,7 +6,12 @@ import {
   trackCursorTaskSession,
 } from "./cursor-session-tracker.ts";
 
-export const CURSOR_ASSIGNEE_NAMES = ["cursor", "קרסר", "cursor cloud", "cursor agent"];
+export const CURSOR_ASSIGNEE_NAMES = [
+  "cursor",
+  "קרסר",
+  "cursor cloud",
+  "cursor agent",
+];
 
 export type HumanTaskRow = {
   id: string;
@@ -19,17 +24,24 @@ export type HumanTaskRow = {
 };
 
 export function isCursorAssignee(name: string | null | undefined): boolean {
-  const n = String(name || "").trim().toLowerCase();
+  const n = String(name || "")
+    .trim()
+    .toLowerCase();
   if (!n) return false;
   return CURSOR_ASSIGNEE_NAMES.some((x) => n === x || n.includes("cursor"));
 }
 
-export function extractHumanTaskId(context: string | null | undefined): string | null {
+export function extractHumanTaskId(
+  context: string | null | undefined,
+): string | null {
   const m = String(context || "").match(/human_task_id:\s*([0-9a-f-]{36})/i);
   return m ? m[1] : null;
 }
 
-export async function countInProgressCursorTasks(supabase: any, tenantId: string): Promise<number> {
+export async function countInProgressCursorTasks(
+  supabase: any,
+  tenantId: string,
+): Promise<number> {
   const { data, error } = await supabase
     .from("tasks")
     .select("assigned_agent")
@@ -37,7 +49,7 @@ export async function countInProgressCursorTasks(supabase: any, tenantId: string
     .eq("status", "in_progress");
   if (error) throw error;
   return (data || []).filter((t: { assigned_agent?: string | null }) =>
-    isCursorAssignee(t.assigned_agent)
+    isCursorAssignee(t.assigned_agent),
   ).length;
 }
 
@@ -54,7 +66,9 @@ export async function claimNextOpenCursorTask(
     .order("created_at", { ascending: true })
     .limit(20);
   if (error) throw error;
-  const candidate = (open || []).find((t: HumanTaskRow) => isCursorAssignee(t.assigned_agent));
+  const candidate = (open || []).find((t: HumanTaskRow) =>
+    isCursorAssignee(t.assigned_agent),
+  );
   if (!candidate) return null;
 
   const { data: claimed, error: claimErr } = await supabase
@@ -69,7 +83,10 @@ export async function claimNextOpenCursorTask(
   return claimed;
 }
 
-export function buildCursorTaskPrompt(task: HumanTaskRow): { task: string; context: string } {
+export function buildCursorTaskPrompt(task: HumanTaskRow): {
+  task: string;
+  context: string;
+} {
   const notes = String(task.notes || "").trim();
   return {
     task: task.title,
@@ -78,7 +95,9 @@ export function buildCursorTaskPrompt(task: HumanTaskRow): { task: string; conte
       notes ? `Notes:\n${notes}` : "",
       "When finished: call MCP tool complete_human_task with this task_id and a short summary.",
       "Then open a PR. One task at a time — do not start unrelated work.",
-    ].filter(Boolean).join("\n\n"),
+    ]
+      .filter(Boolean)
+      .join("\n\n"),
   };
 }
 
@@ -106,14 +125,21 @@ export async function mcpRequestDevTask(
     signal: AbortSignal.timeout(30_000),
   });
   const text = await resp.text();
-  if (!resp.ok) throw new Error(`cursor-mcp ${resp.status}: ${text.slice(0, 400)}`);
+  if (!resp.ok)
+    throw new Error(`cursor-mcp ${resp.status}: ${text.slice(0, 400)}`);
   let parsed: any = {};
-  try { parsed = JSON.parse(text); } catch { /* sse fallback below */ }
+  try {
+    parsed = JSON.parse(text);
+  } catch {
+    /* sse fallback below */
+  }
   const content = parsed?.result?.content;
   const flat = Array.isArray(content)
     ? content.map((c: any) => c?.text ?? "").join("\n")
     : String(parsed?.result ?? text);
-  const urlMatch = flat.match(/https:\/\/cursor\.com\/agents\/(bc-[a-z0-9-]+)/i);
+  const urlMatch = flat.match(
+    /https:\/\/cursor\.com\/agents\/(bc-[a-z0-9-]+)/i,
+  );
   const idMatch = flat.match(/\bbc-[a-z0-9-]+\b/i);
   return {
     sessionUrl: urlMatch ? urlMatch[0] : "",
@@ -168,10 +194,15 @@ export async function completeHumanCursorTask(
 export async function claimAndDispatchCursorTask(
   supabase: any,
   tenantId: string,
-): Promise<{ taskId: string; sessionUrl: string; cursorAgentId?: string } | null> {
+): Promise<{
+  taskId: string;
+  sessionUrl: string;
+  cursorAgentId?: string;
+} | null> {
   const supabaseUrl = Deno.env.get("SUPABASE_URL") || "";
   const bearer = Deno.env.get("CURSOR_MCP_BEARER") || "";
-  if (!supabaseUrl || !bearer) throw new Error("SUPABASE_URL / CURSOR_MCP_BEARER missing");
+  if (!supabaseUrl || !bearer)
+    throw new Error("SUPABASE_URL / CURSOR_MCP_BEARER missing");
 
   const inProgress = await countInProgressCursorTasks(supabase, tenantId);
   if (inProgress > 0) return null;
@@ -180,19 +211,30 @@ export async function claimAndDispatchCursorTask(
   if (!task) return null;
 
   const { task: prompt, context } = buildCursorTaskPrompt(task);
-  const fired = await mcpRequestDevTask(supabaseUrl, bearer, { task: prompt, context, tenantId });
+  const fired = await mcpRequestDevTask(supabaseUrl, bearer, {
+    task: prompt,
+    context,
+    tenantId,
+  });
 
   if (fired.cursorAgentId) {
     await trackCursorTaskSession(supabase, {
       tenantId,
       cursorAgentId: fired.cursorAgentId,
       sessionUrl: fired.sessionUrl,
-      displayName: cursorSessionDisplayName({ taskTitle: task.title, sourceTool: "dispatch-cursor-tasks" }),
+      displayName: cursorSessionDisplayName({
+        taskTitle: task.title,
+        sourceTool: "dispatch-cursor-tasks",
+      }),
       taskTitle: task.title,
       humanTaskId: task.id,
       sourceTool: "dispatch-cursor-tasks",
     });
   }
 
-  return { taskId: task.id, sessionUrl: fired.sessionUrl, cursorAgentId: fired.cursorAgentId };
+  return {
+    taskId: task.id,
+    sessionUrl: fired.sessionUrl,
+    cursorAgentId: fired.cursorAgentId,
+  };
 }

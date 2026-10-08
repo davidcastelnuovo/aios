@@ -1,11 +1,21 @@
-export const DEFAULT_HEADER_SHORTCUT_KEYS = ["tasks", "clients", "dynamic-tables"] as const;
+export const DEFAULT_HEADER_SHORTCUT_KEYS = [
+  "tasks",
+  "clients",
+  "dynamic-tables",
+] as const;
 export const MAX_HEADER_SHORTCUTS = 5;
 
-export function headerShortcutsStorageKey(userId: string, tenantId: string): string {
+export function headerShortcutsStorageKey(
+  userId: string,
+  tenantId: string,
+): string {
   return `headerShortcuts:${userId}:${tenantId}`;
 }
 
-function uniqueAccessible(keys: string[], accessibleKeys: readonly string[]): string[] {
+function uniqueAccessible(
+  keys: string[],
+  accessibleKeys: readonly string[],
+): string[] {
   const accessible = new Set(accessibleKeys);
   return [...new Set(keys)].filter((key) => accessible.has(key));
 }
@@ -15,8 +25,10 @@ export function resolveHeaderShortcuts(
   accessibleKeys: readonly string[],
 ): string[] {
   const defaults = () =>
-    uniqueAccessible([...DEFAULT_HEADER_SHORTCUT_KEYS], accessibleKeys)
-      .slice(0, MAX_HEADER_SHORTCUTS);
+    uniqueAccessible([...DEFAULT_HEADER_SHORTCUT_KEYS], accessibleKeys).slice(
+      0,
+      MAX_HEADER_SHORTCUTS,
+    );
 
   if (storedValue === null) {
     return defaults();
@@ -45,4 +57,3 @@ export function toggleHeaderShortcut(
   if (selectedKeys.length >= max) return [...selectedKeys];
   return [...selectedKeys, key];
 }
-

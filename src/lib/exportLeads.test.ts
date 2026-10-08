@@ -26,12 +26,21 @@ test("leadMatchesTagFilter keeps all leads when no tag filter is set", () => {
 
 test("leadMatchesTagFilter none shows only untagged leads", () => {
   assert.equal(leadMatchesTagFilter([], [], ["none"], new Set()), true);
-  assert.equal(leadMatchesTagFilter(["FB"], ["t1"], ["none"], new Set(["t1"])), false);
+  assert.equal(
+    leadMatchesTagFilter(["FB"], ["t1"], ["none"], new Set(["t1"])),
+    false,
+  );
 });
 
 test("leadMatchesTagFilter selected tags keep matching leads", () => {
-  assert.equal(leadMatchesTagFilter(["FB"], ["t1"], ["t1"], new Set(["t1"])), true);
-  assert.equal(leadMatchesTagFilter(["אתר"], ["t2"], ["t1"], new Set(["t1"])), false);
+  assert.equal(
+    leadMatchesTagFilter(["FB"], ["t1"], ["t1"], new Set(["t1"])),
+    true,
+  );
+  assert.equal(
+    leadMatchesTagFilter(["אתר"], ["t2"], ["t1"], new Set(["t1"])),
+    false,
+  );
 });
 
 test("buildLeadExportRows maps fields, tags, statuses and numbered updates", () => {
@@ -48,8 +57,16 @@ test("buildLeadExportRows maps fields, tags, statuses and numbered updates", () 
       campaign_name: "קיץ",
       tagNames: ["FB", "חם"],
       updates: [
-        { content: "התקשרתי", created_at: "2026-08-01T08:00:00.000Z", author_name: "דוד" },
-        { content: "אין מענה", created_at: "2026-08-02T09:30:00.000Z", author_name: "צחי" },
+        {
+          content: "התקשרתי",
+          created_at: "2026-08-01T08:00:00.000Z",
+          author_name: "דוד",
+        },
+        {
+          content: "אין מענה",
+          created_at: "2026-08-02T09:30:00.000Z",
+          author_name: "צחי",
+        },
       ],
       agencies: { name: "צחי קווטנסקי" },
       sales_people: { full_name: "נציג" },
@@ -62,7 +79,13 @@ test("buildLeadExportRows maps fields, tags, statuses and numbered updates", () 
       response_status: "in_progress",
       source: "website",
       tagNames: [],
-      updates: [{ content: "נסגר", created_at: "2026-08-03T10:00:00.000Z", author_name: "" }],
+      updates: [
+        {
+          content: "נסגר",
+          created_at: "2026-08-03T10:00:00.000Z",
+          author_name: "",
+        },
+      ],
     },
   ];
 
@@ -121,9 +144,15 @@ test("owner export keeps all current-tenant leads when an agency is selected", (
     isOwner: true,
     selectedAgency: "agency-b",
   });
-  assert.equal(calls.some((call) => call[0] === "eq" && call[1] === "agency_id"), false);
   assert.equal(
-    calls.some((call) => call[0] === "or" && String(call[1]).includes("tenant_id.eq.tenant-1")),
+    calls.some((call) => call[0] === "eq" && call[1] === "agency_id"),
+    false,
+  );
+  assert.equal(
+    calls.some(
+      (call) =>
+        call[0] === "or" && String(call[1]).includes("tenant_id.eq.tenant-1"),
+    ),
     true,
   );
   assert.equal(
@@ -142,11 +171,21 @@ test("owner export keeps all current-tenant leads when an agency is selected", (
   );
 });
 
-function makeClient(tables: Record<string, any[]>, ordersByTable: Record<string, Array<{ column: string; ascending?: boolean }>> = {}) {
+function makeClient(
+  tables: Record<string, any[]>,
+  ordersByTable: Record<
+    string,
+    Array<{ column: string; ascending?: boolean }>
+  > = {},
+) {
   return {
     from(table: string) {
       const rows = tables[table] || [];
-      const state = { from: 0, to: Math.max(rows.length - 1, 0), usedRange: false };
+      const state = {
+        from: 0,
+        to: Math.max(rows.length - 1, 0),
+        usedRange: false,
+      };
       ordersByTable[table] = [];
       const api: any = {
         select: () => api,
@@ -167,8 +206,13 @@ function makeClient(tables: Record<string, any[]>, ordersByTable: Record<string,
           return api;
         },
         then: (resolve: any, reject: any) => {
-          const slice = state.usedRange ? rows.slice(state.from, state.to + 1) : rows;
-          return Promise.resolve({ data: slice, error: null }).then(resolve, reject);
+          const slice = state.usedRange
+            ? rows.slice(state.from, state.to + 1)
+            : rows;
+          return Promise.resolve({ data: slice, error: null }).then(
+            resolve,
+            reject,
+          );
         },
       };
       return api;
@@ -186,15 +230,24 @@ test("fetchAllLeadsForExport pages past the loaded UI window", async () => {
     status: "new",
     source: "website",
   }));
-  const ordersByTable: Record<string, Array<{ column: string; ascending?: boolean }>> = {};
-  const supabase = makeClient({
-    leads: leadRows,
-    chat_contact_tags: [],
-    lead_updates: [],
-    lead_pipeline_stages: [{ stage_key: "new", label: "חדש" }],
-    lead_statuses: [],
-  }, ordersByTable);
-  const { leads } = await fetchAllLeadsForExport(supabase, { tenantId: "tenant-1", isOwner: true });
+  const ordersByTable: Record<
+    string,
+    Array<{ column: string; ascending?: boolean }>
+  > = {};
+  const supabase = makeClient(
+    {
+      leads: leadRows,
+      chat_contact_tags: [],
+      lead_updates: [],
+      lead_pipeline_stages: [{ stage_key: "new", label: "חדש" }],
+      lead_statuses: [],
+    },
+    ordersByTable,
+  );
+  const { leads } = await fetchAllLeadsForExport(supabase, {
+    tenantId: "tenant-1",
+    isOwner: true,
+  });
   assert.equal(leads.length, 1205);
   assert.deepEqual(ordersByTable.leads, [
     { column: "created_at", ascending: false },
@@ -204,16 +257,49 @@ test("fetchAllLeadsForExport pages past the loaded UI window", async () => {
 
 test("paged tag and update queries use a unique id order", async () => {
   const { fetchAllLeadsForExport } = await import("./exportLeads.ts");
-  const ordersByTable: Record<string, Array<{ column: string; ascending?: boolean }>> = {};
-  const supabase = makeClient({
-    leads: [{ id: "lead-1", tenant_id: "tenant-1", created_at: "2026-08-01T00:00:00.000Z", status: "new" }],
-    chat_contact_tags: [{ id: "tag-row-1", lead_id: "lead-1", tag_id: "t1", chat_tags: { name: "FB" } }],
-    lead_updates: [{ id: "upd-1", lead_id: "lead-1", content: "hi", created_at: "2026-08-01T00:00:00.000Z", user_id: "u1" }],
-    lead_pipeline_stages: [{ stage_key: "new", label: "חדש" }],
-    lead_statuses: [],
-  }, ordersByTable);
-  await fetchAllLeadsForExport(supabase, { tenantId: "tenant-1", isOwner: true });
-  assert.deepEqual(ordersByTable.chat_contact_tags, [{ column: "id", ascending: true }]);
+  const ordersByTable: Record<
+    string,
+    Array<{ column: string; ascending?: boolean }>
+  > = {};
+  const supabase = makeClient(
+    {
+      leads: [
+        {
+          id: "lead-1",
+          tenant_id: "tenant-1",
+          created_at: "2026-08-01T00:00:00.000Z",
+          status: "new",
+        },
+      ],
+      chat_contact_tags: [
+        {
+          id: "tag-row-1",
+          lead_id: "lead-1",
+          tag_id: "t1",
+          chat_tags: { name: "FB" },
+        },
+      ],
+      lead_updates: [
+        {
+          id: "upd-1",
+          lead_id: "lead-1",
+          content: "hi",
+          created_at: "2026-08-01T00:00:00.000Z",
+          user_id: "u1",
+        },
+      ],
+      lead_pipeline_stages: [{ stage_key: "new", label: "חדש" }],
+      lead_statuses: [],
+    },
+    ordersByTable,
+  );
+  await fetchAllLeadsForExport(supabase, {
+    tenantId: "tenant-1",
+    isOwner: true,
+  });
+  assert.deepEqual(ordersByTable.chat_contact_tags, [
+    { column: "id", ascending: true },
+  ]);
   assert.deepEqual(ordersByTable.lead_updates, [
     { column: "created_at", ascending: true },
     { column: "id", ascending: true },

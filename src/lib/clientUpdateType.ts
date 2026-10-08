@@ -16,22 +16,36 @@ const COMPLETED_CLIENT_CALL_PATTERNS = [
 export function describesCompletedClientPhoneCall(content: string): boolean {
   const normalized = content.replace(/\s+/g, " ").trim();
   if (!normalized) return false;
-  if (NEGATED_CLIENT_CALL_PATTERNS.some((pattern) => pattern.test(normalized))) return false;
-  return COMPLETED_CLIENT_CALL_PATTERNS.some((pattern) => pattern.test(normalized));
+  if (NEGATED_CLIENT_CALL_PATTERNS.some((pattern) => pattern.test(normalized)))
+    return false;
+  return COMPLETED_CLIENT_CALL_PATTERNS.some((pattern) =>
+    pattern.test(normalized),
+  );
 }
 
 /**
  * A weekly update that documents a completed phone call is stored as `call`, so
  * the client card and Carmen's pulse use the same structured source of truth.
  */
-export function resolveClientUpdateType(selectedType: string, content: string): string {
-  if (selectedType === "weekly_update" && describesCompletedClientPhoneCall(content)) return "call";
+export function resolveClientUpdateType(
+  selectedType: string,
+  content: string,
+): string {
+  if (
+    selectedType === "weekly_update" &&
+    describesCompletedClientPhoneCall(content)
+  )
+    return "call";
   return selectedType;
 }
 
 /** Whether a client_updates row counts as a documented client phone call for pulse. */
-export function isClientCallUpdate(updateType: string | null | undefined, content: string): boolean {
+export function isClientCallUpdate(
+  updateType: string | null | undefined,
+  content: string,
+): boolean {
   if (updateType === "call") return true;
-  if (updateType === "weekly_update") return describesCompletedClientPhoneCall(content);
+  if (updateType === "weekly_update")
+    return describesCompletedClientPhoneCall(content);
   return false;
 }

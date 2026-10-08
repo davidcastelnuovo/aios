@@ -46,9 +46,18 @@ interface AgentSeatRailProps {
 function SharedCluster() {
   return (
     <span className="cc-seat-cluster" aria-hidden>
-      <span className="cc-seat-cluster-dot is-cursor" style={{ backgroundImage: `url(${AGENT_SPRITES.cursor})` }} />
-      <span className="cc-seat-cluster-dot is-grok" style={{ backgroundImage: `url(${AGENT_SPRITES.grok})` }} />
-      <span className="cc-seat-cluster-dot is-codex" style={{ backgroundImage: `url(${AGENT_SPRITES.codex})` }} />
+      <span
+        className="cc-seat-cluster-dot is-cursor"
+        style={{ backgroundImage: `url(${AGENT_SPRITES.cursor})` }}
+      />
+      <span
+        className="cc-seat-cluster-dot is-grok"
+        style={{ backgroundImage: `url(${AGENT_SPRITES.grok})` }}
+      />
+      <span
+        className="cc-seat-cluster-dot is-codex"
+        style={{ backgroundImage: `url(${AGENT_SPRITES.codex})` }}
+      />
     </span>
   );
 }
@@ -71,7 +80,9 @@ export function AgentSeatSelect({
   className = "",
 }: Pick<AgentSeatRailProps, "routes" | "selected" | "onSelect" | "className">) {
   const activeKey = seatKeyFromRoute(selected);
-  const options = RAIL_SEAT_ORDER.filter((key) => key === "shared" || routeForSeatKey(routes, key));
+  const options = RAIL_SEAT_ORDER.filter(
+    (key) => key === "shared" || routeForSeatKey(routes, key),
+  );
 
   return (
     <Select
@@ -92,7 +103,12 @@ export function AgentSeatSelect({
       </SelectTrigger>
       <SelectContent className="cc-seat-select-content border-[var(--cc-line-strong)] bg-[rgba(8,16,34,0.98)] text-[var(--cc-text)]">
         {options.map((key) => (
-          <SelectItem key={key} value={key} textValue={SEAT_ARIA[key]} className="cc-seat-select-item">
+          <SelectItem
+            key={key}
+            value={key}
+            textValue={SEAT_ARIA[key]}
+            className="cc-seat-select-item"
+          >
             <span className="flex items-center gap-2">
               <SeatOptionIcon seatKey={key} />
               <span>{SEAT_ARIA[key]}</span>
@@ -112,7 +128,10 @@ export function AgentSeatButtons({
 }: Pick<AgentSeatRailProps, "routes" | "selected" | "onSelect" | "className">) {
   const activeKey = seatKeyFromRoute(selected);
   return (
-    <div className={`cc-seat-buttons hidden items-center justify-center gap-1.5 sm:flex sm:gap-2${className ? ` ${className}` : ""}`} dir="rtl">
+    <div
+      className={`cc-seat-buttons hidden items-center justify-center gap-1.5 sm:flex sm:gap-2${className ? ` ${className}` : ""}`}
+      dir="rtl"
+    >
       {RAIL_SEAT_ORDER.map((key) => {
         const route = routeForSeatKey(routes, key);
         if (!route && key !== "shared") return null;
@@ -157,7 +176,13 @@ export function AgentSeatStatus({
   onCancel,
 }: Pick<
   AgentSeatRailProps,
-  "selected" | "status" | "externalUrl" | "debating" | "onContinue" | "onSynthesize" | "onCancel"
+  | "selected"
+  | "status"
+  | "externalUrl"
+  | "debating"
+  | "onContinue"
+  | "onSynthesize"
+  | "onCancel"
 >) {
   const activeKey = seatKeyFromRoute(selected);
   const waiting = status === "waiting_external" || status === "debating";
@@ -166,7 +191,10 @@ export function AgentSeatStatus({
   if (!note && !waiting && !externalUrl && !showParliament) return null;
 
   return (
-    <div className="cc-seat-status flex flex-wrap items-center justify-center gap-x-2 gap-y-1 px-3 py-1 text-center text-[10px] text-[var(--cc-text-dim)]" dir="rtl">
+    <div
+      className="cc-seat-status flex flex-wrap items-center justify-center gap-x-2 gap-y-1 px-3 py-1 text-center text-[10px] text-[var(--cc-text-dim)]"
+      dir="rtl"
+    >
       {note && <span>{note}</span>}
       {waiting && (
         <span className="inline-flex items-center gap-1 text-[var(--cc-accent)]">
@@ -175,24 +203,41 @@ export function AgentSeatStatus({
         </span>
       )}
       {externalUrl && (
-        <a href={externalUrl} target="_blank" rel="noreferrer" className="text-[var(--cc-accent)] hover:underline">
+        <a
+          href={externalUrl}
+          target="_blank"
+          rel="noreferrer"
+          className="text-[var(--cc-accent)] hover:underline"
+        >
           סשן חיצוני
         </a>
       )}
       {showParliament && (
         <span className="flex flex-wrap justify-center gap-2">
           {onContinue && (
-            <button type="button" onClick={onContinue} className="text-[var(--cc-accent)] hover:underline">
+            <button
+              type="button"
+              onClick={onContinue}
+              className="text-[var(--cc-accent)] hover:underline"
+            >
               המשך
             </button>
           )}
           {onSynthesize && (
-            <button type="button" onClick={onSynthesize} className="text-[var(--cc-ok)] hover:underline">
+            <button
+              type="button"
+              onClick={onSynthesize}
+              className="text-[var(--cc-ok)] hover:underline"
+            >
               סכם
             </button>
           )}
           {onCancel && (
-            <button type="button" onClick={onCancel} className="text-[var(--cc-crit)] hover:underline">
+            <button
+              type="button"
+              onClick={onCancel}
+              className="text-[var(--cc-crit)] hover:underline"
+            >
               עצור
             </button>
           )}
@@ -218,17 +263,33 @@ export function AgentSeatRail({
 }: AgentSeatRailProps) {
   const picker = (
     <>
-      <AgentSeatSelect routes={routes} selected={selected} onSelect={onSelect} className="sm:hidden" />
-      <AgentSeatButtons routes={routes} selected={selected} onSelect={onSelect} />
+      <AgentSeatSelect
+        routes={routes}
+        selected={selected}
+        onSelect={onSelect}
+        className="sm:hidden"
+      />
+      <AgentSeatButtons
+        routes={routes}
+        selected={selected}
+        onSelect={onSelect}
+      />
     </>
   );
 
   if (embedded) {
-    return <div className="cc-seat-picker flex min-w-0 flex-1 justify-center">{picker}</div>;
+    return (
+      <div className="cc-seat-picker flex min-w-0 flex-1 justify-center">
+        {picker}
+      </div>
+    );
   }
 
   return (
-    <div className={`cc-seat-rail shrink-0 px-2 py-2 sm:px-3${className ? ` ${className}` : ""}`} dir="rtl">
+    <div
+      className={`cc-seat-rail shrink-0 px-2 py-2 sm:px-3${className ? ` ${className}` : ""}`}
+      dir="rtl"
+    >
       {picker}
       {!hideStatus && (
         <AgentSeatStatus

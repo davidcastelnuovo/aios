@@ -12,16 +12,22 @@ interface SharedFacebookConnectionBannerProps {
   } | null;
 }
 
-export function SharedFacebookConnectionBanner({ integration }: SharedFacebookConnectionBannerProps) {
+export function SharedFacebookConnectionBanner({
+  integration,
+}: SharedFacebookConnectionBannerProps) {
   // Fetch source integration details
   const { data: sourceIntegration } = useQuery({
-    queryKey: ['source-facebook-integration', integration?.shared_from_integration_id],
+    queryKey: [
+      "source-facebook-integration",
+      integration?.shared_from_integration_id,
+    ],
     queryFn: async () => {
       if (!integration?.shared_from_integration_id) return null;
-      
+
       const { data, error } = await supabase
-        .from('tenant_integrations')
-        .select(`
+        .from("tenant_integrations")
+        .select(
+          `
           id,
           tenant_id,
           settings,
@@ -29,10 +35,11 @@ export function SharedFacebookConnectionBanner({ integration }: SharedFacebookCo
           tenants:tenant_id (
             name
           )
-        `)
-        .eq('id', integration.shared_from_integration_id)
+        `,
+        )
+        .eq("id", integration.shared_from_integration_id)
         .maybeSingle();
-      
+
       if (error) throw error;
       return data;
     },
@@ -43,7 +50,8 @@ export function SharedFacebookConnectionBanner({ integration }: SharedFacebookCo
     return null;
   }
 
-  const sourceTenantName = (sourceIntegration.tenants as any)?.name || 'ארגון אחר';
+  const sourceTenantName =
+    (sourceIntegration.tenants as any)?.name || "ארגון אחר";
   const sourceSettings = sourceIntegration.settings as any;
   const pageName = sourceSettings?.page_name;
 
@@ -59,9 +67,7 @@ export function SharedFacebookConnectionBanner({ integration }: SharedFacebookCo
       </AlertTitle>
       <AlertDescription className="text-blue-700 dark:text-blue-300 text-right mt-2">
         אינטגרציה זו משותפת מ-<strong>{sourceTenantName}</strong>.
-        {pageName && (
-          <> לידים מהעמוד "{pageName}" יתקבלו אוטומטית.</>
-        )}
+        {pageName && <> לידים מהעמוד "{pageName}" יתקבלו אוטומטית.</>}
         <br />
         <span className="text-sm opacity-80">
           ניתן להגדיר Form Mapping ייחודי לארגון זה.

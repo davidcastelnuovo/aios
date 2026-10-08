@@ -1,7 +1,11 @@
 import { useIsMobile } from "@/hooks/use-mobile";
 import { useCommandCenterSidecar } from "@/contexts/CommandCenterSidecarContext";
 import { CommandCenterSidecar } from "./CommandCenterSidecar";
-import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "@/components/ui/resizable";
+import {
+  ResizableHandle,
+  ResizablePanel,
+  ResizablePanelGroup,
+} from "@/components/ui/resizable";
 import { Sheet, SheetContent } from "@/components/ui/sheet";
 
 interface CommandCenterSidecarShellProps {
@@ -38,7 +42,10 @@ export function CommandCenterSidecarShell({
             dir="rtl"
             className="cc-sidecar-sheet w-full border-[var(--cc-line)] bg-[var(--cc-bg)] p-0 sm:max-w-md"
           >
-            <CommandCenterSidecar onClose={() => setOpen(false)} className="h-full" />
+            <CommandCenterSidecar
+              onClose={() => setOpen(false)}
+              className="h-full"
+            />
           </SheetContent>
         </Sheet>
       </>
@@ -56,8 +63,16 @@ export function CommandCenterSidecarShell({
       className="min-h-0 flex-1"
       autoSaveId="aios-cc-sidecar"
     >
-      <ResizablePanel defaultSize={32} minSize={22} maxSize={45} className="min-h-0">
-        <CommandCenterSidecar onClose={() => setOpen(false)} className="h-full border-l border-[var(--cc-line)]" />
+      <ResizablePanel
+        defaultSize={32}
+        minSize={22}
+        maxSize={45}
+        className="min-h-0"
+      >
+        <CommandCenterSidecar
+          onClose={() => setOpen(false)}
+          className="h-full border-l border-[var(--cc-line)]"
+        />
       </ResizablePanel>
       <ResizableHandle withHandle className="bg-[var(--cc-line)]" />
       <ResizablePanel defaultSize={68} minSize={40} className="min-h-0">

@@ -1,73 +1,83 @@
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.75.0';
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2.75.0";
 
 const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Headers":
+    "authorization, x-client-info, apikey, content-type",
 };
 
 // Phone normalization helper
 function normalizePhone(phone: string): string {
-  if (!phone) return '';
-  return phone.replace(/[\s\-\(\)\+]/g, '');
+  if (!phone) return "";
+  return phone.replace(/[\s\-\(\)\+]/g, "");
 }
 
 // Generate phone variations for matching
 function getPhoneVariations(phone: string): string[] {
   const normalized = normalizePhone(phone);
   const variations = new Set<string>();
-  
+
   variations.add(normalized);
-  
+
   // If starts with 972, add 0 prefix version
-  if (normalized.startsWith('972')) {
-    variations.add('0' + normalized.slice(3));
+  if (normalized.startsWith("972")) {
+    variations.add("0" + normalized.slice(3));
   }
-  
+
   // If starts with 0, add 972 version
-  if (normalized.startsWith('0')) {
-    variations.add('972' + normalized.slice(1));
+  if (normalized.startsWith("0")) {
+    variations.add("972" + normalized.slice(1));
   }
-  
+
   // Add +972 versions
-  if (normalized.startsWith('972')) {
-    variations.add('+' + normalized);
+  if (normalized.startsWith("972")) {
+    variations.add("+" + normalized);
   }
-  
+
   return Array.from(variations);
 }
 
 Deno.serve(async (req) => {
-  if (req.method === 'OPTIONS') {
+  if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
   }
 
   try {
-    
-    const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
-    const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+    const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
+    const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
     // Get raw body text first
     const bodyText = await req.text();
 
     // Optional HMAC signature verification (header: x-manychat-signature, secret: MANYCHAT_WEBHOOK_SECRET)
-    const manychatSecret = Deno.env.get('MANYCHAT_WEBHOOK_SECRET');
+    const manychatSecret = Deno.env.get("MANYCHAT_WEBHOOK_SECRET");
     if (manychatSecret) {
-      const signature = req.headers.get('x-manychat-signature') ?? '';
+      const signature = req.headers.get("x-manychat-signature") ?? "";
       const enc = new TextEncoder();
-      const key = await crypto.subtle.importKey('raw', enc.encode(manychatSecret),
-        { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']);
-      const mac = await crypto.subtle.sign('HMAC', key, enc.encode(bodyText));
+      const key = await crypto.subtle.importKey(
+        "raw",
+        enc.encode(manychatSecret),
+        { name: "HMAC", hash: "SHA-256" },
+        false,
+        ["sign"],
+      );
+      const mac = await crypto.subtle.sign("HMAC", key, enc.encode(bodyText));
       const expected = Array.from(new Uint8Array(mac))
-        .map(b => b.toString(16).padStart(2, '0')).join('');
+        .map((b) => b.toString(16).padStart(2, "0"))
+        .join("");
       // Allow either raw hex or sha256= prefix
-      const norm = signature.replace(/^sha256=/, '');
+      const norm = signature.replace(/^sha256=/, "");
       let ok = norm.length === expected.length;
       let diff = 0;
-      if (ok) for (let i = 0; i < expected.length; i++) diff |= norm.charCodeAt(i) ^ expected.charCodeAt(i);
+      if (ok)
+        for (let i = 0; i < expected.length; i++)
+          diff |= norm.charCodeAt(i) ^ expected.charCodeAt(i);
       if (!ok || diff !== 0) {
-        return new Response(JSON.stringify({ error: 'Invalid signature' }),
-          { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+        return new Response(JSON.stringify({ error: "Invalid signature" }), {
+          status: 403,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
       }
     }
 
@@ -76,29 +86,41 @@ Deno.serve(async (req) => {
     try {
       payload = JSON.parse(bodyText);
     } catch (parseError) {
-      console.error('❌ JSON parse error:', parseError);
+      console.error("❌ JSON parse error:", parseError);
       return new Response(
-        JSON.stringify({ 
-          error: 'Invalid JSON', 
+        JSON.stringify({
+          error: "Invalid JSON",
           received: bodyText.substring(0, 100),
-          parseError: parseError instanceof Error ? parseError.message : 'Unknown error'
+          parseError:
+            parseError instanceof Error ? parseError.message : "Unknown error",
         }),
-        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        },
       );
     }
 
     const { subscriber, message, channel, event_type, type } = payload;
 
     // Determine if this is an inbound or outbound message
-    const eventType = event_type || type || 'message_received';
-    const isOutbound = ['message_sent', 'agent_reply', 'bot_reply', 'template_sent', 'automation_sent'].includes(eventType);
-    
+    const eventType = event_type || type || "message_received";
+    const isOutbound = [
+      "message_sent",
+      "agent_reply",
+      "bot_reply",
+      "template_sent",
+      "automation_sent",
+    ].includes(eventType);
 
     if (!subscriber || !subscriber.id) {
-      console.error('Invalid payload: missing subscriber.id');
+      console.error("Invalid payload: missing subscriber.id");
       return new Response(
-        JSON.stringify({ error: 'Invalid payload: missing subscriber.id' }),
-        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        JSON.stringify({ error: "Invalid payload: missing subscriber.id" }),
+        {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        },
       );
     }
 
@@ -106,93 +128,106 @@ Deno.serve(async (req) => {
 
     // Try to find client by manychat_subscriber_id first
     const { data: existingClient } = await supabase
-      .from('clients')
-      .select('id, tenant_id, name, phone')
-      .eq('manychat_subscriber_id', subscriber.id)
+      .from("clients")
+      .select("id, tenant_id, name, phone")
+      .eq("manychat_subscriber_id", subscriber.id)
       .maybeSingle();
 
     if (existingClient) {
       client = existingClient;
     } else {
       // Not found by subscriber_id, try to find by phone
-      
-      const phone = subscriber.full_contact?.whatsapp_phone || 
-                    subscriber.whatsapp_phone || 
-                    subscriber.phone || 
-                    payload.phone;
-      
+
+      const phone =
+        subscriber.full_contact?.whatsapp_phone ||
+        subscriber.whatsapp_phone ||
+        subscriber.phone ||
+        payload.phone;
+
       if (phone) {
         const phoneVariations = getPhoneVariations(phone);
-        
+
         // Build OR query for all phone variations
-        const phoneQuery = phoneVariations.map(p => `phone.eq.${p}`).join(',');
-        
+        const phoneQuery = phoneVariations
+          .map((p) => `phone.eq.${p}`)
+          .join(",");
+
         // Try to find client by phone (without existing manychat_subscriber_id)
         const { data: clientByPhone } = await supabase
-          .from('clients')
-          .select('id, tenant_id, name, phone')
+          .from("clients")
+          .select("id, tenant_id, name, phone")
           .or(phoneQuery)
-          .is('manychat_subscriber_id', null)
+          .is("manychat_subscriber_id", null)
           .limit(1)
           .maybeSingle();
-        
+
         if (clientByPhone) {
-          
           // Update the manychat_subscriber_id
           const { error: updateError } = await supabase
-            .from('clients')
+            .from("clients")
             .update({ manychat_subscriber_id: subscriber.id })
-            .eq('id', clientByPhone.id);
-          
+            .eq("id", clientByPhone.id);
+
           if (updateError) {
-            console.error('❌ Error updating client subscriber_id:', updateError);
+            console.error(
+              "❌ Error updating client subscriber_id:",
+              updateError,
+            );
           } else {
           }
-          
+
           client = clientByPhone;
         } else {
           // Try to find lead by phone
           const { data: leadByPhone } = await supabase
-            .from('leads')
-            .select('id, tenant_id, company_name, phone')
+            .from("leads")
+            .select("id, tenant_id, company_name, phone")
             .or(phoneQuery)
-            .is('manychat_subscriber_id', null)
+            .is("manychat_subscriber_id", null)
             .limit(1)
             .maybeSingle();
-          
+
           if (leadByPhone) {
-            
             // Update the manychat_subscriber_id
             const { error: updateError } = await supabase
-              .from('leads')
+              .from("leads")
               .update({ manychat_subscriber_id: subscriber.id })
-              .eq('id', leadByPhone.id);
-            
+              .eq("id", leadByPhone.id);
+
             if (updateError) {
-              console.error('❌ Error updating lead subscriber_id:', updateError);
+              console.error(
+                "❌ Error updating lead subscriber_id:",
+                updateError,
+              );
             } else {
             }
           }
         }
       } else {
-        console.warn('⚠️ No phone number found in payload');
+        console.warn("⚠️ No phone number found in payload");
       }
     }
 
     if (!client) {
-      console.error('❌ No client or lead found for subscriber:', subscriber.id);
+      console.error(
+        "❌ No client or lead found for subscriber:",
+        subscriber.id,
+      );
       return new Response(
-        JSON.stringify({ 
-          error: 'Contact not found', 
+        JSON.stringify({
+          error: "Contact not found",
           received: true,
-          note: 'Make sure the contact exists with a matching phone number'
+          note: "Make sure the contact exists with a matching phone number",
         }),
-        { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        {
+          status: 200,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        },
       );
     }
 
     // Extract message text
-    let messageText = '';
+    let messageText = "";
     if (message && message.text) {
       messageText = message.text;
     } else if (message && message.type) {
@@ -200,38 +235,45 @@ Deno.serve(async (req) => {
     }
 
     // Save message with correct direction
-    const { error: saveError } = await supabase
-      .from('chat_messages')
-      .insert({
-        client_id: client.id,
-        tenant_id: client.tenant_id,
-        direction: isOutbound ? 'outbound' : 'inbound',
-        message_text: messageText,
-        channel: channel || 'whatsapp',
-        provider: 'manychat',
-        connection_user_id: client.id,
-        raw_provider_data: payload,
-      });
+    const { error: saveError } = await supabase.from("chat_messages").insert({
+      client_id: client.id,
+      tenant_id: client.tenant_id,
+      direction: isOutbound ? "outbound" : "inbound",
+      message_text: messageText,
+      channel: channel || "whatsapp",
+      provider: "manychat",
+      connection_user_id: client.id,
+      raw_provider_data: payload,
+    });
 
     if (saveError) {
-      console.error('Error saving message:', saveError);
+      console.error("Error saving message:", saveError);
       return new Response(
-        JSON.stringify({ error: 'Failed to save message', details: saveError }),
-        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        JSON.stringify({ error: "Failed to save message", details: saveError }),
+        {
+          status: 500,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        },
       );
     }
 
-
     return new Response(
-      JSON.stringify({ received: true, direction: isOutbound ? 'outbound' : 'inbound' }),
-      { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      JSON.stringify({
+        received: true,
+        direction: isOutbound ? "outbound" : "inbound",
+      }),
+      { headers: { ...corsHeaders, "Content-Type": "application/json" } },
     );
   } catch (error) {
-    console.error('ManyChat webhook error:', error);
-    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    console.error("ManyChat webhook error:", error);
+    const errorMessage =
+      error instanceof Error ? error.message : "Unknown error";
     return new Response(
-      JSON.stringify({ error: 'Internal server error', details: errorMessage }),
-      { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      JSON.stringify({ error: "Internal server error", details: errorMessage }),
+      {
+        status: 500,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      },
     );
   }
 });

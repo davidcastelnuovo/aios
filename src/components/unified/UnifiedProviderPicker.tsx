@@ -1,5 +1,11 @@
 import { useState, useEffect } from "react";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+} from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
@@ -22,13 +28,20 @@ interface Props {
   directIntegrationType?: string; // If set, skip provider list and connect directly
 }
 
-export default function UnifiedProviderPicker({ open, onOpenChange, selectedCategory, tenantId, directIntegrationType }: Props) {
+export default function UnifiedProviderPicker({
+  open,
+  onOpenChange,
+  selectedCategory,
+  tenantId,
+  directIntegrationType,
+}: Props) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
   const [providers, setProviders] = useState<UnifiedProvider[]>([]);
   const [isLoadingProviders, setIsLoadingProviders] = useState(false);
-  const [selectedProvider, setSelectedProvider] = useState<UnifiedProvider | null>(null);
+  const [selectedProvider, setSelectedProvider] =
+    useState<UnifiedProvider | null>(null);
   const [isConnecting, setIsConnecting] = useState(false);
   const [searchFilter, setSearchFilter] = useState("");
 
@@ -48,7 +61,9 @@ export default function UnifiedProviderPicker({ open, onOpenChange, selectedCate
     const handler = (event: MessageEvent) => {
       if (event.data?.type === "unified-connected") {
         toast({ title: "החיבור נשמר בהצלחה!" });
-        queryClient.invalidateQueries({ queryKey: ["unified-connections", tenantId] });
+        queryClient.invalidateQueries({
+          queryKey: ["unified-connections", tenantId],
+        });
         handleOpenChange(false);
       }
     };
@@ -60,13 +75,24 @@ export default function UnifiedProviderPicker({ open, onOpenChange, selectedCate
     if (!selectedCategory) return;
     setIsLoadingProviders(true);
     try {
-      const { data, error } = await supabase.functions.invoke("unified-connections", {
-        body: { action: "list_integrations", tenant_id: tenantId, category: selectedCategory.key },
-      });
+      const { data, error } = await supabase.functions.invoke(
+        "unified-connections",
+        {
+          body: {
+            action: "list_integrations",
+            tenant_id: tenantId,
+            category: selectedCategory.key,
+          },
+        },
+      );
       if (error) throw error;
       setProviders(data?.integrations || []);
     } catch (err: any) {
-      toast({ title: "שגיאה בטעינת ספקים", description: err.message, variant: "destructive" });
+      toast({
+        title: "שגיאה בטעינת ספקים",
+        description: err.message,
+        variant: "destructive",
+      });
     } finally {
       setIsLoadingProviders(false);
     }
@@ -99,7 +125,10 @@ export default function UnifiedProviderPicker({ open, onOpenChange, selectedCate
         flow_uid: flowUid,
       };
 
-      sessionStorage.setItem("unified_pending_connection", JSON.stringify(pendingConnection));
+      sessionStorage.setItem(
+        "unified_pending_connection",
+        JSON.stringify(pendingConnection),
+      );
 
       const tenantSlugMatch = window.location.pathname.match(/^\/t\/([^/]+)/);
       const callbackPath = tenantSlugMatch
@@ -108,48 +137,64 @@ export default function UnifiedProviderPicker({ open, onOpenChange, selectedCate
       const callbackUrl = new URL(callbackPath, window.location.origin);
       const state = window.btoa(JSON.stringify(pendingConnection));
 
-      const { data, error } = await supabase.functions.invoke("unified-connections", {
-        body: {
-          action: "get_embed_url",
-          tenant_id: tenantId,
-          category: selectedCategory!.key,
-          integration_type: provider.type,
-          success_redirect: callbackUrl.toString(),
-          failure_redirect: window.location.href,
-          state,
-          uid: flowUid,
+      const { data, error } = await supabase.functions.invoke(
+        "unified-connections",
+        {
+          body: {
+            action: "get_embed_url",
+            tenant_id: tenantId,
+            category: selectedCategory!.key,
+            integration_type: provider.type,
+            success_redirect: callbackUrl.toString(),
+            failure_redirect: window.location.href,
+            state,
+            uid: flowUid,
+          },
         },
-      });
+      );
       if (error) throw error;
       if (data?.embed_url) {
         window.open(data.embed_url, "_blank", "width=600,height=700");
       }
     } catch (err: any) {
-      toast({ title: "שגיאה בפתיחת חלון חיבור", description: err.message, variant: "destructive" });
+      toast({
+        title: "שגיאה בפתיחת חלון חיבור",
+        description: err.message,
+        variant: "destructive",
+      });
     } finally {
       setIsConnecting(false);
     }
   };
 
-  const filteredProviders = providers.filter((p) =>
-    p.name.toLowerCase().includes(searchFilter.toLowerCase()) ||
-    p.type.toLowerCase().includes(searchFilter.toLowerCase())
+  const filteredProviders = providers.filter(
+    (p) =>
+      p.name.toLowerCase().includes(searchFilter.toLowerCase()) ||
+      p.type.toLowerCase().includes(searchFilter.toLowerCase()),
   );
 
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
-      <DialogContent dir="rtl" className="max-w-lg" onOpenAutoFocus={() => onDialogOpen()}>
+      <DialogContent
+        dir="rtl"
+        className="max-w-lg"
+        onOpenAutoFocus={() => onDialogOpen()}
+      >
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             {selectedCategory && (
               <>
                 <span>{selectedCategory.label}</span>
                 <ChevronRight className="h-4 w-4 text-muted-foreground" />
-                <span className="text-muted-foreground text-base font-normal">בחר ספק</span>
+                <span className="text-muted-foreground text-base font-normal">
+                  בחר ספק
+                </span>
               </>
             )}
           </DialogTitle>
-          <DialogDescription>בחר את השירות הספציפי שברצונך לחבר</DialogDescription>
+          <DialogDescription>
+            בחר את השירות הספציפי שברצונך לחבר
+          </DialogDescription>
         </DialogHeader>
 
         <div className="space-y-3">
@@ -164,7 +209,9 @@ export default function UnifiedProviderPicker({ open, onOpenChange, selectedCate
               <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
             </div>
           ) : filteredProviders.length === 0 ? (
-            <p className="text-center text-muted-foreground py-6">לא נמצאו ספקים בקטגוריה זו</p>
+            <p className="text-center text-muted-foreground py-6">
+              לא נמצאו ספקים בקטגוריה זו
+            </p>
           ) : (
             <ScrollArea className="max-h-[360px]">
               <div className="space-y-1">
@@ -172,18 +219,25 @@ export default function UnifiedProviderPicker({ open, onOpenChange, selectedCate
                   <button
                     key={provider.type}
                     onClick={() => handleSelectProvider(provider)}
-                    disabled={isConnecting && selectedProvider?.type === provider.type}
+                    disabled={
+                      isConnecting && selectedProvider?.type === provider.type
+                    }
                     className="w-full flex items-center gap-3 p-3 rounded-lg border hover:bg-muted/50 transition-colors text-right disabled:opacity-50"
                   >
                     {provider.icon_url ? (
-                      <img src={provider.icon_url} alt={provider.name} className="h-8 w-8 rounded object-contain" />
+                      <img
+                        src={provider.icon_url}
+                        alt={provider.name}
+                        className="h-8 w-8 rounded object-contain"
+                      />
                     ) : (
                       <div className="h-8 w-8 rounded bg-primary/10 flex items-center justify-center text-xs font-bold text-primary">
                         {provider.name.charAt(0)}
                       </div>
                     )}
                     <span className="font-medium flex-1">{provider.name}</span>
-                    {isConnecting && selectedProvider?.type === provider.type ? (
+                    {isConnecting &&
+                    selectedProvider?.type === provider.type ? (
                       <Loader2 className="h-4 w-4 animate-spin" />
                     ) : (
                       <ArrowRight className="h-4 w-4 text-muted-foreground" />

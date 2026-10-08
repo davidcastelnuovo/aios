@@ -3,8 +3,9 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2.75.0";
 // Gmail API proxy v1
 
 const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version',
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Headers":
+    "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
 async function refreshTokenIfNeeded(supabaseService: any, tokenData: any) {
@@ -13,49 +14,51 @@ async function refreshTokenIfNeeded(supabaseService: any, tokenData: any) {
     return tokenData.access_token;
   }
 
-  const clientId = Deno.env.get('GOOGLE_CLIENT_ID');
-  const clientSecret = Deno.env.get('GOOGLE_CLIENT_SECRET');
+  const clientId = Deno.env.get("GOOGLE_CLIENT_ID");
+  const clientSecret = Deno.env.get("GOOGLE_CLIENT_SECRET");
 
-  const res = await fetch('https://oauth2.googleapis.com/token', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+  const res = await fetch("https://oauth2.googleapis.com/token", {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
     body: new URLSearchParams({
       client_id: clientId!,
       client_secret: clientSecret!,
       refresh_token: tokenData.refresh_token,
-      grant_type: 'refresh_token',
+      grant_type: "refresh_token",
     }),
   });
 
   const tokens = await res.json();
-  if (!tokens.access_token) throw new Error('Token refresh failed');
+  if (!tokens.access_token) throw new Error("Token refresh failed");
 
-  const newExpires = new Date(Date.now() + (tokens.expires_in * 1000));
+  const newExpires = new Date(Date.now() + tokens.expires_in * 1000);
   await supabaseService
-    .from('gmail_tokens')
+    .from("gmail_tokens")
     .update({
       access_token: tokens.access_token,
       expires_at: newExpires.toISOString(),
       updated_at: new Date().toISOString(),
     })
-    .eq('user_id', tokenData.user_id);
+    .eq("user_id", tokenData.user_id);
 
   return tokens.access_token;
 }
 
 function parseEmailHeader(payload: any, headerName: string): string {
-  const header = payload?.headers?.find((h: any) => h.name.toLowerCase() === headerName.toLowerCase());
-  return header?.value || '';
+  const header = payload?.headers?.find(
+    (h: any) => h.name.toLowerCase() === headerName.toLowerCase(),
+  );
+  return header?.value || "";
 }
 
 function decodeBase64Utf8(base64url: string): string {
-  const base64 = base64url.replace(/-/g, '+').replace(/_/g, '/');
+  const base64 = base64url.replace(/-/g, "+").replace(/_/g, "/");
   const binary = atob(base64);
   const bytes = new Uint8Array(binary.length);
   for (let i = 0; i < binary.length; i++) {
     bytes[i] = binary.charCodeAt(i);
   }
-  return new TextDecoder('utf-8').decode(bytes);
+  return new TextDecoder("utf-8").decode(bytes);
 }
 
 function getEmailBody(payload: any): string {
@@ -64,8 +67,10 @@ function getEmailBody(payload: any): string {
   }
   if (payload.parts) {
     // Prefer text/html, fallback to text/plain
-    const htmlPart = payload.parts.find((p: any) => p.mimeType === 'text/html');
-    const textPart = payload.parts.find((p: any) => p.mimeType === 'text/plain');
+    const htmlPart = payload.parts.find((p: any) => p.mimeType === "text/html");
+    const textPart = payload.parts.find(
+      (p: any) => p.mimeType === "text/plain",
+    );
     const part = htmlPart || textPart;
     if (part?.body?.data) {
       return decodeBase64Utf8(part.body.data);
@@ -78,68 +83,80 @@ function getEmailBody(payload: any): string {
       }
     }
   }
-  return '';
+  return "";
 }
 
 serve(async (req) => {
-  if (req.method === 'OPTIONS') {
+  if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
   }
 
   try {
-    const authHeader = req.headers.get('Authorization') || req.headers.get('authorization');
-    if (!authHeader) throw new Error('No authorization header');
+    const authHeader =
+      req.headers.get("Authorization") || req.headers.get("authorization");
+    if (!authHeader) throw new Error("No authorization header");
 
     const anonClient = createClient(
-      Deno.env.get('SUPABASE_URL') ?? '',
-      Deno.env.get('SUPABASE_ANON_KEY') ?? '',
-      { global: { headers: { Authorization: authHeader } } }
+      Deno.env.get("SUPABASE_URL") ?? "",
+      Deno.env.get("SUPABASE_ANON_KEY") ?? "",
+      { global: { headers: { Authorization: authHeader } } },
     );
 
-    const { data: { user }, error: userError } = await anonClient.auth.getUser();
-    if (userError || !user) throw new Error('Unauthorized');
+    const {
+      data: { user },
+      error: userError,
+    } = await anonClient.auth.getUser();
+    if (userError || !user) throw new Error("Unauthorized");
 
     const serviceClient = createClient(
-      Deno.env.get('SUPABASE_URL') ?? '',
-      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '',
+      Deno.env.get("SUPABASE_URL") ?? "",
+      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "",
     );
 
     // Get tokens
     const { data: tokenData, error: tokenError } = await serviceClient
-      .from('gmail_tokens')
-      .select('*')
-      .eq('user_id', user.id)
+      .from("gmail_tokens")
+      .select("*")
+      .eq("user_id", user.id)
       .single();
 
-    if (tokenError || !tokenData) throw new Error('Gmail not connected');
+    if (tokenError || !tokenData) throw new Error("Gmail not connected");
 
     const accessToken = await refreshTokenIfNeeded(serviceClient, tokenData);
     const body = await req.json();
     const { action } = body;
 
     // LIST messages
-    if (action === 'list') {
+    if (action === "list") {
       const { query, maxResults = 20, pageToken, labelIds } = body;
       const params = new URLSearchParams();
-      if (query) params.set('q', query);
-      params.set('maxResults', String(maxResults));
-      if (pageToken) params.set('pageToken', pageToken);
+      if (query) params.set("q", query);
+      params.set("maxResults", String(maxResults));
+      if (pageToken) params.set("pageToken", pageToken);
       if (Array.isArray(labelIds)) {
         labelIds.forEach((item: unknown) => {
           // Defensive: handle both string IDs and object rows (e.g. { label_id: "..." })
-          const id = typeof item === 'string' ? item
-            : (item && typeof item === 'object' ? ((item as any).label_id || (item as any).id || '') : '');
-          if (typeof id === 'string' && id.trim()) params.append('labelIds', id.trim());
+          const id =
+            typeof item === "string"
+              ? item
+              : item && typeof item === "object"
+                ? (item as any).label_id || (item as any).id || ""
+                : "";
+          if (typeof id === "string" && id.trim())
+            params.append("labelIds", id.trim());
         });
-      } else if (typeof labelIds === 'string' && labelIds.trim()) {
-        params.append('labelIds', labelIds);
+      } else if (typeof labelIds === "string" && labelIds.trim()) {
+        params.append("labelIds", labelIds);
       }
 
-      const res = await fetch(`https://gmail.googleapis.com/gmail/v1/users/me/messages?${params}`, {
-        headers: { 'Authorization': `Bearer ${accessToken}` },
-      });
+      const res = await fetch(
+        `https://gmail.googleapis.com/gmail/v1/users/me/messages?${params}`,
+        {
+          headers: { Authorization: `Bearer ${accessToken}` },
+        },
+      );
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error?.message || 'Gmail API error');
+      if (!res.ok) throw new Error(data.error?.message || "Gmail API error");
 
       // Fetch metadata for each message
       const messages = data.messages || [];
@@ -147,7 +164,7 @@ serve(async (req) => {
         messages.slice(0, maxResults).map(async (msg: any) => {
           const msgRes = await fetch(
             `https://gmail.googleapis.com/gmail/v1/users/me/messages/${msg.id}?format=metadata&metadataHeaders=From&metadataHeaders=To&metadataHeaders=Subject&metadataHeaders=Date`,
-            { headers: { 'Authorization': `Bearer ${accessToken}` } }
+            { headers: { Authorization: `Bearer ${accessToken}` } },
           );
           const msgData = await msgRes.json();
           return {
@@ -155,85 +172,104 @@ serve(async (req) => {
             threadId: msgData.threadId,
             snippet: msgData.snippet,
             labelIds: msgData.labelIds || [],
-            from: parseEmailHeader(msgData.payload, 'From'),
-            to: parseEmailHeader(msgData.payload, 'To'),
-            subject: parseEmailHeader(msgData.payload, 'Subject'),
-            date: parseEmailHeader(msgData.payload, 'Date'),
-            isUnread: (msgData.labelIds || []).includes('UNREAD'),
+            from: parseEmailHeader(msgData.payload, "From"),
+            to: parseEmailHeader(msgData.payload, "To"),
+            subject: parseEmailHeader(msgData.payload, "Subject"),
+            date: parseEmailHeader(msgData.payload, "Date"),
+            isUnread: (msgData.labelIds || []).includes("UNREAD"),
           };
-        })
+        }),
       );
 
-      return new Response(JSON.stringify({
-        messages: detailed,
-        nextPageToken: data.nextPageToken,
-        resultSizeEstimate: data.resultSizeEstimate,
-      }), {
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      });
+      return new Response(
+        JSON.stringify({
+          messages: detailed,
+          nextPageToken: data.nextPageToken,
+          resultSizeEstimate: data.resultSizeEstimate,
+        }),
+        {
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        },
+      );
     }
 
     // GET single message
-    if (action === 'get') {
+    if (action === "get") {
       const { messageId } = body;
-      if (!messageId) throw new Error('Missing messageId');
+      if (!messageId) throw new Error("Missing messageId");
 
       const res = await fetch(
         `https://gmail.googleapis.com/gmail/v1/users/me/messages/${messageId}?format=full`,
-        { headers: { 'Authorization': `Bearer ${accessToken}` } }
+        { headers: { Authorization: `Bearer ${accessToken}` } },
       );
       const msgData = await res.json();
-      if (!res.ok) throw new Error(msgData.error?.message || 'Gmail API error');
+      if (!res.ok) throw new Error(msgData.error?.message || "Gmail API error");
 
-      return new Response(JSON.stringify({
-        id: msgData.id,
-        threadId: msgData.threadId,
-        snippet: msgData.snippet,
-        labelIds: msgData.labelIds || [],
-        from: parseEmailHeader(msgData.payload, 'From'),
-        to: parseEmailHeader(msgData.payload, 'To'),
-        subject: parseEmailHeader(msgData.payload, 'Subject'),
-        date: parseEmailHeader(msgData.payload, 'Date'),
-        body: getEmailBody(msgData.payload),
-        isUnread: (msgData.labelIds || []).includes('UNREAD'),
-      }), {
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      });
+      return new Response(
+        JSON.stringify({
+          id: msgData.id,
+          threadId: msgData.threadId,
+          snippet: msgData.snippet,
+          labelIds: msgData.labelIds || [],
+          from: parseEmailHeader(msgData.payload, "From"),
+          to: parseEmailHeader(msgData.payload, "To"),
+          subject: parseEmailHeader(msgData.payload, "Subject"),
+          date: parseEmailHeader(msgData.payload, "Date"),
+          body: getEmailBody(msgData.payload),
+          isUnread: (msgData.labelIds || []).includes("UNREAD"),
+        }),
+        {
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        },
+      );
     }
 
     // SEND message
-    if (action === 'send') {
-      const { to, subject, body: emailBody, inReplyTo, threadId, attachments } = body;
-      if (!to || !subject) throw new Error('Missing to or subject');
+    if (action === "send") {
+      const {
+        to,
+        subject,
+        body: emailBody,
+        inReplyTo,
+        threadId,
+        attachments,
+      } = body;
+      if (!to || !subject) throw new Error("Missing to or subject");
 
       // Encode subject as RFC 2047 (UTF-8 base64) so Hebrew/non-ASCII renders correctly
       const subjectBytes = new TextEncoder().encode(subject);
-      let subjectBinary = '';
-      for (let i = 0; i < subjectBytes.length; i++) subjectBinary += String.fromCharCode(subjectBytes[i]);
+      let subjectBinary = "";
+      for (let i = 0; i < subjectBytes.length; i++)
+        subjectBinary += String.fromCharCode(subjectBytes[i]);
       const encodedSubject = `=?UTF-8?B?${btoa(subjectBinary)}?=`;
-      const hasAttachments = Array.isArray(attachments) && attachments.length > 0;
+      const hasAttachments =
+        Array.isArray(attachments) && attachments.length > 0;
       // Inline images use Content-Disposition: inline + Content-ID, referenced from HTML via cid:<id>.
-      const hasInline = hasAttachments && attachments.some((a: any) => a?.disposition === 'inline' && a?.cid);
+      const hasInline =
+        hasAttachments &&
+        attachments.some((a: any) => a?.disposition === "inline" && a?.cid);
 
-      let rawMessage = '';
+      let rawMessage = "";
 
       if (hasAttachments) {
         const boundary = `----=_Part_${Date.now()}_${Math.random().toString(36).slice(2)}`;
-        const rootContentType = hasInline ? 'multipart/related' : 'multipart/mixed';
+        const rootContentType = hasInline
+          ? "multipart/related"
+          : "multipart/mixed";
         rawMessage = `To: ${to}\r\nSubject: ${encodedSubject}\r\nMIME-Version: 1.0\r\nContent-Type: ${rootContentType}; boundary="${boundary}"\r\n`;
         if (inReplyTo) {
           rawMessage += `In-Reply-To: ${inReplyTo}\r\nReferences: ${inReplyTo}\r\n`;
         }
-        rawMessage += `\r\n--${boundary}\r\nContent-Type: text/html; charset=utf-8\r\nContent-Transfer-Encoding: 7bit\r\n\r\n${emailBody || ''}\r\n`;
+        rawMessage += `\r\n--${boundary}\r\nContent-Type: text/html; charset=utf-8\r\nContent-Transfer-Encoding: 7bit\r\n\r\n${emailBody || ""}\r\n`;
 
         for (const att of attachments) {
           // att = { filename, mimeType, data (base64), disposition?, cid? }
-          const filename = att.filename || 'attachment';
-          const mimeType = att.mimeType || 'application/octet-stream';
-          const data = String(att.data || '').replace(/\r?\n/g, '');
+          const filename = att.filename || "attachment";
+          const mimeType = att.mimeType || "application/octet-stream";
+          const data = String(att.data || "").replace(/\r?\n/g, "");
           // Re-wrap base64 to 76-char lines as per RFC
-          const wrapped = data.match(/.{1,76}/g)?.join('\r\n') || data;
-          const isInline = att?.disposition === 'inline' && att?.cid;
+          const wrapped = data.match(/.{1,76}/g)?.join("\r\n") || data;
+          const isInline = att?.disposition === "inline" && att?.cid;
           if (isInline) {
             rawMessage += `--${boundary}\r\nContent-Type: ${mimeType}; name="${filename}"\r\nContent-Disposition: inline; filename="${filename}"\r\nContent-Transfer-Encoding: base64\r\nContent-ID: <${att.cid}>\r\nX-Attachment-Id: ${att.cid}\r\n\r\n${wrapped}\r\n`;
           } else {
@@ -246,97 +282,105 @@ serve(async (req) => {
         if (inReplyTo) {
           rawMessage += `In-Reply-To: ${inReplyTo}\r\nReferences: ${inReplyTo}\r\n`;
         }
-        rawMessage += `\r\n${emailBody || ''}`;
+        rawMessage += `\r\n${emailBody || ""}`;
       }
 
       // Base64url encode the full RFC 2822 message
       // Use TextEncoder to handle UTF-8 properly in body content
       const bytes = new TextEncoder().encode(rawMessage);
-      let binary = '';
-      for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i]);
+      let binary = "";
+      for (let i = 0; i < bytes.length; i++)
+        binary += String.fromCharCode(bytes[i]);
       const encoded = btoa(binary)
-        .replace(/\+/g, '-')
-        .replace(/\//g, '_')
-        .replace(/=+$/, '');
+        .replace(/\+/g, "-")
+        .replace(/\//g, "_")
+        .replace(/=+$/, "");
 
       const sendBody: any = { raw: encoded };
       if (threadId) sendBody.threadId = threadId;
 
-      const res = await fetch('https://gmail.googleapis.com/gmail/v1/users/me/messages/send', {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${accessToken}`,
-          'Content-Type': 'application/json',
+      const res = await fetch(
+        "https://gmail.googleapis.com/gmail/v1/users/me/messages/send",
+        {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${accessToken}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify(sendBody),
         },
-        body: JSON.stringify(sendBody),
-      });
+      );
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error?.message || 'Send failed');
+      if (!res.ok) throw new Error(data.error?.message || "Send failed");
 
       return new Response(JSON.stringify({ success: true, id: data.id }), {
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
     // MARK as read/unread
-    if (action === 'markRead' || action === 'markUnread') {
+    if (action === "markRead" || action === "markUnread") {
       const { messageId } = body;
-      if (!messageId) throw new Error('Missing messageId');
+      if (!messageId) throw new Error("Missing messageId");
 
-      const modifications = action === 'markRead'
-        ? { removeLabelIds: ['UNREAD'] }
-        : { addLabelIds: ['UNREAD'] };
+      const modifications =
+        action === "markRead"
+          ? { removeLabelIds: ["UNREAD"] }
+          : { addLabelIds: ["UNREAD"] };
 
       const res = await fetch(
         `https://gmail.googleapis.com/gmail/v1/users/me/messages/${messageId}/modify`,
         {
-          method: 'POST',
+          method: "POST",
           headers: {
-            'Authorization': `Bearer ${accessToken}`,
-            'Content-Type': 'application/json',
+            Authorization: `Bearer ${accessToken}`,
+            "Content-Type": "application/json",
           },
           body: JSON.stringify(modifications),
-        }
+        },
       );
       if (!res.ok) {
         const err = await res.json();
-        throw new Error(err.error?.message || 'Modify failed');
+        throw new Error(err.error?.message || "Modify failed");
       }
 
       return new Response(JSON.stringify({ success: true }), {
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
     // TRASH message
-    if (action === 'trash') {
+    if (action === "trash") {
       const { messageId } = body;
-      if (!messageId) throw new Error('Missing messageId');
+      if (!messageId) throw new Error("Missing messageId");
 
       const res = await fetch(
         `https://gmail.googleapis.com/gmail/v1/users/me/messages/${messageId}/trash`,
         {
-          method: 'POST',
-          headers: { 'Authorization': `Bearer ${accessToken}` },
-        }
+          method: "POST",
+          headers: { Authorization: `Bearer ${accessToken}` },
+        },
       );
       if (!res.ok) {
         const err = await res.json();
-        throw new Error(err.error?.message || 'Trash failed');
+        throw new Error(err.error?.message || "Trash failed");
       }
 
       return new Response(JSON.stringify({ success: true }), {
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
     // LIST LABELS
-    if (action === 'listLabels') {
-      const res = await fetch('https://gmail.googleapis.com/gmail/v1/users/me/labels', {
-        headers: { 'Authorization': `Bearer ${accessToken}` },
-      });
+    if (action === "listLabels") {
+      const res = await fetch(
+        "https://gmail.googleapis.com/gmail/v1/users/me/labels",
+        {
+          headers: { Authorization: `Bearer ${accessToken}` },
+        },
+      );
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error?.message || 'Gmail API error');
+      if (!res.ok) throw new Error(data.error?.message || "Gmail API error");
 
       const labels = (data.labels || []).map((l: any) => ({
         id: l.id,
@@ -345,16 +389,21 @@ serve(async (req) => {
       }));
 
       return new Response(JSON.stringify({ labels }), {
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
-    throw new Error('Invalid action');
+    throw new Error("Invalid action");
   } catch (error) {
-    console.error('Gmail API error:', error);
-    return new Response(JSON.stringify({ error: error instanceof Error ? error.message : 'Unknown error' }), {
-      status: 500,
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-    });
+    console.error("Gmail API error:", error);
+    return new Response(
+      JSON.stringify({
+        error: error instanceof Error ? error.message : "Unknown error",
+      }),
+      {
+        status: 500,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      },
+    );
   }
 });

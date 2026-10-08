@@ -16,10 +16,10 @@ export interface CallerScope {
 }
 
 export class AccessDeniedError extends Error {
-  code = 'access_denied';
+  code = "access_denied";
   constructor(message: string) {
     super(message);
-    this.name = 'AccessDeniedError';
+    this.name = "AccessDeniedError";
   }
 }
 
@@ -35,31 +35,35 @@ export async function assertCallerCanAccessClient(
   clientId: string,
   scope: CallerScope,
 ): Promise<void> {
-  if (!clientId) throw new AccessDeniedError('missing client_id');
+  if (!clientId) throw new AccessDeniedError("missing client_id");
   if (scope.isManagerRole) return; // full-tenant managers
 
   const { data: client } = await supabase
-    .from('clients')
-    .select('agency_id')
-    .eq('id', clientId)
-    .in('tenant_id', scope.accessibleTenantIds)
+    .from("clients")
+    .select("agency_id")
+    .eq("id", clientId)
+    .in("tenant_id", scope.accessibleTenantIds)
     .maybeSingle();
-  if (!client) throw new AccessDeniedError('הלקוח לא נמצא או מחוץ להרשאה שלך');
+  if (!client) throw new AccessDeniedError("הלקוח לא נמצא או מחוץ להרשאה שלך");
 
   if (scope.isTeamManager) {
     if (scope.managedAgencyIds.includes(client.agency_id)) return;
-    throw new AccessDeniedError('הלקוח אינו באחת הסוכנויות שאתה מנהל — אין לך גישה אליו');
+    throw new AccessDeniedError(
+      "הלקוח אינו באחת הסוכנויות שאתה מנהל — אין לך גישה אליו",
+    );
   }
 
   if (scope.callerCampaignerId) {
     const { data: link } = await supabase
-      .from('client_team')
-      .select('id')
-      .eq('client_id', clientId)
-      .eq('campaigner_id', scope.callerCampaignerId)
+      .from("client_team")
+      .select("id")
+      .eq("client_id", clientId)
+      .eq("campaigner_id", scope.callerCampaignerId)
       .maybeSingle();
     if (link) return;
-    throw new AccessDeniedError('הלקוח לא משויך אליך — אינך רשאי לפעול עליו. פנה למנהל אם זו טעות.');
+    throw new AccessDeniedError(
+      "הלקוח לא משויך אליך — אינך רשאי לפעול עליו. פנה למנהל אם זו טעות.",
+    );
   }
 
   // No campaigner identity and not a manager (e.g. in-app owner/admin context):
@@ -78,16 +82,22 @@ async function clientIdFrom(
   if (!id) return null;
   const { data } = await supabase
     .from(table)
-    .select('client_id')
-    .eq('id', id)
-    .in('tenant_id', accessibleTenantIds)
+    .select("client_id")
+    .eq("id", id)
+    .in("tenant_id", accessibleTenantIds)
     .maybeSingle();
   return data?.client_id ?? null;
 }
 
-export const clientIdForSocialPage = (sb: any, pageId: string, t: string[]) => clientIdFrom(sb, 'social_pages', pageId, t);
-export const clientIdForSocialComment = (sb: any, commentId: string, t: string[]) => clientIdFrom(sb, 'social_comments', commentId, t);
-export const clientIdForTask = (sb: any, taskId: string, t: string[]) => clientIdFrom(sb, 'tasks', taskId, t);
+export const clientIdForSocialPage = (sb: any, pageId: string, t: string[]) =>
+  clientIdFrom(sb, "social_pages", pageId, t);
+export const clientIdForSocialComment = (
+  sb: any,
+  commentId: string,
+  t: string[],
+) => clientIdFrom(sb, "social_comments", commentId, t);
+export const clientIdForTask = (sb: any, taskId: string, t: string[]) =>
+  clientIdFrom(sb, "tasks", taskId, t);
 
 /**
  * Guard a tool that operates on an entity owning a client_id. Resolves the
@@ -102,7 +112,12 @@ export async function assertCallerCanAccessEntityClient(
   scope: CallerScope,
 ): Promise<void> {
   if (scope.isManagerRole) return;
-  const clientId = await clientIdFrom(supabase, table, entityId, scope.accessibleTenantIds);
+  const clientId = await clientIdFrom(
+    supabase,
+    table,
+    entityId,
+    scope.accessibleTenantIds,
+  );
   if (clientId === null) return; // not found-or-no-client → don't block (avoids false denials)
   await assertCallerCanAccessClient(supabase, clientId, scope);
 }

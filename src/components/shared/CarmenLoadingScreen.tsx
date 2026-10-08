@@ -56,7 +56,11 @@ function prefersReducedMotion() {
 /** Kept across mounts so a hand-off continues the sequence instead of restarting. */
 let lastMessageIndex = 0;
 
-function useRotatingMessage(messages: string[], intervalMs: number, resume: boolean) {
+function useRotatingMessage(
+  messages: string[],
+  intervalMs: number,
+  resume: boolean,
+) {
   const [index, setIndex] = useState(() => (resume ? lastMessageIndex : 0));
 
   useEffect(() => {
@@ -91,7 +95,10 @@ function useSceneVisible(delayMs: number) {
   }, [visible, delayMs]);
 
   // Layout phase so a hand-off registers (and cancels any dissolve ghost) before paint.
-  useLayoutEffect(() => (visible ? registerCarmenScene() : registerCarmenWait()), [visible]);
+  useLayoutEffect(
+    () => (visible ? registerCarmenScene() : registerCarmenWait()),
+    [visible],
+  );
 
   return { visible, continued };
 }
@@ -306,7 +313,10 @@ export function CarmenLoadingScreen({
       <div className="flex flex-col items-center gap-2 text-center">
         <p className="text-base font-semibold text-foreground">{title}</p>
         <div className="flex items-center gap-2">
-          <p key={message} className="animate-in text-sm text-muted-foreground fade-in duration-700">
+          <p
+            key={message}
+            className="animate-in text-sm text-muted-foreground fade-in duration-700"
+          >
             {message}
           </p>
           <TypingDots />

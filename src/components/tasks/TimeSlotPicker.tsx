@@ -16,7 +16,11 @@ interface TimeSlotPickerProps {
 
 const TIME_SLOTS = generateWorkdayTimeSlots();
 
-export function TimeSlotPicker({ value, onChange, disabled }: TimeSlotPickerProps) {
+export function TimeSlotPicker({
+  value,
+  onChange,
+  disabled,
+}: TimeSlotPickerProps) {
   return (
     <Select
       value={value || "none"}

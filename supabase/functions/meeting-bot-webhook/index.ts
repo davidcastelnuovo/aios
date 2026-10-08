@@ -1,12 +1,16 @@
 // Recall.ai webhook: bot lifecycle + post-meeting ingest into zoom_recordings pipeline.
 // Redeploy trigger: rebundle _shared/meeting-bot-finalize.ts (summary_scope + calendar fields).
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { mapRecallEventToStatus, verifyRecallWebhook } from "../_shared/recall.ts";
+import {
+  mapRecallEventToStatus,
+  verifyRecallWebhook,
+} from "../_shared/recall.ts";
 import { finalizeMeetingBotSession } from "../_shared/meeting-bot-finalize.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, svix-id, svix-timestamp, svix-signature, webhook-id, webhook-timestamp, webhook-signature",
+  "Access-Control-Allow-Headers":
+    "authorization, x-client-info, apikey, content-type, svix-id, svix-timestamp, svix-signature, webhook-id, webhook-timestamp, webhook-signature",
 };
 
 const json = (body: unknown, status = 200) =>
@@ -16,7 +20,8 @@ const json = (body: unknown, status = 200) =>
   });
 
 Deno.serve(async (req) => {
-  if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
+  if (req.method === "OPTIONS")
+    return new Response(null, { headers: corsHeaders });
   if (req.method !== "POST") return json({ error: "Method not allowed" }, 405);
 
   const rawBody = await req.text();
@@ -60,7 +65,9 @@ Deno.serve(async (req) => {
 
   // `bot.done` only means the bot left — with a streaming transcript the artifact
   // is often still processing, so `transcript.done` is the other trigger to ingest.
-  const isIngestEvent = event === "bot.done" || event === "transcript.done" ||
+  const isIngestEvent =
+    event === "bot.done" ||
+    event === "transcript.done" ||
     event === "recording.done";
 
   const newStatus = mapRecallEventToStatus(event);
@@ -71,16 +78,24 @@ Deno.serve(async (req) => {
       updated_at: new Date().toISOString(),
     };
     if (event === "bot.fatal") update.error = subCode || "bot_fatal";
-    if (newStatus === "in_meeting" && !session.joined_at) update.joined_at = new Date().toISOString();
-    await admin.from("meeting_bot_sessions").update(update).eq("id", session.id);
+    if (newStatus === "in_meeting" && !session.joined_at)
+      update.joined_at = new Date().toISOString();
+    await admin
+      .from("meeting_bot_sessions")
+      .update(update)
+      .eq("id", session.id);
     return json({ received: true });
   }
 
   if (!isIngestEvent) return json({ received: true });
-  if (session.status === "done") return json({ received: true, skipped: "already done" });
+  if (session.status === "done")
+    return json({ received: true, skipped: "already done" });
   // bot.done, recording.done and transcript.done arrive together. One of them
   // owns the ingest; the others must not each open a summary agent.
-  if (session.status === "processing" && session.status_detail === "ingesting") {
+  if (
+    session.status === "processing" &&
+    session.status_detail === "ingesting"
+  ) {
     return json({ received: true, skipped: "already ingesting" });
   }
 
@@ -98,27 +113,36 @@ Deno.serve(async (req) => {
     .neq("status", "done")
     .select("id")
     .maybeSingle();
-  if (claimError || !claimed) return json({ received: true, skipped: "already claimed" });
+  if (claimError || !claimed)
+    return json({ received: true, skipped: "already claimed" });
 
   const background = (async () => {
     try {
-      await admin.from("meeting_bot_sessions").update({
-        status: "processing",
-        ended_at: session.ended_at ?? new Date().toISOString(),
-      }).eq("id", session.id);
+      await admin
+        .from("meeting_bot_sessions")
+        .update({
+          status: "processing",
+          ended_at: session.ended_at ?? new Date().toISOString(),
+        })
+        .eq("id", session.id);
 
       const result = await finalizeMeetingBotSession(admin, session);
-      console.log(`[meeting-bot-webhook] ${event} → ${result.outcome}: ${result.detail}`);
+      console.log(
+        `[meeting-bot-webhook] ${event} → ${result.outcome}: ${result.detail}`,
+      );
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       console.error("[meeting-bot-webhook] processing error:", msg);
       // Leave it recoverable — meeting-bot-reconcile retries `processing` rows.
-      await admin.from("meeting_bot_sessions").update({
-        status: "processing",
-        status_detail: "ingest_error",
-        error: msg,
-        updated_at: new Date().toISOString(),
-      }).eq("id", session.id);
+      await admin
+        .from("meeting_bot_sessions")
+        .update({
+          status: "processing",
+          status_detail: "ingest_error",
+          error: msg,
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", session.id);
     }
   })();
 

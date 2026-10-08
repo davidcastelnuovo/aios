@@ -9,8 +9,26 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { Github, Key, Shield, CheckCircle, XCircle, Clock, Send, Loader2, AlertTriangle, Eye, EyeOff } from "lucide-react";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
+import {
+  Github,
+  Key,
+  Shield,
+  CheckCircle,
+  XCircle,
+  Clock,
+  Send,
+  Loader2,
+  AlertTriangle,
+  Eye,
+  EyeOff,
+} from "lucide-react";
 import { toast } from "sonner";
 
 export function GithubAgentPanel() {
@@ -75,14 +93,19 @@ export function GithubAgentPanel() {
   const saveToken = useMutation({
     mutationFn: async () => {
       if (!tenantId || !tokenInput) throw new Error("Missing data");
-      const { data: { user } } = await supabase.auth.getUser();
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
 
       if (credential) {
-        await supabase.from("agent_credentials" as any).update({
-          encrypted_value: tokenInput,
-          metadata: { repo: repoInput },
-          updated_at: new Date().toISOString(),
-        }).eq("id", (credential as any).id);
+        await supabase
+          .from("agent_credentials" as any)
+          .update({
+            encrypted_value: tokenInput,
+            metadata: { repo: repoInput },
+            updated_at: new Date().toISOString(),
+          })
+          .eq("id", (credential as any).id);
       } else {
         await supabase.from("agent_credentials" as any).insert({
           tenant_id: tenantId,
@@ -95,7 +118,9 @@ export function GithubAgentPanel() {
       }
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["agent-credentials", tenantId] });
+      queryClient.invalidateQueries({
+        queryKey: ["agent-credentials", tenantId],
+      });
       toast.success("GitHub Token נשמר בהצלחה");
       setTokenInput("");
     },
@@ -120,8 +145,12 @@ export function GithubAgentPanel() {
       if (error) throw error;
       setChatResponse(data);
       setChatMessage("");
-      queryClient.invalidateQueries({ queryKey: ["agent-approvals", tenantId] });
-      queryClient.invalidateQueries({ queryKey: ["agent-action-log", tenantId] });
+      queryClient.invalidateQueries({
+        queryKey: ["agent-approvals", tenantId],
+      });
+      queryClient.invalidateQueries({
+        queryKey: ["agent-action-log", tenantId],
+      });
     } catch (e: any) {
       toast.error("שגיאה: " + (e.message || "Unknown"));
     } finally {
@@ -130,15 +159,22 @@ export function GithubAgentPanel() {
   };
 
   // Approve/reject action
-  const handleApproval = async (approvalId: string, action: "approve_action" | "reject_action") => {
+  const handleApproval = async (
+    approvalId: string,
+    action: "approve_action" | "reject_action",
+  ) => {
     try {
       const { error } = await supabase.functions.invoke("github-agent", {
         body: { action, tenant_id: tenantId, approval_id: approvalId },
       });
       if (error) throw error;
       toast.success(action === "approve_action" ? "אושר!" : "נדחה");
-      queryClient.invalidateQueries({ queryKey: ["agent-approvals", tenantId] });
-      queryClient.invalidateQueries({ queryKey: ["agent-action-log", tenantId] });
+      queryClient.invalidateQueries({
+        queryKey: ["agent-approvals", tenantId],
+      });
+      queryClient.invalidateQueries({
+        queryKey: ["agent-action-log", tenantId],
+      });
     } catch (e: any) {
       toast.error("שגיאה: " + e.message);
     }
@@ -146,11 +182,36 @@ export function GithubAgentPanel() {
 
   const statusBadge = (status: string) => {
     switch (status) {
-      case "pending": return <Badge variant="outline" className="gap-1"><Clock className="h-3 w-3" />ממתין</Badge>;
-      case "approved": return <Badge className="bg-green-500 gap-1"><CheckCircle className="h-3 w-3" />אושר</Badge>;
-      case "rejected": return <Badge variant="destructive" className="gap-1"><XCircle className="h-3 w-3" />נדחה</Badge>;
-      case "executed": return <Badge className="bg-blue-500 gap-1"><CheckCircle className="h-3 w-3" />בוצע</Badge>;
-      default: return <Badge variant="secondary">{status}</Badge>;
+      case "pending":
+        return (
+          <Badge variant="outline" className="gap-1">
+            <Clock className="h-3 w-3" />
+            ממתין
+          </Badge>
+        );
+      case "approved":
+        return (
+          <Badge className="bg-green-500 gap-1">
+            <CheckCircle className="h-3 w-3" />
+            אושר
+          </Badge>
+        );
+      case "rejected":
+        return (
+          <Badge variant="destructive" className="gap-1">
+            <XCircle className="h-3 w-3" />
+            נדחה
+          </Badge>
+        );
+      case "executed":
+        return (
+          <Badge className="bg-blue-500 gap-1">
+            <CheckCircle className="h-3 w-3" />
+            בוצע
+          </Badge>
+        );
+      default:
+        return <Badge variant="secondary">{status}</Badge>;
     }
   };
 
@@ -162,7 +223,9 @@ export function GithubAgentPanel() {
         </div>
         <div>
           <h2 className="text-xl font-bold">GitHub Agent</h2>
-          <p className="text-sm text-muted-foreground">סוכן אוטומטי לתיקון קוד, ניתוח שגיאות ותמיכה טכנית</p>
+          <p className="text-sm text-muted-foreground">
+            סוכן אוטומטי לתיקון קוד, ניתוח שגיאות ותמיכה טכנית
+          </p>
         </div>
       </div>
 
@@ -171,8 +234,12 @@ export function GithubAgentPanel() {
           <TabsTrigger value="chat">צ'אט תמיכה</TabsTrigger>
           <TabsTrigger value="approvals">
             תור אישורים
-            {approvals.filter((a: any) => a.status === "pending").length > 0 && (
-              <Badge variant="destructive" className="mr-1 h-5 w-5 p-0 text-xs flex items-center justify-center">
+            {approvals.filter((a: any) => a.status === "pending").length >
+              0 && (
+              <Badge
+                variant="destructive"
+                className="mr-1 h-5 w-5 p-0 text-xs flex items-center justify-center"
+              >
                 {approvals.filter((a: any) => a.status === "pending").length}
               </Badge>
             )}
@@ -191,25 +258,55 @@ export function GithubAgentPanel() {
                   onChange={(e) => setChatMessage(e.target.value)}
                   placeholder="תאר את הבעיה... לדוגמה: 'משתמש X מדווח שאין לו גישה לדשבורד' או 'יש שגיאה בדף הלידים'"
                   rows={3}
-                  onKeyDown={(e) => e.key === "Enter" && !e.shiftKey && (e.preventDefault(), sendChat())}
+                  onKeyDown={(e) =>
+                    e.key === "Enter" &&
+                    !e.shiftKey &&
+                    (e.preventDefault(), sendChat())
+                  }
                 />
-                <Button onClick={sendChat} disabled={isSending || !chatMessage.trim()} className="w-full">
-                  {isSending ? <><Loader2 className="h-4 w-4 mr-1 animate-spin" />מנתח...</> : <><Send className="h-4 w-4 mr-1" />שלח</>}
+                <Button
+                  onClick={sendChat}
+                  disabled={isSending || !chatMessage.trim()}
+                  className="w-full"
+                >
+                  {isSending ? (
+                    <>
+                      <Loader2 className="h-4 w-4 mr-1 animate-spin" />
+                      מנתח...
+                    </>
+                  ) : (
+                    <>
+                      <Send className="h-4 w-4 mr-1" />
+                      שלח
+                    </>
+                  )}
                 </Button>
 
                 {chatResponse && (
                   <Card className="bg-accent/50">
                     <CardContent className="pt-4 space-y-3">
-                      <p className="text-sm whitespace-pre-wrap">{chatResponse.response}</p>
+                      <p className="text-sm whitespace-pre-wrap">
+                        {chatResponse.response}
+                      </p>
                       {chatResponse.action_needed && (
                         <div className="flex items-center gap-2">
                           <AlertTriangle className="h-4 w-4 text-yellow-500" />
-                          <span className="text-sm font-medium">פעולה נדרשת: {chatResponse.action_needed}</span>
-                          {chatResponse.requires_approval && <Badge variant="outline">דורש אישור</Badge>}
+                          <span className="text-sm font-medium">
+                            פעולה נדרשת: {chatResponse.action_needed}
+                          </span>
+                          {chatResponse.requires_approval && (
+                            <Badge variant="outline">דורש אישור</Badge>
+                          )}
                         </div>
                       )}
                       {chatResponse.severity && (
-                        <Badge variant={chatResponse.severity === "high" ? "destructive" : "secondary"}>
+                        <Badge
+                          variant={
+                            chatResponse.severity === "high"
+                              ? "destructive"
+                              : "secondary"
+                          }
+                        >
                           חומרה: {chatResponse.severity}
                         </Badge>
                       )}
@@ -224,37 +321,79 @@ export function GithubAgentPanel() {
         {/* Approval Queue */}
         <TabsContent value="approvals" className="mt-4 space-y-3">
           {approvals.length === 0 ? (
-            <Card><CardContent className="pt-6 text-center text-muted-foreground py-8">אין פעולות ממתינות לאישור</CardContent></Card>
+            <Card>
+              <CardContent className="pt-6 text-center text-muted-foreground py-8">
+                אין פעולות ממתינות לאישור
+              </CardContent>
+            </Card>
           ) : (
             approvals.map((approval: any) => (
-              <Card key={approval.id} className={approval.status === "pending" ? "border-yellow-500/50" : ""}>
+              <Card
+                key={approval.id}
+                className={
+                  approval.status === "pending" ? "border-yellow-500/50" : ""
+                }
+              >
                 <CardContent className="pt-4">
                   <div className="flex items-start justify-between">
                     <div className="flex-1 space-y-1">
                       <div className="flex items-center gap-2">
-                        <span className="font-medium text-sm">{approval.title}</span>
+                        <span className="font-medium text-sm">
+                          {approval.title}
+                        </span>
                         {statusBadge(approval.status)}
                       </div>
-                      <p className="text-sm text-muted-foreground">{approval.description}</p>
+                      <p className="text-sm text-muted-foreground">
+                        {approval.description}
+                      </p>
                       <p className="text-xs text-muted-foreground">
-                        {new Date(approval.created_at).toLocaleDateString("he-IL", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}
+                        {new Date(approval.created_at).toLocaleDateString(
+                          "he-IL",
+                          {
+                            day: "numeric",
+                            month: "short",
+                            hour: "2-digit",
+                            minute: "2-digit",
+                          },
+                        )}
                       </p>
                     </div>
                     {approval.status === "pending" && (
                       <div className="flex gap-2 shrink-0">
-                        <Button size="sm" onClick={() => handleApproval(approval.id, "approve_action")}>
-                          <CheckCircle className="h-4 w-4 mr-1" />אשר
+                        <Button
+                          size="sm"
+                          onClick={() =>
+                            handleApproval(approval.id, "approve_action")
+                          }
+                        >
+                          <CheckCircle className="h-4 w-4 mr-1" />
+                          אשר
                         </Button>
-                        <Button size="sm" variant="outline" onClick={() => handleApproval(approval.id, "reject_action")}>
-                          <XCircle className="h-4 w-4 mr-1" />דחה
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() =>
+                            handleApproval(approval.id, "reject_action")
+                          }
+                        >
+                          <XCircle className="h-4 w-4 mr-1" />
+                          דחה
                         </Button>
                       </div>
                     )}
-                    {approval.status === "executed" && approval.execution_result?.pr_url && (
-                      <a href={approval.execution_result.pr_url} target="_blank" rel="noopener noreferrer">
-                        <Button size="sm" variant="outline"><Github className="h-4 w-4 mr-1" />PR</Button>
-                      </a>
-                    )}
+                    {approval.status === "executed" &&
+                      approval.execution_result?.pr_url && (
+                        <a
+                          href={approval.execution_result.pr_url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                        >
+                          <Button size="sm" variant="outline">
+                            <Github className="h-4 w-4 mr-1" />
+                            PR
+                          </Button>
+                        </a>
+                      )}
                   </div>
                 </CardContent>
               </Card>
@@ -265,18 +404,41 @@ export function GithubAgentPanel() {
         {/* Action Log */}
         <TabsContent value="log" className="mt-4 space-y-2">
           {actionLog.length === 0 ? (
-            <Card><CardContent className="pt-6 text-center text-muted-foreground py-8">אין היסטוריה עדיין</CardContent></Card>
+            <Card>
+              <CardContent className="pt-6 text-center text-muted-foreground py-8">
+                אין היסטוריה עדיין
+              </CardContent>
+            </Card>
           ) : (
             actionLog.map((log: any) => (
-              <div key={log.id} className="flex items-center gap-3 p-3 rounded-lg border text-sm">
-                <Badge variant={log.status === "success" ? "default" : log.status === "error" ? "destructive" : "secondary"} className="shrink-0">
+              <div
+                key={log.id}
+                className="flex items-center gap-3 p-3 rounded-lg border text-sm"
+              >
+                <Badge
+                  variant={
+                    log.status === "success"
+                      ? "default"
+                      : log.status === "error"
+                        ? "destructive"
+                        : "secondary"
+                  }
+                  className="shrink-0"
+                >
                   {log.action_type}
                 </Badge>
                 <span className="flex-1 text-muted-foreground truncate">
-                  {log.action_details?.message || log.action_details?.error || JSON.stringify(log.action_details).substring(0, 100)}
+                  {log.action_details?.message ||
+                    log.action_details?.error ||
+                    JSON.stringify(log.action_details).substring(0, 100)}
                 </span>
                 <span className="text-xs text-muted-foreground shrink-0">
-                  {new Date(log.created_at).toLocaleDateString("he-IL", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}
+                  {new Date(log.created_at).toLocaleDateString("he-IL", {
+                    day: "numeric",
+                    month: "short",
+                    hour: "2-digit",
+                    minute: "2-digit",
+                  })}
                 </span>
               </div>
             ))
@@ -296,8 +458,12 @@ export function GithubAgentPanel() {
               {credential && (
                 <div className="flex items-center gap-2 p-3 rounded-lg bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800">
                   <CheckCircle className="h-4 w-4 text-green-500" />
-                  <span className="text-sm text-green-700 dark:text-green-400">Token מוגדר</span>
-                  <span className="text-xs text-muted-foreground">({(credential as any).metadata?.repo})</span>
+                  <span className="text-sm text-green-700 dark:text-green-400">
+                    Token מוגדר
+                  </span>
+                  <span className="text-xs text-muted-foreground">
+                    ({(credential as any).metadata?.repo})
+                  </span>
                 </div>
               )}
               <div>
@@ -310,19 +476,37 @@ export function GithubAgentPanel() {
                     placeholder="ghp_xxxxxxxxxxxxxxxxxxxx"
                     dir="ltr"
                   />
-                  <Button variant="ghost" size="sm" onClick={() => setShowToken(!showToken)}>
-                    {showToken ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setShowToken(!showToken)}
+                  >
+                    {showToken ? (
+                      <EyeOff className="h-4 w-4" />
+                    ) : (
+                      <Eye className="h-4 w-4" />
+                    )}
                   </Button>
                 </div>
                 <p className="text-xs text-muted-foreground mt-1">
-                  צור Token ב-GitHub → Settings → Developer Settings → Personal Access Tokens → Fine-grained
+                  צור Token ב-GitHub → Settings → Developer Settings → Personal
+                  Access Tokens → Fine-grained
                 </p>
               </div>
               <div>
                 <Label>Repository</Label>
-                <Input value={repoInput} onChange={(e) => setRepoInput(e.target.value)} placeholder="owner/repo" dir="ltr" className="mt-1" />
+                <Input
+                  value={repoInput}
+                  onChange={(e) => setRepoInput(e.target.value)}
+                  placeholder="owner/repo"
+                  dir="ltr"
+                  className="mt-1"
+                />
               </div>
-              <Button onClick={() => saveToken.mutate()} disabled={!tokenInput || saveToken.isPending}>
+              <Button
+                onClick={() => saveToken.mutate()}
+                disabled={!tokenInput || saveToken.isPending}
+              >
                 {credential ? "עדכן Token" : "שמור Token"}
               </Button>
             </CardContent>
@@ -337,10 +521,22 @@ export function GithubAgentPanel() {
             </CardHeader>
             <CardContent>
               <ul className="space-y-2 text-sm text-muted-foreground">
-                <li className="flex items-center gap-2"><CheckCircle className="h-4 w-4 text-green-500" />שינויי קוד דורשים אישור ידני</li>
-                <li className="flex items-center gap-2"><CheckCircle className="h-4 w-4 text-green-500" />שינויי הרשאות דורשים אישור אדמין</li>
-                <li className="flex items-center gap-2"><CheckCircle className="h-4 w-4 text-green-500" />כל פעולה נרשמת ביומן</li>
-                <li className="flex items-center gap-2"><CheckCircle className="h-4 w-4 text-green-500" />Token מאוחסן מוצפן</li>
+                <li className="flex items-center gap-2">
+                  <CheckCircle className="h-4 w-4 text-green-500" />
+                  שינויי קוד דורשים אישור ידני
+                </li>
+                <li className="flex items-center gap-2">
+                  <CheckCircle className="h-4 w-4 text-green-500" />
+                  שינויי הרשאות דורשים אישור אדמין
+                </li>
+                <li className="flex items-center gap-2">
+                  <CheckCircle className="h-4 w-4 text-green-500" />
+                  כל פעולה נרשמת ביומן
+                </li>
+                <li className="flex items-center gap-2">
+                  <CheckCircle className="h-4 w-4 text-green-500" />
+                  Token מאוחסן מוצפן
+                </li>
               </ul>
             </CardContent>
           </Card>

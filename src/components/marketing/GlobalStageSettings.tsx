@@ -48,13 +48,43 @@ import {
 } from "lucide-react";
 
 const STAGE_TYPES = [
-  { type: "strategy", label: "בריף ואסטרטגיה", icon: Lightbulb, color: "text-amber-500" },
+  {
+    type: "strategy",
+    label: "בריף ואסטרטגיה",
+    icon: Lightbulb,
+    color: "text-amber-500",
+  },
   { type: "copy", label: "כתיבת תוכן", icon: PenLine, color: "text-sky-500" },
-  { type: "creative", label: "קריאייטיב", icon: ImageIcon, color: "text-fuchsia-500" },
-  { type: "target_paid", label: "קמפיין ממומן", icon: Megaphone, color: "text-rose-500" },
-  { type: "target_seo", label: "SEO / GEO", icon: Search, color: "text-emerald-500" },
-  { type: "target_organic", label: "פרסום אורגני", icon: Share2, color: "text-violet-500" },
-  { type: "measurement", label: "מדידה ודיווח", icon: BarChart3, color: "text-blue-500" },
+  {
+    type: "creative",
+    label: "קריאייטיב",
+    icon: ImageIcon,
+    color: "text-fuchsia-500",
+  },
+  {
+    type: "target_paid",
+    label: "קמפיין ממומן",
+    icon: Megaphone,
+    color: "text-rose-500",
+  },
+  {
+    type: "target_seo",
+    label: "SEO / GEO",
+    icon: Search,
+    color: "text-emerald-500",
+  },
+  {
+    type: "target_organic",
+    label: "פרסום אורגני",
+    icon: Share2,
+    color: "text-violet-500",
+  },
+  {
+    type: "measurement",
+    label: "מדידה ודיווח",
+    icon: BarChart3,
+    color: "text-blue-500",
+  },
 ];
 
 const TRACKS = [
@@ -64,8 +94,18 @@ const TRACKS = [
 ];
 
 const APPROVAL_OPTIONS = [
-  { value: "auto", label: "אוטומטי לחלוטין", icon: Zap, desc: "פס הייצור רץ ללא עצירות" },
-  { value: "hybrid", label: "חצי אוטומטי", icon: Clock, desc: "מחכה לאישור בין שלבים" },
+  {
+    value: "auto",
+    label: "אוטומטי לחלוטין",
+    icon: Zap,
+    desc: "פס הייצור רץ ללא עצירות",
+  },
+  {
+    value: "hybrid",
+    label: "חצי אוטומטי",
+    icon: Clock,
+    desc: "מחכה לאישור בין שלבים",
+  },
   { value: "manual", label: "ידני", desc: "כל שלב מופעל ידנית", icon: Hand },
 ];
 
@@ -118,8 +158,10 @@ function StageTemplateForm({
   // Use template values as defaults when they exist
   const currentName = name || template?.name || stageCfg.label;
   const currentAgent = agentId || template?.default_agent_id || "";
-  const currentApproval = approvalMode || template?.default_approval_mode || "manual";
-  const currentInstructions = instructions || template?.default_instructions || "";
+  const currentApproval =
+    approvalMode || template?.default_approval_mode || "manual";
+  const currentInstructions =
+    instructions || template?.default_instructions || "";
 
   const handleSave = async () => {
     setSaving(true);
@@ -162,12 +204,19 @@ function StageTemplateForm({
     <div className="space-y-4 py-2" dir="rtl">
       {/* Stage identity header */}
       <div className="flex items-center gap-2 rounded-xl border border-border/60 bg-muted/30 p-3">
-        <div className={cn("flex h-8 w-8 items-center justify-center rounded-lg bg-background", stageCfg.color)}>
+        <div
+          className={cn(
+            "flex h-8 w-8 items-center justify-center rounded-lg bg-background",
+            stageCfg.color,
+          )}
+        >
           <Icon className="h-4 w-4" />
         </div>
         <div>
           <div className="text-sm font-semibold">{stageCfg.label}</div>
-          <div className="text-[11px] text-muted-foreground">הגדרות ברירת מחדל לכל לקוח חדש</div>
+          <div className="text-[11px] text-muted-foreground">
+            הגדרות ברירת מחדל לכל לקוח חדש
+          </div>
         </div>
         {template && (
           <Badge variant="secondary" className="ms-auto text-[10px]">
@@ -222,12 +271,14 @@ function StageTemplateForm({
                   "flex flex-col items-center gap-1 rounded-xl border p-2.5 text-center transition-all",
                   currentApproval === opt.value
                     ? "border-primary bg-primary/5 text-primary"
-                    : "border-border/60 hover:border-border hover:bg-muted/40"
+                    : "border-border/60 hover:border-border hover:bg-muted/40",
                 )}
               >
                 <OptIcon className="h-4 w-4" />
                 <span className="text-[11px] font-medium">{opt.label}</span>
-                <span className="text-[10px] text-muted-foreground leading-tight">{opt.desc}</span>
+                <span className="text-[10px] text-muted-foreground leading-tight">
+                  {opt.desc}
+                </span>
               </button>
             );
           })}
@@ -250,7 +301,15 @@ function StageTemplateForm({
       </div>
 
       <Button onClick={handleSave} disabled={saving} className="w-full gap-2">
-        {saving ? <><span className="animate-spin">⏳</span> שומר...</> : <><Save className="h-4 w-4" /> שמור הגדרות</>}
+        {saving ? (
+          <>
+            <span className="animate-spin">⏳</span> שומר...
+          </>
+        ) : (
+          <>
+            <Save className="h-4 w-4" /> שמור הגדרות
+          </>
+        )}
       </Button>
     </div>
   );
@@ -280,14 +339,18 @@ export function GlobalStageSettings({ open, onClose, tenantId }: Props) {
 
   return (
     <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="max-w-3xl max-h-[85vh] overflow-hidden flex flex-col" dir="rtl">
+      <DialogContent
+        className="max-w-3xl max-h-[85vh] overflow-hidden flex flex-col"
+        dir="rtl"
+      >
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Settings2 className="h-5 w-5" />
             הגדרות גלובליות לפס הייצור
           </DialogTitle>
           <p className="text-sm text-muted-foreground">
-            הגדרות אלו יחולו על כל לקוח חדש שנוצר. ניתן לדייק ברמת הלקוח בהגדרות השלב.
+            הגדרות אלו יחולו על כל לקוח חדש שנוצר. ניתן לדייק ברמת הלקוח בהגדרות
+            השלב.
           </p>
         </DialogHeader>
 
@@ -308,7 +371,7 @@ export function GlobalStageSettings({ open, onClose, tenantId }: Props) {
                       "w-full rounded-lg px-3 py-1.5 text-right text-sm transition-colors",
                       activeTrack === t.value
                         ? "bg-primary text-primary-foreground font-medium"
-                        : "hover:bg-muted/60"
+                        : "hover:bg-muted/60",
                     )}
                   >
                     {t.label}
@@ -333,7 +396,7 @@ export function GlobalStageSettings({ open, onClose, tenantId }: Props) {
                         "flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-right text-sm transition-colors",
                         activeStage === s.type
                           ? "bg-muted font-medium"
-                          : "hover:bg-muted/40"
+                          : "hover:bg-muted/40",
                       )}
                     >
                       <Icon className={cn("h-3.5 w-3.5 shrink-0", s.color)} />

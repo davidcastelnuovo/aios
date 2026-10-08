@@ -41,7 +41,8 @@ export function useConnectedProviders() {
     enabled: !!tenantId,
     staleTime: 5 * 60 * 1000,
     queryFn: async (): Promise<ConnectedProviders> => {
-      if (!tenantId) return { google: false, openai: false, anthropic: false, manus: false };
+      if (!tenantId)
+        return { google: false, openai: false, anthropic: false, manus: false };
       const { data } = await supabase
         .from("tenant_integrations")
         .select("settings")
@@ -63,9 +64,13 @@ export function useConnectedProviders() {
         .maybeSingle();
       const ms = (manusData?.settings ?? {}) as Record<string, string>;
       return {
-        google: typeof s.google_api_key === "string" && s.google_api_key.length > 0,
-        openai: typeof s.openai_api_key === "string" && s.openai_api_key.length > 0,
-        anthropic: typeof s.anthropic_api_key === "string" && s.anthropic_api_key.length > 0,
+        google:
+          typeof s.google_api_key === "string" && s.google_api_key.length > 0,
+        openai:
+          typeof s.openai_api_key === "string" && s.openai_api_key.length > 0,
+        anthropic:
+          typeof s.anthropic_api_key === "string" &&
+          s.anthropic_api_key.length > 0,
         manus: typeof ms.api_key === "string" && ms.api_key.length > 0,
       };
     },

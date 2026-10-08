@@ -5,13 +5,20 @@ permissions:
 on:
   push:
     branches: [main]
-    paths: ['supabase/functions/**', 'supabase/config.toml', 'scripts/*edge*', 'scripts/staging-only-functions.json', '.github/workflows/deploy*edge*.yml']
+    paths:
+      [
+        "supabase/functions/**",
+        "supabase/config.toml",
+        "scripts/*edge*",
+        "scripts/staging-only-functions.json",
+        ".github/workflows/deploy*edge*.yml",
+      ]
   workflow_dispatch:
     inputs:
       function_name:
-        description: 'Function names; empty reconciles all changes since last successful deployment'
+        description: "Function names; empty reconciles all changes since last successful deployment"
         type: string
-        default: ''
+        default: ""
 jobs:
   deploy:
     uses: ./.github/workflows/deploy-edge-reusable.yml

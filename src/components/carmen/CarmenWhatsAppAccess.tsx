@@ -17,7 +17,12 @@ type Props = {
 export function CarmenWhatsAppAccess(props: Props) {
   const { tenantId } = useCurrentTenant();
   const queryClient = useQueryClient();
-  const queryKey = ["carmen-whatsapp-access", tenantId, props.entityType, props.entityId];
+  const queryKey = [
+    "carmen-whatsapp-access",
+    tenantId,
+    props.entityType,
+    props.entityId,
+  ];
   const { data: identity, isLoading } = useQuery({
     queryKey,
     enabled: !!tenantId && !!props.entityId,
@@ -42,37 +47,56 @@ export function CarmenWhatsAppAccess(props: Props) {
         throw new Error("יש להזין מספר טלפון תקין לפני האישור");
       }
       if (approved) {
-        const { error } = await supabase.from("carmen_whatsapp_identities" as any)
-          .update({ status: "revoked", verified_at: null }).eq("id", identity.id);
+        const { error } = await supabase
+          .from("carmen_whatsapp_identities" as any)
+          .update({ status: "revoked", verified_at: null })
+          .eq("id", identity.id);
         if (error) throw error;
         return;
       }
-      const { error } = await supabase.from("carmen_whatsapp_identities" as any).upsert({
-        tenant_id: tenantId,
-        phone,
-        entity_type: props.entityType,
-        entity_id: props.entityId,
-        client_id: props.clientId || null,
-        display_name: props.displayName || null,
-        role_title: props.roleTitle || null,
-        status: "approved",
-      }, { onConflict: "tenant_id,phone" });
+      const { error } = await supabase
+        .from("carmen_whatsapp_identities" as any)
+        .upsert(
+          {
+            tenant_id: tenantId,
+            phone,
+            entity_type: props.entityType,
+            entity_id: props.entityId,
+            client_id: props.clientId || null,
+            display_name: props.displayName || null,
+            role_title: props.roleTitle || null,
+            status: "approved",
+          },
+          { onConflict: "tenant_id,phone" },
+        );
       if (error) throw error;
     },
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey });
-      toast.success(approved
-        ? "ההרשאה לדבר עם קארמן בוטלה"
-        : "המספר אושר. קארמן תזהה אותו בקבוצות המשויכות.");
+      toast.success(
+        approved
+          ? "ההרשאה לדבר עם קארמן בוטלה"
+          : "המספר אושר. קארמן תזהה אותו בקבוצות המשויכות.",
+      );
     },
-    onError: (error: Error) => toast.error(error.message || "שגיאה בעדכון הרשאת כרמן"),
+    onError: (error: Error) =>
+      toast.error(error.message || "שגיאה בעדכון הרשאת כרמן"),
   });
 
   return (
-    <Button type="button" size="sm" variant={approved ? "secondary" : "outline"}
-      className="h-7 gap-1 text-xs" disabled={isLoading || mutation.isPending}
-      onClick={() => mutation.mutate()}>
-      {approved ? <ShieldOff className="h-3.5 w-3.5" /> : <ShieldCheck className="h-3.5 w-3.5" />}
+    <Button
+      type="button"
+      size="sm"
+      variant={approved ? "secondary" : "outline"}
+      className="h-7 gap-1 text-xs"
+      disabled={isLoading || mutation.isPending}
+      onClick={() => mutation.mutate()}
+    >
+      {approved ? (
+        <ShieldOff className="h-3.5 w-3.5" />
+      ) : (
+        <ShieldCheck className="h-3.5 w-3.5" />
+      )}
       {approved ? "בטל גישה לקארמן" : "אשר לדבר עם קארמן"}
     </Button>
   );

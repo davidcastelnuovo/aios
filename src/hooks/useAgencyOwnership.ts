@@ -14,11 +14,10 @@ export function useAgencyOwnership(agencyId: string | undefined) {
     queryFn: async () => {
       if (!agencyId || !user?.id) return false;
 
-      const { data, error } = await supabase
-        .rpc("user_owns_agency", {
-          _user_id: user.id,
-          _agency_id: agencyId,
-        });
+      const { data, error } = await supabase.rpc("user_owns_agency", {
+        _user_id: user.id,
+        _agency_id: agencyId,
+      });
 
       if (error) {
         console.error("Error checking agency ownership:", error);

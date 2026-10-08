@@ -1,5 +1,13 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from "recharts";
+import {
+  LineChart,
+  Line,
+  XAxis,
+  YAxis,
+  Tooltip,
+  ResponsiveContainer,
+  CartesianGrid,
+} from "recharts";
 import { useMemo } from "react";
 
 interface GaOrganicMonth {
@@ -13,7 +21,10 @@ interface SeoTrafficChartProps {
   gaOrganicByMonth?: GaOrganicMonth[];
 }
 
-export function SeoTrafficChart({ trafficHistory, gaOrganicByMonth = [] }: SeoTrafficChartProps) {
+export function SeoTrafficChart({
+  trafficHistory,
+  gaOrganicByMonth = [],
+}: SeoTrafficChartProps) {
   const chartData = useMemo(() => {
     // Prefer GA data; fall back to Ahrefs traffic_history
     if (gaOrganicByMonth.length > 0) {
@@ -24,7 +35,11 @@ export function SeoTrafficChart({ trafficHistory, gaOrganicByMonth = [] }: SeoTr
     }
     // Fallback: Ahrefs traffic history
     return trafficHistory.map((item: any) => ({
-      date: item.date ? String(item.date).substring(5, 7) + '/' + String(item.date).substring(2, 4) : '',
+      date: item.date
+        ? String(item.date).substring(5, 7) +
+          "/" +
+          String(item.date).substring(2, 4)
+        : "",
       sessions: item.org_traffic ?? item.traffic ?? 0,
     }));
   }, [gaOrganicByMonth, trafficHistory]);
@@ -39,29 +54,34 @@ export function SeoTrafficChart({ trafficHistory, gaOrganicByMonth = [] }: SeoTr
         <CardTitle className="text-base flex items-center gap-2">
           תנועה לאתר (לא ממומנת)
           <span className="text-xs font-normal text-muted-foreground">
-            {isGaData ? '— Sessions מכל המקורות הלא-ממומנים (Google Analytics)' : '— הערכת Ahrefs'}
+            {isGaData
+              ? "— Sessions מכל המקורות הלא-ממומנים (Google Analytics)"
+              : "— הערכת Ahrefs"}
           </span>
         </CardTitle>
       </CardHeader>
       <CardContent>
         <ResponsiveContainer width="100%" height={250}>
-          <LineChart data={chartData} margin={{ top: 5, right: 10, left: 0, bottom: 5 }}>
+          <LineChart
+            data={chartData}
+            margin={{ top: 5, right: 10, left: 0, bottom: 5 }}
+          >
             <CartesianGrid strokeDasharray="3 3" className="opacity-30" />
             <XAxis dataKey="date" fontSize={12} />
             <YAxis fontSize={12} />
             <Tooltip
               formatter={(value: number) => [
-                value != null ? value.toLocaleString() : '—',
-                isGaData ? 'Sessions לא-ממומנים' : 'תנועה אורגנית',
+                value != null ? value.toLocaleString() : "—",
+                isGaData ? "Sessions לא-ממומנים" : "תנועה אורגנית",
               ]}
               labelFormatter={(label) => `תאריך: ${label}`}
             />
             <Line
               type="monotone"
               dataKey="sessions"
-              stroke={isGaData ? '#22c55e' : 'hsl(var(--primary))'}
+              stroke={isGaData ? "#22c55e" : "hsl(var(--primary))"}
               strokeWidth={2.5}
-              dot={{ fill: isGaData ? '#22c55e' : 'hsl(var(--primary))', r: 4 }}
+              dot={{ fill: isGaData ? "#22c55e" : "hsl(var(--primary))", r: 4 }}
               activeDot={{ r: 6 }}
               connectNulls
             />

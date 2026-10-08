@@ -5,17 +5,17 @@ import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { format } from "date-fns";
 import { he } from "date-fns/locale";
-import { 
-  Globe, 
-  Clock, 
-  MousePointer, 
-  Eye, 
-  ArrowRight, 
+import {
+  Globe,
+  Clock,
+  MousePointer,
+  Eye,
+  ArrowRight,
   Smartphone,
   Monitor,
   Tablet,
   MapPin,
-  ExternalLink
+  ExternalLink,
 } from "lucide-react";
 
 interface VisitorJourneyProps {
@@ -53,9 +53,10 @@ export function VisitorJourney({ leadId }: VisitorJourneyProps) {
   const { data: journey, isLoading } = useQuery({
     queryKey: ["visitor_journey", leadId],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .rpc("get_lead_visitor_journey", { p_lead_id: leadId });
-      
+      const { data, error } = await supabase.rpc("get_lead_visitor_journey", {
+        p_lead_id: leadId,
+      });
+
       if (error) throw error;
       return (data as JourneySession[]) || [];
     },
@@ -71,9 +72,12 @@ export function VisitorJourney({ leadId }: VisitorJourneyProps) {
 
   const getDeviceIcon = (device: string | null) => {
     switch (device) {
-      case "mobile": return <Smartphone className="h-4 w-4" />;
-      case "tablet": return <Tablet className="h-4 w-4" />;
-      default: return <Monitor className="h-4 w-4" />;
+      case "mobile":
+        return <Smartphone className="h-4 w-4" />;
+      case "tablet":
+        return <Tablet className="h-4 w-4" />;
+      default:
+        return <Monitor className="h-4 w-4" />;
     }
   };
 
@@ -104,9 +108,7 @@ export function VisitorJourney({ leadId }: VisitorJourneyProps) {
       <Card>
         <CardContent className="py-8 text-center">
           <Globe className="h-10 w-10 mx-auto text-muted-foreground mb-3" />
-          <p className="text-muted-foreground">
-            אין נתוני מעקב עבור ליד זה
-          </p>
+          <p className="text-muted-foreground">אין נתוני מעקב עבור ליד זה</p>
           <p className="text-xs text-muted-foreground mt-1">
             נתונים יופיעו כאן כאשר המבקר יזוהה דרך טופס באתר
           </p>
@@ -136,7 +138,11 @@ export function VisitorJourney({ leadId }: VisitorJourneyProps) {
                   <div className="flex items-center gap-2">
                     {getDeviceIcon(session.device_type)}
                     <CardTitle className="text-sm">
-                      {format(new Date(session.started_at), "dd/MM/yyyy HH:mm", { locale: he })}
+                      {format(
+                        new Date(session.started_at),
+                        "dd/MM/yyyy HH:mm",
+                        { locale: he },
+                      )}
                     </CardTitle>
                   </div>
                   <div className="flex items-center gap-2">
@@ -149,7 +155,7 @@ export function VisitorJourney({ leadId }: VisitorJourneyProps) {
                     </Badge>
                   </div>
                 </div>
-                
+
                 {session.utm_campaign && (
                   <p className="text-xs text-muted-foreground">
                     קמפיין: {session.utm_campaign}
@@ -166,8 +172,14 @@ export function VisitorJourney({ leadId }: VisitorJourneyProps) {
                   </div>
                   <div className="space-y-1">
                     {(session.pages || []).slice(0, 5).map((page, idx) => (
-                      <div key={idx} className="flex items-center gap-2 text-xs bg-muted/50 rounded px-2 py-1">
-                        <Badge variant="outline" className="text-[10px] h-4 px-1">
+                      <div
+                        key={idx}
+                        className="flex items-center gap-2 text-xs bg-muted/50 rounded px-2 py-1"
+                      >
+                        <Badge
+                          variant="outline"
+                          className="text-[10px] h-4 px-1"
+                        >
                           {idx + 1}
                         </Badge>
                         <span className="truncate flex-1" title={page.url}>
@@ -200,7 +212,11 @@ export function VisitorJourney({ leadId }: VisitorJourneyProps) {
                     </div>
                     <div className="flex flex-wrap gap-1">
                       {session.events.slice(0, 8).map((event, idx) => (
-                        <Badge key={idx} variant="secondary" className="text-[10px]">
+                        <Badge
+                          key={idx}
+                          variant="secondary"
+                          className="text-[10px]"
+                        >
                           {event.name}
                           {event.label && `: ${event.label.substring(0, 20)}`}
                         </Badge>

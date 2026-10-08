@@ -12,7 +12,10 @@ import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
-const configPath = resolve(dirname(fileURLToPath(import.meta.url)), "permission-personas.config.json");
+const configPath = resolve(
+  dirname(fileURLToPath(import.meta.url)),
+  "permission-personas.config.json",
+);
 const config = JSON.parse(readFileSync(configPath, "utf8"));
 
 const failures = [];
@@ -42,8 +45,13 @@ mustInclude(
   "client scope helpers must delegate SEO to user_has_seo_scope",
 );
 
-const hybridMigration = read("supabase/migrations/20260909140000_fix_hybrid_seo_report_access.sql");
-if (hybridMigration.includes("user_can_view_client") && !hybridMigration.includes("user_has_seo_scope(uid)")) {
+const hybridMigration = read(
+  "supabase/migrations/20260909140000_fix_hybrid_seo_report_access.sql",
+);
+if (
+  hybridMigration.includes("user_can_view_client") &&
+  !hybridMigration.includes("user_has_seo_scope(uid)")
+) {
   failures.push(
     "20260909140000: user_can_view_client patch must call user_has_seo_scope(uid)",
   );
@@ -61,7 +69,9 @@ mustInclude(
   "crm-tables must resolve SEO scope via user_has_seo_scope",
 );
 
-const optimizeRls = read("supabase/migrations/20260909120000_optimize_clients_tasks_rls_scope.sql");
+const optimizeRls = read(
+  "supabase/migrations/20260909120000_optimize_clients_tasks_rls_scope.sql",
+);
 if (
   optimizeRls.includes("user_can_view_client") &&
   optimizeRls.includes("is_seo_staff(uid)") &&
@@ -83,19 +93,24 @@ async function queryDb(sql) {
     process.env.SUPABASE_PROJECT_REF;
   if (!token || !ref) return null;
 
-  const res = await fetch(`https://api.supabase.com/v1/projects/${ref}/database/query`, {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${token}`,
-      "Content-Type": "application/json",
-      Accept: "application/json",
+  const res = await fetch(
+    `https://api.supabase.com/v1/projects/${ref}/database/query`,
+    {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+        Accept: "application/json",
+      },
+      body: JSON.stringify({ query: sql }),
     },
-    body: JSON.stringify({ query: sql }),
-  });
+  );
 
   const text = await res.text();
   if (!res.ok) {
-    throw new Error(`Staging query failed HTTP ${res.status}: ${text.slice(0, 500)}`);
+    throw new Error(
+      `Staging query failed HTTP ${res.status}: ${text.slice(0, 500)}`,
+    );
   }
   return JSON.parse(text);
 }
@@ -109,7 +124,9 @@ function resolveRef(map, key) {
 async function runLiveChecks() {
   for (const sig of config.required_functions || []) {
     const proc = `public.${sig}`;
-    const rows = await queryDb(`SELECT to_regprocedure('${proc}') IS NOT NULL AS ok`);
+    const rows = await queryDb(
+      `SELECT to_regprocedure('${proc}') IS NOT NULL AS ok`,
+    );
     if (!rows?.[0]?.ok) {
       failures.push(`Staging DB: missing required function ${proc}`);
     }
@@ -128,7 +145,9 @@ async function runLiveChecks() {
             `SELECT public.user_manages_agency('${uid}'::uuid, '${agencyId}'::uuid) AS v`,
           );
           if (rows?.[0]?.v !== true) {
-            failures.push(`${label}: user_manages_agency(${agencyKey}) expected true`);
+            failures.push(
+              `${label}: user_manages_agency(${agencyKey}) expected true`,
+            );
           }
         }
         continue;
@@ -141,14 +160,18 @@ async function runLiveChecks() {
             `SELECT public.user_can_access_client('${uid}'::uuid, '${clientId}'::uuid) AS v`,
           );
           if (rows?.[0]?.v !== true) {
-            failures.push(`${label}: user_can_access_client(${clientKey}) expected true`);
+            failures.push(
+              `${label}: user_can_access_client(${clientKey}) expected true`,
+            );
           }
         }
         continue;
       }
 
       if (fn === "seo_clients_in_get_user_client_ids") {
-        const rows = await queryDb(`SELECT public.get_user_client_ids('${uid}'::uuid) AS ids`);
+        const rows = await queryDb(
+          `SELECT public.get_user_client_ids('${uid}'::uuid) AS ids`,
+        );
         const ids = rows?.[0]?.ids || [];
         for (const clientKey of expected) {
           const clientId = resolveRef(config.clients, clientKey);
@@ -162,7 +185,9 @@ async function runLiveChecks() {
       if (typeof expected === "boolean") {
         const rows = await queryDb(`SELECT public.${fn}('${uid}'::uuid) AS v`);
         if (rows?.[0]?.v !== expected) {
-          failures.push(`${label}: ${fn} expected ${expected}, got ${rows?.[0]?.v}`);
+          failures.push(
+            `${label}: ${fn} expected ${expected}, got ${rows?.[0]?.v}`,
+          );
         }
         continue;
       }
@@ -177,14 +202,18 @@ async function runLiveChecks() {
       );
       const tableId = tables?.[0]?.id;
       if (!tableId) {
-        warnings.push(`${label}: no ahrefs table on staging for ${clientKey} — skipped crm_table check`);
+        warnings.push(
+          `${label}: no ahrefs table on staging for ${clientKey} — skipped crm_table check`,
+        );
         continue;
       }
       const access = await queryDb(
         `SELECT public.user_can_access_crm_table('${uid}'::uuid, '${tableId}'::uuid) AS v`,
       );
       if (access?.[0]?.v !== true) {
-        failures.push(`${label}: user_can_access_crm_table(${clientKey}) expected true`);
+        failures.push(
+          `${label}: user_can_access_crm_table(${clientKey}) expected true`,
+        );
       }
     }
   }
@@ -224,7 +253,11 @@ async function main() {
     process.exit(1);
   }
 
-  console.log("Permission persona guard OK (static" + (token && ref ? " + live" : "") + ")");
+  console.log(
+    "Permission persona guard OK (static" +
+      (token && ref ? " + live" : "") +
+      ")",
+  );
 }
 
 main();

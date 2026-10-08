@@ -7,7 +7,8 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2.75.0";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+  "Access-Control-Allow-Headers":
+    "authorization, x-client-info, apikey, content-type",
   "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
 
@@ -43,16 +44,21 @@ serve(async (req) => {
     const body = (await req.json()) as SubscribeBody;
     const { integration_id, page_id, action = "subscribe" } = body;
     if (!integration_id || !page_id) {
-      return new Response(JSON.stringify({ error: "integration_id and page_id are required" }), {
-        status: 400,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+      return new Response(
+        JSON.stringify({ error: "integration_id and page_id are required" }),
+        {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        },
+      );
     }
 
     // Load the integration (use service-role to bypass RLS for ownership-checked lookup)
     const { data: integration, error: intErr } = await supabase
       .from("tenant_integrations")
-      .select("id, tenant_id, api_key, shared_from_integration_id, settings, integration_type")
+      .select(
+        "id, tenant_id, api_key, shared_from_integration_id, settings, integration_type",
+      )
       .eq("id", integration_id)
       .eq("integration_type", "facebook_lead_ads")
       .maybeSingle();
@@ -75,10 +81,13 @@ serve(async (req) => {
       userAccessToken = (src?.api_key as string | null) ?? null;
     }
     if (!userAccessToken) {
-      return new Response(JSON.stringify({ error: "No access token on integration" }), {
-        status: 400,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+      return new Response(
+        JSON.stringify({ error: "No access token on integration" }),
+        {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        },
+      );
     }
 
     // Get a Page Access Token (required to subscribe the page)
@@ -95,7 +104,10 @@ serve(async (req) => {
             details: tokenJson,
             hint: "Ensure the connected Facebook user has the 'pages_manage_metadata' scope and is an admin on the page.",
           }),
-          { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+          {
+            status: 400,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          },
         );
       }
       pageAccessToken = tokenJson.access_token as string;
@@ -125,21 +137,32 @@ serve(async (req) => {
     if (!graphResp.ok || graphJson?.success === false) {
       return new Response(
         JSON.stringify({ error: "Graph API error", details: graphJson }),
-        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+        {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        },
       );
     }
 
     // Update integration.settings (delivery_mode + page_subscriptions[page_id])
     const settings = (integration.settings as Record<string, any> | null) ?? {};
-    const pageSubs = (settings.page_subscriptions as Record<string, any> | undefined) ?? {};
+    const pageSubs =
+      (settings.page_subscriptions as Record<string, any> | undefined) ?? {};
     if (action === "subscribe") {
-      pageSubs[page_id] = { status: "subscribed", subscribed_at: new Date().toISOString() };
+      pageSubs[page_id] = {
+        status: "subscribed",
+        subscribed_at: new Date().toISOString(),
+      };
     } else {
-      pageSubs[page_id] = { status: "unsubscribed", unsubscribed_at: new Date().toISOString() };
+      pageSubs[page_id] = {
+        status: "unsubscribed",
+        unsubscribed_at: new Date().toISOString(),
+      };
     }
     const newSettings = {
       ...settings,
-      delivery_mode: action === "subscribe" ? "webhook" : settings.delivery_mode ?? "pull",
+      delivery_mode:
+        action === "subscribe" ? "webhook" : (settings.delivery_mode ?? "pull"),
       page_subscriptions: pageSubs,
     };
 
@@ -150,13 +173,16 @@ serve(async (req) => {
 
     return new Response(
       JSON.stringify({ success: true, action, page_id, settings: newSettings }),
-      { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      {
+        status: 200,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      },
     );
   } catch (err) {
     console.error("facebook-subscribe-page error:", err);
-    return new Response(
-      JSON.stringify({ error: (err as Error).message }),
-      { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } },
-    );
+    return new Response(JSON.stringify({ error: (err as Error).message }), {
+      status: 500,
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
   }
 });

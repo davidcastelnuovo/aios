@@ -10,11 +10,18 @@ interface ClientLinkedFilesProps {
   tenantId: string;
 }
 
-export function ClientLinkedFiles({ clientId, leadId, tenantId }: ClientLinkedFilesProps) {
+export function ClientLinkedFiles({
+  clientId,
+  leadId,
+  tenantId,
+}: ClientLinkedFilesProps) {
   const { data: files = [] } = useQuery({
     queryKey: ["linked-files", clientId, leadId, tenantId],
     queryFn: async () => {
-      let q = supabase.from("team_chat_files").select("*").eq("tenant_id", tenantId);
+      let q = supabase
+        .from("team_chat_files")
+        .select("*")
+        .eq("tenant_id", tenantId);
       if (clientId) q = q.eq("client_id", clientId);
       if (leadId) q = q.eq("lead_id", leadId);
       const { data } = await q.order("created_at", { ascending: false });
@@ -32,8 +39,10 @@ export function ClientLinkedFiles({ clientId, leadId, tenantId }: ClientLinkedFi
   }
 
   const getIcon = (type: string) => {
-    if (type === "image") return <ImageIcon className="h-4 w-4 text-blue-500" />;
-    if (type === "link") return <ExternalLink className="h-4 w-4 text-green-500" />;
+    if (type === "image")
+      return <ImageIcon className="h-4 w-4 text-blue-500" />;
+    if (type === "link")
+      return <ExternalLink className="h-4 w-4 text-green-500" />;
     return <FileText className="h-4 w-4 text-orange-500" />;
   };
 
@@ -51,7 +60,9 @@ export function ClientLinkedFiles({ clientId, leadId, tenantId }: ClientLinkedFi
           <div className="flex-1 min-w-0">
             <p className="text-sm truncate">{file.file_name}</p>
             <p className="text-[10px] text-muted-foreground">
-              {format(new Date(file.created_at), "d MMM yyyy HH:mm", { locale: he })}
+              {format(new Date(file.created_at), "d MMM yyyy HH:mm", {
+                locale: he,
+              })}
               {file.file_size && ` · ${(file.file_size / 1024).toFixed(0)}KB`}
             </p>
           </div>

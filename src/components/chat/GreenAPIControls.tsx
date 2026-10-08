@@ -10,7 +10,10 @@ interface GreenAPIControlsProps {
   groupChatId?: string | null;
 }
 
-export function GreenAPIControls({ phone, groupChatId }: GreenAPIControlsProps) {
+export function GreenAPIControls({
+  phone,
+  groupChatId,
+}: GreenAPIControlsProps) {
   const [copied, setCopied] = useState(false);
 
   const handleCopy = async () => {
@@ -28,7 +31,10 @@ export function GreenAPIControls({ phone, groupChatId }: GreenAPIControlsProps) 
   return (
     <div className="space-y-3 p-3 bg-muted/30 rounded-lg border">
       <div className="flex items-center gap-2 text-sm font-medium">
-        <Badge variant="outline" className="bg-blue-500/10 text-blue-700 dark:text-blue-400">
+        <Badge
+          variant="outline"
+          className="bg-blue-500/10 text-blue-700 dark:text-blue-400"
+        >
           Green API
         </Badge>
       </div>
@@ -40,7 +46,10 @@ export function GreenAPIControls({ phone, groupChatId }: GreenAPIControlsProps) 
             מזהה קבוצה
           </Label>
           <div className="flex items-center gap-2">
-            <code className="text-xs font-mono bg-muted px-2 py-1 rounded flex-1 truncate" dir="ltr">
+            <code
+              className="text-xs font-mono bg-muted px-2 py-1 rounded flex-1 truncate"
+              dir="ltr"
+            >
               {groupChatId}
             </code>
             <Button

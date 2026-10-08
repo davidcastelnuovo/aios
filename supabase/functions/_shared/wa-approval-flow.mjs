@@ -44,22 +44,44 @@ export function isExplicitApprovalPhrase(text) {
 
   // Pure / near-pure Hebrew confirms
   if (/^(כן|כן\.|כֵן)([\s,!.]*)$/u.test(t)) return true;
-  if (/^(כן\s+מאשר|מאשר|מאשרת|אשרי|אשר|מאשר\/ת)([\s,!.]*)$/u.test(t)) return true;
-  if (/^(כן[\s,]+)?(תעשי|תעשה|תבצעי|תבצע|תריצי|תריץ)\s+(את\s+)?(זה|הפעולה|הבקשה|האישור)([\s,!.]*)$/u.test(t)) {
+  if (/^(כן\s+מאשר|מאשר|מאשרת|אשרי|אשר|מאשר\/ת)([\s,!.]*)$/u.test(t))
+    return true;
+  if (
+    /^(כן[\s,]+)?(תעשי|תעשה|תבצעי|תבצע|תריצי|תריץ)\s+(את\s+)?(זה|הפעולה|הבקשה|האישור)([\s,!.]*)$/u.test(
+      t,
+    )
+  ) {
     return true;
   }
-  if (/^(יאללה|סבבה|בסדר|אוקיי|אוקי|ok|okay)\s*,?\s*(כן|תעשי|תבצעי)?([\s,!.]*)$/iu.test(t)) {
+  if (
+    /^(יאללה|סבבה|בסדר|אוקיי|אוקי|ok|okay)\s*,?\s*(כן|תעשי|תבצעי)?([\s,!.]*)$/iu.test(
+      t,
+    )
+  ) {
     // Only when paired with confirm intent or alone as ack after approval ask —
     // require כן/תעשי or exact ok/סבבה alone under 12 chars.
     if (/כן|תעשי|תבצעי|תעשה|תבצע/u.test(t)) return true;
-    if (/^(יאללה|סבבה|בסדר|אוקיי|אוקי|ok|okay)([\s,!.]*)$/iu.test(t) && t.length <= 12) return true;
+    if (
+      /^(יאללה|סבבה|בסדר|אוקיי|אוקי|ok|okay)([\s,!.]*)$/iu.test(t) &&
+      t.length <= 12
+    )
+      return true;
   }
 
   // English
-  if (/^(yes|yep|yeah|approve|approved|do\s+it|go\s+ahead|confirm|confirmed)([\s,!.]*)$/i.test(lower)) {
+  if (
+    /^(yes|yep|yeah|approve|approved|do\s+it|go\s+ahead|confirm|confirmed)([\s,!.]*)$/i.test(
+      lower,
+    )
+  ) {
     return true;
   }
-  if (/^(yes[\s,]+)?(please\s+)?(do\s+it|go\s+ahead|approve)([\s,!.]*)$/i.test(lower)) return true;
+  if (
+    /^(yes[\s,]+)?(please\s+)?(do\s+it|go\s+ahead|approve)([\s,!.]*)$/i.test(
+      lower,
+    )
+  )
+    return true;
 
   // Soft: "כן מאשר את השכפול" etc. — starts with confirm + short rest
   if (/^(כן(\s+מאשר)?|מאשר|אשרי)\b/u.test(t) && t.length <= 40) return true;
@@ -72,7 +94,8 @@ export function isExplicitRejectionPhrase(text) {
   if (!t || t.length > 80) return false;
   const lower = t.toLowerCase();
   if (/^(לא|לא\.|לא\s+מאשר|דחה|דחי|בטל|ביטול)([\s,!.]*)$/u.test(t)) return true;
-  if (/^(no|nope|reject|cancel|don't|do\s+not)([\s,!.]*)$/i.test(lower)) return true;
+  if (/^(no|nope|reject|cancel|don't|do\s+not)([\s,!.]*)$/i.test(lower))
+    return true;
   return false;
 }
 
@@ -107,7 +130,12 @@ export function pickLatestPendingApproval(rows, opts = {}) {
 export function buildNoPendingRecovery(recentRows) {
   const list = Array.isArray(recentRows) ? recentRows.filter(Boolean) : [];
   const candidate =
-    list.find((r) => isMetaApprovalTool(r.tool_name) && r.tool_input && r.status !== "executed") ||
+    list.find(
+      (r) =>
+        isMetaApprovalTool(r.tool_name) &&
+        r.tool_input &&
+        r.status !== "executed",
+    ) ||
     list.find((r) => isMetaApprovalTool(r.tool_name) && r.tool_input) ||
     list.find((r) => r.tool_input && r.status !== "executed") ||
     null;
@@ -138,7 +166,7 @@ export function buildNoPendingRecovery(recentRows) {
       variant_previews: variantPreview,
     },
     instruction_for_carmen:
-      "אין pending כרגע. שחזרי פעם אחת בלבד את אותה בקשה עם אותו tool_name + tool_input (או קראי לכלי המקורי עם אותם ארגומנטים), הציגי סיכום ברור מה יקרה, ובקשי אישור סופי אחד: \"לאשר? (כן/לא)\". " +
+      'אין pending כרגע. שחזרי פעם אחת בלבד את אותה בקשה עם אותו tool_name + tool_input (או קראי לכלי המקורי עם אותם ארגומנטים), הציגי סיכום ברור מה יקרה, ובקשי אישור סופי אחד: "לאשר? (כן/לא)". ' +
       "אחרי שהמשתמש יאשר שוב — חובה לקרוא ל-execute_pending_approval. אסור לטעון שבוצע בלי הצלחת execute_pending_approval. אסור ללולאת אישורים חוזרת.",
   };
 }
@@ -164,7 +192,10 @@ export function buildApprovalConfirmPromptRule(pending) {
 
 export function formatApprovalExecutionReply(execResult, pendingRow) {
   const title = pendingRow?.title || pendingRow?.tool_name || "הפעולה";
-  const ok = !!(execResult && (execResult.success === true || execResult.already_executed === true));
+  const ok = !!(
+    execResult &&
+    (execResult.success === true || execResult.already_executed === true)
+  );
   if (ok) {
     const already = execResult.already_executed ? " (כבר בוצע קודם)" : "";
     return `בוצע: ${title}${already}.`;
@@ -179,8 +210,21 @@ export function formatApprovalExecutionReply(execResult, pendingRow) {
 
 export function buildApprovalFlowAcceptanceCases() {
   return {
-    approve: ["כן", "מאשר", "כן מאשר", "אשרי", "תעשי את זה", "yes", "approve", "go ahead", "כן."],
+    approve: [
+      "כן",
+      "מאשר",
+      "כן מאשר",
+      "אשרי",
+      "תעשי את זה",
+      "yes",
+      "approve",
+      "go ahead",
+      "כן.",
+    ],
     reject: ["לא", "לא מאשר", "no", "reject"],
-    notApproval: ["כן אבל תבדקי קודם את התקציב של כל הקמפיינים לפני", "מה מצב הלידים היום?"],
+    notApproval: [
+      "כן אבל תבדקי קודם את התקציב של כל הקמפיינים לפני",
+      "מה מצב הלידים היום?",
+    ],
   };
 }

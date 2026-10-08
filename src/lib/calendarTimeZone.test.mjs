@@ -1,7 +1,10 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { getJerusalemDashboardDateRange, jerusalemDateRangeToIso } from "./calendarTimeZone.ts";
+import {
+  getJerusalemDashboardDateRange,
+  jerusalemDateRangeToIso,
+} from "./calendarTimeZone.ts";
 
 test("Jerusalem last_7_days rolling window", () => {
   const now = new Date("2026-08-27T09:00:00Z");
@@ -21,6 +24,8 @@ test("Jerusalem last_week is previous Sun-Sat", () => {
 
 test("Jerusalem day bounds wrap midnight correctly", () => {
   const iso = jerusalemDateRangeToIso("2026-08-24", "2026-08-24");
-  assert.ok(iso.start.includes("2026-08-23") || iso.start.includes("2026-08-24"));
+  assert.ok(
+    iso.start.includes("2026-08-23") || iso.start.includes("2026-08-24"),
+  );
   assert.ok(iso.end.includes("2026-08-24"));
 });

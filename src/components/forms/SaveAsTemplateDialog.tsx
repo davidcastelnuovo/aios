@@ -57,7 +57,9 @@ export function SaveAsTemplateDialog({
       return result;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["tenant-templates", tenant.id] });
+      queryClient.invalidateQueries({
+        queryKey: ["tenant-templates", tenant.id],
+      });
       toast.success("הטמפלייט נשמר בהצלחה!");
       setFormData({
         name: "",
@@ -85,10 +87,12 @@ export function SaveAsTemplateDialog({
             שמירה כטמפלייט
           </DialogTitle>
           <DialogDescription>
-            שמור את הגדרות הארגון "{tenant.name}" כטמפלייט לשימוש בארגונים חדשים.
+            שמור את הגדרות הארגון "{tenant.name}" כטמפלייט לשימוש בארגונים
+            חדשים.
             <br />
             <span className="text-xs text-muted-foreground">
-              יועתקו: שדות מותאמים, תפריטים, טרמינולוגיה, אוטומציות, שלבי Pipeline וסטטוסים.
+              יועתקו: שדות מותאמים, תפריטים, טרמינולוגיה, אוטומציות, שלבי
+              Pipeline וסטטוסים.
             </span>
           </DialogDescription>
         </DialogHeader>
@@ -99,7 +103,9 @@ export function SaveAsTemplateDialog({
             <Input
               id="template-name"
               value={formData.name}
-              onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+              onChange={(e) =>
+                setFormData({ ...formData, name: e.target.value })
+              }
               placeholder="שם לטמפלייט"
               required
             />
@@ -110,7 +116,9 @@ export function SaveAsTemplateDialog({
             <Textarea
               id="template-description"
               value={formData.description}
-              onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+              onChange={(e) =>
+                setFormData({ ...formData, description: e.target.value })
+              }
               placeholder="תיאור קצר של הטמפלייט..."
               rows={3}
             />
@@ -128,7 +136,9 @@ export function SaveAsTemplateDialog({
             <Switch
               id="is-public"
               checked={formData.is_public}
-              onCheckedChange={(checked) => setFormData({ ...formData, is_public: checked })}
+              onCheckedChange={(checked) =>
+                setFormData({ ...formData, is_public: checked })
+              }
             />
           </div>
 

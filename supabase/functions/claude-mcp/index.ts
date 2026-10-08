@@ -33,15 +33,18 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.75.0";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL") || "";
-const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
+const SUPABASE_SERVICE_ROLE_KEY =
+  Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+  "Access-Control-Allow-Headers":
+    "authorization, x-client-info, apikey, content-type",
   "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
 };
 
-const ANTHROPIC_BETA = Deno.env.get("CLAUDE_ROUTINE_BETA") || "experimental-cc-routine-2026-04-01";
+const ANTHROPIC_BETA =
+  Deno.env.get("CLAUDE_ROUTINE_BETA") || "experimental-cc-routine-2026-04-01";
 const ANTHROPIC_VERSION = "2023-06-01";
 const SERVER_INFO = { name: "claude-mcp", version: "1.6.0" };
 const PROTOCOL_VERSION = "2024-11-05";
@@ -62,15 +65,18 @@ const TOOLS = [
       properties: {
         task: {
           type: "string",
-          description: "Clear, self-contained description of the development work to perform.",
+          description:
+            "Clear, self-contained description of the development work to perform.",
         },
         branch: {
           type: "string",
-          description: "Optional target/base branch. If omitted Claude uses a default claude/ branch.",
+          description:
+            "Optional target/base branch. If omitted Claude uses a default claude/ branch.",
         },
         context: {
           type: "string",
-          description: "Optional extra context: error logs, file paths, links, constraints, acceptance criteria.",
+          description:
+            "Optional extra context: error logs, file paths, links, constraints, acceptance criteria.",
         },
       },
       required: ["task"],
@@ -101,51 +107,89 @@ const TOOLS = [
 ];
 
 function rpcResult(id: unknown, result: unknown) {
-  return new Response(JSON.stringify({ jsonrpc: "2.0", id: id ?? null, result }), {
-    status: 200,
-    headers: { ...corsHeaders, "Content-Type": "application/json" },
-  });
+  return new Response(
+    JSON.stringify({ jsonrpc: "2.0", id: id ?? null, result }),
+    {
+      status: 200,
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    },
+  );
 }
 
-function rpcError(id: unknown, code: number, message: string, httpStatus = 200) {
-  return new Response(JSON.stringify({ jsonrpc: "2.0", id: id ?? null, error: { code, message } }), {
-    status: httpStatus,
-    headers: { ...corsHeaders, "Content-Type": "application/json" },
-  });
+function rpcError(
+  id: unknown,
+  code: number,
+  message: string,
+  httpStatus = 200,
+) {
+  return new Response(
+    JSON.stringify({
+      jsonrpc: "2.0",
+      id: id ?? null,
+      error: { code, message },
+    }),
+    {
+      status: httpStatus,
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    },
+  );
 }
 
 function bearerFrom(req: Request): string | undefined {
-  const h = req.headers.get("authorization") || req.headers.get("Authorization");
+  const h =
+    req.headers.get("authorization") || req.headers.get("Authorization");
   if (!h) return undefined;
   const m = h.match(/^Bearer\s+(.+)$/i);
   return m ? m[1].trim() : undefined;
 }
 
 // Fire a Claude Code routine session and return its public session URL.
-async function fireRoutine(routineId: string, token: string, text: string): Promise<string> {
+async function fireRoutine(
+  routineId: string,
+  token: string,
+  text: string,
+): Promise<string> {
   const body = text.length > MAX_TEXT ? text.slice(0, MAX_TEXT) : text;
-  const resp = await fetch(`https://api.anthropic.com/v1/claude_code/routines/${routineId}/fire`, {
-    method: "POST",
-    headers: {
-      "Authorization": `Bearer ${token}`,
-      "anthropic-version": ANTHROPIC_VERSION,
-      "anthropic-beta": ANTHROPIC_BETA,
-      "Content-Type": "application/json",
+  const resp = await fetch(
+    `https://api.anthropic.com/v1/claude_code/routines/${routineId}/fire`,
+    {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "anthropic-version": ANTHROPIC_VERSION,
+        "anthropic-beta": ANTHROPIC_BETA,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ text: body }),
     },
-    body: JSON.stringify({ text: body }),
-  });
+  );
   const raw = await resp.text();
   if (!resp.ok) {
     let detail = raw.slice(0, 500);
-    try { detail = JSON.parse(raw)?.error?.message || detail; } catch { /* keep raw */ }
+    try {
+      detail = JSON.parse(raw)?.error?.message || detail;
+    } catch {
+      /* keep raw */
+    }
     throw new Error(`Claude routine fire ${resp.status}: ${detail}`);
   }
   let data: any = {};
-  try { data = JSON.parse(raw); } catch { /* ignore */ }
-  return data?.claude_code_session_url || data?.claude_code_session_id || "(session created)";
+  try {
+    data = JSON.parse(raw);
+  } catch {
+    /* ignore */
+  }
+  return (
+    data?.claude_code_session_url ||
+    data?.claude_code_session_id ||
+    "(session created)"
+  );
 }
 
-function resolveRoutine(kind: "dev" | "general"): { id: string; token: string } {
+function resolveRoutine(kind: "dev" | "general"): {
+  id: string;
+  token: string;
+} {
   const generalId = Deno.env.get("CLAUDE_ROUTINE_ID") || "";
   const generalToken = Deno.env.get("CLAUDE_ROUTINE_TOKEN") || "";
   if (kind === "dev") {
@@ -161,21 +205,38 @@ function resolveRoutine(kind: "dev" | "general"): { id: string; token: string } 
 // connections share the same CLAUDE_MCP_BEARER, so this only disambiguates when
 // a single ready connection matches; otherwise we fall back to the configured
 // default tenant. The model never has to pass a UUID.
-async function resolveContext(bearer: string | undefined): Promise<{ tenantId: string | null; agentId: string | null }> {
-  const fallback = { tenantId: Deno.env.get("CLAUDE_DEFAULT_TENANT_ID") || null, agentId: null as string | null };
+async function resolveContext(
+  bearer: string | undefined,
+): Promise<{ tenantId: string | null; agentId: string | null }> {
+  const fallback = {
+    tenantId: Deno.env.get("CLAUDE_DEFAULT_TENANT_ID") || null,
+    agentId: null as string | null,
+  };
   if (!bearer || !SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) return fallback;
   try {
-    const sb = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, { auth: { persistSession: false } });
+    const sb = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
+      auth: { persistSession: false },
+    });
     const { data } = await sb
       .from("agent_mcp_connections")
       .select("tenant_id, agent_id")
       .eq("state", "ready")
       .filter("oauth_tokens->>bearer", "eq", bearer);
-    const rows = (data || []) as Array<{ tenant_id: string | null; agent_id: string | null }>;
-    const tenants = Array.from(new Set(rows.map((r) => r.tenant_id).filter(Boolean)));
+    const rows = (data || []) as Array<{
+      tenant_id: string | null;
+      agent_id: string | null;
+    }>;
+    const tenants = Array.from(
+      new Set(rows.map((r) => r.tenant_id).filter(Boolean)),
+    );
     if (tenants.length === 1) {
-      const agents = Array.from(new Set(rows.map((r) => r.agent_id).filter(Boolean)));
-      return { tenantId: tenants[0] as string, agentId: agents.length === 1 ? (agents[0] as string) : null };
+      const agents = Array.from(
+        new Set(rows.map((r) => r.agent_id).filter(Boolean)),
+      );
+      return {
+        tenantId: tenants[0] as string,
+        agentId: agents.length === 1 ? (agents[0] as string) : null,
+      };
     }
     return fallback;
   } catch {
@@ -185,7 +246,9 @@ async function resolveContext(bearer: string | undefined): Promise<{ tenantId: s
 
 function sbClient() {
   if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) return null;
-  return createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, { auth: { persistSession: false } });
+  return createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
+    auth: { persistSession: false },
+  });
 }
 
 // MEMORY: pull the last few Carmen → Claude dispatches for this tenant so a fresh
@@ -205,8 +268,12 @@ async function recentDispatchContext(tenantId: string | null): Promise<string> {
     const rows = (data || []) as Array<any>;
     if (!rows.length) return "";
     const lines = rows.map((r) => {
-      const when = String(r.created_at || "").slice(0, 16).replace("T", " ");
-      const what = String(r.request_text || "").replace(/\s+/g, " ").slice(0, 200);
+      const when = String(r.created_at || "")
+        .slice(0, 16)
+        .replace("T", " ");
+      const what = String(r.request_text || "")
+        .replace(/\s+/g, " ")
+        .slice(0, 200);
       const tag = r.tool === "request_dev_task" ? "DEV" : "ASK";
       const sess = r.session_url ? ` — ${r.session_url}` : "";
       return `• [${when} · ${tag} · ${r.status || "dispatched"}] ${what}${sess}`;
@@ -219,7 +286,10 @@ async function recentDispatchContext(tenantId: string | null): Promise<string> {
       lines.join("\n")
     );
   } catch (e) {
-    console.error("[claude-mcp] recentDispatchContext failed:", (e as any)?.message ?? e);
+    console.error(
+      "[claude-mcp] recentDispatchContext failed:",
+      (e as any)?.message ?? e,
+    );
     return "";
   }
 }
@@ -227,8 +297,13 @@ async function recentDispatchContext(tenantId: string | null): Promise<string> {
 // VISIBILITY (durable): persist the dispatch so David has a record of what Carmen
 // asked + the live session URL, and future sessions can recall it. Never throws.
 async function logDispatch(args: {
-  tenantId: string | null; agentId: string | null; tool: string;
-  requestText: string; context: string; branch: string; sessionUrl: string;
+  tenantId: string | null;
+  agentId: string | null;
+  tool: string;
+  requestText: string;
+  context: string;
+  branch: string;
+  sessionUrl: string;
 }): Promise<void> {
   const sb = sbClient();
   if (!sb) return;
@@ -251,7 +326,10 @@ async function logDispatch(args: {
 // independent next time, (c) keeps David in the loop with the result, and (d)
 // treats a failed previously-taught skin as a fix-and-retry job. Carmen's side
 // mirrors this in her always-on instruction + the `claude_escalation` skin.
-function teachingBlock(tenantId: string | null, agentId: string | null): string {
+function teachingBlock(
+  tenantId: string | null,
+  agentId: string | null,
+): string {
   const tenantLine = tenantId
     ? `Target tenant_id for the skin: ${tenantId}`
     : `Target tenant: UNKNOWN — skip the ai_skills write and only record to the repo doc.`;
@@ -280,12 +358,19 @@ function teachingBlock(tenantId: string | null, agentId: string | null): string 
   );
 }
 
-async function handleToolCall(name: string, args: Record<string, any>, ctx: { tenantId: string | null; agentId: string | null }): Promise<string> {
+async function handleToolCall(
+  name: string,
+  args: Record<string, any>,
+  ctx: { tenantId: string | null; agentId: string | null },
+): Promise<string> {
   if (name === "request_dev_task") {
     const task = String(args?.task ?? "").trim();
     if (!task) throw new Error("request_dev_task requires a non-empty 'task'.");
     const { id, token } = resolveRoutine("dev");
-    if (!id || !token) throw new Error("Claude dev routine is not configured (set CLAUDE_ROUTINE_ID / CLAUDE_ROUTINE_TOKEN secrets).");
+    if (!id || !token)
+      throw new Error(
+        "Claude dev routine is not configured (set CLAUDE_ROUTINE_ID / CLAUDE_ROUTINE_TOKEN secrets).",
+      );
     const branch = String(args?.branch ?? "").trim();
     const context = String(args?.context ?? "").trim();
     const text =
@@ -298,7 +383,15 @@ async function handleToolCall(name: string, args: Record<string, any>, ctx: { te
       (await recentDispatchContext(ctx.tenantId)) +
       teachingBlock(ctx.tenantId, ctx.agentId);
     const url = await fireRoutine(id, token, text);
-    await logDispatch({ tenantId: ctx.tenantId, agentId: ctx.agentId, tool: "request_dev_task", requestText: task, context, branch, sessionUrl: url });
+    await logDispatch({
+      tenantId: ctx.tenantId,
+      agentId: ctx.agentId,
+      tool: "request_dev_task",
+      requestText: task,
+      context,
+      branch,
+      sessionUrl: url,
+    });
     return `✅ Dispatched the dev task to Claude Code. Claude is now working on it and will open a pull request when finished.\nSession: ${url}`;
   }
 
@@ -306,7 +399,10 @@ async function handleToolCall(name: string, args: Record<string, any>, ctx: { te
     const request = String(args?.request ?? "").trim();
     if (!request) throw new Error("ask_claude requires a non-empty 'request'.");
     const { id, token } = resolveRoutine("general");
-    if (!id || !token) throw new Error("Claude routine is not configured (set CLAUDE_ROUTINE_ID / CLAUDE_ROUTINE_TOKEN secrets).");
+    if (!id || !token)
+      throw new Error(
+        "Claude routine is not configured (set CLAUDE_ROUTINE_ID / CLAUDE_ROUTINE_TOKEN secrets).",
+      );
     const context = String(args?.context ?? "").trim();
     const text =
       `[Carmen → Claude · REQUEST]\n` +
@@ -316,7 +412,15 @@ async function handleToolCall(name: string, args: Record<string, any>, ctx: { te
       (await recentDispatchContext(ctx.tenantId)) +
       teachingBlock(ctx.tenantId, ctx.agentId);
     const url = await fireRoutine(id, token, text);
-    await logDispatch({ tenantId: ctx.tenantId, agentId: ctx.agentId, tool: "ask_claude", requestText: request, context, branch: "", sessionUrl: url });
+    await logDispatch({
+      tenantId: ctx.tenantId,
+      agentId: ctx.agentId,
+      tool: "ask_claude",
+      requestText: request,
+      context,
+      branch: "",
+      sessionUrl: url,
+    });
     return `✅ Sent your request to Claude. A Claude Code session is now running on it.\nSession: ${url}`;
   }
 
@@ -324,14 +428,22 @@ async function handleToolCall(name: string, args: Record<string, any>, ctx: { te
 }
 
 Deno.serve(async (req) => {
-  if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
+  if (req.method === "OPTIONS")
+    return new Response("ok", { headers: corsHeaders });
 
   // Lightweight health check / friendly GET.
   if (req.method === "GET") {
-    return new Response(JSON.stringify({ ok: true, server: SERVER_INFO, tools: TOOLS.map((t) => t.name) }), {
-      status: 200,
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
-    });
+    return new Response(
+      JSON.stringify({
+        ok: true,
+        server: SERVER_INFO,
+        tools: TOOLS.map((t) => t.name),
+      }),
+      {
+        status: 200,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      },
+    );
   }
 
   let msg: any;
@@ -347,7 +459,12 @@ Deno.serve(async (req) => {
   // present it (Carmen's MCP client forwards the connection's bearer token).
   const requiredBearer = Deno.env.get("CLAUDE_MCP_BEARER");
   if (requiredBearer && bearerFrom(req) !== requiredBearer) {
-    return rpcError(id, -32001, "Unauthorized: invalid or missing bearer token", 401);
+    return rpcError(
+      id,
+      -32001,
+      "Unauthorized: invalid or missing bearer token",
+      401,
+    );
   }
 
   try {

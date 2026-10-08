@@ -36,7 +36,9 @@ export function useClientConnections(clientId: string | null | undefined) {
     queryFn: async (): Promise<ClientConnections> => {
       const clientRes = await supabase
         .from("clients")
-        .select("id, name, services, website, meta_ads_account_id, google_ads_account_id, ga_property_id, gsc_site_url, ahrefs_domain")
+        .select(
+          "id, name, services, website, meta_ads_account_id, google_ads_account_id, ga_property_id, gsc_site_url, ahrefs_domain",
+        )
         .eq("id", clientId!)
         .maybeSingle();
       const pagesRes = await supabase
@@ -56,8 +58,8 @@ export function useClientConnections(clientId: string | null | undefined) {
     },
   });
 
-  const invalidate = () => qc.invalidateQueries({ queryKey: ["client-connections", clientId] });
+  const invalidate = () =>
+    qc.invalidateQueries({ queryKey: ["client-connections", clientId] });
 
   return { ...query, invalidate };
 }
-

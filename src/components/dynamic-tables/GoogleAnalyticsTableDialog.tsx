@@ -1,9 +1,21 @@
 import { useState, useMemo } from "react";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+} from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
@@ -11,9 +23,21 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTenant } from "@/contexts/TenantContext";
 import { useTableDialogAgencies } from "@/hooks/useAgencyClients";
 import { useUserIntegrations } from "@/hooks/useUserIntegrations";
-import { Loader2, BarChart3, ExternalLink, Search, AlertCircle, Check, ChevronsUpDown } from "lucide-react";
+import {
+  Loader2,
+  BarChart3,
+  ExternalLink,
+  Search,
+  AlertCircle,
+  Check,
+  ChevronsUpDown,
+} from "lucide-react";
 import { GaDomainSearch } from "@/components/dynamic-tables/GaDomainSearch";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
 import { cn } from "@/lib/utils";
 
 interface GoogleAnalyticsTableDialogProps {
@@ -28,11 +52,15 @@ interface GAProperty {
   accountName: string;
 }
 
-export function GoogleAnalyticsTableDialog({ open, onOpenChange, assignedClientIds }: GoogleAnalyticsTableDialogProps) {
+export function GoogleAnalyticsTableDialog({
+  open,
+  onOpenChange,
+  assignedClientIds,
+}: GoogleAnalyticsTableDialogProps) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const { currentTenant, currentTenantId: activeTenantId } = useTenant();
-  
+
   const [tableName, setTableName] = useState("");
   const [category, setCategory] = useState("analytics");
   const [selectedProperty, setSelectedProperty] = useState("");
@@ -46,13 +74,14 @@ export function GoogleAnalyticsTableDialog({ open, onOpenChange, assignedClientI
   const [pickedProperty, setPickedProperty] = useState<GAProperty | null>(null);
 
   // Fetch user's own + shared GA integrations
-  const { data: allIntegrations = [], isLoading: integrationLoading } = useUserIntegrations(
-    activeTenantId, 'google_analytics', { enabled: open }
-  );
+  const { data: allIntegrations = [], isLoading: integrationLoading } =
+    useUserIntegrations(activeTenantId, "google_analytics", { enabled: open });
 
   // Use selected or first available integration
   const integration = selectedIntegrationId
-    ? allIntegrations.find(i => i.id === selectedIntegrationId) || allIntegrations[0] || null
+    ? allIntegrations.find((i) => i.id === selectedIntegrationId) ||
+      allIntegrations[0] ||
+      null
     : allIntegrations[0] || null;
 
   // Fetch properties (direct API). Keep the full response — the function
@@ -60,15 +89,18 @@ export function GoogleAnalyticsTableDialog({ open, onOpenChange, assignedClientI
   // revoked or the API errors, and we must surface that instead of showing
   // an empty "no results" list.
   const { data: propertiesResponse, isLoading: propertiesLoading } = useQuery({
-    queryKey: ['ga-properties', integration?.id],
+    queryKey: ["ga-properties", integration?.id],
     queryFn: async () => {
       if (!integration) return null;
 
-      const { data, error } = await supabase.functions.invoke('google-analytics-auth?action=get_properties', {
-        body: {
-          integrationId: integration.id
-        }
-      });
+      const { data, error } = await supabase.functions.invoke(
+        "google-analytics-auth?action=get_properties",
+        {
+          body: {
+            integrationId: integration.id,
+          },
+        },
+      );
 
       if (error) throw error;
       return data as {
@@ -86,17 +118,25 @@ export function GoogleAnalyticsTableDialog({ open, onOpenChange, assignedClientI
     () => (propertiesResponse?.properties || []) as GAProperty[],
     [propertiesResponse?.properties],
   );
-  const integrationSettings = integration?.settings as Record<string, unknown> | null;
+  const integrationSettings = integration?.settings as Record<
+    string,
+    unknown
+  > | null;
   const connectionProblem = propertiesResponse?.needs_reconnect
     ? {
-        ownerEmail: propertiesResponse.owner_email || String(integrationSettings?.google_email || ''),
-        reason: propertiesResponse.reason || '',
-        detail: propertiesResponse.error_detail || '',
+        ownerEmail:
+          propertiesResponse.owner_email ||
+          String(integrationSettings?.google_email || ""),
+        reason: propertiesResponse.reason || "",
+        detail: propertiesResponse.error_detail || "",
       }
     : null;
 
   // Fetch agencies
-  const { data: agencies } = useTableDialogAgencies({ includeShared: true, enabled: open });
+  const { data: agencies } = useTableDialogAgencies({
+    includeShared: true,
+    enabled: open,
+  });
 
   // Fetch all clients the current user may access. RLS includes cross-tenant
   // clients shared through agencies, so the user can search by client name
@@ -119,7 +159,9 @@ export function GoogleAnalyticsTableDialog({ open, onOpenChange, assignedClientI
       ? allClients.filter((client) => client.agency_id === selectedAgency)
       : allClients;
     if (assignedClientIds) {
-      filtered = filtered.filter((client) => assignedClientIds.includes(client.id));
+      filtered = filtered.filter((client) =>
+        assignedClientIds.includes(client.id),
+      );
     }
     return filtered;
   }, [allClients, assignedClientIds, selectedAgency]);
@@ -127,10 +169,14 @@ export function GoogleAnalyticsTableDialog({ open, onOpenChange, assignedClientI
   const filteredClients = useMemo(() => {
     const search = clientSearch.trim().toLocaleLowerCase("he");
     if (!search) return clients;
-    return clients.filter((client) => client.name.toLocaleLowerCase("he").includes(search));
+    return clients.filter((client) =>
+      client.name.toLocaleLowerCase("he").includes(search),
+    );
   }, [clientSearch, clients]);
 
-  const selectedClientName = allClients.find((client) => client.id === selectedClient)?.name;
+  const selectedClientName = allClients.find(
+    (client) => client.id === selectedClient,
+  )?.name;
 
   const handleCreate = async () => {
     if (!tableName.trim()) {
@@ -150,10 +196,14 @@ export function GoogleAnalyticsTableDialog({ open, onOpenChange, assignedClientI
 
     setIsCreating(true);
     try {
-      const slug = tableName.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '');
-      
-      const selectedProp = properties?.find(p => p.id === selectedProperty)
-        || (pickedProperty?.id === selectedProperty ? pickedProperty : undefined);
+      const slug = tableName
+        .toLowerCase()
+        .replace(/\s+/g, "-")
+        .replace(/[^a-z0-9-]/g, "");
+
+      const selectedProp =
+        properties?.find((p) => p.id === selectedProperty) ||
+        (pickedProperty?.id === selectedProperty ? pickedProperty : undefined);
       const integrationSettings: Record<string, unknown> = {
         integrationId: integration?.id,
         propertyId: selectedProperty,
@@ -162,31 +212,38 @@ export function GoogleAnalyticsTableDialog({ open, onOpenChange, assignedClientI
         data_source: "direct_api",
       };
 
-      const { data, error } = await supabase.functions.invoke('crm-tables', {
+      const { data, error } = await supabase.functions.invoke("crm-tables", {
         body: {
-          action: 'create',
+          action: "create",
           tenantId: activeTenantId,
           name: tableName,
           slug: `ga-${slug}-${Date.now()}`,
-          description: `Google Analytics - ${selectedProp?.name || ''}`,
+          description: `Google Analytics - ${selectedProp?.name || ""}`,
           category,
-          icon: 'BarChart3',
+          icon: "BarChart3",
           agency_id: selectedAgency || null,
           client_id: selectedClient || null,
           integration_type: "google_analytics",
           integration_settings: integrationSettings,
-        }
+        },
       });
 
       if (error) throw error;
 
       toast({ title: "טבלת Google Analytics נוצרה בהצלחה!" });
-      queryClient.invalidateQueries({ queryKey: ['crm-tables', activeTenantId] });
+      queryClient.invalidateQueries({
+        queryKey: ["crm-tables", activeTenantId],
+      });
       onOpenChange(false);
       resetForm();
     } catch (error: unknown) {
-      const errorMessage = error instanceof Error ? error.message : "Unknown error";
-      toast({ title: "שגיאה ביצירת הטבלה", description: errorMessage, variant: "destructive" });
+      const errorMessage =
+        error instanceof Error ? error.message : "Unknown error";
+      toast({
+        title: "שגיאה ביצירת הטבלה",
+        description: errorMessage,
+        variant: "destructive",
+      });
     } finally {
       setIsCreating(false);
     }
@@ -208,9 +265,10 @@ export function GoogleAnalyticsTableDialog({ open, onOpenChange, assignedClientI
     if (!properties) return [];
     if (!propertySearch.trim()) return properties;
     const search = propertySearch.toLowerCase();
-    return properties.filter(prop => 
-      prop.name?.toLowerCase().includes(search) || 
-      prop.accountName?.toLowerCase().includes(search)
+    return properties.filter(
+      (prop) =>
+        prop.name?.toLowerCase().includes(search) ||
+        prop.accountName?.toLowerCase().includes(search),
     );
   }, [properties, propertySearch]);
 
@@ -218,7 +276,10 @@ export function GoogleAnalyticsTableDialog({ open, onOpenChange, assignedClientI
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-lg w-[calc(100vw-2rem)] max-h-[90vh] overflow-y-auto" dir="rtl">
+      <DialogContent
+        className="max-w-lg w-[calc(100vw-2rem)] max-h-[90vh] overflow-y-auto"
+        dir="rtl"
+      >
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <BarChart3 className="h-5 w-5 text-orange-500" />
@@ -230,253 +291,309 @@ export function GoogleAnalyticsTableDialog({ open, onOpenChange, assignedClientI
         </DialogHeader>
 
         <div className="space-y-4">
-            {isLoading ? (
-              <div className="flex justify-center py-8">
-                <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-              </div>
-            ) : !integration ? (
-              <div className="text-center py-6 space-y-4">
-                <Alert>
-                  <AlertCircle className="h-4 w-4" />
-                  <AlertDescription>
-                    לא נמצא חיבור Google Analytics פעיל (שלך או משותף)
-                  </AlertDescription>
-                </Alert>
-                <Button variant="outline" asChild>
-                  <a href={`/t/${currentTenant?.slug}/google-analytics-settings`}>
-                    <ExternalLink className="h-4 w-4 ml-2" />
-                    חבר Google Analytics
-                  </a>
-                </Button>
-              </div>
-            ) : (
-              <div className="space-y-4">
-                {/* Integration selector when multiple connections available */}
-                {allIntegrations.length > 1 && (
-                  <div className="space-y-2">
-                    <Label>חשבון Google Analytics</Label>
-                    <Select value={selectedIntegrationId || integration?.id || ''} onValueChange={setSelectedIntegrationId}>
-                      <SelectTrigger>
-                        <SelectValue placeholder="בחר חשבון" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {allIntegrations.map((integ) => {
-                          const s = integ.settings as Record<string, unknown> | null;
-                          const email = (s?.google_email as string) || 'חשבון לא ידוע';
-                          const isOwn = integ._isOwn;
-                          const sharedBy = integ._sharedByName;
-                          return (
-                            <SelectItem key={integ.id} value={integ.id}>
-                              {email} {!isOwn && sharedBy ? `(שותף ע"י ${sharedBy})` : ''}
-                            </SelectItem>
-                          );
-                        })}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                )}
-
-                {connectionProblem && (
-                  <Alert variant="destructive">
-                    <AlertCircle className="h-4 w-4" />
-                    <AlertDescription className="space-y-1">
-                      <div>
-                        החיבור {connectionProblem.ownerEmail ? `של ${connectionProblem.ownerEmail} ` : ''}דורש התחברות מחדש ל-Google —
-                        {' '}ההרשאה פגה או נשללה, ולכן לא ניתן למשוך את רשימת הנכסים.
-                      </div>
-                      <div className="text-xs">
-                        {integration?._isOwn
-                          ? 'עבור להגדרות Google Analytics והתחבר מחדש.'
-                          : `בעל/ת החיבור (${integration?._sharedByName || connectionProblem.ownerEmail || 'המשתמש שחיבר'}) צריך/ה להתחבר מחדש בהגדרות Google Analytics.`}
-                        {connectionProblem.detail ? ` (${connectionProblem.detail})` : ''}
-                      </div>
-                    </AlertDescription>
-                  </Alert>
-                )}
-
+          {isLoading ? (
+            <div className="flex justify-center py-8">
+              <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+            </div>
+          ) : !integration ? (
+            <div className="text-center py-6 space-y-4">
+              <Alert>
+                <AlertCircle className="h-4 w-4" />
+                <AlertDescription>
+                  לא נמצא חיבור Google Analytics פעיל (שלך או משותף)
+                </AlertDescription>
+              </Alert>
+              <Button variant="outline" asChild>
+                <a href={`/t/${currentTenant?.slug}/google-analytics-settings`}>
+                  <ExternalLink className="h-4 w-4 ml-2" />
+                  חבר Google Analytics
+                </a>
+              </Button>
+            </div>
+          ) : (
+            <div className="space-y-4">
+              {/* Integration selector when multiple connections available */}
+              {allIntegrations.length > 1 && (
                 <div className="space-y-2">
-                  <Label>שם הטבלה *</Label>
-                  <Input
-                    value={tableName}
-                    onChange={(e) => setTableName(e.target.value)}
-                    placeholder="לדוגמה: נתוני GA - אתר ראשי"
-                  />
-                </div>
-
-                <GaDomainSearch
-                  connections={allIntegrations.map((integ) => {
-                    const s = integ.settings as Record<string, unknown> | null;
-                    return {
-                      id: integ.id,
-                      label: (s?.google_email as string) || "חשבון לא ידוע",
-                      own: !!integ._isOwn,
-                    };
-                  })}
-                  preferredIntegrationId={selectedIntegrationId || undefined}
-                  onFound={(found) => {
-                    setSelectedIntegrationId(found.integrationId);
-                    setSelectedProperty(found.propertyId);
-                    setPickedProperty({
-                      id: found.propertyId,
-                      name: found.propertyName,
-                      accountName: found.accountName,
-                    });
-                    setPropertySearch("");
-                  }}
-                />
-
-                <div className="space-y-2">
-                  <Label>נכס (Property) *</Label>
-                  <Select value={selectedProperty} onValueChange={setSelectedProperty}>
+                  <Label>חשבון Google Analytics</Label>
+                  <Select
+                    value={selectedIntegrationId || integration?.id || ""}
+                    onValueChange={setSelectedIntegrationId}
+                  >
                     <SelectTrigger>
-                      <SelectValue placeholder="בחר נכס" />
-                    </SelectTrigger>
-                    <SelectContent className="max-w-[calc(100vw-3rem)]">
-                      <div className="p-2 sticky top-0 bg-popover">
-                        <div className="relative">
-                          <Search className="absolute right-2 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                          <Input
-                            placeholder="חפש נכס..."
-                            value={propertySearch}
-                            onChange={(e) => setPropertySearch(e.target.value)}
-                            className="pr-8"
-                            onClick={(e) => e.stopPropagation()}
-                            onKeyDown={(e) => e.stopPropagation()}
-                          />
-                        </div>
-                      </div>
-                      {filteredProperties.length === 0 ? (
-                        <div className="text-center py-4 text-muted-foreground text-sm">
-                          {connectionProblem ? 'החיבור דורש התחברות מחדש — ראה הודעה למעלה' : 'לא נמצאו תוצאות'}
-                        </div>
-                      ) : (
-                        filteredProperties.map((prop) => (
-                          <SelectItem key={prop.id} value={prop.id} className="whitespace-normal break-words">
-                            {prop.name} ({prop.accountName})
-                          </SelectItem>
-                        ))
-                      )}
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                <div className="space-y-2">
-                  <Label>קטגוריה</Label>
-                  <Select value={category} onValueChange={setCategory}>
-                    <SelectTrigger>
-                      <SelectValue />
+                      <SelectValue placeholder="בחר חשבון" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="analytics">אנליטיקס</SelectItem>
-                      <SelectItem value="marketing">שיווק</SelectItem>
-                      <SelectItem value="reports">דוחות</SelectItem>
+                      {allIntegrations.map((integ) => {
+                        const s = integ.settings as Record<
+                          string,
+                          unknown
+                        > | null;
+                        const email =
+                          (s?.google_email as string) || "חשבון לא ידוע";
+                        const isOwn = integ._isOwn;
+                        const sharedBy = integ._sharedByName;
+                        return (
+                          <SelectItem key={integ.id} value={integ.id}>
+                            {email}{" "}
+                            {!isOwn && sharedBy ? `(שותף ע"י ${sharedBy})` : ""}
+                          </SelectItem>
+                        );
+                      })}
                     </SelectContent>
                   </Select>
                 </div>
+              )}
 
-                <div className="space-y-2">
-                  <Label>סוכנות (אופציונלי)</Label>
-                  <Select value={selectedAgency || "all"} onValueChange={(v) => {
+              {connectionProblem && (
+                <Alert variant="destructive">
+                  <AlertCircle className="h-4 w-4" />
+                  <AlertDescription className="space-y-1">
+                    <div>
+                      החיבור{" "}
+                      {connectionProblem.ownerEmail
+                        ? `של ${connectionProblem.ownerEmail} `
+                        : ""}
+                      דורש התחברות מחדש ל-Google — ההרשאה פגה או נשללה, ולכן לא
+                      ניתן למשוך את רשימת הנכסים.
+                    </div>
+                    <div className="text-xs">
+                      {integration?._isOwn
+                        ? "עבור להגדרות Google Analytics והתחבר מחדש."
+                        : `בעל/ת החיבור (${integration?._sharedByName || connectionProblem.ownerEmail || "המשתמש שחיבר"}) צריך/ה להתחבר מחדש בהגדרות Google Analytics.`}
+                      {connectionProblem.detail
+                        ? ` (${connectionProblem.detail})`
+                        : ""}
+                    </div>
+                  </AlertDescription>
+                </Alert>
+              )}
+
+              <div className="space-y-2">
+                <Label>שם הטבלה *</Label>
+                <Input
+                  value={tableName}
+                  onChange={(e) => setTableName(e.target.value)}
+                  placeholder="לדוגמה: נתוני GA - אתר ראשי"
+                />
+              </div>
+
+              <GaDomainSearch
+                connections={allIntegrations.map((integ) => {
+                  const s = integ.settings as Record<string, unknown> | null;
+                  return {
+                    id: integ.id,
+                    label: (s?.google_email as string) || "חשבון לא ידוע",
+                    own: !!integ._isOwn,
+                  };
+                })}
+                preferredIntegrationId={selectedIntegrationId || undefined}
+                onFound={(found) => {
+                  setSelectedIntegrationId(found.integrationId);
+                  setSelectedProperty(found.propertyId);
+                  setPickedProperty({
+                    id: found.propertyId,
+                    name: found.propertyName,
+                    accountName: found.accountName,
+                  });
+                  setPropertySearch("");
+                }}
+              />
+
+              <div className="space-y-2">
+                <Label>נכס (Property) *</Label>
+                <Select
+                  value={selectedProperty}
+                  onValueChange={setSelectedProperty}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="בחר נכס" />
+                  </SelectTrigger>
+                  <SelectContent className="max-w-[calc(100vw-3rem)]">
+                    <div className="p-2 sticky top-0 bg-popover">
+                      <div className="relative">
+                        <Search className="absolute right-2 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                        <Input
+                          placeholder="חפש נכס..."
+                          value={propertySearch}
+                          onChange={(e) => setPropertySearch(e.target.value)}
+                          className="pr-8"
+                          onClick={(e) => e.stopPropagation()}
+                          onKeyDown={(e) => e.stopPropagation()}
+                        />
+                      </div>
+                    </div>
+                    {filteredProperties.length === 0 ? (
+                      <div className="text-center py-4 text-muted-foreground text-sm">
+                        {connectionProblem
+                          ? "החיבור דורש התחברות מחדש — ראה הודעה למעלה"
+                          : "לא נמצאו תוצאות"}
+                      </div>
+                    ) : (
+                      filteredProperties.map((prop) => (
+                        <SelectItem
+                          key={prop.id}
+                          value={prop.id}
+                          className="whitespace-normal break-words"
+                        >
+                          {prop.name} ({prop.accountName})
+                        </SelectItem>
+                      ))
+                    )}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="space-y-2">
+                <Label>קטגוריה</Label>
+                <Select value={category} onValueChange={setCategory}>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="analytics">אנליטיקס</SelectItem>
+                    <SelectItem value="marketing">שיווק</SelectItem>
+                    <SelectItem value="reports">דוחות</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="space-y-2">
+                <Label>סוכנות (אופציונלי)</Label>
+                <Select
+                  value={selectedAgency || "all"}
+                  onValueChange={(v) => {
                     setSelectedAgency(v === "all" ? "" : v);
                     setSelectedClient("");
                     setClientSearch("");
-                  }}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="כל הסוכנויות" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="all">כל הסוכנויות</SelectItem>
-                      {agencies?.map((agency) => (
-                        <SelectItem key={agency.id} value={agency.id}>
-                          {agency.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                <div className="space-y-2">
-                  <Label>לקוח {assignedClientIds ? "*" : "(אופציונלי)"}</Label>
-                  <Popover open={clientPopoverOpen} onOpenChange={setClientPopoverOpen}>
-                    <PopoverTrigger asChild>
-                      <Button
-                        type="button"
-                        variant="outline"
-                        role="combobox"
-                        aria-expanded={clientPopoverOpen}
-                        className="w-full justify-between font-normal"
-                      >
-                        <span className="truncate">{selectedClientName || "בחר לקוח לפי שם"}</span>
-                        <ChevronsUpDown className="mr-2 h-4 w-4 shrink-0 opacity-50" />
-                      </Button>
-                    </PopoverTrigger>
-                    <PopoverContent className="w-[--radix-popover-trigger-width] p-0" align="start">
-                      <div className="flex items-center border-b px-3 py-2">
-                        <Search className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-                        <Input
-                          autoFocus
-                          placeholder="חפש לפי שם לקוח..."
-                          value={clientSearch}
-                          onChange={(event) => setClientSearch(event.target.value)}
-                          className="h-8 border-0 shadow-none focus-visible:ring-0"
-                        />
-                      </div>
-                      <div className="max-h-[240px] overflow-y-auto p-1">
-                        {!assignedClientIds && (
-                          <button
-                            type="button"
-                            className={cn(
-                              "relative flex w-full items-center rounded-sm px-2 py-1.5 text-sm hover:bg-accent",
-                              !selectedClient && "bg-accent",
-                            )}
-                            onClick={() => {
-                              setSelectedClient("");
-                              setClientPopoverOpen(false);
-                              setClientSearch("");
-                            }}
-                          >
-                            <Check className={cn("ml-2 h-4 w-4", selectedClient ? "opacity-0" : "opacity-100")} />
-                            ללא שיוך ללקוח
-                          </button>
-                        )}
-                        {filteredClients.map((client) => (
-                          <button
-                            type="button"
-                            key={client.id}
-                            className={cn(
-                              "relative flex w-full items-center rounded-sm px-2 py-1.5 text-sm hover:bg-accent",
-                              selectedClient === client.id && "bg-accent",
-                            )}
-                            onClick={() => {
-                              setSelectedClient(client.id);
-                              setSelectedAgency(client.agency_id);
-                              setClientPopoverOpen(false);
-                              setClientSearch("");
-                            }}
-                          >
-                            <Check className={cn("ml-2 h-4 w-4", selectedClient === client.id ? "opacity-100" : "opacity-0")} />
-                            <span className="truncate">{client.name}</span>
-                          </button>
-                        ))}
-                        {filteredClients.length === 0 && (
-                          <p className="py-4 text-center text-sm text-muted-foreground">לא נמצאו לקוחות</p>
-                        )}
-                      </div>
-                    </PopoverContent>
-                  </Popover>
-                </div>
-
-                <div className="flex gap-2 pt-4">
-                  <Button onClick={handleCreate} disabled={isCreating} className="flex-1">
-                    {isCreating ? <Loader2 className="h-4 w-4 animate-spin ml-2" /> : null}
-                    צור טבלה
-                  </Button>
-                  <Button variant="outline" onClick={() => onOpenChange(false)}>
-                    ביטול
-                  </Button>
-                </div>
+                  }}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="כל הסוכנויות" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">כל הסוכנויות</SelectItem>
+                    {agencies?.map((agency) => (
+                      <SelectItem key={agency.id} value={agency.id}>
+                        {agency.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
-            )}
+
+              <div className="space-y-2">
+                <Label>לקוח {assignedClientIds ? "*" : "(אופציונלי)"}</Label>
+                <Popover
+                  open={clientPopoverOpen}
+                  onOpenChange={setClientPopoverOpen}
+                >
+                  <PopoverTrigger asChild>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      role="combobox"
+                      aria-expanded={clientPopoverOpen}
+                      className="w-full justify-between font-normal"
+                    >
+                      <span className="truncate">
+                        {selectedClientName || "בחר לקוח לפי שם"}
+                      </span>
+                      <ChevronsUpDown className="mr-2 h-4 w-4 shrink-0 opacity-50" />
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent
+                    className="w-[--radix-popover-trigger-width] p-0"
+                    align="start"
+                  >
+                    <div className="flex items-center border-b px-3 py-2">
+                      <Search className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                      <Input
+                        autoFocus
+                        placeholder="חפש לפי שם לקוח..."
+                        value={clientSearch}
+                        onChange={(event) =>
+                          setClientSearch(event.target.value)
+                        }
+                        className="h-8 border-0 shadow-none focus-visible:ring-0"
+                      />
+                    </div>
+                    <div className="max-h-[240px] overflow-y-auto p-1">
+                      {!assignedClientIds && (
+                        <button
+                          type="button"
+                          className={cn(
+                            "relative flex w-full items-center rounded-sm px-2 py-1.5 text-sm hover:bg-accent",
+                            !selectedClient && "bg-accent",
+                          )}
+                          onClick={() => {
+                            setSelectedClient("");
+                            setClientPopoverOpen(false);
+                            setClientSearch("");
+                          }}
+                        >
+                          <Check
+                            className={cn(
+                              "ml-2 h-4 w-4",
+                              selectedClient ? "opacity-0" : "opacity-100",
+                            )}
+                          />
+                          ללא שיוך ללקוח
+                        </button>
+                      )}
+                      {filteredClients.map((client) => (
+                        <button
+                          type="button"
+                          key={client.id}
+                          className={cn(
+                            "relative flex w-full items-center rounded-sm px-2 py-1.5 text-sm hover:bg-accent",
+                            selectedClient === client.id && "bg-accent",
+                          )}
+                          onClick={() => {
+                            setSelectedClient(client.id);
+                            setSelectedAgency(client.agency_id);
+                            setClientPopoverOpen(false);
+                            setClientSearch("");
+                          }}
+                        >
+                          <Check
+                            className={cn(
+                              "ml-2 h-4 w-4",
+                              selectedClient === client.id
+                                ? "opacity-100"
+                                : "opacity-0",
+                            )}
+                          />
+                          <span className="truncate">{client.name}</span>
+                        </button>
+                      ))}
+                      {filteredClients.length === 0 && (
+                        <p className="py-4 text-center text-sm text-muted-foreground">
+                          לא נמצאו לקוחות
+                        </p>
+                      )}
+                    </div>
+                  </PopoverContent>
+                </Popover>
+              </div>
+
+              <div className="flex gap-2 pt-4">
+                <Button
+                  onClick={handleCreate}
+                  disabled={isCreating}
+                  className="flex-1"
+                >
+                  {isCreating ? (
+                    <Loader2 className="h-4 w-4 animate-spin ml-2" />
+                  ) : null}
+                  צור טבלה
+                </Button>
+                <Button variant="outline" onClick={() => onOpenChange(false)}>
+                  ביטול
+                </Button>
+              </div>
+            </div>
+          )}
         </div>
       </DialogContent>
     </Dialog>

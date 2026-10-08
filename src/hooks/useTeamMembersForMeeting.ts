@@ -24,15 +24,21 @@ export function useTeamMembersForMeeting(
       const { data: sessionData } = await supabase.auth.getSession();
       const currentUserId = sessionData?.session?.user?.id;
 
-      const [{ data: tenantUsers }, { data: roleRows }, { data: sharedAccess }] =
-        await Promise.all([
-          supabase.from("tenant_users").select("user_id").eq("tenant_id", tenantId),
-          supabase.from("user_roles").select("user_id").eq("tenant_id", tenantId),
-          supabase
-            .from("agency_tenant_access")
-            .select("agency_id")
-            .eq("accessing_tenant_id", tenantId),
-        ]);
+      const [
+        { data: tenantUsers },
+        { data: roleRows },
+        { data: sharedAccess },
+      ] = await Promise.all([
+        supabase
+          .from("tenant_users")
+          .select("user_id")
+          .eq("tenant_id", tenantId),
+        supabase.from("user_roles").select("user_id").eq("tenant_id", tenantId),
+        supabase
+          .from("agency_tenant_access")
+          .select("agency_id")
+          .eq("accessing_tenant_id", tenantId),
+      ]);
 
       const ids = new Set<string>();
       (tenantUsers || []).forEach((row) => {
@@ -47,17 +53,20 @@ export function useTeamMembersForMeeting(
         .map((row) => row.agency_id)
         .filter(Boolean);
       if (agencyIds.length > 0) {
-        const [{ data: campaignerLinks }, { data: salesLinks }] = await Promise.all([
-          supabase
-            .from("campaigner_agencies")
-            .select("campaigner_id")
-            .in("agency_id", agencyIds),
-          supabase
-            .from("sales_person_agencies")
-            .select("sales_person_id")
-            .in("agency_id", agencyIds),
-        ]);
-        const campaignerIds = (campaignerLinks || []).map((row) => row.campaigner_id);
+        const [{ data: campaignerLinks }, { data: salesLinks }] =
+          await Promise.all([
+            supabase
+              .from("campaigner_agencies")
+              .select("campaigner_id")
+              .in("agency_id", agencyIds),
+            supabase
+              .from("sales_person_agencies")
+              .select("sales_person_id")
+              .in("agency_id", agencyIds),
+          ]);
+        const campaignerIds = (campaignerLinks || []).map(
+          (row) => row.campaigner_id,
+        );
         const salesIds = (salesLinks || []).map((row) => row.sales_person_id);
         const orParts: string[] = [];
         if (campaignerIds.length > 0) {
@@ -89,7 +98,9 @@ export function useTeamMembersForMeeting(
       if (error) throw error;
 
       return (profiles || [])
-        .filter((row): row is MeetingTeamMember => Boolean(row.email && row.email.trim()))
+        .filter((row): row is MeetingTeamMember =>
+          Boolean(row.email && row.email.trim()),
+        )
         .map((row) => ({
           id: row.id,
           full_name: row.full_name,

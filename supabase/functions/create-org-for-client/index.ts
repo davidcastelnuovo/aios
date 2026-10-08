@@ -25,7 +25,8 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+  "Access-Control-Allow-Headers":
+    "authorization, x-client-info, apikey, content-type",
 };
 
 function json(body: unknown, status = 200) {
@@ -36,10 +37,24 @@ function json(body: unknown, status = 200) {
 }
 
 const ALL_MODULES = [
-  "dashboard", "clients", "leads", "tasks", "agencies", "campaigners",
-  "sales_people", "suppliers", "client_onboarding", "finance", "finance_view",
-  "users", "tenants", "reports", "sales_dashboard", "lead_integrations",
-  "time_tracking", "automations",
+  "dashboard",
+  "clients",
+  "leads",
+  "tasks",
+  "agencies",
+  "campaigners",
+  "sales_people",
+  "suppliers",
+  "client_onboarding",
+  "finance",
+  "finance_view",
+  "users",
+  "tenants",
+  "reports",
+  "sales_dashboard",
+  "lead_integrations",
+  "time_tracking",
+  "automations",
 ];
 
 function generateSlug(name: string): string {
@@ -50,27 +65,35 @@ function generateSlug(name: string): string {
     .replace(/-+/g, "-")
     .replace(/^-+|-+$/g, "")
     .trim();
-  if (!slug || slug === "-" || slug.length < 2) slug = `org-${crypto.randomUUID().slice(0, 8)}`;
+  if (!slug || slug === "-" || slug.length < 2)
+    slug = `org-${crypto.randomUUID().slice(0, 8)}`;
   return slug;
 }
 
 function asStringArray(value: unknown): string[] {
   if (!Array.isArray(value)) return [];
-  return value.filter((v): v is string => typeof v === "string" && v.length > 0);
+  return value.filter(
+    (v): v is string => typeof v === "string" && v.length > 0,
+  );
 }
 
 serve(async (req: Request) => {
-  if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
+  if (req.method === "OPTIONS")
+    return new Response(null, { headers: corsHeaders });
 
   try {
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
-    const serviceKey  = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+    const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const admin = createClient(supabaseUrl, serviceKey);
 
     const authHeader = req.headers.get("authorization");
-    if (!authHeader) return json({ error: "Missing authorization header" }, 401);
+    if (!authHeader)
+      return json({ error: "Missing authorization header" }, 401);
     const token = authHeader.replace("Bearer ", "");
-    const { data: { user }, error: authErr } = await admin.auth.getUser(token);
+    const {
+      data: { user },
+      error: authErr,
+    } = await admin.auth.getUser(token);
     if (authErr || !user) return json({ error: "Unauthorized" }, 401);
 
     const { data: userRoles } = await admin
@@ -78,7 +101,9 @@ serve(async (req: Request) => {
       .select("role, tenant_id")
       .eq("user_id", user.id);
 
-    const isSuperAdmin = (userRoles || []).some((r: any) => r.role === "super_admin");
+    const isSuperAdmin = (userRoles || []).some(
+      (r: any) => r.role === "super_admin",
+    );
 
     const body = await req.json().catch(() => ({}));
     const {
@@ -104,7 +129,8 @@ serve(async (req: Request) => {
 
     const { data: client, error: clientErr } = await admin
       .from("clients")
-      .select(`
+      .select(
+        `
         id, name, contact_name, contact_email, phone, email, agency_id, tenant_id,
         industry, monthly_budget, start_date, status, website, notes, folder_link,
         retainer, is_seo_client, manychat_subscriber_id, active_chat_provider,
@@ -112,7 +138,8 @@ serve(async (req: Request) => {
         end_date, tier, services, health_score, overall_status, active_flags,
         meta_ads_account_id, google_ads_account_id, ga_property_id, gsc_site_url,
         ahrefs_domain, monthly_fixed_expense, is_ecommerce
-      `)
+      `,
+      )
       .eq("id", client_id)
       .maybeSingle();
 
@@ -120,8 +147,11 @@ serve(async (req: Request) => {
     const sourceTenantId: string = client.tenant_id;
 
     const ADMIN_ROLES = new Set(["owner", "team_manager", "agency_owner"]);
-    const hasAccess = isSuperAdmin ||
-      (userRoles || []).some((r: any) => r.tenant_id === sourceTenantId && ADMIN_ROLES.has(r.role));
+    const hasAccess =
+      isSuperAdmin ||
+      (userRoles || []).some(
+        (r: any) => r.tenant_id === sourceTenantId && ADMIN_ROLES.has(r.role),
+      );
     if (!hasAccess) return json({ error: "Insufficient permissions" }, 403);
 
     const { data: sourceTenant } = await admin
@@ -132,13 +162,22 @@ serve(async (req: Request) => {
 
     let orgType: "root" | "organization" | "sub_organization" = "organization";
     if (sourceTenant?.org_type === "root") orgType = "organization";
-    else if (sourceTenant?.org_type === "organization") orgType = "sub_organization";
+    else if (sourceTenant?.org_type === "organization")
+      orgType = "sub_organization";
     else if (isSuperAdmin) orgType = "organization";
 
     const warnings: string[] = [];
     if (orgType === "sub_organization") {
-      warnings.push("ארגון היעד יהיה תת-ארגון (ארגון המקור עצמו הוא תת-ארגון). לא ניתן ליצור רמה נוספת בהיררכיה.");
-      return json({ error: "Cannot create sub-sub-organization — source is already a sub_organization" }, 400);
+      warnings.push(
+        "ארגון היעד יהיה תת-ארגון (ארגון המקור עצמו הוא תת-ארגון). לא ניתן ליצור רמה נוספת בהיררכיה.",
+      );
+      return json(
+        {
+          error:
+            "Cannot create sub-sub-organization — source is already a sub_organization",
+        },
+        400,
+      );
     }
 
     const { data: contacts } = await admin
@@ -148,19 +187,26 @@ serve(async (req: Request) => {
       .order("is_primary", { ascending: false });
 
     const primaryContact = contacts?.[0];
-    const ownerEmail = primaryContact?.email || client.contact_email || client.email;
-    const ownerName  = primaryContact?.contact_name || client.contact_name || client.name;
+    const ownerEmail =
+      primaryContact?.email || client.contact_email || client.email;
+    const ownerName =
+      primaryContact?.contact_name || client.contact_name || client.name;
 
     if (!ownerEmail) {
       warnings.push("אין אימייל לאיש קשר ראשי — לא ייוצר owner אוטומטי.");
     }
 
-    const tenantName = client.name || ownerName || `ארגון ${client_id.slice(0, 6)}`;
+    const tenantName =
+      client.name || ownerName || `ארגון ${client_id.slice(0, 6)}`;
     const baseSlug = generateSlug(tenantName);
     let slug = baseSlug;
     let slugCounter = 1;
     while (true) {
-      const { data: existing } = await admin.from("tenants").select("id").eq("slug", slug).maybeSingle();
+      const { data: existing } = await admin
+        .from("tenants")
+        .select("id")
+        .eq("slug", slug)
+        .maybeSingle();
       if (!existing) break;
       slug = `${baseSlug}-${slugCounter++}`;
     }
@@ -180,27 +226,46 @@ serve(async (req: Request) => {
       .select()
       .single();
 
-    if (tenantErr || !newTenant) throw new Error("Failed to create tenant: " + tenantErr?.message);
+    if (tenantErr || !newTenant)
+      throw new Error("Failed to create tenant: " + tenantErr?.message);
 
     const targetTenantId: string = newTenant.id;
 
     if (template_id) {
-      await admin.rpc("copy_tenant_template", {
-        _source_tenant_id: template_id,
-        _target_tenant_id: targetTenantId,
-      }).then(({ error: e }) => e && warnings.push("copy_tenant_template: " + e.message));
+      await admin
+        .rpc("copy_tenant_template", {
+          _source_tenant_id: template_id,
+          _target_tenant_id: targetTenantId,
+        })
+        .then(
+          ({ error: e }) =>
+            e && warnings.push("copy_tenant_template: " + e.message),
+        );
     } else {
-      await admin.rpc("initialize_tenant_menu_items", { _tenant_id: targetTenantId })
+      await admin
+        .rpc("initialize_tenant_menu_items", { _tenant_id: targetTenantId })
         .then(({ error: e }) => e && warnings.push("menu_items: " + e.message));
-      await admin.rpc("initialize_default_custom_fields", { _tenant_id: targetTenantId })
-        .then(({ error: e }) => e && warnings.push("custom_fields: " + e.message));
-      await admin.rpc("initialize_tenant_terminology", {
-        _tenant_id: targetTenantId, _business_type: "marketing_agency",
-      }).then(({ error: e }) => e && warnings.push("terminology: " + e.message));
+      await admin
+        .rpc("initialize_default_custom_fields", { _tenant_id: targetTenantId })
+        .then(
+          ({ error: e }) => e && warnings.push("custom_fields: " + e.message),
+        );
+      await admin
+        .rpc("initialize_tenant_terminology", {
+          _tenant_id: targetTenantId,
+          _business_type: "marketing_agency",
+        })
+        .then(
+          ({ error: e }) => e && warnings.push("terminology: " + e.message),
+        );
     }
 
-    await admin.from("tenant_users").insert({ tenant_id: targetTenantId, user_id: user.id, role: "owner" });
-    await admin.from("user_roles").insert({ user_id: user.id, role: "owner", tenant_id: targetTenantId });
+    await admin
+      .from("tenant_users")
+      .insert({ tenant_id: targetTenantId, user_id: user.id, role: "owner" });
+    await admin
+      .from("user_roles")
+      .insert({ user_id: user.id, role: "owner", tenant_id: targetTenantId });
 
     let ownerStatus: "existing_user" | "invited" | "no_email" = "no_email";
     let invitedEmail: string | undefined;
@@ -213,14 +278,18 @@ serve(async (req: Request) => {
         .maybeSingle();
 
       if (profile) {
-        await admin.from("tenant_users").upsert(
-          { tenant_id: targetTenantId, user_id: profile.id, role: "owner" },
-          { onConflict: "tenant_id,user_id" }
-        );
-        await admin.from("user_roles").upsert(
-          { user_id: profile.id, role: "owner", tenant_id: targetTenantId },
-          { onConflict: "user_id,role,tenant_id" }
-        );
+        await admin
+          .from("tenant_users")
+          .upsert(
+            { tenant_id: targetTenantId, user_id: profile.id, role: "owner" },
+            { onConflict: "tenant_id,user_id" },
+          );
+        await admin
+          .from("user_roles")
+          .upsert(
+            { user_id: profile.id, role: "owner", tenant_id: targetTenantId },
+            { onConflict: "user_id,role,tenant_id" },
+          );
         ownerStatus = "existing_user";
       } else {
         const expiresAt = new Date();
@@ -258,10 +327,16 @@ serve(async (req: Request) => {
         .single();
 
       if (agencyErr || !agency) {
-        warnings.push("copy_client_details (agency): " + (agencyErr?.message || "failed"));
+        warnings.push(
+          "copy_client_details (agency): " + (agencyErr?.message || "failed"),
+        );
       } else {
         const {
-          id: _id, agency_id: _agencyId, tenant_id: _tenantId, created_at, updated_at,
+          id: _id,
+          agency_id: _agencyId,
+          tenant_id: _tenantId,
+          created_at,
+          updated_at,
           ...clientFields
         } = client as Record<string, unknown>;
 
@@ -277,7 +352,10 @@ serve(async (req: Request) => {
           .single();
 
         if (newClientErr || !newClient) {
-          warnings.push("copy_client_details (client): " + (newClientErr?.message || "failed"));
+          warnings.push(
+            "copy_client_details (client): " +
+              (newClientErr?.message || "failed"),
+          );
         } else {
           copiedClientId = newClient.id;
           const contactRows = (contacts || []).map((c: any) => ({
@@ -288,8 +366,13 @@ serve(async (req: Request) => {
             is_primary: !!c.is_primary,
           }));
           if (contactRows.length) {
-            const { error: contactsErr } = await admin.from("client_contacts").insert(contactRows);
-            if (contactsErr) warnings.push("copy_client_details (contacts): " + contactsErr.message);
+            const { error: contactsErr } = await admin
+              .from("client_contacts")
+              .insert(contactRows);
+            if (contactsErr)
+              warnings.push(
+                "copy_client_details (contacts): " + contactsErr.message,
+              );
           }
         }
       }
@@ -305,19 +388,28 @@ serve(async (req: Request) => {
         .eq("is_active", true)
         .in("id", selectedIntegrationIds);
 
-      if (integLoadErr) warnings.push("integrations load: " + integLoadErr.message);
+      if (integLoadErr)
+        warnings.push("integrations load: " + integLoadErr.message);
 
       for (const integ of sourceIntegrations || []) {
         if (integ.integration_type === "llm" && !share_llm) continue;
-        const { error: accessErr } = await admin.from("integration_tenant_access").upsert(
-          {
-            integration_id: integ.id,
-            accessing_tenant_id: targetTenantId,
-            granted_by: user.id,
-          },
-          { onConflict: "integration_id,accessing_tenant_id", ignoreDuplicates: true }
-        );
-        if (accessErr) warnings.push(`integration access (${integ.integration_type}): ${accessErr.message}`);
+        const { error: accessErr } = await admin
+          .from("integration_tenant_access")
+          .upsert(
+            {
+              integration_id: integ.id,
+              accessing_tenant_id: targetTenantId,
+              granted_by: user.id,
+            },
+            {
+              onConflict: "integration_id,accessing_tenant_id",
+              ignoreDuplicates: true,
+            },
+          );
+        if (accessErr)
+          warnings.push(
+            `integration access (${integ.integration_type}): ${accessErr.message}`,
+          );
         else sharedIntegrationCount++;
       }
     }
@@ -332,15 +424,21 @@ serve(async (req: Request) => {
         .maybeSingle();
 
       if (llmIntegration?.id) {
-        const { error: llmErr } = await admin.from("integration_tenant_access").upsert(
-          {
-            integration_id: llmIntegration.id,
-            accessing_tenant_id: targetTenantId,
-            granted_by: user.id,
-          },
-          { onConflict: "integration_id,accessing_tenant_id", ignoreDuplicates: true }
-        );
-        if (llmErr) warnings.push("integration access (llm): " + llmErr.message);
+        const { error: llmErr } = await admin
+          .from("integration_tenant_access")
+          .upsert(
+            {
+              integration_id: llmIntegration.id,
+              accessing_tenant_id: targetTenantId,
+              granted_by: user.id,
+            },
+            {
+              onConflict: "integration_id,accessing_tenant_id",
+              ignoreDuplicates: true,
+            },
+          );
+        if (llmErr)
+          warnings.push("integration access (llm): " + llmErr.message);
         else sharedIntegrationCount++;
       }
     }
@@ -354,7 +452,8 @@ serve(async (req: Request) => {
         .eq("client_id", client_id)
         .in("id", selectedPageIds);
 
-      if (pagesLoadErr) warnings.push("social_pages load: " + pagesLoadErr.message);
+      if (pagesLoadErr)
+        warnings.push("social_pages load: " + pagesLoadErr.message);
 
       const pageRows = (socialPages || []).map((p: any) => ({
         social_page_id: p.id,
@@ -365,7 +464,10 @@ serve(async (req: Request) => {
       if (pageRows.length) {
         const { error: pagesErr } = await admin
           .from("social_pages_shared_tenants")
-          .upsert(pageRows, { onConflict: "social_page_id,tenant_id", ignoreDuplicates: true });
+          .upsert(pageRows, {
+            onConflict: "social_page_id,tenant_id",
+            ignoreDuplicates: true,
+          });
         if (pagesErr) warnings.push("social_pages_shared: " + pagesErr.message);
         else sharedPagesCount = pageRows.length;
       }
@@ -381,7 +483,8 @@ serve(async (req: Request) => {
         .eq("client_id", client_id)
         .in("id", selectedSiteIds);
 
-      if (sitesLoadErr) warnings.push("wordpress_sites load: " + sitesLoadErr.message);
+      if (sitesLoadErr)
+        warnings.push("wordpress_sites load: " + sitesLoadErr.message);
 
       const siteRows = (wpSites || []).map((s: any) => ({
         site_id: s.id,
@@ -392,8 +495,12 @@ serve(async (req: Request) => {
       if (siteRows.length) {
         const { error: sitesErr } = await admin
           .from("wordpress_sites_shared_tenants")
-          .upsert(siteRows, { onConflict: "site_id,tenant_id", ignoreDuplicates: true });
-        if (sitesErr) warnings.push("wordpress_sites_shared: " + sitesErr.message);
+          .upsert(siteRows, {
+            onConflict: "site_id,tenant_id",
+            ignoreDuplicates: true,
+          });
+        if (sitesErr)
+          warnings.push("wordpress_sites_shared: " + sitesErr.message);
         else sharedSitesCount = siteRows.length;
       }
     }
@@ -408,7 +515,8 @@ serve(async (req: Request) => {
         .eq("client_id", client_id)
         .in("id", selectedTableIds);
 
-      if (tablesLoadErr) warnings.push("crm_tables load: " + tablesLoadErr.message);
+      if (tablesLoadErr)
+        warnings.push("crm_tables load: " + tablesLoadErr.message);
 
       const tableRows = (tables || []).map((t: any) => ({
         crm_table_id: t.id,
@@ -419,7 +527,10 @@ serve(async (req: Request) => {
       if (tableRows.length) {
         const { error: tablesErr } = await admin
           .from("crm_tables_shared_tenants")
-          .upsert(tableRows, { onConflict: "crm_table_id,tenant_id", ignoreDuplicates: true });
+          .upsert(tableRows, {
+            onConflict: "crm_table_id,tenant_id",
+            ignoreDuplicates: true,
+          });
         if (tablesErr) warnings.push("crm_tables_shared: " + tablesErr.message);
         else sharedTablesCount = tableRows.length;
       }
@@ -436,18 +547,21 @@ serve(async (req: Request) => {
         .maybeSingle();
 
       if (sourceAgent) {
-        const cloneRes = await fetch(`${supabaseUrl}/functions/v1/clone-entity-to-tenant`, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${token}`,
+        const cloneRes = await fetch(
+          `${supabaseUrl}/functions/v1/clone-entity-to-tenant`,
+          {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${token}`,
+            },
+            body: JSON.stringify({
+              entity_type: "agent",
+              entity_id: sourceAgent.id,
+              target_tenant_ids: [targetTenantId],
+            }),
           },
-          body: JSON.stringify({
-            entity_type: "agent",
-            entity_id: sourceAgent.id,
-            target_tenant_ids: [targetTenantId],
-          }),
-        });
+        );
         const cloneData = await cloneRes.json().catch(() => ({}));
         cloneResults.push({ type: "agent", ...cloneData });
       }
@@ -461,18 +575,25 @@ serve(async (req: Request) => {
         .eq("active", true)
         .in("id", selectedAutomationIds);
 
-      if (automationsErr) warnings.push("automations load: " + automationsErr.message);
+      if (automationsErr)
+        warnings.push("automations load: " + automationsErr.message);
 
       for (const aut of automations || []) {
-        const res = await fetch(`${supabaseUrl}/functions/v1/clone-entity-to-tenant`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-          body: JSON.stringify({
-            entity_type: "automation",
-            entity_id: aut.id,
-            target_tenant_ids: [targetTenantId],
-          }),
-        });
+        const res = await fetch(
+          `${supabaseUrl}/functions/v1/clone-entity-to-tenant`,
+          {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${token}`,
+            },
+            body: JSON.stringify({
+              entity_type: "automation",
+              entity_id: aut.id,
+              target_tenant_ids: [targetTenantId],
+            }),
+          },
+        );
         const d = await res.json().catch(() => ({}));
         cloneResults.push({ type: "automation", id: aut.id, ...d });
       }

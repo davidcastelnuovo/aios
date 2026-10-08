@@ -1,61 +1,73 @@
-import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
-import { aiTranscribe, aiCleanTranscript, hasAiKey } from '../_shared/ai.ts';
-import { getCaller, getUserOpenAIKey } from '../_shared/userKey.ts';
+import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { aiTranscribe, aiCleanTranscript, hasAiKey } from "../_shared/ai.ts";
+import { getCaller, getUserOpenAIKey } from "../_shared/userKey.ts";
 
 // Users with a personal key are billed on it; these owners may use the org key.
-const ORG_KEY_ALLOWLIST = ['david.castelnuovo@gmail.com'];
+const ORG_KEY_ALLOWLIST = ["david.castelnuovo@gmail.com"];
 
 const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version',
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Headers":
+    "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
 // Speech-to-text via OpenAI Whisper.
 serve(async (req) => {
-  if (req.method === 'OPTIONS') {
+  if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
   }
 
   try {
     const formData = await req.formData();
-    const audioFile = formData.get('audio') as File;
-    const inputMode = String(formData.get('input_mode') || '');
+    const audioFile = formData.get("audio") as File;
+    const inputMode = String(formData.get("input_mode") || "");
 
     if (!audioFile) {
-      return new Response(JSON.stringify({ error: 'No audio file provided' }), {
+      return new Response(JSON.stringify({ error: "No audio file provided" }), {
         status: 400,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
     // Personal-key users are billed on their own key; org key only for owners.
-    const caller = await getCaller(req.headers.get('Authorization') || '');
+    const caller = await getCaller(req.headers.get("Authorization") || "");
     const userKey = caller ? await getUserOpenAIKey(caller.id) : null;
     const isOwner = !!caller && ORG_KEY_ALLOWLIST.includes(caller.email);
     if (!userKey && !isOwner) {
-      return new Response(JSON.stringify({ error: 'personal_key_required', message: 'כדי להשתמש בקול של כרמן יש להזין API key אישי בפרופיל' }), {
-        status: 403,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      });
+      return new Response(
+        JSON.stringify({
+          error: "personal_key_required",
+          message: "כדי להשתמש בקול של כרמן יש להזין API key אישי בפרופיל",
+        }),
+        {
+          status: 403,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        },
+      );
     }
 
     if (!userKey && !(await hasAiKey())) {
-      return new Response(JSON.stringify({ error: 'OpenAI key not configured (env secret or llm integration)' }), {
-        status: 500,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      });
+      return new Response(
+        JSON.stringify({
+          error: "OpenAI key not configured (env secret or llm integration)",
+        }),
+        {
+          status: 500,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        },
+      );
     }
 
     const text = await aiTranscribe(audioFile, {
-      language: 'he',
-      filename: audioFile.name || 'audio.ogg',
+      language: "he",
+      filename: audioFile.name || "audio.ogg",
       ...(userKey ? { key: userKey } : {}),
     });
 
     if (text == null) {
-      return new Response(JSON.stringify({ error: 'Transcription failed' }), {
+      return new Response(JSON.stringify({ error: "Transcription failed" }), {
         status: 502,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
@@ -63,22 +75,23 @@ serve(async (req) => {
     // org key, so personal-key users get the raw transcript (still good).
     const cleaned = userKey ? text : await aiCleanTranscript(text);
 
-    if (inputMode === 'transcribe_only') {
-      console.log('[transcribe-voice] transcribe_only ok', {
+    if (inputMode === "transcribe_only") {
+      console.log("[transcribe-voice] transcribe_only ok", {
         bytes: audioFile.size,
         chars: cleaned.length,
       });
     }
 
     return new Response(JSON.stringify({ text: cleaned }), {
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   } catch (error) {
-    console.error('❌ Error in transcribe-voice:', error);
-    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    console.error("❌ Error in transcribe-voice:", error);
+    const errorMessage =
+      error instanceof Error ? error.message : "Unknown error";
     return new Response(JSON.stringify({ error: errorMessage }), {
       status: 500,
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   }
 });

@@ -1,6 +1,13 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Link, Navigate, useParams } from "react-router-dom";
-import { ArrowRight, History, LayoutDashboard, Target, Users, Wrench } from "lucide-react";
+import {
+  ArrowRight,
+  History,
+  LayoutDashboard,
+  Target,
+  Users,
+  Wrench,
+} from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useCurrentTenant } from "@/hooks/useCurrentTenant";
 import { useCommandCenterAccess } from "@/components/carmen-command/access";
@@ -9,8 +16,14 @@ import { CarmenDashboardView } from "@/components/carmen-command/CarmenDashboard
 import { DevTasksCommandCenterView } from "@/components/carmen-command/DevTasksCommandCenterView";
 import { GoalsCommandCenterView } from "@/components/carmen-command/GoalsCommandCenterView";
 import { HudMenu } from "@/components/carmen-command/HudMenu";
-import { AgentSeatRail, AgentSeatStatus } from "@/components/carmen-command/AgentSeatRail";
-import { CarmenChatBar, CarmenChatBarHandle } from "@/components/carmen-command/CarmenChatBar";
+import {
+  AgentSeatRail,
+  AgentSeatStatus,
+} from "@/components/carmen-command/AgentSeatRail";
+import {
+  CarmenChatBar,
+  CarmenChatBarHandle,
+} from "@/components/carmen-command/CarmenChatBar";
 import { useCommandRealtime } from "@/components/carmen-command/useCommandData";
 import { useBrainChannel } from "@/components/carmen-command/useBrainChannel";
 import { useToast } from "@/hooks/use-toast";
@@ -18,7 +31,8 @@ import type { HudStage } from "@/lib/agentChannelRouting";
 
 import "@/components/carmen-command/command-center.css";
 
-export type CommandCenterViewMode = "agents" | "dashboard" | "dev_tasks" | "goals";
+export type CommandCenterViewMode =
+  "agents" | "dashboard" | "dev_tasks" | "goals";
 
 const VIEW_MODE_KEY = "aios:cc-view-mode";
 
@@ -41,13 +55,23 @@ function Clock({ compact = false }: { compact?: boolean }) {
     return () => clearInterval(id);
   }, []);
   return (
-    <div className={`cc-header-clock text-left leading-tight${compact ? " cc-header-clock--compact" : ""}`}>
+    <div
+      className={`cc-header-clock text-left leading-tight${compact ? " cc-header-clock--compact" : ""}`}
+    >
       <p className="cc-num text-sm font-bold sm:text-base">
-        {now.toLocaleTimeString("he-IL", { hour: "2-digit", minute: "2-digit", second: "2-digit" })}
+        {now.toLocaleTimeString("he-IL", {
+          hour: "2-digit",
+          minute: "2-digit",
+          second: "2-digit",
+        })}
       </p>
       {!compact && (
         <p className="hidden text-[10px] text-[var(--cc-text-dim)] sm:block">
-          {now.toLocaleDateString("he-IL", { weekday: "long", day: "numeric", month: "long" })}
+          {now.toLocaleDateString("he-IL", {
+            weekday: "long",
+            day: "numeric",
+            month: "long",
+          })}
         </p>
       )}
     </div>
@@ -78,15 +102,23 @@ export default function CarmenCommandCenter() {
   const { toast } = useToast();
 
   const flashAlert = useCallback(() => {
-    setFaceState(prev => {
+    setFaceState((prev) => {
       if (prev === "speaking" || prev === "listening") return prev;
       if (alertTimer.current) clearTimeout(alertTimer.current);
-      alertTimer.current = setTimeout(() => setFaceState(p => (p === "alert" ? "idle" : p)), 4000);
+      alertTimer.current = setTimeout(
+        () => setFaceState((p) => (p === "alert" ? "idle" : p)),
+        4000,
+      );
       return "alert";
     });
   }, []);
   useCommandRealtime(tenantId, flashAlert);
-  useEffect(() => () => { if (alertTimer.current) clearTimeout(alertTimer.current); }, []);
+  useEffect(
+    () => () => {
+      if (alertTimer.current) clearTimeout(alertTimer.current);
+    },
+    [],
+  );
 
   const healthCheck = useCallback(() => {
     qc.invalidateQueries({ queryKey: ["cc-health", tenantId] });
@@ -95,7 +127,11 @@ export default function CarmenCommandCenter() {
 
   const switchViewMode = useCallback((mode: CommandCenterViewMode) => {
     setViewMode(mode);
-    try { localStorage.setItem(VIEW_MODE_KEY, mode); } catch { /* ignore */ }
+    try {
+      localStorage.setItem(VIEW_MODE_KEY, mode);
+    } catch {
+      /* ignore */
+    }
   }, []);
 
   useEffect(() => {
@@ -110,14 +146,33 @@ export default function CarmenCommandCenter() {
     ? () => brain.cancelParliament(conversationId)
     : undefined;
   const onContinueParliament = conversationId
-    ? () => brain.parliamentAction("parliament_continue", conversationId).catch((e) => toast({ title: "שגיאה", description: e.message, variant: "destructive" }))
+    ? () =>
+        brain
+          .parliamentAction("parliament_continue", conversationId)
+          .catch((e) =>
+            toast({
+              title: "שגיאה",
+              description: e.message,
+              variant: "destructive",
+            }),
+          )
     : undefined;
   const onSynthesizeParliament = conversationId
-    ? () => brain.parliamentAction("parliament_synthesize", conversationId).catch((e) => toast({ title: "שגיאה", description: e.message, variant: "destructive" }))
+    ? () =>
+        brain
+          .parliamentAction("parliament_synthesize", conversationId)
+          .catch((e) =>
+            toast({
+              title: "שגיאה",
+              description: e.message,
+              variant: "destructive",
+            }),
+          )
     : undefined;
 
   if (access.loading) return <div className="cc-root h-full" />;
-  if (!access.allowed) return <Navigate to={tenantSlug ? `/t/${tenantSlug}` : "/"} replace />;
+  if (!access.allowed)
+    return <Navigate to={tenantSlug ? `/t/${tenantSlug}` : "/"} replace />;
 
   const isDashboard = viewMode === "dashboard";
   const isDevTasks = viewMode === "dev_tasks";
@@ -125,7 +180,10 @@ export default function CarmenCommandCenter() {
   const isSpecialView = isDevTasks || isGoals;
 
   return (
-    <div dir="rtl" className={`cc-root relative flex flex-col overflow-hidden font-heebo${isDashboard ? " is-dashboard" : ""}${isDevTasks ? " is-dev-tasks" : ""}${isGoals ? " is-goals" : ""}`}>
+    <div
+      dir="rtl"
+      className={`cc-root relative flex flex-col overflow-hidden font-heebo${isDashboard ? " is-dashboard" : ""}${isDevTasks ? " is-dev-tasks" : ""}${isGoals ? " is-goals" : ""}`}
+    >
       <header className="cc-header-bar shrink-0">
         <div className="cc-header-bar__brand flex min-w-0 items-center gap-1.5 sm:gap-2">
           <Link
@@ -136,7 +194,9 @@ export default function CarmenCommandCenter() {
             <ArrowRight className="h-3.5 w-3.5" />
             <span className="hidden sm:inline">חזרה</span>
           </Link>
-          <h1 className="cc-title hidden text-sm font-bold text-[var(--cc-accent)] sm:block sm:text-base">CARMEN</h1>
+          <h1 className="cc-title hidden text-sm font-bold text-[var(--cc-accent)] sm:block sm:text-base">
+            CARMEN
+          </h1>
           {isDashboard && (
             <span className="hidden text-[10px] tracking-[0.12em] text-[var(--cc-text-dim)] md:inline">
               מרכז פיקוד · כרמן בלבד
@@ -159,7 +219,11 @@ export default function CarmenCommandCenter() {
         <div className="cc-header-bar__tools flex shrink-0 items-center gap-1.5 sm:gap-2">
           <button
             type="button"
-            title={isDashboard ? "מצב סוכנים — Cursor, Grok, מועצה" : "מרכז בקרה — כרמן בלבד, כל הלוחות פתוחים"}
+            title={
+              isDashboard
+                ? "מצב סוכנים — Cursor, Grok, מועצה"
+                : "מרכז בקרה — כרמן בלבד, כל הלוחות פתוחים"
+            }
             onClick={() => switchViewMode(isDashboard ? "agents" : "dashboard")}
             className={`cc-header-btn flex items-center gap-1 rounded-md border px-2 text-xs ${
               isDashboard
@@ -167,8 +231,14 @@ export default function CarmenCommandCenter() {
                 : "border-[var(--cc-line)] text-[var(--cc-text-dim)] hover:border-[var(--cc-line-strong)]"
             }`}
           >
-            {isDashboard ? <Users className="h-4 w-4" /> : <LayoutDashboard className="h-4 w-4" />}
-            <span className="hidden sm:inline">{isDashboard ? "סוכנים" : "מרכז בקרה"}</span>
+            {isDashboard ? (
+              <Users className="h-4 w-4" />
+            ) : (
+              <LayoutDashboard className="h-4 w-4" />
+            )}
+            <span className="hidden sm:inline">
+              {isDashboard ? "סוכנים" : "מרכז בקרה"}
+            </span>
           </button>
 
           <button
@@ -182,7 +252,9 @@ export default function CarmenCommandCenter() {
             }`}
           >
             <Wrench className="h-4 w-4" />
-            <span className="hidden sm:inline">{isDevTasks ? "משימות פיתוח" : "פיתוח"}</span>
+            <span className="hidden sm:inline">
+              {isDevTasks ? "משימות פיתוח" : "פיתוח"}
+            </span>
           </button>
 
           <button
@@ -196,7 +268,9 @@ export default function CarmenCommandCenter() {
             }`}
           >
             <Target className="h-4 w-4" />
-            <span className="hidden sm:inline">{isGoals ? "יעדי ביצוע" : "יעדים"}</span>
+            <span className="hidden sm:inline">
+              {isGoals ? "יעדי ביצוע" : "יעדים"}
+            </span>
           </button>
 
           {!isDashboard && !isSpecialView && (

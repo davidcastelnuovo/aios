@@ -1,6 +1,11 @@
 import { useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import { RefreshCw, Clock } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import { he } from "date-fns/locale";
@@ -34,25 +39,38 @@ const FN_BY_TYPE: Record<string, string> = {
   ahrefs: "sync-ahrefs-data",
 };
 
-async function runWithConcurrency<T>(items: T[], limit: number, worker: (item: T, idx: number) => Promise<void>) {
+async function runWithConcurrency<T>(
+  items: T[],
+  limit: number,
+  worker: (item: T, idx: number) => Promise<void>,
+) {
   let i = 0;
-  const runners = Array.from({ length: Math.min(limit, items.length) }, async () => {
-    while (i < items.length) {
-      const idx = i++;
-      await worker(items[idx], idx);
-    }
-  });
+  const runners = Array.from(
+    { length: Math.min(limit, items.length) },
+    async () => {
+      while (i < items.length) {
+        const idx = i++;
+        await worker(items[idx], idx);
+      }
+    },
+  );
   await Promise.all(runners);
 }
 
-async function resolveReportTenantIds(clientId: string, tableTenantId?: string | null): Promise<string[]> {
+async function resolveReportTenantIds(
+  clientId: string,
+  tableTenantId?: string | null,
+): Promise<string[]> {
   const { data: client } = await supabase
     .from("clients")
     .select("tenant_id, agency_id")
     .eq("id", clientId)
     .maybeSingle();
 
-  let agencyRows: Array<{ accessing_tenant_id?: string | null; source_tenant_id?: string | null }> = [];
+  let agencyRows: Array<{
+    accessing_tenant_id?: string | null;
+    source_tenant_id?: string | null;
+  }> = [];
   if (client?.agency_id) {
     const { data } = await supabase
       .from("agency_tenant_access")
@@ -61,10 +79,18 @@ async function resolveReportTenantIds(clientId: string, tableTenantId?: string |
     agencyRows = data || [];
   }
 
-  return buildSeoReportTenantIds(client, agencyRows, tableTenantId ? [tableTenantId] : []);
+  return buildSeoReportTenantIds(
+    client,
+    agencyRows,
+    tableTenantId ? [tableTenantId] : [],
+  );
 }
 
-function ahrefsReportsForClient(clientId: string, tenantIds: string[], columns = "*") {
+function ahrefsReportsForClient(
+  clientId: string,
+  tenantIds: string[],
+  columns = "*",
+) {
   let q = supabase
     .from("ahrefs_reports" as any)
     .select(columns)
@@ -81,7 +107,8 @@ async function syncStoredAhrefsReportTable(t: CategoryTable) {
   if (!clientId || !t.tenant_id) throw new Error("Missing SEO report scope");
 
   const reportTenantIds = await resolveReportTenantIds(clientId, t.tenant_id);
-  if (reportTenantIds.length === 0) throw new Error("Missing SEO report tenant scope");
+  if (reportTenantIds.length === 0)
+    throw new Error("Missing SEO report tenant scope");
 
   const { data: clientRow } = await supabase
     .from("clients")
@@ -103,7 +130,10 @@ async function syncStoredAhrefsReportTable(t: CategoryTable) {
   });
 
   const normalizeDomain = (value?: string) =>
-    String(value || "").replace(/^https?:\/\//, "").replace(/^www\./, "").replace(/\/.*$/, "");
+    String(value || "")
+      .replace(/^https?:\/\//, "")
+      .replace(/^www\./, "")
+      .replace(/\/.*$/, "");
   const normalizedDomain = normalizeDomain(domain);
 
   // Look up the most recent ahrefs_project_id for this client+domain so the
@@ -121,9 +151,11 @@ async function syncStoredAhrefsReportTable(t: CategoryTable) {
       .not("metadata->ahrefs_project_id", "is", null)
       .limit(20);
     const rows = (lastWithProject as any[]) || [];
-    const match = rows.find((r: any) =>
-      !normalizedDomain || normalizeDomain(r.domain) === normalizedDomain
-    ) || rows[0];
+    const match =
+      rows.find(
+        (r: any) =>
+          !normalizedDomain || normalizeDomain(r.domain) === normalizedDomain,
+      ) || rows[0];
     const meta = match?.metadata as any;
     if (meta) {
       projectId = meta.ahrefs_project_id ?? null;
@@ -132,26 +164,31 @@ async function syncStoredAhrefsReportTable(t: CategoryTable) {
     }
   }
 
-
   // Step 1: Fetch fresh Ahrefs snapshot from API (persists into ahrefs_reports via webhook)
-  const { error: fetchError } = await supabase.functions.invoke("fetch-ahrefs-snapshot", {
-    body: {
-      clientId,
-      ...(domain ? { domain } : {}),
-      country: settings.country || "il",
-      ...(projectId ? { projectId } : {}),
-      ...(usedMode ? { mode: usedMode } : {}),
-      ...(usedProtocol ? { protocol: usedProtocol } : {}),
+  const { error: fetchError } = await supabase.functions.invoke(
+    "fetch-ahrefs-snapshot",
+    {
+      body: {
+        clientId,
+        ...(domain ? { domain } : {}),
+        country: settings.country || "il",
+        ...(projectId ? { projectId } : {}),
+        ...(usedMode ? { mode: usedMode } : {}),
+        ...(usedProtocol ? { protocol: usedProtocol } : {}),
+      },
     },
-  });
+  );
   if (fetchError) throw fetchError;
 
-
   // Step 2: Read freshly stored reports and rebuild crm_records
-  const { data: reports, error } = await ahrefsReportsForClient(clientId, reportTenantIds);
+  const { data: reports, error } = await ahrefsReportsForClient(
+    clientId,
+    reportTenantIds,
+  );
 
   if (error) throw error;
-  if (!reports || reports.length === 0) throw new Error("לא נמצאו דוחות Ahrefs שמורים");
+  if (!reports || reports.length === 0)
+    throw new Error("לא נמצאו דוחות Ahrefs שמורים");
 
   const target = normalizedDomain;
 
@@ -160,7 +197,9 @@ async function syncStoredAhrefsReportTable(t: CategoryTable) {
     : reports;
 
   const recordsToInsert: any[] = [];
-  for (const report of (reportsToUse.length > 0 ? reportsToUse : reports) as any[]) {
+  for (const report of (reportsToUse.length > 0
+    ? reportsToUse
+    : reports) as any[]) {
     const rd = report.report_data || {};
     const snapshot = rd.snapshot || {};
     const reportDate = report.report_date || report.received_at;
@@ -178,7 +217,10 @@ async function syncStoredAhrefsReportTable(t: CategoryTable) {
             keyword: String(kw.keyword || ""),
             position: kw.position ?? null,
             position_prev_month: kw.position_prev_month ?? null,
-            position_change: kw.position_prev_month != null && kw.position != null ? kw.position_prev_month - kw.position : null,
+            position_change:
+              kw.position_prev_month != null && kw.position != null
+                ? kw.position_prev_month - kw.position
+                : null,
             traffic: kw.traffic ?? 0,
             traffic_prev_month: kw.traffic_prev_month ?? 0,
             volume: kw.volume ?? 0,
@@ -211,9 +253,14 @@ async function syncStoredAhrefsReportTable(t: CategoryTable) {
     }
   }
 
-  await supabase.from("crm_records" as any).delete().eq("table_id", t.id);
+  await supabase
+    .from("crm_records" as any)
+    .delete()
+    .eq("table_id", t.id);
   for (let i = 0; i < recordsToInsert.length; i += 500) {
-    const { error: insertError } = await supabase.from("crm_records" as any).insert(recordsToInsert.slice(i, i + 500));
+    const { error: insertError } = await supabase
+      .from("crm_records" as any)
+      .insert(recordsToInsert.slice(i, i + 500));
     if (insertError) throw insertError;
   }
 
@@ -232,7 +279,8 @@ async function syncTrackedOnlyForTable(t: CategoryTable) {
   const clientId = settings.clientId || settings.client_id || t.client_id;
   if (!clientId || !t.tenant_id) throw new Error("Missing SEO report scope");
   const reportTenantIds = await resolveReportTenantIds(clientId, t.tenant_id);
-  if (reportTenantIds.length === 0) throw new Error("Missing SEO report tenant scope");
+  if (reportTenantIds.length === 0)
+    throw new Error("Missing SEO report tenant scope");
   const { data: clientRow } = await supabase
     .from("clients")
     .select("website, ahrefs_domain")
@@ -250,14 +298,19 @@ async function syncTrackedOnlyForTable(t: CategoryTable) {
     latestReportDomain: (latestReportRow as any)?.domain,
   });
 
-  const { data, error } = await supabase.functions.invoke("fetch-ahrefs-snapshot", {
-    body: {
-      clientId,
-      ...(domain ? { domain } : {}),
-      tracked_only: true,
-      ...(settings.ahrefs_project_id ? { projectId: settings.ahrefs_project_id } : {}),
+  const { data, error } = await supabase.functions.invoke(
+    "fetch-ahrefs-snapshot",
+    {
+      body: {
+        clientId,
+        ...(domain ? { domain } : {}),
+        tracked_only: true,
+        ...(settings.ahrefs_project_id
+          ? { projectId: settings.ahrefs_project_id }
+          : {}),
+      },
     },
-  });
+  );
   if (error) throw error;
   if ((data as any)?.error) throw new Error((data as any).error);
 
@@ -268,21 +321,34 @@ async function syncTrackedOnlyForTable(t: CategoryTable) {
       method: "PATCH",
       body: {
         table_id: t.id,
-        integration_settings: { ...settings, ahrefs_project_id: persistedProjectId },
+        integration_settings: {
+          ...settings,
+          ahrefs_project_id: persistedProjectId,
+        },
       },
     });
   }
 
   // Rebuild crm_records from the (now-merged) report so the table reflects tracked keywords.
   const normalizeDomain = (value?: string) =>
-    String(value || "").replace(/^https?:\/\//, "").replace(/^www\./, "").replace(/\/.*$/, "");
+    String(value || "")
+      .replace(/^https?:\/\//, "")
+      .replace(/^www\./, "")
+      .replace(/\/.*$/, "");
   const target = normalizeDomain(domain);
-  const { data: reports } = await ahrefsReportsForClient(clientId, reportTenantIds);
+  const { data: reports } = await ahrefsReportsForClient(
+    clientId,
+    reportTenantIds,
+  );
   const reportsToUse = target
-    ? ((reports as any[]) || []).filter((r: any) => normalizeDomain(r.domain) === target)
-    : ((reports as any[]) || []);
+    ? ((reports as any[]) || []).filter(
+        (r: any) => normalizeDomain(r.domain) === target,
+      )
+    : (reports as any[]) || [];
   const recordsToInsert: any[] = [];
-  for (const report of (reportsToUse.length > 0 ? reportsToUse : ((reports as any[]) || []))) {
+  for (const report of reportsToUse.length > 0
+    ? reportsToUse
+    : (reports as any[]) || []) {
     const rd = report.report_data || {};
     const snapshot = rd.snapshot || {};
     const reportDate = report.report_date || report.received_at;
@@ -299,7 +365,10 @@ async function syncTrackedOnlyForTable(t: CategoryTable) {
             keyword: String(kw.keyword || ""),
             position: kw.position ?? null,
             position_prev_month: kw.position_prev_month ?? null,
-            position_change: kw.position_prev_month != null && kw.position != null ? kw.position_prev_month - kw.position : null,
+            position_change:
+              kw.position_prev_month != null && kw.position != null
+                ? kw.position_prev_month - kw.position
+                : null,
             traffic: kw.traffic ?? 0,
             traffic_prev_month: kw.traffic_prev_month ?? 0,
             volume: kw.volume ?? 0,
@@ -315,9 +384,14 @@ async function syncTrackedOnlyForTable(t: CategoryTable) {
     }
   }
   if (recordsToInsert.length > 0) {
-    await supabase.from("crm_records" as any).delete().eq("table_id", t.id);
+    await supabase
+      .from("crm_records" as any)
+      .delete()
+      .eq("table_id", t.id);
     for (let i = 0; i < recordsToInsert.length; i += 500) {
-      const { error: insertError } = await supabase.from("crm_records" as any).insert(recordsToInsert.slice(i, i + 500));
+      const { error: insertError } = await supabase
+        .from("crm_records" as any)
+        .insert(recordsToInsert.slice(i, i + 500));
       if (insertError) throw insertError;
     }
   }
@@ -332,13 +406,21 @@ export function CategorySyncControl({ category, tables }: Props) {
   const [progress, setProgress] = useState({ done: 0, total: 0 });
 
   const syncableTables = useMemo(
-    () => tables.filter((t) => t.integration_type && FN_BY_TYPE[t.integration_type]),
-    [tables]
+    () =>
+      tables.filter(
+        (t) => t.integration_type && FN_BY_TYPE[t.integration_type],
+      ),
+    [tables],
   );
 
   const ahrefsReportTables = useMemo(
-    () => tables.filter((t) => t.integration_type === "ahrefs" && isSeoReportSource(t.integration_settings?.data_source)),
-    [tables]
+    () =>
+      tables.filter(
+        (t) =>
+          t.integration_type === "ahrefs" &&
+          isSeoReportSource(t.integration_settings?.data_source),
+      ),
+    [tables],
   );
 
   // Show the OLDEST sync among syncable tables — reflects the staleness of the
@@ -371,7 +453,10 @@ export function CategorySyncControl({ category, tables }: Props) {
     await runWithConcurrency(syncableTables, 2, async (t) => {
       const fnName = FN_BY_TYPE[t.integration_type as string];
       try {
-        if (t.integration_type === "ahrefs" && isSeoReportSource(t.integration_settings?.data_source)) {
+        if (
+          t.integration_type === "ahrefs" &&
+          isSeoReportSource(t.integration_settings?.data_source)
+        ) {
           await syncStoredAhrefsReportTable(t);
           success++;
           return;
@@ -383,7 +468,8 @@ export function CategorySyncControl({ category, tables }: Props) {
           const settings = t.integration_settings || {};
           body.config = {
             target: settings.targetDomain || settings.target || settings.domain,
-            dataType: settings.reportType || settings.dataType || "site_explorer",
+            dataType:
+              settings.reportType || settings.dataType || "site_explorer",
             country: settings.country,
             limit: settings.limit,
           };
@@ -431,7 +517,10 @@ export function CategorySyncControl({ category, tables }: Props) {
         totalTracked += count;
         success++;
       } catch (e: any) {
-        console.error(`[CategorySyncControl] tracked-only sync failed for ${t.name}:`, e);
+        console.error(
+          `[CategorySyncControl] tracked-only sync failed for ${t.name}:`,
+          e,
+        );
         failed++;
       } finally {
         setProgress((p) => ({ ...p, done: p.done + 1 }));
@@ -440,11 +529,15 @@ export function CategorySyncControl({ category, tables }: Props) {
 
     setIsTrackedSyncing(false);
     if (failed === 0) {
-      toast.success(`סונכרנו ביטויים במעקב ב-${success} דוחות (${totalTracked} ביטויים סה״כ)`);
+      toast.success(
+        `סונכרנו ביטויים במעקב ב-${success} דוחות (${totalTracked} ביטויים סה״כ)`,
+      );
     } else if (success === 0) {
       toast.error(`סנכרון ביטויים במעקב נכשל בכל ${failed} הדוחות`);
     } else {
-      toast.warning(`סונכרנו ${success} דוחות (${totalTracked} ביטויים), ${failed} נכשלו`);
+      toast.warning(
+        `סונכרנו ${success} דוחות (${totalTracked} ביטויים), ${failed} נכשלו`,
+      );
     }
     queryClient.invalidateQueries({ queryKey: ["crm-tables", tenantId] });
     queryClient.invalidateQueries({ queryKey: ["dynamic-tables", tenantId] });
@@ -472,14 +565,17 @@ export function CategorySyncControl({ category, tables }: Props) {
       <TooltipProvider>
         <Tooltip>
           <TooltipTrigger asChild>
-            <div className={`flex items-center gap-1.5 text-xs ${lastSyncTone}`}>
+            <div
+              className={`flex items-center gap-1.5 text-xs ${lastSyncTone}`}
+            >
               <Clock className="h-3.5 w-3.5" />
               <span>{lastSyncLabel}</span>
             </div>
           </TooltipTrigger>
           {oldestSyncAt && (
             <TooltipContent>
-              הדוח הכי ישן בקטגוריה סונכרן ב-{oldestSyncAt.toLocaleString("he-IL")}
+              הדוח הכי ישן בקטגוריה סונכרן ב-
+              {oldestSyncAt.toLocaleString("he-IL")}
             </TooltipContent>
           )}
         </Tooltip>
@@ -496,14 +592,17 @@ export function CategorySyncControl({ category, tables }: Props) {
                 disabled={anySyncing}
                 className="gap-1.5 h-8"
               >
-                <RefreshCw className={`h-3.5 w-3.5 ${isTrackedSyncing ? "animate-spin" : ""}`} />
+                <RefreshCw
+                  className={`h-3.5 w-3.5 ${isTrackedSyncing ? "animate-spin" : ""}`}
+                />
                 {isTrackedSyncing
                   ? `מסנכרן ביטויים במעקב… (${progress.done}/${progress.total})`
                   : `ביטויים במעקב בלבד (${ahrefsReportTables.length})`}
               </Button>
             </TooltipTrigger>
             <TooltipContent>
-              משיכת ביטויים במעקב בלבד מ-Ahrefs Rank Tracker. לא צורך קרדיטים של Site Explorer.
+              משיכת ביטויים במעקב בלבד מ-Ahrefs Rank Tracker. לא צורך קרדיטים של
+              Site Explorer.
             </TooltipContent>
           </Tooltip>
         </TooltipProvider>
@@ -516,7 +615,9 @@ export function CategorySyncControl({ category, tables }: Props) {
         disabled={anySyncing || syncableTables.length === 0}
         className="gap-1.5 h-8"
       >
-        <RefreshCw className={`h-3.5 w-3.5 ${isSyncing ? "animate-spin" : ""}`} />
+        <RefreshCw
+          className={`h-3.5 w-3.5 ${isSyncing ? "animate-spin" : ""}`}
+        />
         {isSyncing
           ? `${category === "seo" ? "מסנכרן Ahrefs…" : "מסנכרן…"} (${progress.done}/${progress.total})`
           : `סנכרן עכשיו${syncableTables.length ? ` (${syncableTables.length})` : ""}`}

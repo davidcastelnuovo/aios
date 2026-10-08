@@ -10,8 +10,12 @@ export const LEAD_VIEW_MODE_LABELS: Record<LeadViewMode, string> = {
   chat: "צ'אט",
 };
 
-export function parseLeadViewMode(value: string | null | undefined): LeadViewMode | null {
-  return value === "kanban" || value === "table" || value === "chat" ? value : null;
+export function parseLeadViewMode(
+  value: string | null | undefined,
+): LeadViewMode | null {
+  return value === "kanban" || value === "table" || value === "chat"
+    ? value
+    : null;
 }
 
 function getStorage(): Pick<Storage, "getItem" | "setItem"> | null {

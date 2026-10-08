@@ -1,6 +1,7 @@
 import { supabase } from "@/integrations/supabase/client";
 
-type InsertPayload = import("@/integrations/supabase/types").Database["public"]["Tables"]["signature_documents"]["Insert"];
+type InsertPayload =
+  import("@/integrations/supabase/types").Database["public"]["Tables"]["signature_documents"]["Insert"];
 
 function stripKeys(payload: InsertPayload, keys: string[]): InsertPayload {
   const next = { ...payload };
@@ -9,7 +10,9 @@ function stripKeys(payload: InsertPayload, keys: string[]): InsertPayload {
 }
 
 /** Insert signature_documents with graceful fallbacks for older DB schemas. */
-export async function insertSignatureDocument(payload: InsertPayload): Promise<{ id: string }> {
+export async function insertSignatureDocument(
+  payload: InsertPayload,
+): Promise<{ id: string }> {
   const wantsTemplate = payload.is_template === true;
   const attempts: InsertPayload[] = [payload];
 
@@ -20,9 +23,19 @@ export async function insertSignatureDocument(payload: InsertPayload): Promise<{
   // Never strip template columns when the caller asked to save a template —
   // that used to succeed as a plain draft and toast "התבנית נשמרה" falsely.
   if (!wantsTemplate) {
-    attempts.push(stripKeys(payload, ["document_fields", "is_template", "template_name", "lead_id", "client_id"]));
+    attempts.push(
+      stripKeys(payload, [
+        "document_fields",
+        "is_template",
+        "template_name",
+        "lead_id",
+        "client_id",
+      ]),
+    );
   } else {
-    attempts.push(stripKeys(payload, ["document_fields", "lead_id", "client_id"]));
+    attempts.push(
+      stripKeys(payload, ["document_fields", "lead_id", "client_id"]),
+    );
   }
 
   let lastError: { message: string } | null = null;
@@ -33,7 +46,11 @@ export async function insertSignatureDocument(payload: InsertPayload): Promise<{
     if (seen.has(key)) continue;
     seen.add(key);
 
-    const res = await supabase.from("signature_documents").insert(attempt).select("id").single();
+    const res = await supabase
+      .from("signature_documents")
+      .insert(attempt)
+      .select("id")
+      .single();
     if (!res.error && res.data) {
       if (wantsTemplate && attempt.is_template !== true) {
         throw new Error("שמירת תבנית נכשלה — עמודת is_template חסרה ב־DB");
@@ -52,7 +69,9 @@ export async function insertSignatureDocument(payload: InsertPayload): Promise<{
   }
 
   if (wantsTemplate && lastError?.message?.includes("is_template")) {
-    throw new Error("שמירת תבנית נכשלה — חסרות עמודות תבנית ב־DB (is_template). יש להריץ migration.");
+    throw new Error(
+      "שמירת תבנית נכשלה — חסרות עמודות תבנית ב־DB (is_template). יש להריץ migration.",
+    );
   }
 
   throw lastError ?? new Error("שמירת המסמך נכשלה");

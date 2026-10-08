@@ -1,6 +1,12 @@
 import { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
-import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { Slider } from "@/components/ui/slider";
 import { Textarea } from "@/components/ui/textarea";
@@ -52,7 +58,10 @@ const blobToBase64 = (blob: Blob) =>
 
 const canvasToBlob = (canvas: HTMLCanvasElement) =>
   new Promise<Blob>((resolve, reject) => {
-    canvas.toBlob((blob) => (blob ? resolve(blob) : reject(new Error("png failed"))), "image/png");
+    canvas.toBlob(
+      (blob) => (blob ? resolve(blob) : reject(new Error("png failed"))),
+      "image/png",
+    );
   });
 
 const loadImage = (url: string) =>
@@ -107,7 +116,10 @@ export function CreativeEraseDialog({
         if (!cancelled) setPhoto(image);
       })
       .catch((cause: unknown) => {
-        if (!cancelled) setError(cause instanceof Error ? cause.message : "טעינת התמונה נכשלה");
+        if (!cancelled)
+          setError(
+            cause instanceof Error ? cause.message : "טעינת התמונה נכשלה",
+          );
       })
       .finally(() => {
         if (!cancelled) setLoading(false);
@@ -118,7 +130,9 @@ export function CreativeEraseDialog({
   }, [variation?.id, variation?.imageUrl]);
 
   const allMarks = draft ? [...marks, draft] : marks;
-  const coverage = maskHasCoverage(applyEraseMarks(createKeepMask(64, 64), 64, 64, allMarks));
+  const coverage = maskHasCoverage(
+    applyEraseMarks(createKeepMask(64, 64), 64, 64, allMarks),
+  );
 
   useEffect(() => {
     const canvas = overlayRef.current;
@@ -135,7 +149,12 @@ export function CreativeEraseDialog({
     ctx.lineJoin = "round";
     for (const mark of allMarks) {
       if (mark.type === "rect") {
-        ctx.fillRect(mark.x * width, mark.y * height, mark.width * width, mark.height * height);
+        ctx.fillRect(
+          mark.x * width,
+          mark.y * height,
+          mark.width * width,
+          mark.height * height,
+        );
         continue;
       }
       if (mark.points.length === 0) continue;
@@ -199,9 +218,10 @@ export function CreativeEraseDialog({
     painting.current = false;
     rectOrigin.current = null;
     if (!draft) return;
-    const keep = draft.type === "rect"
-      ? draft.width > 0.004 && draft.height > 0.004
-      : draft.points.length > 0;
+    const keep =
+      draft.type === "rect"
+        ? draft.width > 0.004 && draft.height > 0.004
+        : draft.points.length > 0;
     if (keep) setMarks((current) => [...current, draft]);
     setDraft(null);
   };
@@ -220,7 +240,12 @@ export function CreativeEraseDialog({
     maskCanvas.height = height;
     const maskCtx = maskCanvas.getContext("2d");
     if (!maskCtx) throw new Error("canvas");
-    const mask = applyEraseMarks(createKeepMask(width, height), width, height, marks);
+    const mask = applyEraseMarks(
+      createKeepMask(width, height),
+      width,
+      height,
+      marks,
+    );
     maskCtx.putImageData(new ImageData(mask, width, height), 0, 0);
 
     const markedCanvas = document.createElement("canvas");
@@ -235,11 +260,19 @@ export function CreativeEraseDialog({
     markedCtx.lineJoin = "round";
     for (const mark of marks) {
       if (mark.type === "rect") {
-        markedCtx.fillRect(mark.x * width, mark.y * height, mark.width * width, mark.height * height);
+        markedCtx.fillRect(
+          mark.x * width,
+          mark.y * height,
+          mark.width * width,
+          mark.height * height,
+        );
         continue;
       }
       if (mark.points.length === 0) continue;
-      markedCtx.lineWidth = Math.max(2, mark.radius * 2 * Math.min(width, height));
+      markedCtx.lineWidth = Math.max(
+        2,
+        mark.radius * 2 * Math.min(width, height),
+      );
       markedCtx.beginPath();
       mark.points.forEach((point, index) => {
         const x = point.x * width;
@@ -262,50 +295,101 @@ export function CreativeEraseDialog({
     return {
       imagePngBase64,
       maskPngBase64,
-      markedFile: new File([markedBlob], "erase-mark.png", { type: "image/png" }),
+      markedFile: new File([markedBlob], "erase-mark.png", {
+        type: "image/png",
+      }),
       hint: hint.trim(),
     };
   };
 
   return (
-    <Dialog open={!!variation} onOpenChange={(open) => { if (!open) onClose(); }}>
-      <DialogContent className="max-h-[92vh] overflow-y-auto sm:max-w-xl" dir="rtl">
+    <Dialog
+      open={!!variation}
+      onOpenChange={(open) => {
+        if (!open) onClose();
+      }}
+    >
+      <DialogContent
+        className="max-h-[92vh] overflow-y-auto sm:max-w-xl"
+        dir="rtl"
+      >
         <DialogHeader>
           <DialogTitle>מחק אזור מהתמונה</DialogTitle>
         </DialogHeader>
         <p className="text-sm text-muted-foreground">
-          סמנו את מה שצריך להיעלם — למשל המילה «פרומו». ה־AI ממלא את החור מהצילום מסביב ולא מוסיף טקסט חדש.
+          סמנו את מה שצריך להיעלם — למשל המילה «פרומו». ה־AI ממלא את החור
+          מהצילום מסביב ולא מוסיף טקסט חדש.
           {liveTextLayers ? " אם זו שכבת טקסט חיה, מחקו אותה ב«שכבות»." : null}
         </p>
         <div className="flex flex-wrap items-center gap-2">
-          <Button size="sm" variant={tool === "brush" ? "default" : "outline"} className="h-8 gap-1" onClick={() => setTool("brush")}>
-            <Eraser className="h-3.5 w-3.5" />מברשת
+          <Button
+            size="sm"
+            variant={tool === "brush" ? "default" : "outline"}
+            className="h-8 gap-1"
+            onClick={() => setTool("brush")}
+          >
+            <Eraser className="h-3.5 w-3.5" />
+            מברשת
           </Button>
-          <Button size="sm" variant={tool === "rect" ? "default" : "outline"} className="h-8 gap-1" onClick={() => setTool("rect")}>
-            <Square className="h-3.5 w-3.5" />מלבן
+          <Button
+            size="sm"
+            variant={tool === "rect" ? "default" : "outline"}
+            className="h-8 gap-1"
+            onClick={() => setTool("rect")}
+          >
+            <Square className="h-3.5 w-3.5" />
+            מלבן
           </Button>
-          <Button size="sm" variant="ghost" className="h-8 gap-1" onClick={() => setMarks((current) => current.slice(0, -1))} disabled={marks.length === 0}>
-            <Undo2 className="h-3.5 w-3.5" />בטל
+          <Button
+            size="sm"
+            variant="ghost"
+            className="h-8 gap-1"
+            onClick={() => setMarks((current) => current.slice(0, -1))}
+            disabled={marks.length === 0}
+          >
+            <Undo2 className="h-3.5 w-3.5" />
+            בטל
           </Button>
-          <Button size="sm" variant="ghost" className="h-8" onClick={() => { setMarks([]); setDraft(null); }} disabled={marks.length === 0}>
+          <Button
+            size="sm"
+            variant="ghost"
+            className="h-8"
+            onClick={() => {
+              setMarks([]);
+              setDraft(null);
+            }}
+            disabled={marks.length === 0}
+          >
             נקה
           </Button>
         </div>
         {tool === "brush" && (
           <div className="space-y-1.5">
             <Label>עובי מברשת</Label>
-            <Slider min={0.02} max={0.12} step={0.005} value={[radius]} onValueChange={(value) => setRadius(value[0] ?? 0.045)} />
+            <Slider
+              min={0.02}
+              max={0.12}
+              step={0.005}
+              value={[radius]}
+              onValueChange={(value) => setRadius(value[0] ?? 0.045)}
+            />
           </div>
         )}
         <div
           ref={frameRef}
-          className={cn("relative overflow-hidden rounded-xl border bg-muted", aspectRatioClass(variation?.format))}
+          className={cn(
+            "relative overflow-hidden rounded-xl border bg-muted",
+            aspectRatioClass(variation?.format),
+          )}
           onPointerDown={onPointerDown}
           onPointerMove={onPointerMove}
           onPointerUp={onPointerUp}
           onPointerCancel={onPointerUp}
         >
-          <canvas ref={overlayRef} className="absolute inset-0 h-full w-full touch-none cursor-crosshair object-fill" />
+          <canvas
+            ref={overlayRef}
+            className="absolute inset-0 h-full w-full touch-none cursor-crosshair object-fill"
+          />
           {loading && (
             <div className="absolute inset-0 flex items-center justify-center bg-background/60">
               <Loader2 className="h-6 w-6 animate-spin" />
@@ -327,15 +411,27 @@ export function CreativeEraseDialog({
           <Button
             disabled={!coverage || loading || submitting || !photo}
             onClick={() => {
-              void exportJob().then(onSubmit).catch((cause: unknown) => {
-                setError(cause instanceof Error ? cause.message : "ייצוא הסימון נכשל");
-              });
+              void exportJob()
+                .then(onSubmit)
+                .catch((cause: unknown) => {
+                  setError(
+                    cause instanceof Error
+                      ? cause.message
+                      : "ייצוא הסימון נכשל",
+                  );
+                });
             }}
           >
-            {submitting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Eraser className="h-4 w-4" />}
+            {submitting ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <Eraser className="h-4 w-4" />
+            )}
             מחק את הסימון
           </Button>
-          <Button variant="outline" onClick={onClose}>ביטול</Button>
+          <Button variant="outline" onClick={onClose}>
+            ביטול
+          </Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>

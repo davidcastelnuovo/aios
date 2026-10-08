@@ -16,7 +16,12 @@ import {
 test("getBrandKit reads logo, book, and style references from payload", () => {
   const kit = getBrandKit({
     logo_url: "https://example.com/logo.png",
-    brand_book: { name: "Smartair", colors: ["#1d4ed8", "#111827"], notes: "n", source: "auto" },
+    brand_book: {
+      name: "Smartair",
+      colors: ["#1d4ed8", "#111827"],
+      notes: "n",
+      source: "auto",
+    },
     style_references: [{ url: "https://example.com/ref.jpg", name: "board" }],
   });
   assert.equal(kit.logoUrl, "https://example.com/logo.png");
@@ -57,11 +62,14 @@ test("brandKitPrompt locks logo colors and attaches project style refs", () => {
 });
 
 test("brandKitPrompt talent lock keeps the spokesman instead of forbidding faces", () => {
-  const prompt = brandKitPrompt({
-    logoUrl: "https://example.com/logo.png",
-    brandBook: { colors: ["#c00000"], notes: "", source: "auto" },
-    styleReferences: [{ url: "https://example.com/person.jpg" }],
-  }, { talentLock: true });
+  const prompt = brandKitPrompt(
+    {
+      logoUrl: "https://example.com/logo.png",
+      brandBook: { colors: ["#c00000"], notes: "", source: "auto" },
+      styleReferences: [{ url: "https://example.com/person.jpg" }],
+    },
+    { talentLock: true },
+  );
   assert.match(prompt, /Keep that spokesman/i);
   assert.doesNotMatch(prompt, /RANGE only/i);
   assert.doesNotMatch(prompt, /Do not attach, recall, or copy/i);
@@ -78,14 +86,23 @@ test("client attachments become image style refs and ignore non-images", () => {
   assert.equal(websiteHref("smartair.co.il"), "https://smartair.co.il");
   const merged = mergeStyleReferences(
     [{ url: "https://example.com/a.jpg" }],
-    [{ url: "https://example.com/a.jpg" }, { url: "https://example.com/b.jpg" }],
+    [
+      { url: "https://example.com/a.jpg" },
+      { url: "https://example.com/b.jpg" },
+    ],
   );
   assert.equal(merged.length, 2);
 });
 
 test("getBrandKit keeps an uploaded brand-book file", () => {
   const kit = getBrandKit({
-    brand_book: { colors: ["#111"], notes: "n", source: "upload", fileUrl: "https://example.com/book.pdf", fileName: "book.pdf" },
+    brand_book: {
+      colors: ["#111"],
+      notes: "n",
+      source: "upload",
+      fileUrl: "https://example.com/book.pdf",
+      fileName: "book.pdf",
+    },
   });
   assert.equal(kit.brandBook?.fileName, "book.pdf");
   assert.equal(kit.brandBook?.source, "upload");
@@ -93,8 +110,14 @@ test("getBrandKit keeps an uploaded brand-book file", () => {
 
 test("isGenerationAborted recognizes abort signals and abort errors", () => {
   assert.equal(isGenerationAborted(new Error("ABORTED")), true);
-  assert.equal(isGenerationAborted(new DOMException("Aborted", "AbortError")), true);
-  assert.equal(isGenerationAborted(new Error("The user aborted a request.")), true);
+  assert.equal(
+    isGenerationAborted(new DOMException("Aborted", "AbortError")),
+    true,
+  );
+  assert.equal(
+    isGenerationAborted(new Error("The user aborted a request.")),
+    true,
+  );
   assert.equal(isGenerationAborted(new Error("network down")), false);
 });
 
@@ -110,10 +133,7 @@ test("throwIfGenerationAborted raises a recognizable abort error", () => {
 
 test("sampleColorsFromImageData ignores near-white and transparent pixels", () => {
   const data = new Uint8ClampedArray([
-    255, 255, 255, 255,
-    30, 80, 200, 255,
-    30, 80, 200, 10,
-    10, 10, 10, 255,
+    255, 255, 255, 255, 30, 80, 200, 255, 30, 80, 200, 10, 10, 10, 10, 255,
   ]);
   const colors = sampleColorsFromImageData(data);
   assert.ok(colors.some((color) => color.startsWith("#")));

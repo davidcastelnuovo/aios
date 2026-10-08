@@ -2,11 +2,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { CLIENT_CHANNELS } from "@/config/clientChannels";
 
 export type ShareableResourceKind =
-  | "integration"
-  | "social_page"
-  | "wordpress_site"
-  | "crm_table"
-  | "automation";
+  "integration" | "social_page" | "wordpress_site" | "crm_table" | "automation";
 
 export interface ShareableResource {
   id: string;
@@ -46,7 +42,10 @@ function integrationLabel(type: string, displayName?: string | null) {
   return displayName || INTEGRATION_LABELS[type] || type;
 }
 
-function automationReferencesClient(configuration: unknown, clientId: string): boolean {
+function automationReferencesClient(
+  configuration: unknown,
+  clientId: string,
+): boolean {
   if (!configuration || typeof configuration !== "object") return false;
   const cfg = configuration as Record<string, unknown>;
   if (cfg.client_id === clientId) return true;
@@ -54,12 +53,15 @@ function automationReferencesClient(configuration: unknown, clientId: string): b
   if (!Array.isArray(steps)) return false;
   return steps.some((step) => {
     if (!step || typeof step !== "object") return false;
-    const conf = (step as { configuration?: Record<string, unknown> }).configuration;
+    const conf = (step as { configuration?: Record<string, unknown> })
+      .configuration;
     return conf?.client_id === clientId;
   });
 }
 
-function integrationTypesForClient(client: Record<string, unknown>): Set<string> {
+function integrationTypesForClient(
+  client: Record<string, unknown>,
+): Set<string> {
   const types = new Set<string>();
   for (const channel of CLIENT_CHANNELS) {
     for (const table of channel.tables) {
@@ -93,7 +95,9 @@ export async function loadShareableResourcesForClient(
 
   if (clientErr || !client) throw clientErr || new Error("Client not found");
 
-  const clientTypes = integrationTypesForClient(client as Record<string, unknown>);
+  const clientTypes = integrationTypesForClient(
+    client as Record<string, unknown>,
+  );
 
   const [
     integrationsRes,
@@ -105,7 +109,9 @@ export async function loadShareableResourcesForClient(
   ] = await Promise.all([
     supabase
       .from("tenant_integrations")
-      .select("id, integration_type, display_name, is_active, user_id, connection_visibility")
+      .select(
+        "id, integration_type, display_name, is_active, user_id, connection_visibility",
+      )
       .eq("tenant_id", tenantId)
       .eq("is_active", true)
       .is("shared_from_integration_id", null),
@@ -132,7 +138,10 @@ export async function loadShareableResourcesForClient(
       .eq("tenant_id", tenantId),
   ]);
 
-  const flowStepsByAutomation = new Map<string, Array<Record<string, unknown>>>();
+  const flowStepsByAutomation = new Map<
+    string,
+    Array<Record<string, unknown>>
+  >();
   for (const step of flowStepsRes.data || []) {
     const list = flowStepsByAutomation.get(step.automation_id) || [];
     list.push((step.configuration || {}) as Record<string, unknown>);
@@ -153,9 +162,11 @@ export async function loadShareableResourcesForClient(
   for (const aut of automationsRes.data || []) {
     if (!clientAutomationIds.has(aut.id)) continue;
     const cfg = (aut.configuration || {}) as Record<string, unknown>;
-    if (typeof cfg.integration_id === "string") clientIntegrationIds.add(cfg.integration_id);
+    if (typeof cfg.integration_id === "string")
+      clientIntegrationIds.add(cfg.integration_id);
     for (const step of flowStepsByAutomation.get(aut.id) || []) {
-      if (typeof step.integration_id === "string") clientIntegrationIds.add(step.integration_id);
+      if (typeof step.integration_id === "string")
+        clientIntegrationIds.add(step.integration_id);
     }
   }
 
@@ -225,9 +236,13 @@ export async function loadShareableResourcesForClient(
   return resources;
 }
 
-export function defaultSelectionFromResources(resources: ShareableResource[]): CreateOrgShareSelection {
+export function defaultSelectionFromResources(
+  resources: ShareableResource[],
+): CreateOrgShareSelection {
   const pick = (kind: ShareableResourceKind) =>
-    resources.filter((r) => r.kind === kind && r.clientRelated).map((r) => r.id);
+    resources
+      .filter((r) => r.kind === kind && r.clientRelated)
+      .map((r) => r.id);
 
   return {
     integration_ids: pick("integration"),

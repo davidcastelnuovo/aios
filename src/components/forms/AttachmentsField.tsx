@@ -4,14 +4,14 @@ import { Label } from "@/components/ui/label";
 import { supabase } from "@/integrations/supabase/client";
 import { useCurrentTenant } from "@/hooks/useCurrentTenant";
 import { toast } from "sonner";
-import { 
-  Upload, 
-  Trash2, 
-  Download, 
-  FileText, 
-  FileImage, 
+import {
+  Upload,
+  Trash2,
+  Download,
+  FileText,
+  FileImage,
   File,
-  Loader2
+  Loader2,
 } from "lucide-react";
 
 export interface Attachment {
@@ -53,78 +53,86 @@ function formatFileSize(bytes: number): string {
 
 // Sanitize file name: keep only ASCII, numbers, dash, underscore, dot
 function sanitizeFileName(name: string): string {
-  const ext = name.lastIndexOf('.') > 0 ? name.slice(name.lastIndexOf('.')) : '';
-  const baseName = name.lastIndexOf('.') > 0 ? name.slice(0, name.lastIndexOf('.')) : name;
+  const ext =
+    name.lastIndexOf(".") > 0 ? name.slice(name.lastIndexOf(".")) : "";
+  const baseName =
+    name.lastIndexOf(".") > 0 ? name.slice(0, name.lastIndexOf(".")) : name;
   // Replace non-ASCII and problematic chars with underscore
-  const sanitized = baseName.replace(/[^a-zA-Z0-9_-]/g, '_').replace(/_+/g, '_').slice(0, 50);
+  const sanitized = baseName
+    .replace(/[^a-zA-Z0-9_-]/g, "_")
+    .replace(/_+/g, "_")
+    .slice(0, 50);
   return sanitized + ext.toLowerCase();
 }
 
-export function AttachmentsField({ 
-  attachments, 
-  onChange, 
-  entityType, 
+export function AttachmentsField({
+  attachments,
+  onChange,
+  entityType,
   entityId,
-  readOnly = false 
+  readOnly = false,
 }: AttachmentsFieldProps) {
   const [isUploading, setIsUploading] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { tenantId } = useCurrentTenant();
 
-  const handleUpload = useCallback(async (files: FileList | null) => {
-    if (!files || files.length === 0 || !tenantId || !entityId) return;
+  const handleUpload = useCallback(
+    async (files: FileList | null) => {
+      if (!files || files.length === 0 || !tenantId || !entityId) return;
 
-    setIsUploading(true);
-    const newAttachments: Attachment[] = [];
+      setIsUploading(true);
+      const newAttachments: Attachment[] = [];
 
-    try {
-      for (const file of Array.from(files)) {
-        if (file.size > MAX_FILE_SIZE) {
-          toast.error(`הקובץ ${file.name} גדול מדי (מקסימום 10MB)`);
-          continue;
+      try {
+        for (const file of Array.from(files)) {
+          if (file.size > MAX_FILE_SIZE) {
+            toast.error(`הקובץ ${file.name} גדול מדי (מקסימום 10MB)`);
+            continue;
+          }
+
+          const safeFileName = sanitizeFileName(file.name);
+          const filePath = `${tenantId}/${entityType}/${entityId}/${Date.now()}_${safeFileName}`;
+
+          const { error } = await supabase.storage
+            .from("entity-attachments")
+            .upload(filePath, file);
+
+          if (error) {
+            console.error("Upload error:", error);
+            toast.error(`שגיאה בהעלאת ${file.name}`);
+            continue;
+          }
+
+          newAttachments.push({
+            name: file.name,
+            path: filePath,
+            size: file.size,
+            type: file.type,
+            uploaded_at: new Date().toISOString(),
+          });
         }
 
-        const safeFileName = sanitizeFileName(file.name);
-        const filePath = `${tenantId}/${entityType}/${entityId}/${Date.now()}_${safeFileName}`;
-        
-        const { error } = await supabase.storage
-          .from("entity-attachments")
-          .upload(filePath, file);
-
-        if (error) {
-          console.error("Upload error:", error);
-          toast.error(`שגיאה בהעלאת ${file.name}`);
-          continue;
+        if (newAttachments.length > 0) {
+          onChange([...attachments, ...newAttachments]);
+          toast.success(`${newAttachments.length} קבצים הועלו בהצלחה`);
         }
-
-        newAttachments.push({
-          name: file.name,
-          path: filePath,
-          size: file.size,
-          type: file.type,
-          uploaded_at: new Date().toISOString(),
-        });
+      } catch (err) {
+        console.error("Upload failed:", err);
+        toast.error("שגיאה בהעלאת קבצים");
+      } finally {
+        setIsUploading(false);
+        if (fileInputRef.current) {
+          fileInputRef.current.value = "";
+        }
       }
-
-      if (newAttachments.length > 0) {
-        onChange([...attachments, ...newAttachments]);
-        toast.success(`${newAttachments.length} קבצים הועלו בהצלחה`);
-      }
-    } catch (err) {
-      console.error("Upload failed:", err);
-      toast.error("שגיאה בהעלאת קבצים");
-    } finally {
-      setIsUploading(false);
-      if (fileInputRef.current) {
-        fileInputRef.current.value = "";
-      }
-    }
-  }, [attachments, entityId, entityType, onChange, tenantId]);
+    },
+    [attachments, entityId, entityType, onChange, tenantId],
+  );
 
   const handleDelete = async (index: number) => {
     const attachment = attachments[index];
-    
+
     try {
       const { error } = await supabase.storage
         .from("entity-attachments")
@@ -192,18 +200,20 @@ export function AttachmentsField({
   return (
     <div className="space-y-3">
       <Label className="text-sm font-medium">קבצים מצורפים</Label>
-      
+
       {/* Existing attachments */}
       {attachments.length > 0 && (
         <div className="space-y-2">
           {attachments.map((attachment, index) => (
-            <div 
-              key={index} 
+            <div
+              key={index}
               className="flex items-center gap-2 p-2 rounded-lg border bg-muted/30"
             >
               {getFileIcon(attachment.type)}
               <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium truncate">{attachment.name}</p>
+                <p className="text-sm font-medium truncate">
+                  {attachment.name}
+                </p>
                 {attachment.size ? (
                   <p className="text-xs text-muted-foreground">
                     {formatFileSize(attachment.size)}
@@ -236,7 +246,7 @@ export function AttachmentsField({
           ))}
         </div>
       )}
-      
+
       {/* Upload area */}
       {!readOnly && (
         <div
@@ -272,7 +282,7 @@ export function AttachmentsField({
           )}
         </div>
       )}
-      
+
       {attachments.length === 0 && readOnly && (
         <p className="text-sm text-muted-foreground">אין קבצים מצורפים</p>
       )}

@@ -34,7 +34,16 @@ import {
 } from "@/components/ui/command";
 import { Badge } from "@/components/ui/badge";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
-import { ChevronsUpDown, Check, Facebook, ShoppingCart, FileSpreadsheet, Building2, User, Network } from "lucide-react";
+import {
+  ChevronsUpDown,
+  Check,
+  Facebook,
+  ShoppingCart,
+  FileSpreadsheet,
+  Building2,
+  User,
+  Network,
+} from "lucide-react";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { useCurrentTenant } from "@/hooks/useCurrentTenant";
@@ -49,14 +58,20 @@ interface CreateDashboardDialogProps {
   assignedClientIds?: string[];
 }
 
-export function CreateDashboardDialog({ open, onOpenChange, assignedClientIds }: CreateDashboardDialogProps) {
+export function CreateDashboardDialog({
+  open,
+  onOpenChange,
+  assignedClientIds,
+}: CreateDashboardDialogProps) {
   const navigate = useNavigate();
   const { buildPath } = useTenantPath();
   const queryClient = useQueryClient();
   const { tenantId } = useCurrentTenant();
   const { crossTenantAgencyIds } = useCrossTenantAgencyIds();
-  
-  const [dashboardType, setDashboardType] = useState<'client' | 'agency' | 'organization'>('client');
+
+  const [dashboardType, setDashboardType] = useState<
+    "client" | "agency" | "organization"
+  >("client");
   const [name, setName] = useState("");
   const [agencyId, setAgencyId] = useState<string>("");
   const [clientId, setClientId] = useState<string>("");
@@ -64,14 +79,16 @@ export function CreateDashboardDialog({ open, onOpenChange, assignedClientIds }:
 
   // Fetch agencies (own tenant + cross-tenant shared agencies)
   const { data: agencies = [] } = useQuery({
-    queryKey: ['agencies-with-shared', tenantId, crossTenantAgencyIds],
+    queryKey: ["agencies-with-shared", tenantId, crossTenantAgencyIds],
     queryFn: async () => {
       if (!tenantId) return [];
-      let query = supabase.from('agencies').select('id, name, tenant_id');
+      let query = supabase.from("agencies").select("id, name, tenant_id");
       if (crossTenantAgencyIds.length > 0) {
-        query = query.or(`tenant_id.eq.${tenantId},id.in.(${crossTenantAgencyIds.join(',')})`);
+        query = query.or(
+          `tenant_id.eq.${tenantId},id.in.(${crossTenantAgencyIds.join(",")})`,
+        );
       } else {
-        query = query.eq('tenant_id', tenantId);
+        query = query.eq("tenant_id", tenantId);
       }
       const { data, error } = await query;
       if (error) throw error;
@@ -82,14 +99,18 @@ export function CreateDashboardDialog({ open, onOpenChange, assignedClientIds }:
 
   // Fetch clients (own tenant + cross-tenant via shared agencies)
   const { data: allClients = [] } = useQuery({
-    queryKey: ['clients-all-with-shared', tenantId, crossTenantAgencyIds],
+    queryKey: ["clients-all-with-shared", tenantId, crossTenantAgencyIds],
     queryFn: async () => {
       if (!tenantId) return [];
-      let query = supabase.from('clients').select('id, name, agency_id, tenant_id');
+      let query = supabase
+        .from("clients")
+        .select("id, name, agency_id, tenant_id");
       if (crossTenantAgencyIds.length > 0) {
-        query = query.or(`tenant_id.eq.${tenantId},agency_id.in.(${crossTenantAgencyIds.join(',')})`);
+        query = query.or(
+          `tenant_id.eq.${tenantId},agency_id.in.(${crossTenantAgencyIds.join(",")})`,
+        );
       } else {
-        query = query.eq('tenant_id', tenantId);
+        query = query.eq("tenant_id", tenantId);
       }
       const { data, error } = await query;
       if (error) throw error;
@@ -100,75 +121,81 @@ export function CreateDashboardDialog({ open, onOpenChange, assignedClientIds }:
 
   const filteredClients = useMemo(() => {
     if (!agencyId) return [];
-    let filtered = allClients.filter(c => c.agency_id === agencyId);
+    let filtered = allClients.filter((c) => c.agency_id === agencyId);
     if (assignedClientIds) {
-      filtered = filtered.filter(c => assignedClientIds.includes(c.id));
+      filtered = filtered.filter((c) => assignedClientIds.includes(c.id));
     }
     return filtered;
   }, [allClients, agencyId, assignedClientIds]);
 
   // Fetch tables for selected client (preview) - only for client type
   const { data: clientTables = [] } = useQuery({
-    queryKey: ['crm-tables-client', clientId, tenantId],
+    queryKey: ["crm-tables-client", clientId, tenantId],
     queryFn: async () => {
       if (!clientId) return [];
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session) throw new Error('Not authenticated');
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+      if (!session) throw new Error("Not authenticated");
 
-      const response = await supabase.functions.invoke(`crm-tables?tenant_id=${tenantId}`, {
-        method: 'GET',
-      });
+      const response = await supabase.functions.invoke(
+        `crm-tables?tenant_id=${tenantId}`,
+        {
+          method: "GET",
+        },
+      );
 
       if (response.error) throw response.error;
       const tables = Array.isArray(response.data) ? response.data : [];
       return tables.filter((t: any) => t.client_id === clientId);
     },
-    enabled: !!clientId && !!tenantId && dashboardType === 'client',
+    enabled: !!clientId && !!tenantId && dashboardType === "client",
   });
 
   // Count clients for selected agency (preview for agency type)
   const agencyClientsCount = useMemo(() => {
-    if (!agencyId || dashboardType !== 'agency') return 0;
-    return allClients.filter(c => c.agency_id === agencyId).length;
+    if (!agencyId || dashboardType !== "agency") return 0;
+    return allClients.filter((c) => c.agency_id === agencyId).length;
   }, [allClients, agencyId, dashboardType]);
 
-  const selectedClient = allClients.find(c => c.id === clientId);
-  const selectedAgency = agencies.find(a => a.id === agencyId);
+  const selectedClient = allClients.find((c) => c.id === clientId);
+  const selectedAgency = agencies.find((a) => a.id === agencyId);
 
   const createDashboardMutation = useMutation({
     mutationFn: async () => {
       if (!tenantId || !name.trim()) {
-        throw new Error('Missing required fields');
+        throw new Error("Missing required fields");
       }
 
       // Organization type does not require an agency, others do
-      if (dashboardType !== 'organization' && !agencyId) {
-        throw new Error('Missing agency selection');
+      if (dashboardType !== "organization" && !agencyId) {
+        throw new Error("Missing agency selection");
       }
 
       // For client type, clientId is required
-      if (dashboardType === 'client' && !clientId) {
-        throw new Error('Missing client selection');
+      if (dashboardType === "client" && !clientId) {
+        throw new Error("Missing client selection");
       }
 
       // Shared agencies (DMM-MC) must store the dashboard on the agency home
       // tenant — same rule as crm-tables — otherwise MC creates orphans that
       // DMM never sees and the list depends on cross-tenant unions forever.
-      const homeTenantId = dashboardType === 'organization'
-        ? tenantId
-        : await resolveDashboardHomeTenant({
-            uiTenantId: tenantId,
-            agencyId,
-            clientId: dashboardType === 'client' ? clientId : null,
-          });
+      const homeTenantId =
+        dashboardType === "organization"
+          ? tenantId
+          : await resolveDashboardHomeTenant({
+              uiTenantId: tenantId,
+              agencyId,
+              clientId: dashboardType === "client" ? clientId : null,
+            });
 
       const { data, error } = await supabase
-        .from('crm_dashboards')
+        .from("crm_dashboards")
         .insert({
           tenant_id: homeTenantId,
           name: name.trim(),
-          agency_id: dashboardType === 'organization' ? null : agencyId,
-          client_id: dashboardType === 'client' ? clientId : null,
+          agency_id: dashboardType === "organization" ? null : agencyId,
+          client_id: dashboardType === "client" ? clientId : null,
           dashboard_type: dashboardType,
           settings: {},
         })
@@ -179,20 +206,20 @@ export function CreateDashboardDialog({ open, onOpenChange, assignedClientIds }:
       return data;
     },
     onSuccess: (data) => {
-      queryClient.invalidateQueries({ queryKey: ['crm-dashboards', tenantId] });
-      toast.success('הדשבורד נוצר בהצלחה');
+      queryClient.invalidateQueries({ queryKey: ["crm-dashboards", tenantId] });
+      toast.success("הדשבורד נוצר בהצלחה");
       onOpenChange(false);
       resetForm();
       // Navigate to the new dashboard
       navigate(buildPath(`/dashboard/${data.id}`));
     },
     onError: (error: any) => {
-      toast.error('שגיאה ביצירת הדשבורד: ' + error.message);
+      toast.error("שגיאה ביצירת הדשבורד: " + error.message);
     },
   });
 
   const resetForm = () => {
-    setDashboardType('client');
+    setDashboardType("client");
     setName("");
     setAgencyId("");
     setClientId("");
@@ -203,22 +230,27 @@ export function CreateDashboardDialog({ open, onOpenChange, assignedClientIds }:
     setClientId(""); // Reset client when agency changes
   };
 
-  const handleDashboardTypeChange = (value: 'client' | 'agency' | 'organization') => {
+  const handleDashboardTypeChange = (
+    value: "client" | "agency" | "organization",
+  ) => {
     setDashboardType(value);
     setClientId(""); // Reset client when type changes
-    if (value === 'organization') setAgencyId("");
+    if (value === "organization") setAgencyId("");
   };
 
   const getIntegrationIcon = (type: string | null) => {
     switch (type) {
-      case 'facebook_insights':
+      case "facebook_insights":
         return <Facebook className="h-4 w-4 text-blue-600" />;
-      case 'facebook_ecommerce':
+      case "facebook_ecommerce":
         return <ShoppingCart className="h-4 w-4 text-green-600" />;
-      case 'google_ads':
+      case "google_ads":
         return (
           <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none">
-            <path d="M12.48 10.92v3.28h7.84c-.24 1.84-.853 3.187-1.787 4.133-1.147 1.147-2.933 2.4-6.053 2.4-4.827 0-8.6-3.893-8.6-8.72s3.773-8.72 8.6-8.72c2.6 0 4.507 1.027 5.907 2.347l2.307-2.307C18.747 1.44 16.133 0 12.48 0 5.867 0 .307 5.387.307 12s5.56 12 12.173 12c3.573 0 6.267-1.173 8.373-3.36 2.16-2.16 2.84-5.213 2.84-7.667 0-.76-.053-1.467-.173-2.053H12.48z" fill="#4285F4"/>
+            <path
+              d="M12.48 10.92v3.28h7.84c-.24 1.84-.853 3.187-1.787 4.133-1.147 1.147-2.933 2.4-6.053 2.4-4.827 0-8.6-3.893-8.6-8.72s3.773-8.72 8.6-8.72c2.6 0 4.507 1.027 5.907 2.347l2.307-2.307C18.747 1.44 16.133 0 12.48 0 5.867 0 .307 5.387.307 12s5.56 12 12.173 12c3.573 0 6.267-1.173 8.373-3.36 2.16-2.16 2.84-5.213 2.84-7.667 0-.76-.053-1.467-.173-2.053H12.48z"
+              fill="#4285F4"
+            />
           </svg>
         );
       default:
@@ -227,15 +259,16 @@ export function CreateDashboardDialog({ open, onOpenChange, assignedClientIds }:
   };
 
   const orgClientsCount = useMemo(() => {
-    if (dashboardType !== 'organization') return 0;
+    if (dashboardType !== "organization") return 0;
     return allClients.length;
   }, [allClients, dashboardType]);
 
-  const isValid = dashboardType === 'client'
-    ? name.trim() && clientId && agencyId
-    : dashboardType === 'agency'
-      ? name.trim() && agencyId
-      : name.trim();
+  const isValid =
+    dashboardType === "client"
+      ? name.trim() && clientId && agencyId
+      : dashboardType === "agency"
+        ? name.trim() && agencyId
+        : name.trim();
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -251,39 +284,52 @@ export function CreateDashboardDialog({ open, onOpenChange, assignedClientIds }:
           {/* Dashboard Type Selection */}
           <div className="space-y-3">
             <Label>סוג דשבורד</Label>
-            <RadioGroup 
-              value={dashboardType} 
-              onValueChange={(v) => handleDashboardTypeChange(v as 'client' | 'agency' | 'organization')}
+            <RadioGroup
+              value={dashboardType}
+              onValueChange={(v) =>
+                handleDashboardTypeChange(
+                  v as "client" | "agency" | "organization",
+                )
+              }
               className="flex flex-wrap gap-4"
             >
               <div className="flex items-center space-x-2 space-x-reverse">
                 <RadioGroupItem value="client" id="type-client" />
-                <Label htmlFor="type-client" className="flex items-center gap-2 cursor-pointer">
+                <Label
+                  htmlFor="type-client"
+                  className="flex items-center gap-2 cursor-pointer"
+                >
                   <User className="h-4 w-4" />
                   דשבורד לקוח
                 </Label>
               </div>
               <div className="flex items-center space-x-2 space-x-reverse">
                 <RadioGroupItem value="agency" id="type-agency" />
-                <Label htmlFor="type-agency" className="flex items-center gap-2 cursor-pointer">
+                <Label
+                  htmlFor="type-agency"
+                  className="flex items-center gap-2 cursor-pointer"
+                >
                   <Building2 className="h-4 w-4" />
                   דשבורד סוכנות
                 </Label>
               </div>
               <div className="flex items-center space-x-2 space-x-reverse">
                 <RadioGroupItem value="organization" id="type-organization" />
-                <Label htmlFor="type-organization" className="flex items-center gap-2 cursor-pointer">
+                <Label
+                  htmlFor="type-organization"
+                  className="flex items-center gap-2 cursor-pointer"
+                >
                   <Network className="h-4 w-4" />
                   דשבורד ארגון
                 </Label>
               </div>
             </RadioGroup>
             <p className="text-xs text-muted-foreground">
-              {dashboardType === 'client' 
-                ? 'מציג נתונים מאוחדים של לקוח אחד'
-                : dashboardType === 'agency'
-                  ? 'מציג טבלה מסכמת של כל הלקוחות בסוכנות'
-                  : 'מאחד את כל הסוכנויות של הארגון, עם בורר סוכנות בתוך הדשבורד'}
+              {dashboardType === "client"
+                ? "מציג נתונים מאוחדים של לקוח אחד"
+                : dashboardType === "agency"
+                  ? "מציג טבלה מסכמת של כל הלקוחות בסוכנות"
+                  : "מאחד את כל הסוכנויות של הארגון, עם בורר סוכנות בתוך הדשבורד"}
             </p>
           </div>
 
@@ -294,16 +340,18 @@ export function CreateDashboardDialog({ open, onOpenChange, assignedClientIds }:
               id="dashboard-name"
               value={name}
               onChange={(e) => setName(e.target.value)}
-              placeholder={dashboardType === 'client' 
-                ? "לדוגמה: דשבורד ארבע על ארבע" 
-                : dashboardType === 'agency'
-                  ? "לדוגמה: סיכום סוכנות MC"
-                  : "לדוגמה: דשבורד ארגון DMM"}
+              placeholder={
+                dashboardType === "client"
+                  ? "לדוגמה: דשבורד ארבע על ארבע"
+                  : dashboardType === "agency"
+                    ? "לדוגמה: סיכום סוכנות MC"
+                    : "לדוגמה: דשבורד ארגון DMM"
+              }
             />
           </div>
 
           {/* Agency Select - hidden for organization type */}
-          {dashboardType !== 'organization' && (
+          {dashboardType !== "organization" && (
             <div className="space-y-2">
               <Label>סוכנות</Label>
               <Select value={agencyId} onValueChange={handleAgencyChange}>
@@ -322,10 +370,13 @@ export function CreateDashboardDialog({ open, onOpenChange, assignedClientIds }:
           )}
 
           {/* Client Select - only for client type */}
-          {dashboardType === 'client' && agencyId && (
+          {dashboardType === "client" && agencyId && (
             <div className="space-y-2">
               <Label>לקוח</Label>
-              <Popover open={clientPopoverOpen} onOpenChange={setClientPopoverOpen}>
+              <Popover
+                open={clientPopoverOpen}
+                onOpenChange={setClientPopoverOpen}
+              >
                 <PopoverTrigger asChild>
                   <Button
                     variant="outline"
@@ -355,7 +406,9 @@ export function CreateDashboardDialog({ open, onOpenChange, assignedClientIds }:
                             <Check
                               className={cn(
                                 "mr-2 h-4 w-4",
-                                clientId === client.id ? "opacity-100" : "opacity-0"
+                                clientId === client.id
+                                  ? "opacity-100"
+                                  : "opacity-0",
                               )}
                             />
                             {client.name}
@@ -370,34 +423,38 @@ export function CreateDashboardDialog({ open, onOpenChange, assignedClientIds }:
           )}
 
           {/* Preview of tables that will be included - for client type */}
-          {dashboardType === 'client' && clientId && clientTables.length > 0 && (
-            <div className="space-y-2">
-              <Label className="text-muted-foreground text-sm">
-                טבלאות שיכללו בדשבורד:
-              </Label>
-              <div className="flex flex-wrap gap-2">
-                {clientTables.map((table: any) => (
-                  <Badge
-                    key={table.id}
-                    variant="secondary"
-                    className="flex items-center gap-1"
-                  >
-                    {getIntegrationIcon(table.integration_type)}
-                    {table.name}
-                  </Badge>
-                ))}
+          {dashboardType === "client" &&
+            clientId &&
+            clientTables.length > 0 && (
+              <div className="space-y-2">
+                <Label className="text-muted-foreground text-sm">
+                  טבלאות שיכללו בדשבורד:
+                </Label>
+                <div className="flex flex-wrap gap-2">
+                  {clientTables.map((table: any) => (
+                    <Badge
+                      key={table.id}
+                      variant="secondary"
+                      className="flex items-center gap-1"
+                    >
+                      {getIntegrationIcon(table.integration_type)}
+                      {table.name}
+                    </Badge>
+                  ))}
+                </div>
               </div>
-            </div>
-          )}
+            )}
 
-          {dashboardType === 'client' && clientId && clientTables.length === 0 && (
-            <div className="text-sm text-muted-foreground bg-muted p-3 rounded-lg">
-              לא נמצאו טבלאות עבור לקוח זה. צור קודם טבלאות ושייך אותן ללקוח.
-            </div>
-          )}
+          {dashboardType === "client" &&
+            clientId &&
+            clientTables.length === 0 && (
+              <div className="text-sm text-muted-foreground bg-muted p-3 rounded-lg">
+                לא נמצאו טבלאות עבור לקוח זה. צור קודם טבלאות ושייך אותן ללקוח.
+              </div>
+            )}
 
           {/* Preview for agency type */}
-          {dashboardType === 'agency' && agencyId && (
+          {dashboardType === "agency" && agencyId && (
             <div className="text-sm bg-blue-50 dark:bg-blue-950 p-3 rounded-lg border border-blue-200 dark:border-blue-800">
               <div className="flex items-center gap-2 text-blue-700 dark:text-blue-300">
                 <Building2 className="h-4 w-4" />
@@ -410,14 +467,15 @@ export function CreateDashboardDialog({ open, onOpenChange, assignedClientIds }:
           )}
 
           {/* Preview for organization type */}
-          {dashboardType === 'organization' && (
+          {dashboardType === "organization" && (
             <div className="text-sm bg-purple-50 dark:bg-purple-950 p-3 rounded-lg border border-purple-200 dark:border-purple-800">
               <div className="flex items-center gap-2 text-purple-700 dark:text-purple-300">
                 <Network className="h-4 w-4" />
                 <span className="font-medium">דשבורד מאחד</span>
               </div>
               <p className="mt-1 text-purple-600 dark:text-purple-400">
-                {agencies.length} סוכנויות, {orgClientsCount} לקוחות סה"כ. תוכל לבחור סוכנות בתוך הדשבורד.
+                {agencies.length} סוכנויות, {orgClientsCount} לקוחות סה"כ. תוכל
+                לבחור סוכנות בתוך הדשבורד.
               </p>
             </div>
           )}
@@ -431,7 +489,7 @@ export function CreateDashboardDialog({ open, onOpenChange, assignedClientIds }:
             onClick={() => createDashboardMutation.mutate()}
             disabled={!isValid || createDashboardMutation.isPending}
           >
-            {createDashboardMutation.isPending ? 'יוצר...' : 'צור דשבורד'}
+            {createDashboardMutation.isPending ? "יוצר..." : "צור דשבורד"}
           </Button>
         </DialogFooter>
       </DialogContent>

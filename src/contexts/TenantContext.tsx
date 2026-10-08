@@ -1,4 +1,11 @@
-import { createContext, useContext, useState, ReactNode, useEffect, useRef } from "react";
+import {
+  createContext,
+  useContext,
+  useState,
+  ReactNode,
+  useEffect,
+  useRef,
+} from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate, useLocation } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
@@ -53,18 +60,24 @@ export function TenantProvider({ children }: { children: ReactNode }) {
   const location = useLocation();
 
   // Parse tenantSlug directly from URL instead of useParams (which doesn't work outside Routes)
-  const [tenantSlug, setTenantSlug] = useState<string | null>(() => getSlugFromPath(window.location.pathname));
+  const [tenantSlug, setTenantSlug] = useState<string | null>(() =>
+    getSlugFromPath(window.location.pathname),
+  );
 
-  const [currentTenantId, setCurrentTenantId] = useState<string | null>(() => safeGetLocalStorage("selectedTenantId"));
+  const [currentTenantId, setCurrentTenantId] = useState<string | null>(() =>
+    safeGetLocalStorage("selectedTenantId"),
+  );
   // Optimistic: if localStorage slug→id cache matches the stored tenantId, skip the
   // blocking spinner on initial load (same tenant as previous session).
-  const [isActiveTenantSynced, setIsActiveTenantSynced] = useState<boolean>(() => {
-    const slug = getSlugFromPath(window.location.pathname);
-    if (!slug) return false;
-    const cachedId = getCachedSlugId(slug);
-    const storedId = safeGetLocalStorage("selectedTenantId");
-    return !!(cachedId && storedId && cachedId === storedId);
-  });
+  const [isActiveTenantSynced, setIsActiveTenantSynced] = useState<boolean>(
+    () => {
+      const slug = getSlugFromPath(window.location.pathname);
+      if (!slug) return false;
+      const cachedId = getCachedSlugId(slug);
+      const storedId = safeGetLocalStorage("selectedTenantId");
+      return !!(cachedId && storedId && cachedId === storedId);
+    },
+  );
   const [isActiveTenantDbSynced, setIsActiveTenantDbSynced] = useState(false);
   const [isBootstrapTimedOut, setIsBootstrapTimedOut] = useState(false);
   const previousTenantIdRef = useRef<string | null>(null);
@@ -82,11 +95,11 @@ export function TenantProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     const handleLocationChange = () => {
       const newSlug = getSlugFromPath(window.location.pathname);
-      setTenantSlug(prev => prev !== newSlug ? newSlug : prev);
+      setTenantSlug((prev) => (prev !== newSlug ? newSlug : prev));
     };
 
-    window.addEventListener('popstate', handleLocationChange);
-    return () => window.removeEventListener('popstate', handleLocationChange);
+    window.addEventListener("popstate", handleLocationChange);
+    return () => window.removeEventListener("popstate", handleLocationChange);
   }, []);
 
   // Get tenant by slug from URL
@@ -94,18 +107,18 @@ export function TenantProvider({ children }: { children: ReactNode }) {
     queryKey: ["tenant-by-slug", tenantSlug],
     queryFn: async () => {
       if (!tenantSlug) return null;
-      
+
       const { data, error } = await supabase
         .from("tenants")
         .select("id, name, slug")
         .eq("slug", tenantSlug)
         .maybeSingle();
-      
+
       if (error) {
         console.error("Error fetching tenant by slug:", error);
         return null;
       }
-      
+
       return data;
     },
     enabled: !!tenantSlug,
@@ -134,12 +147,26 @@ export function TenantProvider({ children }: { children: ReactNode }) {
     if (!currentTenantId || isActiveTenantSynced) return;
 
     const keysToRemove = [
-      "tasks", "clients", "agencies", "agencies-filter", "user-agency-ids",
-      "leads", "campaigners", "client-onboarding", "finance", "sales-people",
-      "suppliers", "products", "automations", "time-entries", "chat-contacts",
-      "crm-tables", "crm-records", "tenant-for-operations"
+      "tasks",
+      "clients",
+      "agencies",
+      "agencies-filter",
+      "user-agency-ids",
+      "leads",
+      "campaigners",
+      "client-onboarding",
+      "finance",
+      "sales-people",
+      "suppliers",
+      "products",
+      "automations",
+      "time-entries",
+      "chat-contacts",
+      "crm-tables",
+      "crm-records",
+      "tenant-for-operations",
     ];
-    keysToRemove.forEach(key => {
+    keysToRemove.forEach((key) => {
       queryClient.removeQueries({ queryKey: [key] });
     });
 
@@ -159,7 +186,9 @@ export function TenantProvider({ children }: { children: ReactNode }) {
     let cancelled = false;
 
     const sync = async () => {
-      const { data: { user } } = await supabase.auth.getUser();
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
       if (cancelled) return;
       if (!user) {
         setIsActiveTenantDbSynced(true);
@@ -169,7 +198,11 @@ export function TenantProvider({ children }: { children: ReactNode }) {
       const { error } = await (supabase as any)
         .from("user_active_tenant")
         .upsert(
-          { user_id: user.id, tenant_id: currentTenantId, updated_at: new Date().toISOString() },
+          {
+            user_id: user.id,
+            tenant_id: currentTenantId,
+            updated_at: new Date().toISOString(),
+          },
           { onConflict: "user_id" },
         );
 
@@ -189,7 +222,9 @@ export function TenantProvider({ children }: { children: ReactNode }) {
       if (!cancelled) setIsActiveTenantDbSynced(true);
     });
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(() => {
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange(() => {
       void sync();
     });
 
@@ -203,7 +238,9 @@ export function TenantProvider({ children }: { children: ReactNode }) {
   const { data: userTenant, isLoading: isLoadingUserTenant } = useQuery({
     queryKey: ["user-tenant"],
     queryFn: async () => {
-      const { data: { user } } = await supabase.auth.getUser();
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
       if (!user) return null;
 
       const { data: userTenants, error: tenantsError } = await supabase
@@ -222,13 +259,17 @@ export function TenantProvider({ children }: { children: ReactNode }) {
         .maybeSingle();
 
       if (activeTenant) {
-        const matchingTenant = userTenants.find((t: any) => t.tenant_id === activeTenant.tenant_id);
+        const matchingTenant = userTenants.find(
+          (t: any) => t.tenant_id === activeTenant.tenant_id,
+        );
         if (matchingTenant) {
           return matchingTenant as any;
         }
       }
 
-      const mcTenant = userTenants.find((t: any) => (t as any)?.tenants?.slug === 'marketingcaptain');
+      const mcTenant = userTenants.find(
+        (t: any) => (t as any)?.tenants?.slug === "marketingcaptain",
+      );
       return (mcTenant || userTenants[0]) as any;
     },
     staleTime: 1000 * 60 * 5,
@@ -246,12 +287,12 @@ export function TenantProvider({ children }: { children: ReactNode }) {
         .select("id, name, slug, allow_super_admin_access")
         .eq("id", currentTenantId)
         .maybeSingle();
-      
+
       if (error) {
         console.error("Error fetching current tenant:", error);
         return null;
       }
-      
+
       return data;
     },
     enabled: !!currentTenantId,
@@ -268,11 +309,23 @@ export function TenantProvider({ children }: { children: ReactNode }) {
   // Redirect to tenant-scoped route if needed
   useEffect(() => {
     const path = window.location.pathname;
-    const isPublicRoute = ['/', '/auth', '/signup', '/landing', '/setup', '/privacy', '/terms'].includes(path) || path.startsWith('/chat-invite') || path.startsWith('/shared/') || path.startsWith('/sign-document');
-    const isAlreadyTenantScoped = path.startsWith('/t/');
-    
+    const isPublicRoute =
+      [
+        "/",
+        "/auth",
+        "/signup",
+        "/landing",
+        "/setup",
+        "/privacy",
+        "/terms",
+      ].includes(path) ||
+      path.startsWith("/chat-invite") ||
+      path.startsWith("/shared/") ||
+      path.startsWith("/sign-document");
+    const isAlreadyTenantScoped = path.startsWith("/t/");
+
     if (!isPublicRoute && !isAlreadyTenantScoped && currentTenant?.slug) {
-      const page = path.slice(1) || 'dashboard';
+      const page = path.slice(1) || "dashboard";
       navigate(`/t/${currentTenant.slug}/${page}`, { replace: true });
     }
   }, [currentTenant?.slug, navigate]);
@@ -312,14 +365,15 @@ export function TenantProvider({ children }: { children: ReactNode }) {
   }
 
   const effectiveTenantId = tenantFromSlug?.id || currentTenantId;
-  const effectiveTenant = tenantFromSlug || currentTenant || userTenant?.tenants;
+  const effectiveTenant =
+    tenantFromSlug || currentTenant || userTenant?.tenants;
 
   return (
-    <TenantContext.Provider 
-      value={{ 
-        currentTenantId: effectiveTenantId, 
+    <TenantContext.Provider
+      value={{
+        currentTenantId: effectiveTenantId,
         currentTenantSlug: effectiveTenant?.slug || null,
-        setCurrentTenantId, 
+        setCurrentTenantId,
         currentTenant: effectiveTenant,
         isLoading,
         isActiveTenantSynced,

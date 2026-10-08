@@ -35,10 +35,13 @@ Deno.serve(async (req) => {
     const userClient = createClient(
       SUPABASE_URL,
       Deno.env.get("SUPABASE_ANON_KEY")!,
-      { global: { headers: { Authorization: authHeader } } }
+      { global: { headers: { Authorization: authHeader } } },
     );
 
-    const { data: { user }, error: authError } = await userClient.auth.getUser();
+    const {
+      data: { user },
+      error: authError,
+    } = await userClient.auth.getUser();
     if (authError || !user) return json({ error: "Unauthorized" }, 401);
 
     const { recording_id } = await req.json();
@@ -47,12 +50,19 @@ Deno.serve(async (req) => {
     // RLS-scoped read: enforces that the caller belongs to the recording's tenant.
     const { data: recording, error: recError } = await userClient
       .from("zoom_recordings")
-      .select("id, tenant_id, meeting_id, source, client_id, lead_id, agency_id, campaigner_ids, summary_scope, meeting_topic, start_time, duration, host_email, file_path, audio_file_path, audio_file_paths, transcription, calendar_event_id")
+      .select(
+        "id, tenant_id, meeting_id, source, client_id, lead_id, agency_id, campaigner_ids, summary_scope, meeting_topic, start_time, duration, host_email, file_path, audio_file_path, audio_file_paths, transcription, calendar_event_id",
+      )
       .eq("id", recording_id)
       .maybeSingle();
 
-    if (recError || !recording) return json({ error: "Recording not found" }, 404);
-    if (!recording.file_path && !recording.audio_file_path && !(recording.audio_file_paths?.length)) {
+    if (recError || !recording)
+      return json({ error: "Recording not found" }, 404);
+    if (
+      !recording.file_path &&
+      !recording.audio_file_path &&
+      !recording.audio_file_paths?.length
+    ) {
       return json({ error: "Recording has no uploaded file" }, 400);
     }
 
@@ -63,10 +73,14 @@ Deno.serve(async (req) => {
     // playback at the first part so the recording is usable end-to-end.
     if (!recording.file_path && recording.audio_file_paths?.length) {
       const parts: string[] = recording.audio_file_paths;
-      const micParts = parts.filter((p: string) => /_mic_part\d+\./.test(p)).length;
+      const micParts = parts.filter((p: string) =>
+        /_mic_part\d+\./.test(p),
+      ).length;
       const healed = {
         file_path: parts[0],
-        ...(recording.duration ? {} : { duration: Math.max(1, (micParts || parts.length) * 10) }),
+        ...(recording.duration
+          ? {}
+          : { duration: Math.max(1, (micParts || parts.length) * 10) }),
       };
       await admin.from("zoom_recordings").update(healed).eq("id", recording_id);
     }
@@ -87,13 +101,19 @@ Deno.serve(async (req) => {
         console.error("[ingest-extension-recording] background error:", err);
         await admin
           .from("zoom_recordings")
-          .update({ transcription_error: err instanceof Error ? err.message : String(err) })
+          .update({
+            transcription_error:
+              err instanceof Error ? err.message : String(err),
+          })
           .eq("id", recording_id);
       }
     })();
 
     // @ts-ignore EdgeRuntime is available in Supabase edge functions
-    if (typeof EdgeRuntime !== "undefined" && (EdgeRuntime as { waitUntil?: (p: Promise<unknown>) => void }).waitUntil) {
+    if (
+      typeof EdgeRuntime !== "undefined" &&
+      (EdgeRuntime as { waitUntil?: (p: Promise<unknown>) => void }).waitUntil
+    ) {
       // @ts-ignore see above
       EdgeRuntime.waitUntil(background);
     } else {
@@ -103,6 +123,9 @@ Deno.serve(async (req) => {
     return json({ queued: true, recording_id }, 202);
   } catch (error) {
     console.error("[ingest-extension-recording] error:", error);
-    return json({ error: error instanceof Error ? error.message : "Unknown error" }, 500);
+    return json(
+      { error: error instanceof Error ? error.message : "Unknown error" },
+      500,
+    );
   }
 });

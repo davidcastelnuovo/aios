@@ -7,16 +7,22 @@ import { Badge } from "@/components/ui/badge";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
-import { 
-  CheckCircle2, 
-  Circle, 
-  Calendar, 
-  User, 
-  Plus, 
-  Clock, 
-  CheckCheck, 
+import {
+  CheckCircle2,
+  Circle,
+  Calendar,
+  User,
+  Plus,
+  Clock,
+  CheckCheck,
   MessageSquare,
   Send,
   Loader2,
@@ -28,7 +34,7 @@ import {
   Mail,
   Video,
   AlertTriangle,
-  Activity
+  Activity,
 } from "lucide-react";
 import { format } from "date-fns";
 import { he } from "date-fns/locale";
@@ -40,7 +46,10 @@ import { withTaskCreatorNames } from "@/lib/taskCreators";
 import { useCurrentTenant } from "@/hooks/useCurrentTenant";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
 import { resolveClientUpdateType } from "@/lib/clientUpdateType";
-import { getClientMoodChanges, type ClientMoodStatus } from "@/lib/clientMoodHistory";
+import {
+  getClientMoodChanges,
+  type ClientMoodStatus,
+} from "@/lib/clientMoodHistory";
 import { SeoUpdateModal } from "@/components/clients/SeoUpdateModal";
 
 interface ClientUpdatesTabProps {
@@ -55,26 +64,51 @@ type MoodFilter = "all" | ClientMoodStatus;
 
 // ── Unified mood/status config ───────────────────────────────────────────────
 const MOOD_STATUS_OPTIONS = [
-  { value: "happy",           label: "😊 מבסוט / תקין",        color: "text-green-700",  bg: "bg-green-50 border-green-200" },
-  { value: "wavering",        label: "😐 מתנדנד / רגיש",       color: "text-yellow-700", bg: "bg-yellow-50 border-yellow-200" },
-  { value: "churn_risk",      label: "😟 סכנת נטישה / תלונה",  color: "text-red-700",    bg: "bg-red-50 border-red-200" },
-  { value: "not_progressing", label: "😔 לא מתקדם",            color: "text-orange-700", bg: "bg-orange-50 border-orange-200" },
+  {
+    value: "happy",
+    label: "😊 מבסוט / תקין",
+    color: "text-green-700",
+    bg: "bg-green-50 border-green-200",
+  },
+  {
+    value: "wavering",
+    label: "😐 מתנדנד / רגיש",
+    color: "text-yellow-700",
+    bg: "bg-yellow-50 border-yellow-200",
+  },
+  {
+    value: "churn_risk",
+    label: "😟 סכנת נטישה / תלונה",
+    color: "text-red-700",
+    bg: "bg-red-50 border-red-200",
+  },
+  {
+    value: "not_progressing",
+    label: "😔 לא מתקדם",
+    color: "text-orange-700",
+    bg: "bg-orange-50 border-orange-200",
+  },
 ];
 const INTERACTION_TYPES = [
-  { value: "call",            label: "שיחה",          icon: Phone },
-  { value: "email",           label: "מייל",          icon: Mail },
-  { value: "meeting",         label: "פגישה",         icon: Video },
-  { value: "whatsapp",        label: "וואטסאפ",       icon: MessageSquare },
-  { value: "weekly_update",   label: "עדכון שבועי",   icon: AlertTriangle },
-  { value: "seo_update",      label: "עדכון SEO",     icon: AlertTriangle },
-  { value: "meeting_summary", label: "סיכום פגישה",   icon: Video },
-  { value: "other",           label: "אחר",           icon: AlertTriangle },
-  { value: "pulse_override",  label: "תיקון דופק",    icon: Activity },
+  { value: "call", label: "שיחה", icon: Phone },
+  { value: "email", label: "מייל", icon: Mail },
+  { value: "meeting", label: "פגישה", icon: Video },
+  { value: "whatsapp", label: "וואטסאפ", icon: MessageSquare },
+  { value: "weekly_update", label: "עדכון שבועי", icon: AlertTriangle },
+  { value: "seo_update", label: "עדכון SEO", icon: AlertTriangle },
+  { value: "meeting_summary", label: "סיכום פגישה", icon: Video },
+  { value: "other", label: "אחר", icon: AlertTriangle },
+  { value: "pulse_override", label: "תיקון דופק", icon: Activity },
 ];
 
-export function ClientUpdatesTab({ clientId, clientName, currentMoodStatus }: ClientUpdatesTabProps) {
+export function ClientUpdatesTab({
+  clientId,
+  clientName,
+  currentMoodStatus,
+}: ClientUpdatesTabProps) {
   const [dateFilter, setDateFilter] = useState<DateFilter>("month");
-  const [updateTypeFilter, setUpdateTypeFilter] = useState<UpdateTypeFilter>("all");
+  const [updateTypeFilter, setUpdateTypeFilter] =
+    useState<UpdateTypeFilter>("all");
   const [moodFilter, setMoodFilter] = useState<MoodFilter>("all");
   const [editingTask, setEditingTask] = useState<any>(null);
   const [newUpdate, setNewUpdate] = useState("");
@@ -85,8 +119,11 @@ export function ClientUpdatesTab({ clientId, clientName, currentMoodStatus }: Cl
   const { user } = useCurrentUser();
 
   // ── CRM: communication log state ──────────────────────────────────────────
-  const [commStatus, setCommStatus] = useState<string>(currentMoodStatus || "happy");
-  const [commInteraction, setCommInteraction] = useState<string>("weekly_update");
+  const [commStatus, setCommStatus] = useState<string>(
+    currentMoodStatus || "happy",
+  );
+  const [commInteraction, setCommInteraction] =
+    useState<string>("weekly_update");
 
   // Sync local state with the actual client mood_status whenever it changes
   useEffect(() => {
@@ -107,7 +144,9 @@ export function ClientUpdatesTab({ clientId, clientName, currentMoodStatus }: Cl
           .maybeSingle();
         if (error) return null;
         return data;
-      } catch { return null; }
+      } catch {
+        return null;
+      }
     },
     enabled: !!clientId,
   });
@@ -136,10 +175,18 @@ export function ClientUpdatesTab({ clientId, clientName, currentMoodStatus }: Cl
       if (logError) console.warn("communication_logs insert failed:", logError);
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["comm-log-latest", clientId] });
-      queryClient.invalidateQueries({ queryKey: ["client-mood-history", clientId] });
-      queryClient.invalidateQueries({ queryKey: ["communication-logs-latest", tenantId] });
-      queryClient.invalidateQueries({ queryKey: ["comm-logs-agency", tenantId] });
+      queryClient.invalidateQueries({
+        queryKey: ["comm-log-latest", clientId],
+      });
+      queryClient.invalidateQueries({
+        queryKey: ["client-mood-history", clientId],
+      });
+      queryClient.invalidateQueries({
+        queryKey: ["communication-logs-latest", tenantId],
+      });
+      queryClient.invalidateQueries({
+        queryKey: ["comm-logs-agency", tenantId],
+      });
       queryClient.invalidateQueries({ queryKey: ["clients", tenantId] });
       queryClient.invalidateQueries({ queryKey: ["clients-chat", tenantId] });
       queryClient.invalidateQueries({ queryKey: ["client", clientId] });
@@ -154,12 +201,14 @@ export function ClientUpdatesTab({ clientId, clientName, currentMoodStatus }: Cl
     queryFn: async () => {
       let query = supabase
         .from("tasks")
-        .select(`
+        .select(
+          `
           *,
           campaigners (full_name),
           agencies (name),
           clients (name)
-        `)
+        `,
+        )
         .eq("client_id", clientId)
         .order("due_date", { ascending: false });
 
@@ -186,10 +235,12 @@ export function ClientUpdatesTab({ clientId, clientName, currentMoodStatus }: Cl
     queryFn: async () => {
       let query = supabase
         .from("client_updates")
-        .select(`
+        .select(
+          `
           *,
           profiles:user_id (full_name, email)
-        `)
+        `,
+        )
         .eq("client_id", clientId)
         .order("created_at", { ascending: false });
 
@@ -213,37 +264,42 @@ export function ClientUpdatesTab({ clientId, clientName, currentMoodStatus }: Cl
   // Full log so a mood change can be compared with the previous status,
   // even when the visible date range starts mid-history. Same source as the
   // client-update-filters draft — do not add a second mood pipeline.
-  const { data: communicationLogs, isLoading: communicationLogsLoading } = useQuery({
-    queryKey: ["client-mood-history", clientId],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from("communication_logs")
-        .select("id, status, interaction_type, note, created_at")
-        .eq("client_id", clientId)
-        .order("created_at", { ascending: true });
-      if (error) throw error;
-      return data ?? [];
-    },
-    enabled: !!clientId,
-  });
+  const { data: communicationLogs, isLoading: communicationLogsLoading } =
+    useQuery({
+      queryKey: ["client-mood-history", clientId],
+      queryFn: async () => {
+        const { data, error } = await supabase
+          .from("communication_logs")
+          .select("id, status, interaction_type, note, created_at")
+          .eq("client_id", clientId)
+          .order("created_at", { ascending: true });
+        if (error) throw error;
+        return data ?? [];
+      },
+      enabled: !!clientId,
+    });
 
   const [editingUpdateId, setEditingUpdateId] = useState<string | null>(null);
   const [editingUpdateContent, setEditingUpdateContent] = useState("");
 
   // Add update mutation
   const addUpdateMutation = useMutation({
-    mutationFn: async ({ content, updateType }: { content: string; updateType: string }) => {
+    mutationFn: async ({
+      content,
+      updateType,
+    }: {
+      content: string;
+      updateType: string;
+    }) => {
       if (!tenantId || !user?.id) throw new Error("Missing tenant or user");
       const resolvedUpdateType = resolveClientUpdateType(updateType, content);
-      const { error } = await supabase
-        .from("client_updates")
-        .insert({
-          client_id: clientId,
-          tenant_id: tenantId,
-          user_id: user.id,
-          content,
-          update_type: resolvedUpdateType,
-        } as any);
+      const { error } = await supabase.from("client_updates").insert({
+        client_id: clientId,
+        tenant_id: tenantId,
+        user_id: user.id,
+        content,
+        update_type: resolvedUpdateType,
+      } as any);
       if (error) throw error;
     },
     onSuccess: () => {
@@ -295,7 +351,13 @@ export function ClientUpdatesTab({ clientId, clientName, currentMoodStatus }: Cl
   });
 
   const updateStatusMutation = useMutation({
-    mutationFn: async ({ taskId, status }: { taskId: string; status: "open" | "in_progress" | "done" }) => {
+    mutationFn: async ({
+      taskId,
+      status,
+    }: {
+      taskId: string;
+      status: "open" | "in_progress" | "done";
+    }) => {
       const { error } = await supabase
         .from("tasks")
         .update({ status })
@@ -319,11 +381,16 @@ export function ClientUpdatesTab({ clientId, clientName, currentMoodStatus }: Cl
     }
     if (!newUpdate.trim()) return;
     saveCommMutation.mutate(commStatus);
-    addUpdateMutation.mutate({ content: newUpdate.trim(), updateType: newUpdateType });
+    addUpdateMutation.mutate({
+      content: newUpdate.trim(),
+      updateType: newUpdateType,
+    });
   };
 
-  const inProgressTasks = tasks?.filter(t => t.status === "open" || t.status === "in_progress") || [];
-  const completedTasks = tasks?.filter(t => t.status === "done") || [];
+  const inProgressTasks =
+    tasks?.filter((t) => t.status === "open" || t.status === "in_progress") ||
+    [];
+  const completedTasks = tasks?.filter((t) => t.status === "done") || [];
 
   const historyEvents = useMemo(() => {
     const moodChanges = getClientMoodChanges(communicationLogs || []);
@@ -334,9 +401,12 @@ export function ClientUpdatesTab({ clientId, clientName, currentMoodStatus }: Cl
       dateFilter === "all" || new Date(createdAt ?? 0) >= cutoff;
 
     const updateEvents = (updates || [])
-      .filter((update) => moodFilter === "all"
-        && (updateTypeFilter === "all"
-          || (update.update_type ?? "other") === updateTypeFilter))
+      .filter(
+        (update) =>
+          moodFilter === "all" &&
+          (updateTypeFilter === "all" ||
+            (update.update_type ?? "other") === updateTypeFilter),
+      )
       .map((update) => ({
         kind: "update" as const,
         id: update.id,
@@ -345,10 +415,12 @@ export function ClientUpdatesTab({ clientId, clientName, currentMoodStatus }: Cl
       }));
 
     const moodEvents = moodChanges
-      .filter((change) =>
-        isInDateRange(change.created_at)
-        && (updateTypeFilter === "all" || updateTypeFilter === "mood_change")
-        && (moodFilter === "all" || change.moodStatus === moodFilter))
+      .filter(
+        (change) =>
+          isInDateRange(change.created_at) &&
+          (updateTypeFilter === "all" || updateTypeFilter === "mood_change") &&
+          (moodFilter === "all" || change.moodStatus === moodFilter),
+      )
       .map((change) => ({
         kind: "mood" as const,
         id: `mood-${change.id}`,
@@ -357,19 +429,22 @@ export function ClientUpdatesTab({ clientId, clientName, currentMoodStatus }: Cl
       }));
 
     return [...updateEvents, ...moodEvents].sort(
-      (a, b) => new Date(b.createdAt ?? 0).getTime() - new Date(a.createdAt ?? 0).getTime(),
+      (a, b) =>
+        new Date(b.createdAt ?? 0).getTime() -
+        new Date(a.createdAt ?? 0).getTime(),
     );
   }, [communicationLogs, dateFilter, moodFilter, updateTypeFilter, updates]);
 
   const isLoading = tasksLoading || updatesLoading || communicationLogsLoading;
 
   if (isLoading) {
-    return <div className="text-center py-8 text-muted-foreground">טוען...</div>;
+    return (
+      <div className="text-center py-8 text-muted-foreground">טוען...</div>
+    );
   }
 
   return (
     <div className="space-y-4 overflow-x-hidden w-full" dir="rtl">
-
       {/* Composer (right 25%) + history filtered by סוג עדכון (left 75%), one white frame */}
       <Card className="bg-card border-border/60 shadow-sm">
         <CardContent className="p-3 sm:p-4">
@@ -382,15 +457,24 @@ export function ClientUpdatesTab({ clientId, clientName, currentMoodStatus }: Cl
                 </div>
                 {latestComm && (
                   <p className="text-xs text-muted-foreground">
-                    עדכון אחרון: {format(new Date((latestComm as any).created_at), "d/M/yy", { locale: he })}
+                    עדכון אחרון:{" "}
+                    {format(
+                      new Date((latestComm as any).created_at),
+                      "d/M/yy",
+                      { locale: he },
+                    )}
                     {" — "}
-                    {MOOD_STATUS_OPTIONS.find(o => o.value === (latestComm as any).status)?.label ?? (latestComm as any).status}
+                    {MOOD_STATUS_OPTIONS.find(
+                      (o) => o.value === (latestComm as any).status,
+                    )?.label ?? (latestComm as any).status}
                   </p>
                 )}
               </div>
 
               <div>
-                <Label className="text-xs text-muted-foreground mb-1 block">מצב לקוח</Label>
+                <Label className="text-xs text-muted-foreground mb-1 block">
+                  מצב לקוח
+                </Label>
                 <Select
                   value={commStatus}
                   onValueChange={(value) => {
@@ -402,7 +486,7 @@ export function ClientUpdatesTab({ clientId, clientName, currentMoodStatus }: Cl
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    {MOOD_STATUS_OPTIONS.map(opt => (
+                    {MOOD_STATUS_OPTIONS.map((opt) => (
                       <SelectItem key={opt.value} value={opt.value}>
                         <span className={opt.color}>{opt.label}</span>
                       </SelectItem>
@@ -412,7 +496,9 @@ export function ClientUpdatesTab({ clientId, clientName, currentMoodStatus }: Cl
               </div>
 
               <div>
-                <Label className="text-xs text-muted-foreground mb-1 block">סוג עדכון</Label>
+                <Label className="text-xs text-muted-foreground mb-1 block">
+                  סוג עדכון
+                </Label>
                 <Select
                   value={newUpdateType}
                   onValueChange={(value) => {
@@ -424,7 +510,7 @@ export function ClientUpdatesTab({ clientId, clientName, currentMoodStatus }: Cl
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    {INTERACTION_TYPES.map(opt => {
+                    {INTERACTION_TYPES.map((opt) => {
                       const Icon = opt.icon;
                       return (
                         <SelectItem key={opt.value} value={opt.value}>
@@ -448,10 +534,14 @@ export function ClientUpdatesTab({ clientId, clientName, currentMoodStatus }: Cl
                 />
                 <Button
                   onClick={handleAddUpdate}
-                  disabled={!newUpdate.trim() || addUpdateMutation.isPending || saveCommMutation.isPending}
+                  disabled={
+                    !newUpdate.trim() ||
+                    addUpdateMutation.isPending ||
+                    saveCommMutation.isPending
+                  }
                   className="self-end shrink-0"
                 >
-                  {(addUpdateMutation.isPending || saveCommMutation.isPending) ? (
+                  {addUpdateMutation.isPending || saveCommMutation.isPending ? (
                     <Loader2 className="h-4 w-4 animate-spin" />
                   ) : (
                     <Send className="h-4 w-4" />
@@ -465,11 +555,15 @@ export function ClientUpdatesTab({ clientId, clientName, currentMoodStatus }: Cl
                 <div className="flex items-center gap-2">
                   <MessageSquare className="h-4 w-4 text-primary" />
                   <h3 className="font-semibold text-sm">היסטוריית עדכונים</h3>
-                  <Badge variant="secondary" className="text-xs">{historyEvents.length}</Badge>
+                  <Badge variant="secondary" className="text-xs">
+                    {historyEvents.length}
+                  </Badge>
                 </div>
                 <div className="flex flex-wrap items-end gap-3">
                   <div className="w-full sm:w-52">
-                    <Label className="text-xs text-muted-foreground mb-1 block">סינון לפי סוג עדכון</Label>
+                    <Label className="text-xs text-muted-foreground mb-1 block">
+                      סינון לפי סוג עדכון
+                    </Label>
                     <Select
                       value={updateTypeFilter}
                       onValueChange={(value) => {
@@ -482,15 +576,21 @@ export function ClientUpdatesTab({ clientId, clientName, currentMoodStatus }: Cl
                       </SelectTrigger>
                       <SelectContent>
                         <SelectItem value="all">כל סוגי העדכונים</SelectItem>
-                        <SelectItem value="mood_change">שינוי מצב לקוח</SelectItem>
+                        <SelectItem value="mood_change">
+                          שינוי מצב לקוח
+                        </SelectItem>
                         {INTERACTION_TYPES.map((option) => (
-                          <SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>
+                          <SelectItem key={option.value} value={option.value}>
+                            {option.label}
+                          </SelectItem>
                         ))}
                       </SelectContent>
                     </Select>
                   </div>
                   <div className="w-full sm:w-52">
-                    <Label className="text-xs text-muted-foreground mb-1 block">סינון לפי מצב לקוח</Label>
+                    <Label className="text-xs text-muted-foreground mb-1 block">
+                      סינון לפי מצב לקוח
+                    </Label>
                     <Select
                       value={moodFilter}
                       onValueChange={(value) => {
@@ -504,27 +604,37 @@ export function ClientUpdatesTab({ clientId, clientName, currentMoodStatus }: Cl
                       <SelectContent>
                         <SelectItem value="all">כל המצבים</SelectItem>
                         {MOOD_STATUS_OPTIONS.map((option) => (
-                          <SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>
+                          <SelectItem key={option.value} value={option.value}>
+                            {option.label}
+                          </SelectItem>
                         ))}
                       </SelectContent>
                     </Select>
                   </div>
                   <RadioGroup
                     value={dateFilter}
-                    onValueChange={(value) => setDateFilter(value as DateFilter)}
+                    onValueChange={(value) =>
+                      setDateFilter(value as DateFilter)
+                    }
                     className="flex gap-3 flex-wrap pb-1"
                   >
                     <div className="flex items-center space-x-2 space-x-reverse">
                       <RadioGroupItem value="week" id="week" />
-                      <Label htmlFor="week" className="cursor-pointer text-sm">שבוע</Label>
+                      <Label htmlFor="week" className="cursor-pointer text-sm">
+                        שבוע
+                      </Label>
                     </div>
                     <div className="flex items-center space-x-2 space-x-reverse">
                       <RadioGroupItem value="month" id="month" />
-                      <Label htmlFor="month" className="cursor-pointer text-sm">חודש</Label>
+                      <Label htmlFor="month" className="cursor-pointer text-sm">
+                        חודש
+                      </Label>
                     </div>
                     <div className="flex items-center space-x-2 space-x-reverse">
                       <RadioGroupItem value="all" id="all" />
-                      <Label htmlFor="all" className="cursor-pointer text-sm">הכל</Label>
+                      <Label htmlFor="all" className="cursor-pointer text-sm">
+                        הכל
+                      </Label>
                     </div>
                   </RadioGroup>
                 </div>
@@ -535,136 +645,189 @@ export function ClientUpdatesTab({ clientId, clientName, currentMoodStatus }: Cl
                   <div className="rounded-lg border border-dashed border-border/70 bg-card p-4 text-center text-sm text-muted-foreground">
                     אין עדכונים התואמים לסינון
                   </div>
-                ) : historyEvents.map((event) => {
-                  if (event.kind === "mood") {
-                    const currentOption = MOOD_STATUS_OPTIONS.find(
-                      (option) => option.value === event.change.moodStatus,
-                    );
-                    const previousOption = MOOD_STATUS_OPTIONS.find(
-                      (option) => option.value === event.change.previousMoodStatus,
-                    );
-                    const changedAt = event.createdAt ? new Date(event.createdAt) : null;
+                ) : (
+                  historyEvents.map((event) => {
+                    if (event.kind === "mood") {
+                      const currentOption = MOOD_STATUS_OPTIONS.find(
+                        (option) => option.value === event.change.moodStatus,
+                      );
+                      const previousOption = MOOD_STATUS_OPTIONS.find(
+                        (option) =>
+                          option.value === event.change.previousMoodStatus,
+                      );
+                      const changedAt = event.createdAt
+                        ? new Date(event.createdAt)
+                        : null;
+                      return (
+                        <Card
+                          key={event.id}
+                          className={`bg-card shadow-none ${currentOption?.bg ?? ""}`}
+                        >
+                          <CardContent className="p-3">
+                            <Badge
+                              variant="outline"
+                              className="mb-2 gap-1 text-xs bg-card"
+                            >
+                              <Activity className="h-3 w-3" />
+                              שינוי מצב לקוח
+                            </Badge>
+                            <p
+                              className={`text-sm font-medium ${currentOption?.color ?? ""}`}
+                            >
+                              {previousOption
+                                ? `מצב הלקוח השתנה מ־${previousOption.label} ל־${currentOption?.label ?? event.change.moodStatus}`
+                                : `מצב הלקוח נקבע ל־${currentOption?.label ?? event.change.moodStatus}`}
+                            </p>
+                            {event.change.note && (
+                              <p className="text-sm whitespace-pre-wrap mt-1">
+                                {event.change.note}
+                              </p>
+                            )}
+                            {changedAt &&
+                              !Number.isNaN(changedAt.getTime()) && (
+                                <div className="flex items-center gap-2 text-xs text-muted-foreground mt-2">
+                                  <Calendar className="h-3 w-3 shrink-0" />
+                                  <span>
+                                    {format(changedAt, "d/M/yy HH:mm", {
+                                      locale: he,
+                                    })}
+                                  </span>
+                                </div>
+                              )}
+                          </CardContent>
+                        </Card>
+                      );
+                    }
+
+                    const update = event.update;
+                    const isEditing = editingUpdateId === update.id;
+                    const isOwner = user?.id === update.user_id;
+
                     return (
-                      <Card key={event.id} className={`bg-card shadow-none ${currentOption?.bg ?? ""}`}>
+                      <Card
+                        key={update.id}
+                        className="bg-card border-border/60 shadow-none"
+                      >
                         <CardContent className="p-3">
-                          <Badge variant="outline" className="mb-2 gap-1 text-xs bg-card">
-                            <Activity className="h-3 w-3" />
-                            שינוי מצב לקוח
-                          </Badge>
-                          <p className={`text-sm font-medium ${currentOption?.color ?? ""}`}>
-                            {previousOption
-                              ? `מצב הלקוח השתנה מ־${previousOption.label} ל־${currentOption?.label ?? event.change.moodStatus}`
-                              : `מצב הלקוח נקבע ל־${currentOption?.label ?? event.change.moodStatus}`}
-                          </p>
-                          {event.change.note && (
-                            <p className="text-sm whitespace-pre-wrap mt-1">{event.change.note}</p>
-                          )}
-                          {changedAt && !Number.isNaN(changedAt.getTime()) && (
-                            <div className="flex items-center gap-2 text-xs text-muted-foreground mt-2">
-                              <Calendar className="h-3 w-3 shrink-0" />
-                              <span>{format(changedAt, "d/M/yy HH:mm", { locale: he })}</span>
+                          {isEditing ? (
+                            <div className="space-y-2">
+                              <Textarea
+                                value={editingUpdateContent}
+                                onChange={(e) =>
+                                  setEditingUpdateContent(e.target.value)
+                                }
+                                className="min-h-[60px] resize-none text-sm bg-card"
+                              />
+                              <div className="flex gap-2 justify-end">
+                                <Button
+                                  size="sm"
+                                  variant="ghost"
+                                  onClick={() => {
+                                    setEditingUpdateId(null);
+                                    setEditingUpdateContent("");
+                                  }}
+                                >
+                                  <X className="h-4 w-4" />
+                                </Button>
+                                <Button
+                                  size="sm"
+                                  onClick={() =>
+                                    editUpdateMutation.mutate({
+                                      id: update.id,
+                                      content: editingUpdateContent,
+                                    })
+                                  }
+                                  disabled={
+                                    !editingUpdateContent.trim() ||
+                                    editUpdateMutation.isPending
+                                  }
+                                >
+                                  {editUpdateMutation.isPending ? (
+                                    <Loader2 className="h-4 w-4 animate-spin" />
+                                  ) : (
+                                    <Check className="h-4 w-4" />
+                                  )}
+                                </Button>
+                              </div>
                             </div>
+                          ) : (
+                            <>
+                              {update.update_type &&
+                                (() => {
+                                  const t = INTERACTION_TYPES.find(
+                                    (o) => o.value === update.update_type,
+                                  );
+                                  if (!t) return null;
+                                  const Icon = t.icon;
+                                  return (
+                                    <Badge
+                                      variant="outline"
+                                      className="mb-2 gap-1 text-xs bg-card"
+                                    >
+                                      <Icon className="h-3 w-3" />
+                                      {t.label}
+                                    </Badge>
+                                  );
+                                })()}
+                              <p className="text-sm whitespace-pre-wrap">
+                                {update.content}
+                              </p>
+                              <div className="flex items-center justify-between mt-2">
+                                <div className="flex items-center gap-2 text-xs text-muted-foreground flex-wrap">
+                                  <User className="h-3 w-3 shrink-0" />
+                                  <span>
+                                    {update.profiles?.full_name ||
+                                      update.profiles?.email ||
+                                      "משתמש"}
+                                  </span>
+                                  <span>•</span>
+                                  <Calendar className="h-3 w-3 shrink-0" />
+                                  <span>
+                                    {format(
+                                      new Date(update.created_at),
+                                      "d/M/yy HH:mm",
+                                      { locale: he },
+                                    )}
+                                  </span>
+                                </div>
+                                {isOwner && (
+                                  <div className="flex gap-1 shrink-0">
+                                    <Button
+                                      size="icon"
+                                      variant="ghost"
+                                      className="h-6 w-6"
+                                      onClick={() => {
+                                        setEditingUpdateId(update.id);
+                                        setEditingUpdateContent(update.content);
+                                      }}
+                                    >
+                                      <Pencil className="h-3 w-3" />
+                                    </Button>
+                                    <Button
+                                      size="icon"
+                                      variant="ghost"
+                                      className="h-6 w-6 text-destructive hover:text-destructive"
+                                      onClick={() =>
+                                        deleteUpdateMutation.mutate(update.id)
+                                      }
+                                      disabled={deleteUpdateMutation.isPending}
+                                    >
+                                      {deleteUpdateMutation.isPending ? (
+                                        <Loader2 className="h-3 w-3 animate-spin" />
+                                      ) : (
+                                        <Trash2 className="h-3 w-3" />
+                                      )}
+                                    </Button>
+                                  </div>
+                                )}
+                              </div>
+                            </>
                           )}
                         </CardContent>
                       </Card>
                     );
-                  }
-
-                  const update = event.update;
-                  const isEditing = editingUpdateId === update.id;
-                  const isOwner = user?.id === update.user_id;
-
-                  return (
-                    <Card key={update.id} className="bg-card border-border/60 shadow-none">
-                      <CardContent className="p-3">
-                        {isEditing ? (
-                          <div className="space-y-2">
-                            <Textarea
-                              value={editingUpdateContent}
-                              onChange={(e) => setEditingUpdateContent(e.target.value)}
-                              className="min-h-[60px] resize-none text-sm bg-card"
-                            />
-                            <div className="flex gap-2 justify-end">
-                              <Button
-                                size="sm"
-                                variant="ghost"
-                                onClick={() => {
-                                  setEditingUpdateId(null);
-                                  setEditingUpdateContent("");
-                                }}
-                              >
-                                <X className="h-4 w-4" />
-                              </Button>
-                              <Button
-                                size="sm"
-                                onClick={() => editUpdateMutation.mutate({ id: update.id, content: editingUpdateContent })}
-                                disabled={!editingUpdateContent.trim() || editUpdateMutation.isPending}
-                              >
-                                {editUpdateMutation.isPending ? (
-                                  <Loader2 className="h-4 w-4 animate-spin" />
-                                ) : (
-                                  <Check className="h-4 w-4" />
-                                )}
-                              </Button>
-                            </div>
-                          </div>
-                        ) : (
-                          <>
-                            {update.update_type && (() => {
-                              const t = INTERACTION_TYPES.find(o => o.value === update.update_type);
-                              if (!t) return null;
-                              const Icon = t.icon;
-                              return (
-                                <Badge variant="outline" className="mb-2 gap-1 text-xs bg-card">
-                                  <Icon className="h-3 w-3" />
-                                  {t.label}
-                                </Badge>
-                              );
-                            })()}
-                            <p className="text-sm whitespace-pre-wrap">{update.content}</p>
-                            <div className="flex items-center justify-between mt-2">
-                              <div className="flex items-center gap-2 text-xs text-muted-foreground flex-wrap">
-                                <User className="h-3 w-3 shrink-0" />
-                                <span>{update.profiles?.full_name || update.profiles?.email || "משתמש"}</span>
-                                <span>•</span>
-                                <Calendar className="h-3 w-3 shrink-0" />
-                                <span>{format(new Date(update.created_at), "d/M/yy HH:mm", { locale: he })}</span>
-                              </div>
-                              {isOwner && (
-                                <div className="flex gap-1 shrink-0">
-                                  <Button
-                                    size="icon"
-                                    variant="ghost"
-                                    className="h-6 w-6"
-                                    onClick={() => {
-                                      setEditingUpdateId(update.id);
-                                      setEditingUpdateContent(update.content);
-                                    }}
-                                  >
-                                    <Pencil className="h-3 w-3" />
-                                  </Button>
-                                  <Button
-                                    size="icon"
-                                    variant="ghost"
-                                    className="h-6 w-6 text-destructive hover:text-destructive"
-                                    onClick={() => deleteUpdateMutation.mutate(update.id)}
-                                    disabled={deleteUpdateMutation.isPending}
-                                  >
-                                    {deleteUpdateMutation.isPending ? (
-                                      <Loader2 className="h-3 w-3 animate-spin" />
-                                    ) : (
-                                      <Trash2 className="h-3 w-3" />
-                                    )}
-                                  </Button>
-                                </div>
-                              )}
-                            </div>
-                          </>
-                        )}
-                      </CardContent>
-                    </Card>
-                  );
-                })}
+                  })
+                )}
               </div>
             </div>
           </div>
@@ -675,7 +838,11 @@ export function ClientUpdatesTab({ clientId, clientName, currentMoodStatus }: Cl
         <AddTaskForm
           clientId={clientId}
           triggerButton={
-            <Button size="sm" variant="outline" className="w-full sm:w-auto bg-card">
+            <Button
+              size="sm"
+              variant="outline"
+              className="w-full sm:w-auto bg-card"
+            >
               <Plus className="h-4 w-4 mr-2" />
               הוסף משימה
             </Button>
@@ -696,10 +863,10 @@ export function ClientUpdatesTab({ clientId, clientName, currentMoodStatus }: Cl
               </Badge>
             </h3>
           </div>
-          
+
           <div className="space-y-2 max-h-[300px] overflow-y-auto">
             {inProgressTasks.length > 0 ? (
-              inProgressTasks.map(task => (
+              inProgressTasks.map((task) => (
                 <EntityTaskCard
                   key={task.id}
                   task={task}
@@ -708,7 +875,12 @@ export function ClientUpdatesTab({ clientId, clientName, currentMoodStatus }: Cl
                   compact
                   tintByPriority
                   onEdit={() => setEditingTask(task)}
-                  onToggleComplete={() => updateStatusMutation.mutate({ taskId: task.id, status: "done" })}
+                  onToggleComplete={() =>
+                    updateStatusMutation.mutate({
+                      taskId: task.id,
+                      status: "done",
+                    })
+                  }
                 />
               ))
             ) : (
@@ -733,10 +905,10 @@ export function ClientUpdatesTab({ clientId, clientName, currentMoodStatus }: Cl
               </Badge>
             </h3>
           </div>
-          
+
           <div className="space-y-2 max-h-[300px] overflow-y-auto">
             {completedTasks.length > 0 ? (
-              completedTasks.map(task => (
+              completedTasks.map((task) => (
                 <EntityTaskCard
                   key={task.id}
                   task={task}
@@ -745,7 +917,12 @@ export function ClientUpdatesTab({ clientId, clientName, currentMoodStatus }: Cl
                   compact
                   tintByPriority
                   onEdit={() => setEditingTask(task)}
-                  onToggleComplete={() => updateStatusMutation.mutate({ taskId: task.id, status: "open" })}
+                  onToggleComplete={() =>
+                    updateStatusMutation.mutate({
+                      taskId: task.id,
+                      status: "open",
+                    })
+                  }
                 />
               ))
             ) : (

@@ -1,8 +1,5 @@
 export type CrmWhatsappProvider =
-  | "green_api"
-  | "manus_wa"
-  | "meta_whatsapp"
-  | "manychat";
+  "green_api" | "manus_wa" | "meta_whatsapp" | "manychat";
 
 export type CrmWhatsappIntegration = {
   id: string;

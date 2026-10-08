@@ -16,7 +16,11 @@ export function recallCreditRecoveredWhatsApp(): string {
   return "✅ הקרדיט ב-Recall חזר — כרמן יכולה שוב להצטרף לפגישות.";
 }
 
-export function recallBudgetWhatsApp(usageSeconds: number, budgetHours: number, pct: number): string {
+export function recallBudgetWhatsApp(
+  usageSeconds: number,
+  budgetHours: number,
+  pct: number,
+): string {
   return `⚠️ רגע לפני שנגמר: כרמן השתמשה ב-${formatRecallBotHours(usageSeconds)} בוט החודש מתוך תקציב ${budgetHours} שעות (${pct.toFixed(0)}%). כדאי לטעון קרדיט ב-Recall:\n${recallBillingDashboardUrl()}`;
 }
 
@@ -41,24 +45,35 @@ export async function notifyRecallCreditEmpty(
     alert_type: "quota_out",
     reason: recallCreditErrorMessage(),
   });
-  await supabase.rpc("claude_notify_david", {
-    p_message: recallCreditEmptyWhatsApp(),
-  }).then(() => {}, (e: unknown) => console.error("[recall] credit notify failed", e));
+  await supabase
+    .rpc("claude_notify_david", {
+      p_message: recallCreditEmptyWhatsApp(),
+    })
+    .then(
+      () => {},
+      (e: unknown) => console.error("[recall] credit notify failed", e),
+    );
   return true;
 }
 
-export async function notifyRecallCreditRecovered(
-  supabase: { from: Function; rpc: Function },
-): Promise<void> {
+export async function notifyRecallCreditRecovered(supabase: {
+  from: Function;
+  rpc: Function;
+}): Promise<void> {
   await supabase.from("integration_alerts_log").insert({
     tenant_id: DAVID_TENANT,
     provider: "recall",
     alert_type: "reconnected",
     reason: "הקרדיט ב-Recall חזר לפעול",
   });
-  await supabase.rpc("claude_notify_david", {
-    p_message: recallCreditRecoveredWhatsApp(),
-  }).then(() => {}, (e: unknown) => console.error("[recall] recovered notify failed", e));
+  await supabase
+    .rpc("claude_notify_david", {
+      p_message: recallCreditRecoveredWhatsApp(),
+    })
+    .then(
+      () => {},
+      (e: unknown) => console.error("[recall] recovered notify failed", e),
+    );
 }
 
 export async function notifyRecallBudget(
@@ -86,9 +101,14 @@ export async function notifyRecallBudget(
     reason,
   });
   if (alertType === "budget_95") {
-    await supabase.rpc("claude_notify_david", {
-      p_message: recallBudgetWhatsApp(usageSeconds, budgetHours, pct),
-    }).then(() => {}, (e: unknown) => console.error("[recall] budget notify failed", e));
+    await supabase
+      .rpc("claude_notify_david", {
+        p_message: recallBudgetWhatsApp(usageSeconds, budgetHours, pct),
+      })
+      .then(
+        () => {},
+        (e: unknown) => console.error("[recall] budget notify failed", e),
+      );
   }
   return true;
 }

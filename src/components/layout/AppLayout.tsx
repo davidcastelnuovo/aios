@@ -41,7 +41,8 @@ function RouteContentLoader() {
   return <CarmenLoadingScreen />;
 }
 
-const CARMEN_ICON = "https://d2xsxph8kpxj0f.cloudfront.net/310419663030948028/XGJWpzb5zh76ZdoV37Q3K8/carmen-icon-CyF3DNNJ8Z9Uhfz7EpYJcQ.webp";
+const CARMEN_ICON =
+  "https://d2xsxph8kpxj0f.cloudfront.net/310419663030948028/XGJWpzb5zh76ZdoV37Q3K8/carmen-icon-CyF3DNNJ8Z9Uhfz7EpYJcQ.webp";
 
 export function AppLayout() {
   const navigate = useNavigate();
@@ -62,7 +63,7 @@ export function AppLayout() {
         .from("tenant_users")
         .select("tenant_id, tenants(id, name, slug)")
         .eq("user_id", userId);
-      
+
       if (error) throw error;
       return data;
     },
@@ -71,28 +72,30 @@ export function AppLayout() {
 
   const handleTenantChange = async (tenantId: string) => {
     try {
-      await (supabase as any)
-        .from("user_active_tenant")
-        .upsert({
+      await (supabase as any).from("user_active_tenant").upsert(
+        {
           user_id: userId,
           tenant_id: tenantId,
           updated_at: new Date().toISOString(),
-        }, {
-          onConflict: "user_id"
-        });
+        },
+        {
+          onConflict: "user_id",
+        },
+      );
 
       const { data: tenantData } = await supabase
         .from("tenants")
         .select("slug")
         .eq("id", tenantId)
         .single();
-      
+
       const newSlug = tenantData?.slug;
-      
+
       if (newSlug) {
-        const pathParts = window.location.pathname.split('/');
-        const currentModule = pathParts.length > 3 ? pathParts.slice(3).join('/') : 'dashboard';
-        
+        const pathParts = window.location.pathname.split("/");
+        const currentModule =
+          pathParts.length > 3 ? pathParts.slice(3).join("/") : "dashboard";
+
         toast({
           title: "עובר לארגון...",
           description: "המערכת עוברת לארגון החדש",
@@ -121,7 +124,7 @@ export function AppLayout() {
         .select("status")
         .eq("id", userId)
         .single();
-      
+
       if (error) throw error;
       return data;
     },
@@ -133,7 +136,7 @@ export function AppLayout() {
 
   useEffect(() => {
     const processInvitation = async () => {
-      if (!userId || !userProfile || userProfile.status !== 'pending') {
+      if (!userId || !userProfile || userProfile.status !== "pending") {
         return;
       }
 
@@ -141,11 +144,14 @@ export function AppLayout() {
         const { data: session } = await supabase.auth.getSession();
         if (!session?.session) return;
 
-        const { data, error } = await supabase.functions.invoke("process-user-invitation", {
-          headers: {
-            Authorization: `Bearer ${session.session.access_token}`,
+        const { data, error } = await supabase.functions.invoke(
+          "process-user-invitation",
+          {
+            headers: {
+              Authorization: `Bearer ${session.session.access_token}`,
+            },
           },
-        });
+        );
 
         if (error) {
           console.error("Error processing invitation:", error);
@@ -162,11 +168,11 @@ export function AppLayout() {
 
   const handleLogout = async () => {
     try {
-      const { error } = await supabase.auth.signOut({ scope: 'global' });
+      const { error } = await supabase.auth.signOut({ scope: "global" });
       if (error) throw error;
     } catch (err) {
       try {
-        await supabase.auth.signOut({ scope: 'local' });
+        await supabase.auth.signOut({ scope: "local" });
       } catch (_) {}
       try {
         Object.keys(localStorage).forEach((k) => {
@@ -174,10 +180,10 @@ export function AppLayout() {
         });
       } catch (_) {}
     } finally {
-      navigate('/auth', { replace: true });
+      navigate("/auth", { replace: true });
       toast({
-        title: 'התנתקת בהצלחה',
-        description: 'להתראות!',
+        title: "התנתקת בהצלחה",
+        description: "להתראות!",
       });
     }
   };
@@ -185,7 +191,10 @@ export function AppLayout() {
   return (
     <ViewAsProvider>
       <SidebarProvider defaultOpen={false}>
-        <div className="flex h-screen max-h-screen w-full overflow-hidden" dir="rtl">
+        <div
+          className="flex h-screen max-h-screen w-full overflow-hidden"
+          dir="rtl"
+        >
           <AppSidebar />
           <div className="flex-1 min-w-0 min-h-0 flex flex-col overflow-hidden">
             <ViewAsBanner />
@@ -200,8 +209,13 @@ export function AppLayout() {
                 <HeaderModuleShortcuts />
                 {agencies && agencies.length > 0 && (
                   <div className="hidden md:flex items-center gap-1 sm:gap-2 min-w-0 max-w-[42vw] sm:max-w-none">
-                    <span className="text-sm text-muted-foreground hidden lg:inline shrink-0">סוכנות:</span>
-                    <Select value={selectedAgency} onValueChange={setSelectedAgency}>
+                    <span className="text-sm text-muted-foreground hidden lg:inline shrink-0">
+                      סוכנות:
+                    </span>
+                    <Select
+                      value={selectedAgency}
+                      onValueChange={setSelectedAgency}
+                    >
                       <SelectTrigger className="h-9 w-[min(42vw,10rem)] sm:w-[160px] md:w-[220px] bg-background border-2 px-2">
                         <Building2 className="h-4 w-4 shrink-0" />
                         <SelectValue placeholder="סוכנות" />
@@ -257,11 +271,22 @@ export function AppLayout() {
                 )}
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
-                    <Button variant="ghost" size="icon" className="rounded-full">
-                      <img src={logo} alt="Logo" className="h-8 w-8 object-contain" />
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="rounded-full"
+                    >
+                      <img
+                        src={logo}
+                        alt="Logo"
+                        className="h-8 w-8 object-contain"
+                      />
                     </Button>
                   </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end" className="bg-background z-[100]">
+                  <DropdownMenuContent
+                    align="end"
+                    className="bg-background z-[100]"
+                  >
                     <DropdownMenuItem onClick={handleLogout}>
                       <LogOut className="mr-2 h-4 w-4" />
                       התנתק
@@ -286,7 +311,6 @@ export function AppLayout() {
               </CommandCenterSidecarShell>
             </main>
           </div>
-
         </div>
       </SidebarProvider>
     </ViewAsProvider>

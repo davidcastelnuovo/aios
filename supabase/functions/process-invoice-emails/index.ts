@@ -3,7 +3,8 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2.75.0";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
+  "Access-Control-Allow-Headers":
+    "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
 async function refreshTokenIfNeeded(supabaseService: any, tokenData: any) {
@@ -24,17 +25,24 @@ async function refreshTokenIfNeeded(supabaseService: any, tokenData: any) {
   if (!tokens.access_token) throw new Error("Token refresh failed");
 
   const newExpires = new Date(Date.now() + tokens.expires_in * 1000);
-  await supabaseService.from("gmail_tokens").update({
-    access_token: tokens.access_token,
-    expires_at: newExpires.toISOString(),
-    updated_at: new Date().toISOString(),
-  }).eq("user_id", tokenData.user_id);
+  await supabaseService
+    .from("gmail_tokens")
+    .update({
+      access_token: tokens.access_token,
+      expires_at: newExpires.toISOString(),
+      updated_at: new Date().toISOString(),
+    })
+    .eq("user_id", tokenData.user_id);
 
   return tokens.access_token;
 }
 
 function parseEmailHeader(payload: any, headerName: string): string {
-  return payload?.headers?.find((h: any) => h.name.toLowerCase() === headerName.toLowerCase())?.value || "";
+  return (
+    payload?.headers?.find(
+      (h: any) => h.name.toLowerCase() === headerName.toLowerCase(),
+    )?.value || ""
+  );
 }
 
 // Find attachments recursively in MIME parts
@@ -54,7 +62,8 @@ function findAttachments(parts: any[], result: any[] = []): any[] {
 }
 
 serve(async (req) => {
-  if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
+  if (req.method === "OPTIONS")
+    return new Response(null, { headers: corsHeaders });
 
   try {
     const authHeader = req.headers.get("Authorization");
@@ -63,9 +72,12 @@ serve(async (req) => {
     const anonClient = createClient(
       Deno.env.get("SUPABASE_URL")!,
       Deno.env.get("SUPABASE_ANON_KEY")!,
-      { global: { headers: { Authorization: authHeader } } }
+      { global: { headers: { Authorization: authHeader } } },
     );
-    const { data: { user }, error: userError } = await anonClient.auth.getUser();
+    const {
+      data: { user },
+      error: userError,
+    } = await anonClient.auth.getUser();
     if (userError || !user) throw new Error("Unauthorized");
 
     const serviceClient = createClient(
@@ -74,7 +86,10 @@ serve(async (req) => {
     );
 
     const { data: tokenData, error: tokenError } = await serviceClient
-      .from("gmail_tokens").select("*").eq("user_id", user.id).single();
+      .from("gmail_tokens")
+      .select("*")
+      .eq("user_id", user.id)
+      .single();
     if (tokenError || !tokenData) throw new Error("Gmail not connected");
 
     const accessToken = await refreshTokenIfNeeded(serviceClient, tokenData);
@@ -86,7 +101,9 @@ serve(async (req) => {
 
     // Get suppliers for matching
     const { data: suppliers } = await serviceClient
-      .from("suppliers").select("id, name, email").eq("tenant_id", tenantId);
+      .from("suppliers")
+      .select("id, name, email")
+      .eq("tenant_id", tenantId);
 
     const OPENAI_API_KEY = Deno.env.get("OPENAI_API_KEY");
     const results: any[] = [];
@@ -96,36 +113,48 @@ serve(async (req) => {
         // 1. Get full message with attachments
         const msgRes = await fetch(
           `https://gmail.googleapis.com/gmail/v1/users/me/messages/${messageId}?format=full`,
-          { headers: { Authorization: `Bearer ${accessToken}` } }
+          { headers: { Authorization: `Bearer ${accessToken}` } },
         );
         const msgData = await msgRes.json();
         if (!msgRes.ok) {
-          results.push({ messageId, error: msgData.error?.message || "Failed to fetch message" });
+          results.push({
+            messageId,
+            error: msgData.error?.message || "Failed to fetch message",
+          });
           continue;
         }
 
         const from = parseEmailHeader(msgData.payload, "From");
         const subject = parseEmailHeader(msgData.payload, "Subject");
         const date = parseEmailHeader(msgData.payload, "Date");
-        const fromEmail = from.match(/<([^>]+)>/)?.[1]?.toLowerCase() || from.toLowerCase();
+        const fromEmail =
+          from.match(/<([^>]+)>/)?.[1]?.toLowerCase() || from.toLowerCase();
 
         // 2. Find attachments (PDF, images)
         const attachments = findAttachments(msgData.payload?.parts || []);
-        const invoiceAttachments = attachments.filter((a: any) =>
-          /\.(pdf|png|jpg|jpeg|gif|webp|tiff|bmp)$/i.test(a.filename) ||
-          a.mimeType.startsWith("image/") ||
-          a.mimeType === "application/pdf"
+        const invoiceAttachments = attachments.filter(
+          (a: any) =>
+            /\.(pdf|png|jpg|jpeg|gif|webp|tiff|bmp)$/i.test(a.filename) ||
+            a.mimeType.startsWith("image/") ||
+            a.mimeType === "application/pdf",
         );
 
         if (invoiceAttachments.length === 0) {
-          results.push({ messageId, subject, from, error: "no_attachments", skipped: true });
+          results.push({
+            messageId,
+            subject,
+            from,
+            error: "no_attachments",
+            skipped: true,
+          });
           continue;
         }
 
         // 3. Try to match supplier by email
-        let matchedSupplier = suppliers?.find(s => 
-          s.email && s.email.toLowerCase() === fromEmail
-        ) || null;
+        let matchedSupplier =
+          suppliers?.find(
+            (s) => s.email && s.email.toLowerCase() === fromEmail,
+          ) || null;
 
         // 4. Process each attachment
         for (const att of invoiceAttachments) {
@@ -133,23 +162,32 @@ serve(async (req) => {
             // Download attachment
             const attRes = await fetch(
               `https://gmail.googleapis.com/gmail/v1/users/me/messages/${messageId}/attachments/${att.attachmentId}`,
-              { headers: { Authorization: `Bearer ${accessToken}` } }
+              { headers: { Authorization: `Bearer ${accessToken}` } },
             );
             const attData = await attRes.json();
             if (!attRes.ok || !attData.data) {
-              results.push({ messageId, subject, from, filename: att.filename, error: "Failed to download attachment" });
+              results.push({
+                messageId,
+                subject,
+                from,
+                filename: att.filename,
+                error: "Failed to download attachment",
+              });
               continue;
             }
 
             // Convert from URL-safe base64 to standard base64
-            const base64Data = attData.data.replace(/-/g, "+").replace(/_/g, "/");
+            const base64Data = attData.data
+              .replace(/-/g, "+")
+              .replace(/_/g, "/");
 
             // 5. Upload to storage
             const ext = att.filename.split(".").pop() || "pdf";
             const storagePath = `${tenantId}/gmail-invoices/${Date.now()}-${att.filename}`;
             const binaryStr = atob(base64Data);
             const bytes = new Uint8Array(binaryStr.length);
-            for (let i = 0; i < binaryStr.length; i++) bytes[i] = binaryStr.charCodeAt(i);
+            for (let i = 0; i < binaryStr.length; i++)
+              bytes[i] = binaryStr.charCodeAt(i);
 
             const { error: uploadError } = await serviceClient.storage
               .from("supplier-invoices")
@@ -157,7 +195,9 @@ serve(async (req) => {
 
             let fileUrl: string | null = null;
             if (!uploadError) {
-              const { data: urlData } = await serviceClient.storage.from("supplier-invoices").createSignedUrl(storagePath, 60 * 60 * 24 * 365 * 10);
+              const { data: urlData } = await serviceClient.storage
+                .from("supplier-invoices")
+                .createSignedUrl(storagePath, 60 * 60 * 24 * 365 * 10);
               fileUrl = urlData?.signedUrl ?? null;
             }
 
@@ -166,67 +206,110 @@ serve(async (req) => {
             let invoiceAmount = 0;
             let aiExtracted = false;
 
-            if (OPENAI_API_KEY && (att.mimeType.startsWith("image/") || att.mimeType === "application/pdf")) {
+            if (
+              OPENAI_API_KEY &&
+              (att.mimeType.startsWith("image/") ||
+                att.mimeType === "application/pdf")
+            ) {
               try {
-                const mediaType = att.mimeType === "application/pdf" ? "application/pdf" : att.mimeType;
-                const aiResponse = await fetch("https://api.openai.com/v1/chat/completions", {
-                  method: "POST",
-                  headers: {
-                    Authorization: `Bearer ${OPENAI_API_KEY}`,
-                    "Content-Type": "application/json",
-                  },
-                  body: JSON.stringify({
-                    model: 'gpt-4o-mini',
-                    messages: [
-                      {
-                        role: "system",
-                        content: "You are an invoice data extraction assistant. Extract the invoice name/description, total amount, and supplier/vendor name from the provided invoice. The invoice may be in Hebrew or English. Always use the extract_invoice_data tool."
-                      },
-                      {
-                        role: "user",
-                        content: [
-                          { type: "image_url", image_url: { url: `data:${mediaType};base64,${base64Data}` } },
-                          { type: "text", text: "Extract the invoice name/title, total amount, and supplier/vendor name from this invoice." }
-                        ]
-                      }
-                    ],
-                    tools: [{
-                      type: "function",
-                      function: {
-                        name: "extract_invoice_data",
-                        description: "Extract invoice data",
-                        parameters: {
-                          type: "object",
-                          properties: {
-                            invoice_name: { type: "string", description: "Invoice name/title/description" },
-                            invoice_amount: { type: "number", description: "Total amount" },
-                            supplier_name: { type: "string", description: "Supplier/vendor name" }
+                const mediaType =
+                  att.mimeType === "application/pdf"
+                    ? "application/pdf"
+                    : att.mimeType;
+                const aiResponse = await fetch(
+                  "https://api.openai.com/v1/chat/completions",
+                  {
+                    method: "POST",
+                    headers: {
+                      Authorization: `Bearer ${OPENAI_API_KEY}`,
+                      "Content-Type": "application/json",
+                    },
+                    body: JSON.stringify({
+                      model: "gpt-4o-mini",
+                      messages: [
+                        {
+                          role: "system",
+                          content:
+                            "You are an invoice data extraction assistant. Extract the invoice name/description, total amount, and supplier/vendor name from the provided invoice. The invoice may be in Hebrew or English. Always use the extract_invoice_data tool.",
+                        },
+                        {
+                          role: "user",
+                          content: [
+                            {
+                              type: "image_url",
+                              image_url: {
+                                url: `data:${mediaType};base64,${base64Data}`,
+                              },
+                            },
+                            {
+                              type: "text",
+                              text: "Extract the invoice name/title, total amount, and supplier/vendor name from this invoice.",
+                            },
+                          ],
+                        },
+                      ],
+                      tools: [
+                        {
+                          type: "function",
+                          function: {
+                            name: "extract_invoice_data",
+                            description: "Extract invoice data",
+                            parameters: {
+                              type: "object",
+                              properties: {
+                                invoice_name: {
+                                  type: "string",
+                                  description: "Invoice name/title/description",
+                                },
+                                invoice_amount: {
+                                  type: "number",
+                                  description: "Total amount",
+                                },
+                                supplier_name: {
+                                  type: "string",
+                                  description: "Supplier/vendor name",
+                                },
+                              },
+                              required: ["invoice_name", "invoice_amount"],
+                              additionalProperties: false,
+                            },
                           },
-                          required: ["invoice_name", "invoice_amount"],
-                          additionalProperties: false,
-                        }
-                      }
-                    }],
-                    tool_choice: { type: "function", function: { name: "extract_invoice_data" } }
-                  }),
-                });
+                        },
+                      ],
+                      tool_choice: {
+                        type: "function",
+                        function: { name: "extract_invoice_data" },
+                      },
+                    }),
+                  },
+                );
 
                 if (aiResponse.ok) {
                   const aiData = await aiResponse.json();
-                  const toolCall = aiData.choices?.[0]?.message?.tool_calls?.[0];
+                  const toolCall =
+                    aiData.choices?.[0]?.message?.tool_calls?.[0];
                   if (toolCall?.function?.arguments) {
                     const extracted = JSON.parse(toolCall.function.arguments);
-                    if (extracted.invoice_name) invoiceName = extracted.invoice_name;
-                    if (extracted.invoice_amount) invoiceAmount = extracted.invoice_amount;
+                    if (extracted.invoice_name)
+                      invoiceName = extracted.invoice_name;
+                    if (extracted.invoice_amount)
+                      invoiceAmount = extracted.invoice_amount;
                     aiExtracted = true;
 
                     // Try to match supplier by AI-extracted name if not already matched
-                    if (!matchedSupplier && extracted.supplier_name && suppliers) {
-                      const aiSupplierLower = extracted.supplier_name.toLowerCase();
-                      matchedSupplier = suppliers.find(s =>
-                        s.name.toLowerCase().includes(aiSupplierLower) ||
-                        aiSupplierLower.includes(s.name.toLowerCase())
-                      ) || null;
+                    if (
+                      !matchedSupplier &&
+                      extracted.supplier_name &&
+                      suppliers
+                    ) {
+                      const aiSupplierLower =
+                        extracted.supplier_name.toLowerCase();
+                      matchedSupplier =
+                        suppliers.find(
+                          (s) =>
+                            s.name.toLowerCase().includes(aiSupplierLower) ||
+                            aiSupplierLower.includes(s.name.toLowerCase()),
+                        ) || null;
                     }
                   }
                 }
@@ -244,7 +327,9 @@ serve(async (req) => {
               }
             } catch {}
 
-            const invoiceMonth = invoiceDate ? invoiceDate.substring(0, 7) : new Date().toISOString().substring(0, 7);
+            const invoiceMonth = invoiceDate
+              ? invoiceDate.substring(0, 7)
+              : new Date().toISOString().substring(0, 7);
 
             results.push({
               messageId,
@@ -263,7 +348,13 @@ serve(async (req) => {
             });
           } catch (attErr) {
             console.error("Attachment processing error:", attErr);
-            results.push({ messageId, subject, from, filename: att.filename, error: String(attErr) });
+            results.push({
+              messageId,
+              subject,
+              from,
+              filename: att.filename,
+              error: String(attErr),
+            });
           }
         }
       } catch (msgErr) {
@@ -277,9 +368,14 @@ serve(async (req) => {
     });
   } catch (e) {
     console.error("process-invoice-emails error:", e);
-    return new Response(JSON.stringify({ error: e instanceof Error ? e.message : "Unknown error" }), {
-      status: 500,
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
-    });
+    return new Response(
+      JSON.stringify({
+        error: e instanceof Error ? e.message : "Unknown error",
+      }),
+      {
+        status: 500,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      },
+    );
   }
 });

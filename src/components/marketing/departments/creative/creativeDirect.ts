@@ -7,10 +7,12 @@ export const CREATIVE_DIRECT_LABEL_HE = "קריאייטיב דיירקט";
 
 export const CREATIVE_DIRECT_SKIN_SLUG = "creative_direct";
 
-export const CREATIVE_DIRECT_SKILL_PATH = ".cursor/skills/creative-direct/SKILL.md";
+export const CREATIVE_DIRECT_SKILL_PATH =
+  ".cursor/skills/creative-direct/SKILL.md";
 
 /** Prefix stored on `cursor_dispatches.request_text` when the sticky image chat is opened. */
-export const CREATIVE_DIRECT_OPEN_MARKER = "[CREATIVE AGENT] opened Creative Direct";
+export const CREATIVE_DIRECT_OPEN_MARKER =
+  "[CREATIVE AGENT] opened Creative Direct";
 
 export const CREATIVE_DIRECT_IDENTITY = [
   "You are קריאייטיב דיירקט (AIOS Creative Direct) — the dedicated image chat of מחלקת קריאייטיב.",

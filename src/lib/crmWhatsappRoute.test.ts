@@ -16,13 +16,25 @@ test("prefers the lead's active CRM WhatsApp provider", () => {
 });
 
 test("falls back to green_api then manus then meta", () => {
-  assert.equal(pickCrmWhatsappIntegration(null, [meta, manus, green])?.type, "green_api");
-  assert.equal(pickCrmWhatsappIntegration(null, [meta, manus])?.type, "manus_wa");
-  assert.equal(pickCrmWhatsappIntegration("telegram", [meta])?.type, "meta_whatsapp");
+  assert.equal(
+    pickCrmWhatsappIntegration(null, [meta, manus, green])?.type,
+    "green_api",
+  );
+  assert.equal(
+    pickCrmWhatsappIntegration(null, [meta, manus])?.type,
+    "manus_wa",
+  );
+  assert.equal(
+    pickCrmWhatsappIntegration("telegram", [meta])?.type,
+    "meta_whatsapp",
+  );
 });
 
 test("maps provider to the CRM send function", () => {
   assert.equal(crmWhatsappFunctionName("green_api"), "send-green-api-message");
   assert.equal(crmWhatsappFunctionName("manus_wa"), "send-manus-wa-message");
-  assert.equal(crmWhatsappFunctionName("meta_whatsapp"), "send-meta-whatsapp-message");
+  assert.equal(
+    crmWhatsappFunctionName("meta_whatsapp"),
+    "send-meta-whatsapp-message",
+  );
 });

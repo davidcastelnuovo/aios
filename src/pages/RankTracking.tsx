@@ -11,18 +11,52 @@ const useBuildPath = () => {
 };
 import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+  DialogFooter,
+} from "@/components/ui/dialog";
 import { toast } from "sonner";
-import { 
-  Search, Plus, Settings, TrendingUp, TrendingDown, Minus, 
-  RefreshCw, ExternalLink, MoreVertical, Trash2, Play, AlertCircle
+import {
+  Search,
+  Plus,
+  Settings,
+  TrendingUp,
+  TrendingDown,
+  Minus,
+  RefreshCw,
+  ExternalLink,
+  MoreVertical,
+  Trash2,
+  Play,
+  AlertCircle,
 } from "lucide-react";
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { format } from "date-fns";
 import { he } from "date-fns/locale";
 
@@ -65,7 +99,9 @@ export default function RankTracking() {
   const { data: serpStatus } = useQuery({
     queryKey: ["serpapi-status", tenantId],
     queryFn: async () => {
-      const { data: { session } } = await supabase.auth.getSession();
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
       if (!session) return { connected: false };
 
       const response = await fetch(
@@ -76,7 +112,7 @@ export default function RankTracking() {
             Authorization: `Bearer ${session.access_token}`,
             "Content-Type": "application/json",
           },
-        }
+        },
       );
 
       if (!response.ok) return { connected: false };
@@ -108,18 +144,22 @@ export default function RankTracking() {
             .eq("is_active", true);
 
           const positions = (keywords || [])
-            .map(k => k.current_position)
+            .map((k) => k.current_position)
             .filter((p): p is number => p !== null);
 
           return {
             ...project,
             keywords_count: keywords?.length || 0,
-            avg_position: positions.length > 0 
-              ? Math.round(positions.reduce((a, b) => a + b, 0) / positions.length * 10) / 10 
-              : null,
-            top10_count: positions.filter(p => p <= 10).length,
+            avg_position:
+              positions.length > 0
+                ? Math.round(
+                    (positions.reduce((a, b) => a + b, 0) / positions.length) *
+                      10,
+                  ) / 10
+                : null,
+            top10_count: positions.filter((p) => p <= 10).length,
           };
-        })
+        }),
       );
 
       return projectsWithStats as RankProject[];
@@ -131,7 +171,8 @@ export default function RankTracking() {
     let result = projects;
     if (result && selectedAgency && selectedAgency !== "all") {
       result = result.filter(
-        (project) => project.agency_id === null || project.agency_id === selectedAgency
+        (project) =>
+          project.agency_id === null || project.agency_id === selectedAgency,
       );
     }
     return result;
@@ -160,7 +201,9 @@ export default function RankTracking() {
       const { error } = await supabase.from("rank_tracking_projects").insert({
         tenant_id: tenantId,
         name: data.name,
-        domain: data.domain.replace(/^(https?:\/\/)?(www\.)?/, "").split("/")[0],
+        domain: data.domain
+          .replace(/^(https?:\/\/)?(www\.)?/, "")
+          .split("/")[0],
         country: data.country,
         language: data.language,
         device: data.device,
@@ -184,7 +227,9 @@ export default function RankTracking() {
         client_id: "",
         agency_id: "",
       });
-      queryClient.invalidateQueries({ queryKey: ["rank-tracking-projects", tenantId] });
+      queryClient.invalidateQueries({
+        queryKey: ["rank-tracking-projects", tenantId],
+      });
     },
     onError: (error: Error) => {
       toast.error(error.message || "שגיאה ביצירת פרויקט");
@@ -202,7 +247,9 @@ export default function RankTracking() {
     },
     onSuccess: () => {
       toast.success("פרויקט נמחק");
-      queryClient.invalidateQueries({ queryKey: ["rank-tracking-projects", tenantId] });
+      queryClient.invalidateQueries({
+        queryKey: ["rank-tracking-projects", tenantId],
+      });
     },
     onError: () => {
       toast.error("שגיאה במחיקת פרויקט");
@@ -212,7 +259,9 @@ export default function RankTracking() {
   // Scan project mutation
   const scanMutation = useMutation({
     mutationFn: async (projectId: string) => {
-      const { data: { session } } = await supabase.auth.getSession();
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
       if (!session) throw new Error("Not authenticated");
 
       const response = await fetch(
@@ -227,7 +276,7 @@ export default function RankTracking() {
             action: "bulk_search",
             projectId,
           }),
-        }
+        },
       );
 
       const data = await response.json();
@@ -236,7 +285,9 @@ export default function RankTracking() {
     },
     onSuccess: (data) => {
       toast.success(`סריקה הושלמה! נבדקו ${data.checked_count} ביטויים`);
-      queryClient.invalidateQueries({ queryKey: ["rank-tracking-projects", tenantId] });
+      queryClient.invalidateQueries({
+        queryKey: ["rank-tracking-projects", tenantId],
+      });
     },
     onError: (error: Error) => {
       toast.error(error.message || "שגיאה בסריקה");
@@ -258,7 +309,9 @@ export default function RankTracking() {
           <Search className="h-8 w-8 text-primary" />
           <div>
             <h1 className="text-2xl font-bold">מעקב דירוגים</h1>
-            <p className="text-muted-foreground">מעקב אחרי מיקום הביטויים שלך בגוגל</p>
+            <p className="text-muted-foreground">
+              מעקב אחרי מיקום הביטויים שלך בגוגל
+            </p>
           </div>
         </div>
 
@@ -292,7 +345,9 @@ export default function RankTracking() {
           <Search className="h-8 w-8 text-primary" />
           <div>
             <h1 className="text-2xl font-bold">מעקב דירוגים</h1>
-            <p className="text-muted-foreground">מעקב אחרי מיקום הביטויים שלך בגוגל</p>
+            <p className="text-muted-foreground">
+              מעקב אחרי מיקום הביטויים שלך בגוגל
+            </p>
           </div>
         </div>
 
@@ -321,7 +376,9 @@ export default function RankTracking() {
                     id="name"
                     placeholder="לדוגמה: האתר הראשי"
                     value={newProject.name}
-                    onChange={(e) => setNewProject({ ...newProject, name: e.target.value })}
+                    onChange={(e) =>
+                      setNewProject({ ...newProject, name: e.target.value })
+                    }
                   />
                 </div>
 
@@ -331,7 +388,9 @@ export default function RankTracking() {
                     id="domain"
                     placeholder="example.com"
                     value={newProject.domain}
-                    onChange={(e) => setNewProject({ ...newProject, domain: e.target.value })}
+                    onChange={(e) =>
+                      setNewProject({ ...newProject, domain: e.target.value })
+                    }
                   />
                 </div>
 
@@ -340,7 +399,9 @@ export default function RankTracking() {
                     <Label>מדינה</Label>
                     <Select
                       value={newProject.country}
-                      onValueChange={(v) => setNewProject({ ...newProject, country: v })}
+                      onValueChange={(v) =>
+                        setNewProject({ ...newProject, country: v })
+                      }
                     >
                       <SelectTrigger>
                         <SelectValue />
@@ -359,7 +420,9 @@ export default function RankTracking() {
                     <Label>שפה</Label>
                     <Select
                       value={newProject.language}
-                      onValueChange={(v) => setNewProject({ ...newProject, language: v })}
+                      onValueChange={(v) =>
+                        setNewProject({ ...newProject, language: v })
+                      }
                     >
                       <SelectTrigger>
                         <SelectValue />
@@ -379,7 +442,9 @@ export default function RankTracking() {
                     <Label>מכשיר</Label>
                     <Select
                       value={newProject.device}
-                      onValueChange={(v) => setNewProject({ ...newProject, device: v })}
+                      onValueChange={(v) =>
+                        setNewProject({ ...newProject, device: v })
+                      }
                     >
                       <SelectTrigger>
                         <SelectValue />
@@ -396,7 +461,9 @@ export default function RankTracking() {
                     <Label>תדירות בדיקה</Label>
                     <Select
                       value={newProject.check_frequency}
-                      onValueChange={(v) => setNewProject({ ...newProject, check_frequency: v })}
+                      onValueChange={(v) =>
+                        setNewProject({ ...newProject, check_frequency: v })
+                      }
                     >
                       <SelectTrigger>
                         <SelectValue />
@@ -414,7 +481,12 @@ export default function RankTracking() {
                   <Label>לקוח (אופציונלי)</Label>
                   <Select
                     value={newProject.client_id || "none"}
-                    onValueChange={(v) => setNewProject({ ...newProject, client_id: v === "none" ? "" : v })}
+                    onValueChange={(v) =>
+                      setNewProject({
+                        ...newProject,
+                        client_id: v === "none" ? "" : v,
+                      })
+                    }
                   >
                     <SelectTrigger>
                       <SelectValue placeholder="בחר לקוח" />
@@ -431,10 +503,16 @@ export default function RankTracking() {
                 </div>
               </div>
               <DialogFooter>
-                <Button variant="outline" onClick={() => setIsCreateOpen(false)}>
+                <Button
+                  variant="outline"
+                  onClick={() => setIsCreateOpen(false)}
+                >
                   ביטול
                 </Button>
-                <Button onClick={handleCreate} disabled={createMutation.isPending}>
+                <Button
+                  onClick={handleCreate}
+                  disabled={createMutation.isPending}
+                >
                   {createMutation.isPending ? (
                     <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
                   ) : (
@@ -455,7 +533,10 @@ export default function RankTracking() {
       ) : filteredProjects && filteredProjects.length > 0 ? (
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
           {filteredProjects.map((project) => (
-            <Card key={project.id} className="hover:shadow-md transition-shadow">
+            <Card
+              key={project.id}
+              className="hover:shadow-md transition-shadow"
+            >
               <CardHeader className="pb-2">
                 <div className="flex items-start justify-between">
                   <div>
@@ -493,7 +574,9 @@ export default function RankTracking() {
               <CardContent>
                 <div className="grid grid-cols-3 gap-4 mb-4">
                   <div className="text-center">
-                    <div className="text-2xl font-bold">{project.keywords_count}</div>
+                    <div className="text-2xl font-bold">
+                      {project.keywords_count}
+                    </div>
                     <div className="text-xs text-muted-foreground">ביטויים</div>
                   </div>
                   <div className="text-center">
@@ -516,7 +599,12 @@ export default function RankTracking() {
                   </span>
                   {project.last_checked_at && (
                     <span>
-                      נבדק: {format(new Date(project.last_checked_at), "dd/MM HH:mm", { locale: he })}
+                      נבדק:{" "}
+                      {format(
+                        new Date(project.last_checked_at),
+                        "dd/MM HH:mm",
+                        { locale: he },
+                      )}
                     </span>
                   )}
                 </div>

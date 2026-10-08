@@ -16,8 +16,12 @@ export function useLeadsViewMode(userId: string | undefined) {
   const { toast } = useToast();
   const userTouchedView = useRef(false);
   const appliedProfileDefault = useRef(false);
-  const [viewMode, setViewModeState] = useState<LeadViewMode>(readStoredLeadViewMode);
-  const [defaultView, setDefaultViewState] = useState<LeadViewMode | null>(readStoredLeadDefaultView);
+  const [viewMode, setViewModeState] = useState<LeadViewMode>(
+    readStoredLeadViewMode,
+  );
+  const [defaultView, setDefaultViewState] = useState<LeadViewMode | null>(
+    readStoredLeadDefaultView,
+  );
 
   const { data: profileDefault } = useQuery({
     queryKey: ["leads-default-view", userId],
@@ -36,7 +40,12 @@ export function useLeadsViewMode(userId: string | undefined) {
   });
 
   useEffect(() => {
-    if (profileDefault == null || appliedProfileDefault.current || userTouchedView.current) return;
+    if (
+      profileDefault == null ||
+      appliedProfileDefault.current ||
+      userTouchedView.current
+    )
+      return;
     appliedProfileDefault.current = true;
     setDefaultViewState(profileDefault);
     setViewModeState(profileDefault);

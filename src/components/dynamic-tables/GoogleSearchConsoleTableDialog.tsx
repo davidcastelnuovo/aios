@@ -1,16 +1,34 @@
 import { useEffect, useState } from "react";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+} from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTenant } from "@/contexts/TenantContext";
-import { useAgencyClients, useTableDialogAgencies } from "@/hooks/useAgencyClients";
+import {
+  useAgencyClients,
+  useTableDialogAgencies,
+} from "@/hooks/useAgencyClients";
 import { Loader2, Search, ExternalLink } from "lucide-react";
-import { CLIENT_INTEGRATION_COLUMNS, toClientIntegration } from "@/lib/tenantIntegrationsClient";
+import {
+  CLIENT_INTEGRATION_COLUMNS,
+  toClientIntegration,
+} from "@/lib/tenantIntegrationsClient";
 
 interface GoogleSearchConsoleTableDialogProps {
   open: boolean;
@@ -23,7 +41,11 @@ interface GSCSite {
   permissionLevel: string;
 }
 
-export function GoogleSearchConsoleTableDialog({ open, onOpenChange, assignedClientIds }: GoogleSearchConsoleTableDialogProps) {
+export function GoogleSearchConsoleTableDialog({
+  open,
+  onOpenChange,
+  assignedClientIds,
+}: GoogleSearchConsoleTableDialogProps) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const { currentTenant, currentTenantId: activeTenantId } = useTenant();
@@ -59,15 +81,20 @@ export function GoogleSearchConsoleTableDialog({ open, onOpenChange, assignedCli
     queryFn: async () => {
       if (!integration?.id) return [] as GSCSite[];
 
-      const { data: { session } } = await supabase.auth.getSession();
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
       if (!session) throw new Error("Not authenticated");
 
-      const { data, error } = await supabase.functions.invoke("google-search-console-auth?action=get_sites", {
-        body: {
-          integrationId: integration.id,
+      const { data, error } = await supabase.functions.invoke(
+        "google-search-console-auth?action=get_sites",
+        {
+          body: {
+            integrationId: integration.id,
+          },
+          headers: { Authorization: `Bearer ${session.access_token}` },
         },
-        headers: { Authorization: `Bearer ${session.access_token}` },
-      });
+      );
 
       if (error) throw error;
       return Array.isArray(data?.sites) ? (data.sites as GSCSite[]) : [];
@@ -82,12 +109,17 @@ export function GoogleSearchConsoleTableDialog({ open, onOpenChange, assignedCli
     }
   }, [sites, selectedSite]);
 
-  const { data: agencies } = useTableDialogAgencies({ includeShared: true, enabled: open });
+  const { data: agencies } = useTableDialogAgencies({
+    includeShared: true,
+    enabled: open,
+  });
 
   const { data: rawClients } = useAgencyClients(selectedAgency || null);
 
   const clients = assignedClientIds
-    ? (rawClients || []).filter((client) => assignedClientIds.includes(client.id))
+    ? (rawClients || []).filter((client) =>
+        assignedClientIds.includes(client.id),
+      )
     : rawClients;
 
   const handleCreate = async () => {
@@ -98,7 +130,10 @@ export function GoogleSearchConsoleTableDialog({ open, onOpenChange, assignedCli
 
     setIsCreating(true);
     try {
-      const slug = tableName.toLowerCase().replace(/\s+/g, "-").replace(/[^a-z0-9-]/g, "");
+      const slug = tableName
+        .toLowerCase()
+        .replace(/\s+/g, "-")
+        .replace(/[^a-z0-9-]/g, "");
 
       const { error } = await supabase.functions.invoke("crm-tables", {
         body: {
@@ -129,11 +164,17 @@ export function GoogleSearchConsoleTableDialog({ open, onOpenChange, assignedCli
       if (error) throw error;
 
       toast({ title: "טבלת Search Console נוצרה בהצלחה!" });
-      queryClient.invalidateQueries({ queryKey: ["crm-tables", activeTenantId] });
+      queryClient.invalidateQueries({
+        queryKey: ["crm-tables", activeTenantId],
+      });
       onOpenChange(false);
       resetForm();
     } catch (error: any) {
-      toast({ title: "שגיאה ביצירת הטבלה", description: error.message, variant: "destructive" });
+      toast({
+        title: "שגיאה ביצירת הטבלה",
+        description: error.message,
+        variant: "destructive",
+      });
     } finally {
       setIsCreating(false);
     }
@@ -168,9 +209,13 @@ export function GoogleSearchConsoleTableDialog({ open, onOpenChange, assignedCli
           </div>
         ) : !integration ? (
           <div className="text-center py-6 space-y-4">
-            <p className="text-muted-foreground">לא נמצא חיבור Search Console פעיל</p>
+            <p className="text-muted-foreground">
+              לא נמצא חיבור Search Console פעיל
+            </p>
             <Button variant="outline" asChild>
-              <a href={`/t/${currentTenant?.slug}/google-search-console-settings`}>
+              <a
+                href={`/t/${currentTenant?.slug}/google-search-console-settings`}
+              >
                 <ExternalLink className="h-4 w-4 ml-2" />
                 חבר Search Console
               </a>
@@ -178,9 +223,13 @@ export function GoogleSearchConsoleTableDialog({ open, onOpenChange, assignedCli
           </div>
         ) : sites.length === 0 ? (
           <div className="text-center py-6 space-y-4">
-            <p className="text-muted-foreground">החיבור קיים אבל לא נטענו נכסים מ-Search Console</p>
+            <p className="text-muted-foreground">
+              החיבור קיים אבל לא נטענו נכסים מ-Search Console
+            </p>
             <Button variant="outline" asChild>
-              <a href={`/t/${currentTenant?.slug}/google-search-console-settings`}>
+              <a
+                href={`/t/${currentTenant?.slug}/google-search-console-settings`}
+              >
                 <ExternalLink className="h-4 w-4 ml-2" />
                 חבר מחדש Search Console
               </a>
@@ -206,7 +255,9 @@ export function GoogleSearchConsoleTableDialog({ open, onOpenChange, assignedCli
                 <SelectContent>
                   {sites.map((site) => (
                     <SelectItem key={site.siteUrl} value={site.siteUrl}>
-                      {site.siteUrl.replace("sc-domain:", "").replace("https://", "")}
+                      {site.siteUrl
+                        .replace("sc-domain:", "")
+                        .replace("https://", "")}
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -253,7 +304,12 @@ export function GoogleSearchConsoleTableDialog({ open, onOpenChange, assignedCli
             {selectedAgency && (
               <div className="space-y-2">
                 <Label>לקוח (אופציונלי)</Label>
-                <Select value={selectedClient || "all"} onValueChange={(value) => setSelectedClient(value === "all" ? "" : value)}>
+                <Select
+                  value={selectedClient || "all"}
+                  onValueChange={(value) =>
+                    setSelectedClient(value === "all" ? "" : value)
+                  }
+                >
                   <SelectTrigger>
                     <SelectValue placeholder="כל הלקוחות" />
                   </SelectTrigger>
@@ -270,8 +326,14 @@ export function GoogleSearchConsoleTableDialog({ open, onOpenChange, assignedCli
             )}
 
             <div className="flex gap-2 pt-4">
-              <Button onClick={handleCreate} disabled={isCreating} className="flex-1">
-                {isCreating ? <Loader2 className="h-4 w-4 animate-spin ml-2" /> : null}
+              <Button
+                onClick={handleCreate}
+                disabled={isCreating}
+                className="flex-1"
+              >
+                {isCreating ? (
+                  <Loader2 className="h-4 w-4 animate-spin ml-2" />
+                ) : null}
                 צור טבלה
               </Button>
               <Button variant="outline" onClick={() => onOpenChange(false)}>

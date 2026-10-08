@@ -28,7 +28,10 @@ describe("crmTableCategories", () => {
 
   it("keeps facebook insights and google ads leads in their buckets", () => {
     expect(
-      resolveListCategory({ integration_type: "facebook_insights", category: "Facebook Insights" }),
+      resolveListCategory({
+        integration_type: "facebook_insights",
+        category: "Facebook Insights",
+      }),
     ).toBe("Facebook Insights");
     expect(
       resolveListCategory({
@@ -40,20 +43,32 @@ describe("crmTableCategories", () => {
   });
 
   it("defaultCategoryForCreate matches list buckets", () => {
-    expect(defaultCategoryForCreate("facebook_ecommerce")).toBe(ECOMMERCE_CATEGORY);
-    expect(defaultCategoryForCreate("google_ads", { campaignType: "ecommerce" })).toBe(ECOMMERCE_CATEGORY);
-    expect(defaultCategoryForCreate("google_ads", { campaignType: "leads" })).toBe("Google Ads");
-    expect(defaultCategoryForCreate("facebook_insights")).toBe("Facebook Insights");
+    expect(defaultCategoryForCreate("facebook_ecommerce")).toBe(
+      ECOMMERCE_CATEGORY,
+    );
+    expect(
+      defaultCategoryForCreate("google_ads", { campaignType: "ecommerce" }),
+    ).toBe(ECOMMERCE_CATEGORY);
+    expect(
+      defaultCategoryForCreate("google_ads", { campaignType: "leads" }),
+    ).toBe("Google Ads");
+    expect(defaultCategoryForCreate("facebook_insights")).toBe(
+      "Facebook Insights",
+    );
   });
 
   it("isEcommerceCrmTable detects both FB and Google ecommerce", () => {
-    expect(isEcommerceCrmTable({ integration_type: "facebook_ecommerce" })).toBe(true);
+    expect(
+      isEcommerceCrmTable({ integration_type: "facebook_ecommerce" }),
+    ).toBe(true);
     expect(
       isEcommerceCrmTable({
         integration_type: "google_ads",
         integration_settings: { campaign_type: "ecommerce" },
       }),
     ).toBe(true);
-    expect(isEcommerceCrmTable({ integration_type: "facebook_insights" })).toBe(false);
+    expect(isEcommerceCrmTable({ integration_type: "facebook_insights" })).toBe(
+      false,
+    );
   });
 });

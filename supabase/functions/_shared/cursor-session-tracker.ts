@@ -108,7 +108,10 @@ export async function touchCursorTaskSession(
   const now = new Date().toISOString();
   const patch: Record<string, string> = { updated_at: now, last_seen_at: now };
   if (status) patch.status = status;
-  await supabase.from("cursor_task_sessions").update(patch).eq("cursor_agent_id", id);
+  await supabase
+    .from("cursor_task_sessions")
+    .update(patch)
+    .eq("cursor_agent_id", id);
 }
 
 export async function completeCursorSessionsForTask(
@@ -185,16 +188,20 @@ export async function findCursorSessionForTask(
   return (data as CursorTaskSessionRow | null) ?? null;
 }
 
-export function formatCursorSessionsForAgent(rows: CursorTaskSessionRow[]): string {
+export function formatCursorSessionsForAgent(
+  rows: CursorTaskSessionRow[],
+): string {
   if (!rows.length) return "No Cursor task sessions found.";
-  return rows.map((r) => {
-    const task = r.human_task_id ? `task=${r.human_task_id}` : "task=—";
-    const title = r.task_title || r.display_name;
-    return (
-      `• ${title}\n` +
-      `  session_id: ${r.cursor_agent_id}\n` +
-      `  url: ${r.session_url || `https://cursor.com/agents/${r.cursor_agent_id}`}\n` +
-      `  ${task} · status=${r.status} · env=${r.app_env || "?"} · tool=${r.source_tool}`
-    );
-  }).join("\n\n");
+  return rows
+    .map((r) => {
+      const task = r.human_task_id ? `task=${r.human_task_id}` : "task=—";
+      const title = r.task_title || r.display_name;
+      return (
+        `• ${title}\n` +
+        `  session_id: ${r.cursor_agent_id}\n` +
+        `  url: ${r.session_url || `https://cursor.com/agents/${r.cursor_agent_id}`}\n` +
+        `  ${task} · status=${r.status} · env=${r.app_env || "?"} · tool=${r.source_tool}`
+      );
+    })
+    .join("\n\n");
 }

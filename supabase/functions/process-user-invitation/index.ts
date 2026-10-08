@@ -3,7 +3,8 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+  "Access-Control-Allow-Headers":
+    "authorization, x-client-info, apikey, content-type",
 };
 
 serve(async (req: Request) => {
@@ -23,12 +24,14 @@ serve(async (req: Request) => {
     }
 
     const token = authHeader.replace("Bearer ", "");
-    const { data: { user }, error: userError } = await supabase.auth.getUser(token);
-    
+    const {
+      data: { user },
+      error: userError,
+    } = await supabase.auth.getUser(token);
+
     if (userError || !user) {
       throw new Error("Unauthorized");
     }
-
 
     // Check if user already has an active profile (status = 'active')
     const { data: profileData } = await supabase
@@ -38,10 +41,13 @@ serve(async (req: Request) => {
       .single();
 
     // If user is already active, skip invitation processing
-    if (profileData?.status === 'active') {
+    if (profileData?.status === "active") {
       return new Response(
         JSON.stringify({ success: true, message: "User already active" }),
-        { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 200 }
+        {
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+          status: 200,
+        },
       );
     }
 
@@ -53,16 +59,18 @@ serve(async (req: Request) => {
       .maybeSingle();
 
     if (existingTenant) {
-      
       // Update profile status to active
       await supabase
         .from("profiles")
-        .update({ status: 'active' })
+        .update({ status: "active" })
         .eq("id", user.id);
-      
+
       return new Response(
         JSON.stringify({ success: true, message: "User already has a tenant" }),
-        { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 200 }
+        {
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+          status: 200,
+        },
       );
     }
 
@@ -78,12 +86,15 @@ serve(async (req: Request) => {
 
     if (!invitation) {
       return new Response(
-        JSON.stringify({ 
-          success: false, 
+        JSON.stringify({
+          success: false,
           error: "NO_INVITATION",
-          message: "לא נמצאה הזמנה תקפה למשתמש זה. אנא צור קשר עם המנהל." 
+          message: "לא נמצאה הזמנה תקפה למשתמש זה. אנא צור קשר עם המנהל.",
         }),
-        { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 400 }
+        {
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+          status: 400,
+        },
       );
     }
 
@@ -91,18 +102,28 @@ serve(async (req: Request) => {
     if (invitation.used) {
       return new Response(
         JSON.stringify({ success: true, message: "ההזמנה כבר עובדה בעבר" }),
-        { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 200 }
+        {
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+          status: 200,
+        },
       );
     }
 
-
     const metadata = invitation.metadata as any;
-    const { fullName, role, agencyIds, modulePermissions, campaignerId, salesPersonId } = metadata;
+    const {
+      fullName,
+      role,
+      agencyIds,
+      modulePermissions,
+      campaignerId,
+      salesPersonId,
+    } = metadata;
 
     // Auto-create campaigner if role is campaigner and no campaignerId in metadata
     let effectiveCampaignerId = campaignerId;
     if (role === "campaigner" && !campaignerId && (fullName || user.email)) {
-      const displayName = fullName || user.email?.split("@")[0] || "קמפיינר חדש";
+      const displayName =
+        fullName || user.email?.split("@")[0] || "קמפיינר חדש";
       const { data: newCampaigner, error: cError } = await supabase
         .from("campaigners")
         .insert({
@@ -131,23 +152,23 @@ serve(async (req: Request) => {
 
     // Auto-create sales_people record if role is sales_person, no salesPersonId provided, and fullName is available
     let effectiveSalesPersonId = salesPersonId;
-    if (role === 'sales_person' && !salesPersonId && (fullName || user.email)) {
+    if (role === "sales_person" && !salesPersonId && (fullName || user.email)) {
       const { data: newSalesPerson, error: spError } = await supabase
         .from("sales_people")
         .insert({
-          full_name: fullName || user.email?.split('@')[0] || 'איש מכירות חדש',
+          full_name: fullName || user.email?.split("@")[0] || "איש מכירות חדש",
           email: user.email,
           active: true,
           tenant_id: invitation.tenant_id,
         })
         .select()
         .single();
-      
+
       if (spError) {
         console.error("Error creating sales_people record:", spError);
       } else if (newSalesPerson) {
         effectiveSalesPersonId = newSalesPerson.id;
-        
+
         // Link to agencies if provided
         if (agencyIds && agencyIds.length > 0) {
           const spAgenciesToInsert = agencyIds.map((agencyId: string) => ({
@@ -187,7 +208,7 @@ serve(async (req: Request) => {
     // Update profile status to active
     await supabase
       .from("profiles")
-      .update({ status: 'active' })
+      .update({ status: "active" })
       .eq("id", user.id);
 
     // Set user role (tenant-scoped)
@@ -206,10 +227,7 @@ serve(async (req: Request) => {
     // Set module permissions
     if (modulePermissions && modulePermissions.length > 0) {
       // Delete existing permissions
-      await supabase
-        .from("user_permissions")
-        .delete()
-        .eq("user_id", user.id);
+      await supabase.from("user_permissions").delete().eq("user_id", user.id);
 
       // Insert new permissions
       const permissionsToInsert = modulePermissions.map((module: string) => ({
@@ -218,9 +236,7 @@ serve(async (req: Request) => {
         can_access: true,
       }));
 
-      await supabase
-        .from("user_permissions")
-        .insert(permissionsToInsert);
+      await supabase.from("user_permissions").insert(permissionsToInsert);
     }
 
     // Link campaigner to agencies
@@ -244,17 +260,17 @@ serve(async (req: Request) => {
 
       await supabase
         .from("sales_person_agencies")
-        .upsert(salesPersonAgenciesToInsert, { onConflict: 'sales_person_id,agency_id' });
+        .upsert(salesPersonAgenciesToInsert, {
+          onConflict: "sales_person_id,agency_id",
+        });
     }
 
     // Add user to tenant
-    await supabase
-      .from("tenant_users")
-      .insert({
-        user_id: user.id,
-        tenant_id: invitation.tenant_id,
-        role: role || "member",
-      });
+    await supabase.from("tenant_users").insert({
+      user_id: user.id,
+      tenant_id: invitation.tenant_id,
+      role: role || "member",
+    });
 
     // Mark invitation as used
     await supabase
@@ -267,24 +283,30 @@ serve(async (req: Request) => {
       .eq("id", invitation.id);
 
     // Set active tenant for the user (so they automatically switch to new tenant)
-    await supabase
-      .from("user_active_tenant")
-      .upsert({
+    await supabase.from("user_active_tenant").upsert(
+      {
         user_id: user.id,
         tenant_id: invitation.tenant_id,
         updated_at: new Date().toISOString(),
-      }, { onConflict: "user_id" });
-
+      },
+      { onConflict: "user_id" },
+    );
 
     return new Response(
       JSON.stringify({ success: true, message: "ההזמנה עובדה בהצלחה" }),
-      { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 200 }
+      {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+        status: 200,
+      },
     );
   } catch (error: any) {
     console.error("Error in process-user-invitation:", error);
     return new Response(
       JSON.stringify({ success: false, error: error.message }),
-      { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 500 }
+      {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+        status: 500,
+      },
     );
   }
 });

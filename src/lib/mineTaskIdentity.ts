@@ -48,9 +48,13 @@ export async function fetchMineTaskIdentity(input: {
           .from("campaigner_agencies")
           .select("campaigner_id")
           .in("agency_id", crossTenantAgencyIds);
-        const crossIds = Array.from(new Set((crossRows || []).map((r) => r.campaigner_id)));
+        const crossIds = Array.from(
+          new Set((crossRows || []).map((r) => r.campaigner_id)),
+        );
         if (crossIds.length > 0) {
-          emailQuery = emailQuery.or(`tenant_id.eq.${tenantId},id.in.(${crossIds.join(",")})`);
+          emailQuery = emailQuery.or(
+            `tenant_id.eq.${tenantId},id.in.(${crossIds.join(",")})`,
+          );
         } else {
           emailQuery = emailQuery.eq("tenant_id", tenantId);
         }

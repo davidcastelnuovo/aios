@@ -35,7 +35,10 @@ function monthBounds(month: string): { startDate: string; endDate: string } {
   // Search Console has no data for the future; never ask beyond yesterday.
   const yesterday = new Date();
   yesterday.setDate(yesterday.getDate() - 1);
-  return { startDate: iso(start), endDate: iso(end > yesterday ? yesterday : end) };
+  return {
+    startDate: iso(start),
+    endDate: iso(end > yesterday ? yesterday : end),
+  };
 }
 
 function shiftMonth(month: string, delta: number): string {
@@ -80,16 +83,16 @@ export function useSeoMonthlyGsc(params: {
     enabled = true,
   } = params;
 
-  const { data: personalIntegrations = [], isLoading: loadingPersonal } = useUserIntegrations(
-    tenantIds,
-    "google_search_console",
-    { enabled: enabled && !!clientId },
-  );
+  const { data: personalIntegrations = [], isLoading: loadingPersonal } =
+    useUserIntegrations(tenantIds, "google_search_console", {
+      enabled: enabled && !!clientId,
+    });
 
   const personal = useMemo(() => {
     if (!clientId) return null;
     for (const integration of personalIntegrations as any[]) {
-      const mapped: string | undefined = integration?.settings?.client_sites?.[clientId];
+      const mapped: string | undefined =
+        integration?.settings?.client_sites?.[clientId];
       if (!mapped) continue;
       if (expectedDomain && !seoDomainsMatch(mapped, expectedDomain)) continue;
       return { integrationId: integration.id as string, siteUrl: mapped };
@@ -106,9 +109,12 @@ export function useSeoMonthlyGsc(params: {
   });
 
   const integrationId = personal?.integrationId ?? fallback.integrationId;
-  const resolvedSiteUrl = personal?.siteUrl ?? fallback.siteUrl ?? savedSiteUrl ?? null;
+  const resolvedSiteUrl =
+    personal?.siteUrl ?? fallback.siteUrl ?? savedSiteUrl ?? null;
   const siteUrl =
-    resolvedSiteUrl && expectedDomain && !seoDomainsMatch(resolvedSiteUrl, expectedDomain)
+    resolvedSiteUrl &&
+    expectedDomain &&
+    !seoDomainsMatch(resolvedSiteUrl, expectedDomain)
       ? null
       : resolvedSiteUrl;
 
@@ -136,23 +142,35 @@ export function useSeoMonthlyGsc(params: {
       } = await supabase.auth.getSession();
       if (!session) return EMPTY;
 
-      const windows: Array<{ key: keyof SeoMonthlyGscPeriods; month: string }> = [
-        { key: "current", month },
-        { key: "prev", month: shiftMonth(month, -1) },
-      ];
-      if (baselineMonth) windows.push({ key: "baseline", month: baselineMonth });
+      const windows: Array<{ key: keyof SeoMonthlyGscPeriods; month: string }> =
+        [
+          { key: "current", month },
+          { key: "prev", month: shiftMonth(month, -1) },
+        ];
+      if (baselineMonth)
+        windows.push({ key: "baseline", month: baselineMonth });
 
       const responses = await Promise.all(
         windows.map((w) => {
           const { startDate, endDate } = monthBounds(w.month);
           return supabase.functions.invoke("fetch-gsc-data", {
-            body: { integrationId, siteUrl, startDate, endDate, aggregateAll: true },
+            body: {
+              integrationId,
+              siteUrl,
+              startDate,
+              endDate,
+              aggregateAll: true,
+            },
             headers: { Authorization: `Bearer ${session.access_token}` },
           });
         }),
       );
 
-      const result: SeoMonthlyGscPeriods = { current: [], prev: [], baseline: [] };
+      const result: SeoMonthlyGscPeriods = {
+        current: [],
+        prev: [],
+        baseline: [],
+      };
       windows.forEach((w, i) => {
         const rows = responses[i]?.data?.rows;
         result[w.key] = Array.isArray(rows) ? (rows as GscKeywordData[]) : [];

@@ -28,7 +28,12 @@ export function CreativeImage({ src, alt, className }: Props) {
 
   if (!src || failed) {
     return (
-      <div className={cn("flex items-center justify-center bg-muted text-muted-foreground", className)}>
+      <div
+        className={cn(
+          "flex items-center justify-center bg-muted text-muted-foreground",
+          className,
+        )}
+      >
         <ImageIcon className="h-8 w-8 opacity-40" />
       </div>
     );
@@ -36,7 +41,12 @@ export function CreativeImage({ src, alt, className }: Props) {
 
   if (!resolved) {
     return (
-      <div className={cn("flex items-center justify-center bg-muted text-muted-foreground", className)}>
+      <div
+        className={cn(
+          "flex items-center justify-center bg-muted text-muted-foreground",
+          className,
+        )}
+      >
         <Loader2 className="h-6 w-6 animate-spin opacity-50" />
       </div>
     );

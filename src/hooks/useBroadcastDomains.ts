@@ -2,7 +2,10 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useCurrentTenant } from "@/hooks/useCurrentTenant";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
-import { normalizeSenderEmailParts, formatSenderEmail } from "@/lib/senderEmailDomain";
+import {
+  normalizeSenderEmailParts,
+  formatSenderEmail,
+} from "@/lib/senderEmailDomain";
 
 export interface SenderDomain {
   id: string;
@@ -46,8 +49,11 @@ export function useBroadcastDomains() {
     enabled: !!tenantId,
     queryFn: async (): Promise<SenderDomain[]> => {
       const { data, error } = await supabase
-        .from("broadcast_email_domains").select("*").eq("tenant_id", tenantId)
-        .order("is_default", { ascending: false }).order("created_at", { ascending: true });
+        .from("broadcast_email_domains")
+        .select("*")
+        .eq("tenant_id", tenantId)
+        .order("is_default", { ascending: false })
+        .order("created_at", { ascending: true });
       if (error) throw error;
       return (data || []) as unknown as SenderDomain[];
     },
@@ -55,12 +61,16 @@ export function useBroadcastDomains() {
 
   const add = useMutation({
     mutationFn: async (payload: SenderDomainPayload) => {
-      const { domain, default_local, from_name, wasSwapped } = normalizePayload(payload);
+      const { domain, default_local, from_name, wasSwapped } =
+        normalizePayload(payload);
       if (!domain) throw new Error("missing_domain");
       const isFirst = (list.data || []).length === 0;
       const makeDefault = payload.is_default || isFirst;
       if (makeDefault) {
-        await supabase.from("broadcast_email_domains").update({ is_default: false }).eq("tenant_id", tenantId);
+        await supabase
+          .from("broadcast_email_domains")
+          .update({ is_default: false })
+          .eq("tenant_id", tenantId);
       }
       const { error } = await supabase.from("broadcast_email_domains").insert({
         tenant_id: tenantId,
@@ -77,8 +87,12 @@ export function useBroadcastDomains() {
   });
 
   const update = useMutation({
-    mutationFn: async ({ id, ...payload }: SenderDomainPayload & { id: string }) => {
-      const { domain, default_local, from_name, wasSwapped } = normalizePayload(payload);
+    mutationFn: async ({
+      id,
+      ...payload
+    }: SenderDomainPayload & { id: string }) => {
+      const { domain, default_local, from_name, wasSwapped } =
+        normalizePayload(payload);
       if (!domain) throw new Error("missing_domain");
       const { error } = await supabase
         .from("broadcast_email_domains")
@@ -93,7 +107,10 @@ export function useBroadcastDomains() {
 
   const remove = useMutation({
     mutationFn: async (id: string) => {
-      const { error } = await supabase.from("broadcast_email_domains").delete().eq("id", id);
+      const { error } = await supabase
+        .from("broadcast_email_domains")
+        .delete()
+        .eq("id", id);
       if (error) throw error;
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: key }),
@@ -101,8 +118,14 @@ export function useBroadcastDomains() {
 
   const setDefault = useMutation({
     mutationFn: async (id: string) => {
-      await supabase.from("broadcast_email_domains").update({ is_default: false }).eq("tenant_id", tenantId);
-      const { error } = await supabase.from("broadcast_email_domains").update({ is_default: true }).eq("id", id);
+      await supabase
+        .from("broadcast_email_domains")
+        .update({ is_default: false })
+        .eq("tenant_id", tenantId);
+      const { error } = await supabase
+        .from("broadcast_email_domains")
+        .update({ is_default: true })
+        .eq("id", id);
       if (error) throw error;
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: key }),

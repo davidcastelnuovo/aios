@@ -2,7 +2,8 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-api-key",
+  "Access-Control-Allow-Headers":
+    "authorization, x-client-info, apikey, content-type, x-api-key",
 };
 
 Deno.serve(async (req) => {
@@ -20,21 +21,31 @@ Deno.serve(async (req) => {
   try {
     const supabase = createClient(
       Deno.env.get("SUPABASE_URL")!,
-      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
+      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
     );
 
     const body = await req.json();
     const reports = Array.isArray(body) ? body : [body];
-    const results: Array<{ success: boolean; id?: string; error?: string; domain?: string; action?: string }> = [];
+    const results: Array<{
+      success: boolean;
+      id?: string;
+      error?: string;
+      domain?: string;
+      action?: string;
+    }> = [];
 
     for (const report of reports) {
       let tenant_id = report.tenant_id || report.tenantId || null;
       const client_id = report.client_id || report.clientId || null;
       const agency_id = report.agency_id || report.agencyId || null;
-      const domain = report.domain || report.target || report.url || report.site || null;
-      const report_type = report.report_type || report.reportType || report.type || "general";
-      const report_date = report.report_date || report.reportDate || report.date || null;
-      const report_data = report.report_data || report.reportData || report.data || report;
+      const domain =
+        report.domain || report.target || report.url || report.site || null;
+      const report_type =
+        report.report_type || report.reportType || report.type || "general";
+      const report_date =
+        report.report_date || report.reportDate || report.date || null;
+      const report_data =
+        report.report_data || report.reportData || report.data || report;
       const metadata = report.metadata || report.meta || {};
 
       if (!domain) {
@@ -54,7 +65,11 @@ Deno.serve(async (req) => {
           .not("tenant_id", "is", null)
           .limit(1);
 
-        if (existingReports && existingReports.length > 0 && existingReports[0].tenant_id) {
+        if (
+          existingReports &&
+          existingReports.length > 0 &&
+          existingReports[0].tenant_id
+        ) {
           tenant_id = existingReports[0].tenant_id;
         } else {
           const { data: mcTenant } = await supabase
@@ -111,13 +126,15 @@ Deno.serve(async (req) => {
         }
 
         const { data: existingList } = await existingQuery.limit(1);
-        const existing = existingList && existingList.length > 0 ? existingList[0] : null;
+        const existing =
+          existingList && existingList.length > 0 ? existingList[0] : null;
 
         if (existing) {
           // Update existing report (UPSERT), preserve existing client_id if already set
           const updatePayload: Record<string, unknown> = {
             report_data,
-            metadata: typeof metadata === "object" ? metadata : { raw: metadata },
+            metadata:
+              typeof metadata === "object" ? metadata : { raw: metadata },
             received_at: new Date().toISOString(),
             tenant_id: tenant_id || null,
           };
@@ -134,9 +151,18 @@ Deno.serve(async (req) => {
 
           if (updateError) {
             console.error("Error updating ahrefs report:", updateError);
-            results.push({ success: false, error: updateError.message, domain });
+            results.push({
+              success: false,
+              error: updateError.message,
+              domain,
+            });
           } else {
-            results.push({ success: true, id: existing.id, domain, action: "updated" });
+            results.push({
+              success: true,
+              id: existing.id,
+              domain,
+              action: "updated",
+            });
           }
           continue;
         }
@@ -209,19 +235,25 @@ Deno.serve(async (req) => {
               .eq("integration_type", "ahrefs");
 
             // Find the table matching this specific domain
-            const matchingTable = crmTables?.find((t: any) => {
-              const settings = t.integration_settings as any;
-              return settings?.targetDomain === domain;
-            }) || (crmTables && crmTables.length > 0 ? crmTables[0] : null);
+            const matchingTable =
+              crmTables?.find((t: any) => {
+                const settings = t.integration_settings as any;
+                return settings?.targetDomain === domain;
+              }) || (crmTables && crmTables.length > 0 ? crmTables[0] : null);
 
             if (matchingTable) {
               const crmTableId = matchingTable.id;
-              const rd = report_data as any || {};
+              const rd = (report_data as any) || {};
               const snapshot = rd.snapshot || {};
-              const organicKeywords = Array.isArray(rd.organic_keywords) ? rd.organic_keywords : [];
-              const trackedKeywords = Array.isArray(rd.tracked_keywords) ? rd.tracked_keywords : [];
+              const organicKeywords = Array.isArray(rd.organic_keywords)
+                ? rd.organic_keywords
+                : [];
+              const trackedKeywords = Array.isArray(rd.tracked_keywords)
+                ? rd.tracked_keywords
+                : [];
               const allKeywords = [...organicKeywords, ...trackedKeywords];
-              const reportDateVal = report_date || new Date().toISOString().split("T")[0];
+              const reportDateVal =
+                report_date || new Date().toISOString().split("T")[0];
 
               // Delete existing records for this specific report_date
               await supabase
@@ -241,8 +273,10 @@ Deno.serve(async (req) => {
                       keyword: String(kw.keyword || ""),
                       position: kw.position ?? null,
                       position_prev_month: kw.position_prev_month ?? null,
-                      position_change: kw.position_prev_month != null && kw.position != null
-                        ? kw.position_prev_month - kw.position : null,
+                      position_change:
+                        kw.position_prev_month != null && kw.position != null
+                          ? kw.position_prev_month - kw.position
+                          : null,
                       traffic: kw.traffic ?? 0,
                       traffic_prev_month: kw.traffic_prev_month ?? 0,
                       volume: kw.volume ?? 0,
@@ -280,7 +314,9 @@ Deno.serve(async (req) => {
                 const batch = crmRecords.slice(i, i + batchSize);
                 await supabase.from("crm_records").insert(batch);
               }
-              console.log(`Auto-synced ${crmRecords.length} records to crm_records for table ${crmTableId}`);
+              console.log(
+                `Auto-synced ${crmRecords.length} records to crm_records for table ${crmTableId}`,
+              );
             }
           } catch (e) {
             console.error("Error auto-syncing to crm_records:", e);
@@ -300,7 +336,7 @@ Deno.serve(async (req) => {
       {
         status: allSuccess ? 200 : 207,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
-      }
+      },
     );
   } catch (error) {
     console.error("Error in ahrefs-webhook:", error);

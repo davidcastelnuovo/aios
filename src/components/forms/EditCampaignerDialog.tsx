@@ -1,8 +1,25 @@
 import { useState, useEffect } from "react";
 import { useQueryClient, useMutation, useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogClose } from "@/components/ui/dialog";
-import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+  DialogClose,
+} from "@/components/ui/dialog";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -38,7 +55,11 @@ interface EditCampaignerDialogProps {
   onOpenChange?: (open: boolean) => void;
 }
 
-export function EditCampaignerDialog({ campaigner, open: externalOpen, onOpenChange }: EditCampaignerDialogProps) {
+export function EditCampaignerDialog({
+  campaigner,
+  open: externalOpen,
+  onOpenChange,
+}: EditCampaignerDialogProps) {
   const [internalOpen, setInternalOpen] = useState(false);
   const isControlled = externalOpen !== undefined;
   const open = isControlled ? externalOpen : internalOpen;
@@ -69,7 +90,10 @@ export function EditCampaignerDialog({ campaigner, open: externalOpen, onOpenCha
         .select("agency_id")
         .eq("campaigner_id", campaigner.id);
       if (data) {
-        setFormData(prev => ({ ...prev, agency_ids: data.map(ca => ca.agency_id) }));
+        setFormData((prev) => ({
+          ...prev,
+          agency_ids: data.map((ca) => ca.agency_id),
+        }));
       }
     };
     if (open) loadAgencies();
@@ -103,7 +127,7 @@ export function EditCampaignerDialog({ campaigner, open: externalOpen, onOpenCha
 
       // הוספת הקשרים החדשים
       if (agency_ids.length > 0) {
-        const agencyLinks = agency_ids.map(agencyId => ({
+        const agencyLinks = agency_ids.map((agencyId) => ({
           campaigner_id: campaigner.id,
           agency_id: agencyId,
         }));
@@ -182,7 +206,10 @@ export function EditCampaignerDialog({ campaigner, open: externalOpen, onOpenCha
           </Button>
         </DialogTrigger>
       )}
-      <DialogContent dir="rtl" className="max-w-2xl max-h-[90vh] overflow-y-auto">
+      <DialogContent
+        dir="rtl"
+        className="max-w-2xl max-h-[90vh] overflow-y-auto"
+      >
         <DialogHeader className="relative">
           <DialogTitle>ערוך איש צוות</DialogTitle>
           <DialogClose className="absolute left-4 top-4 rounded-sm opacity-70 ring-offset-background transition-opacity hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:pointer-events-none data-[state=open]:bg-accent data-[state=open]:text-muted-foreground">
@@ -196,7 +223,9 @@ export function EditCampaignerDialog({ campaigner, open: externalOpen, onOpenCha
             <Input
               id="full_name"
               value={formData.full_name}
-              onChange={(e) => setFormData({ ...formData, full_name: e.target.value })}
+              onChange={(e) =>
+                setFormData({ ...formData, full_name: e.target.value })
+              }
               required
             />
           </div>
@@ -204,8 +233,15 @@ export function EditCampaignerDialog({ campaigner, open: externalOpen, onOpenCha
           {agencies && (
             <div className="space-y-2">
               <Label>סוכנויות *</Label>
-              {agencies?.filter(a => a.name.toLowerCase().includes(agencySearchEC.toLowerCase())).map((agency) => (
-                  <div key={agency.id} className="flex items-center space-x-2 space-x-reverse">
+              {agencies
+                ?.filter((a) =>
+                  a.name.toLowerCase().includes(agencySearchEC.toLowerCase()),
+                )
+                .map((agency) => (
+                  <div
+                    key={agency.id}
+                    className="flex items-center space-x-2 space-x-reverse"
+                  >
                     <input
                       type="checkbox"
                       id={`agency-${agency.id}`}
@@ -213,12 +249,17 @@ export function EditCampaignerDialog({ campaigner, open: externalOpen, onOpenCha
                       onChange={(e) => {
                         const newValue = e.target.checked
                           ? [...formData.agency_ids, agency.id]
-                          : formData.agency_ids.filter(id => id !== agency.id);
+                          : formData.agency_ids.filter(
+                              (id) => id !== agency.id,
+                            );
                         setFormData({ ...formData, agency_ids: newValue });
                       }}
                       className="rounded border-gray-300"
                     />
-                    <label htmlFor={`agency-${agency.id}`} className="text-sm cursor-pointer">
+                    <label
+                      htmlFor={`agency-${agency.id}`}
+                      className="text-sm cursor-pointer"
+                    >
                       {agency.name}
                     </label>
                   </div>
@@ -233,7 +274,10 @@ export function EditCampaignerDialog({ campaigner, open: externalOpen, onOpenCha
                 <p className="text-sm text-muted-foreground">טוען תפקידים...</p>
               ) : (
                 teamRoles.map((role) => (
-                  <div key={role.key} className="flex items-center space-x-2 space-x-reverse">
+                  <div
+                    key={role.key}
+                    className="flex items-center space-x-2 space-x-reverse"
+                  >
                     <input
                       type="checkbox"
                       id={`edit-role-${role.key}`}
@@ -241,12 +285,15 @@ export function EditCampaignerDialog({ campaigner, open: externalOpen, onOpenCha
                       onChange={(e) => {
                         const newValue = e.target.checked
                           ? [...formData.roles, role.label]
-                          : formData.roles.filter(r => r !== role.label);
+                          : formData.roles.filter((r) => r !== role.label);
                         setFormData({ ...formData, roles: newValue });
                       }}
                       className="rounded border-gray-300"
                     />
-                    <label htmlFor={`edit-role-${role.key}`} className="text-sm cursor-pointer">
+                    <label
+                      htmlFor={`edit-role-${role.key}`}
+                      className="text-sm cursor-pointer"
+                    >
                       {role.label}
                     </label>
                   </div>
@@ -260,7 +307,9 @@ export function EditCampaignerDialog({ campaigner, open: externalOpen, onOpenCha
             <Input
               id="phone"
               value={formData.phone}
-              onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
+              onChange={(e) =>
+                setFormData({ ...formData, phone: e.target.value })
+              }
             />
           </div>
 
@@ -270,7 +319,9 @@ export function EditCampaignerDialog({ campaigner, open: externalOpen, onOpenCha
               id="email"
               type="email"
               value={formData.email}
-              onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+              onChange={(e) =>
+                setFormData({ ...formData, email: e.target.value })
+              }
             />
           </div>
 
@@ -279,7 +330,9 @@ export function EditCampaignerDialog({ campaigner, open: externalOpen, onOpenCha
             <Input
               id="folder_link"
               value={formData.folder_link}
-              onChange={(e) => setFormData({ ...formData, folder_link: e.target.value })}
+              onChange={(e) =>
+                setFormData({ ...formData, folder_link: e.target.value })
+              }
             />
           </div>
 
@@ -288,7 +341,9 @@ export function EditCampaignerDialog({ campaigner, open: externalOpen, onOpenCha
             <Input
               id="whatsapp_group_id"
               value={formData.whatsapp_group_id}
-              onChange={(e) => setFormData({ ...formData, whatsapp_group_id: e.target.value })}
+              onChange={(e) =>
+                setFormData({ ...formData, whatsapp_group_id: e.target.value })
+              }
               placeholder="לדוגמה: 972501234567-1234567890@g.us"
             />
           </div>
@@ -298,7 +353,9 @@ export function EditCampaignerDialog({ campaigner, open: externalOpen, onOpenCha
             <Textarea
               id="notes"
               value={formData.notes}
-              onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
+              onChange={(e) =>
+                setFormData({ ...formData, notes: e.target.value })
+              }
             />
           </div>
 
@@ -307,7 +364,9 @@ export function EditCampaignerDialog({ campaigner, open: externalOpen, onOpenCha
             <Switch
               id="active"
               checked={formData.active}
-              onCheckedChange={(checked) => setFormData({ ...formData, active: checked })}
+              onCheckedChange={(checked) =>
+                setFormData({ ...formData, active: checked })
+              }
             />
           </div>
 
@@ -339,9 +398,13 @@ export function EditCampaignerDialog({ campaigner, open: externalOpen, onOpenCha
                 </AlertDialogFooter>
               </AlertDialogContent>
             </AlertDialog>
-            
+
             <div className="flex gap-2">
-              <Button type="button" variant="outline" onClick={() => setOpen(false)}>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setOpen(false)}
+              >
                 ביטול
               </Button>
               <Button type="submit" disabled={updateMutation.isPending}>

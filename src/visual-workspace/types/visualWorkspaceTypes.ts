@@ -11,12 +11,7 @@ export type IslandId =
   | "agents";
 
 export type AgentState =
-  | "idle"
-  | "working"
-  | "waiting"
-  | "error"
-  | "completed"
-  | "overloaded";
+  "idle" | "working" | "waiting" | "error" | "completed" | "overloaded";
 
 export type AgentRole =
   | "ceo"

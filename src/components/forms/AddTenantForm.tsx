@@ -44,12 +44,12 @@ interface AddTenantFormProps {
   onOpenChange?: (open: boolean) => void;
 }
 
-export function AddTenantForm({ 
-  onSuccess, 
-  asDialog = true, 
+export function AddTenantForm({
+  onSuccess,
+  asDialog = true,
   parentTenantId,
   open: controlledOpen,
-  onOpenChange 
+  onOpenChange,
 }: AddTenantFormProps) {
   const queryClient = useQueryClient();
   const { userId } = useCurrentUser();
@@ -64,7 +64,8 @@ export function AddTenantForm({
     allow_super_admin_access: true,
   });
   const [selectedTemplateId, setSelectedTemplateId] = useState<string>("");
-  const [selectedTerminologyPresetId, setSelectedTerminologyPresetId] = useState<string>("");
+  const [selectedTerminologyPresetId, setSelectedTerminologyPresetId] =
+    useState<string>("");
 
   // Use controlled or internal state
   const open = controlledOpen !== undefined ? controlledOpen : internalOpen;
@@ -110,14 +111,27 @@ export function AddTenantForm({
         .select("id, name, description, is_public")
         .order("name");
       if (error) throw error;
-      return data as unknown as { id: string; name: string; description: string | null; is_public: boolean }[];
+      return data as unknown as {
+        id: string;
+        name: string;
+        description: string | null;
+        is_public: boolean;
+      }[];
     },
   });
 
-  const [selectedParentTenant, setSelectedParentTenant] = useState<string>(parentTenantId || "");
+  const [selectedParentTenant, setSelectedParentTenant] = useState<string>(
+    parentTenantId || "",
+  );
 
   const addTenantMutation = useMutation({
-    mutationFn: async (data: typeof formData & { parent_tenant_id?: string; template_id?: string; terminology_preset_id?: string }) => {
+    mutationFn: async (
+      data: typeof formData & {
+        parent_tenant_id?: string;
+        template_id?: string;
+        terminology_preset_id?: string;
+      },
+    ) => {
       // Call edge function to create tenant with owner invitation
       const { data: result, error } = await supabase.functions.invoke(
         "create-tenant-with-owner",
@@ -132,7 +146,7 @@ export function AddTenantForm({
             template_id: data.template_id || null,
             terminology_preset_id: data.terminology_preset_id || null,
           },
-        }
+        },
       );
 
       if (error) throw error;
@@ -142,32 +156,34 @@ export function AddTenantForm({
       // Invalidate all user-tenants queries (with any suffix)
       queryClient.invalidateQueries({ queryKey: ["user-tenants"] });
       queryClient.invalidateQueries({ queryKey: ["tenants"] });
-      
+
       // Store new tenant ID for switch dialog
       if (result?.tenant?.id) {
         setNewTenantId(result.tenant.id);
       }
-      
+
       // Show invitation URL to admin
       if (result?.invitation?.invitation_url) {
         toast.success(
           <div className="space-y-2">
             <p>הארגון נוסף בהצלחה!</p>
-            <p className="text-xs">קישור הזמנה ל-owner נשלח ל: {formData.contact_email}</p>
-            <a 
-              href={result.invitation.invitation_url} 
-              target="_blank" 
+            <p className="text-xs">
+              קישור הזמנה ל-owner נשלח ל: {formData.contact_email}
+            </p>
+            <a
+              href={result.invitation.invitation_url}
+              target="_blank"
               className="text-xs underline block"
             >
               {result.invitation.invitation_url}
             </a>
           </div>,
-          { duration: 10000 }
+          { duration: 10000 },
         );
       } else {
         toast.success("הארגון נוסף בהצלחה!");
       }
-      
+
       setFormData({
         name: "",
         contact_name: "",
@@ -179,10 +195,10 @@ export function AddTenantForm({
       setSelectedTemplateId("");
       setSelectedTerminologyPresetId("");
       setOpen(false);
-      
+
       // Show switch dialog
       setShowSwitchDialog(true);
-      
+
       onSuccess?.();
     },
     onError: (error: Error) => {
@@ -192,16 +208,17 @@ export function AddTenantForm({
 
   const handleSwitchToNewTenant = async () => {
     if (!newTenantId || !userId) return;
-    
+
     try {
-      await supabase
-        .from("user_active_tenant")
-        .upsert({
+      await supabase.from("user_active_tenant").upsert(
+        {
           user_id: userId,
           tenant_id: newTenantId,
           updated_at: new Date().toISOString(),
-        }, { onConflict: "user_id" });
-      
+        },
+        { onConflict: "user_id" },
+      );
+
       localStorage.setItem("selectedTenantId", newTenantId);
       window.location.href = "/";
     } catch (error) {
@@ -213,18 +230,26 @@ export function AddTenantForm({
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     // Use parentTenantId prop if provided, otherwise use selectedParentTenant (if not empty)
-    const finalParentId = parentTenantId || (selectedParentTenant && selectedParentTenant !== "" ? selectedParentTenant : undefined);
+    const finalParentId =
+      parentTenantId ||
+      (selectedParentTenant && selectedParentTenant !== ""
+        ? selectedParentTenant
+        : undefined);
     // Get template_id from selected template (if valid)
-    const templateId = selectedTemplateId && selectedTemplateId !== "__none__" ? selectedTemplateId : undefined;
-    
+    const templateId =
+      selectedTemplateId && selectedTemplateId !== "__none__"
+        ? selectedTemplateId
+        : undefined;
+
     // If template is selected, get its source_tenant_id
-    const template = templates?.find(t => t.id === templateId);
-    
+    const template = templates?.find((t) => t.id === templateId);
+
     // Get terminology preset id
-    const terminologyPresetId = selectedTerminologyPresetId && selectedTerminologyPresetId !== "__none__" 
-      ? selectedTerminologyPresetId 
-      : undefined;
-    
+    const terminologyPresetId =
+      selectedTerminologyPresetId && selectedTerminologyPresetId !== "__none__"
+        ? selectedTerminologyPresetId
+        : undefined;
+
     addTenantMutation.mutate({
       ...formData,
       parent_tenant_id: finalParentId,
@@ -239,8 +264,8 @@ export function AddTenantForm({
       {terminologyPresets && terminologyPresets.length > 0 && (
         <div className="space-y-2">
           <Label htmlFor="terminology_preset">פריסט טרמינולוגיה *</Label>
-          <Select 
-            value={selectedTerminologyPresetId || "__none__"} 
+          <Select
+            value={selectedTerminologyPresetId || "__none__"}
             onValueChange={setSelectedTerminologyPresetId}
           >
             <SelectTrigger id="terminology_preset">
@@ -251,16 +276,21 @@ export function AddTenantForm({
               {terminologyPresets.map((preset) => (
                 <SelectItem key={preset.id} value={preset.id}>
                   {preset.name}
-                  {preset.is_public && !preset.description?.includes("מותאם") && " (ברירת מחדל)"}
+                  {preset.is_public &&
+                    !preset.description?.includes("מותאם") &&
+                    " (ברירת מחדל)"}
                 </SelectItem>
               ))}
             </SelectContent>
           </Select>
-          {selectedTerminologyPresetId && selectedTerminologyPresetId !== "__none__" && (
-            <p className="text-xs text-muted-foreground">
-              {terminologyPresets.find(p => p.id === selectedTerminologyPresetId)?.description || ""}
-            </p>
-          )}
+          {selectedTerminologyPresetId &&
+            selectedTerminologyPresetId !== "__none__" && (
+              <p className="text-xs text-muted-foreground">
+                {terminologyPresets.find(
+                  (p) => p.id === selectedTerminologyPresetId,
+                )?.description || ""}
+              </p>
+            )}
         </div>
       )}
 
@@ -280,7 +310,9 @@ export function AddTenantForm({
         <Input
           id="contact_name"
           value={formData.contact_name}
-          onChange={(e) => setFormData({ ...formData, contact_name: e.target.value })}
+          onChange={(e) =>
+            setFormData({ ...formData, contact_name: e.target.value })
+          }
           placeholder="שם מלא"
           required
         />
@@ -292,7 +324,9 @@ export function AddTenantForm({
           id="contact_email"
           type="email"
           value={formData.contact_email}
-          onChange={(e) => setFormData({ ...formData, contact_email: e.target.value })}
+          onChange={(e) =>
+            setFormData({ ...formData, contact_email: e.target.value })
+          }
           placeholder="email@example.com"
           required
         />
@@ -304,12 +338,19 @@ export function AddTenantForm({
       {!parentTenantId && tenants && tenants.length > 0 && (
         <div className="space-y-2">
           <Label htmlFor="parent_tenant">ארגון אב (אופציונלי)</Label>
-          <Select value={selectedParentTenant || "__none__"} onValueChange={(value) => setSelectedParentTenant(value === "__none__" ? "" : value)}>
+          <Select
+            value={selectedParentTenant || "__none__"}
+            onValueChange={(value) =>
+              setSelectedParentTenant(value === "__none__" ? "" : value)
+            }
+          >
             <SelectTrigger id="parent_tenant">
               <SelectValue placeholder="בחר ארגון אב אם זה תת-ארגון" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="__none__">ללא ארגון אב (ארגון עצמאי)</SelectItem>
+              <SelectItem value="__none__">
+                ללא ארגון אב (ארגון עצמאי)
+              </SelectItem>
               {tenants.map((tenant) => (
                 <SelectItem key={tenant.id} value={tenant.id}>
                   {tenant.name}
@@ -327,7 +368,10 @@ export function AddTenantForm({
       {templates && templates.length > 0 && (
         <div className="space-y-2">
           <Label htmlFor="template">טמפלייט (אופציונלי)</Label>
-          <Select value={selectedTemplateId || "__none__"} onValueChange={setSelectedTemplateId}>
+          <Select
+            value={selectedTemplateId || "__none__"}
+            onValueChange={setSelectedTemplateId}
+          >
             <SelectTrigger id="template">
               <SelectValue placeholder="בחר טמפלייט" />
             </SelectTrigger>
@@ -342,7 +386,8 @@ export function AddTenantForm({
             </SelectContent>
           </Select>
           <p className="text-xs text-muted-foreground">
-            טמפלייט מעתיק הגדרות: שדות מותאמים, תפריטים, טרמינולוגיה, אוטומציות ועוד
+            טמפלייט מעתיק הגדרות: שדות מותאמים, תפריטים, טרמינולוגיה, אוטומציות
+            ועוד
           </p>
         </div>
       )}
@@ -363,18 +408,22 @@ export function AddTenantForm({
           <div className="flex items-start gap-2 flex-1">
             <ShieldCheck className="h-5 w-5 text-primary mt-0.5" />
             <div className="space-y-1">
-              <Label htmlFor="allow_super_admin_access" className="text-base font-semibold cursor-pointer">
+              <Label
+                htmlFor="allow_super_admin_access"
+                className="text-base font-semibold cursor-pointer"
+              >
                 אפשר גישת Super Admin
               </Label>
               <p className="text-xs text-muted-foreground">
-                קבע האם Super Admin יוכל לצפות ולערוך נתונים בארגון זה. ברירת מחדל: מופעל
+                קבע האם Super Admin יוכל לצפות ולערוך נתונים בארגון זה. ברירת
+                מחדל: מופעל
               </p>
             </div>
           </div>
           <Switch
             id="allow_super_admin_access"
             checked={formData.allow_super_admin_access}
-            onCheckedChange={(checked) => 
+            onCheckedChange={(checked) =>
               setFormData({ ...formData, allow_super_admin_access: checked })
             }
           />
@@ -452,9 +501,11 @@ export function AddTenantForm({
         )}
         <DialogContent className="sm:max-w-[500px] max-h-[90vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>{parentTenantId ? "הוספת תת-ארגון" : "הוספת ארגון חדש"}</DialogTitle>
+            <DialogTitle>
+              {parentTenantId ? "הוספת תת-ארגון" : "הוספת ארגון חדש"}
+            </DialogTitle>
             <DialogDescription>
-              {parentTenantId 
+              {parentTenantId
                 ? "צור תת-ארגון חדש תחת הארגון הנבחר והזמן owner לניהול."
                 : "צור ארגון חדש והזמן owner לניהול הארגון. ה-owner יקבל גישה מלאה לכל המודולים."}
             </DialogDescription>

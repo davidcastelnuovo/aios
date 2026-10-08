@@ -18,15 +18,29 @@ export type SeoPriorBrief = {
 
 export type SeoIntakePreview = {
   website: string | null;
-  wordpressSites: Array<{ id: string; site_url: string; site_name: string | null; is_active: boolean | null }>;
+  wordpressSites: Array<{
+    id: string;
+    site_url: string;
+    site_name: string | null;
+    is_active: boolean | null;
+  }>;
   priorBriefs: SeoPriorBrief[];
   ahrefsReportCount: number;
   trackedKeywordCount: number;
   rankDomains: string[];
 };
 
-export async function fetchSeoIntakePreview(tenantId: string, clientId: string): Promise<SeoIntakePreview> {
-  const [{ data: client }, { data: wpSites }, { data: items }, { count: ahrefsReportCount }, { data: projects }] = await Promise.all([
+export async function fetchSeoIntakePreview(
+  tenantId: string,
+  clientId: string,
+): Promise<SeoIntakePreview> {
+  const [
+    { data: client },
+    { data: wpSites },
+    { data: items },
+    { count: ahrefsReportCount },
+    { data: projects },
+  ] = await Promise.all([
     supabase.from("clients").select("website").eq("id", clientId).maybeSingle(),
     supabase
       .from("social_media_wordpress_sites")
@@ -40,13 +54,26 @@ export async function fetchSeoIntakePreview(tenantId: string, clientId: string):
       .eq("client_id", clientId)
       .order("updated_at", { ascending: false })
       .limit(12),
-    supabase.from("ahrefs_reports").select("id", { count: "exact", head: true }).eq("tenant_id", tenantId).eq("client_id", clientId),
-    supabase.from("rank_tracking_projects").select("id,domain").eq("tenant_id", tenantId).eq("client_id", clientId).eq("is_active", true),
+    supabase
+      .from("ahrefs_reports")
+      .select("id", { count: "exact", head: true })
+      .eq("tenant_id", tenantId)
+      .eq("client_id", clientId),
+    supabase
+      .from("rank_tracking_projects")
+      .select("id,domain")
+      .eq("tenant_id", tenantId)
+      .eq("client_id", clientId)
+      .eq("is_active", true),
   ]);
 
   const projectIds = (projects ?? []).map((p) => p.id);
   const { count: keywordCount } = projectIds.length
-    ? await supabase.from("rank_tracking_keywords").select("id", { count: "exact", head: true }).in("project_id", projectIds).eq("is_active", true)
+    ? await supabase
+        .from("rank_tracking_keywords")
+        .select("id", { count: "exact", head: true })
+        .in("project_id", projectIds)
+        .eq("is_active", true)
     : { count: 0 };
 
   const priorBriefs: SeoPriorBrief[] = (items ?? [])

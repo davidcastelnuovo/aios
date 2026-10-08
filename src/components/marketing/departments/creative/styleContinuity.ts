@@ -3,11 +3,13 @@ import type { CreativeLayer, CreativeVariation } from "./types";
 
 /** A designed field under type — not a thin accent bar. */
 export const isTypePlate = (layer: CreativeLayer): boolean =>
-  layer.type === "shape"
-  && (layer.width ?? 0) >= 20
-  && (layer.height ?? 0) >= 6;
+  layer.type === "shape" &&
+  (layer.width ?? 0) >= 20 &&
+  (layer.height ?? 0) >= 6;
 
-export const usesIntegratedType = (variation: Pick<CreativeVariation, "layers" | "compositionId">): boolean =>
+export const usesIntegratedType = (
+  variation: Pick<CreativeVariation, "layers" | "compositionId">,
+): boolean =>
   variation.compositionId === "flush" || !variation.layers.some(isTypePlate);
 
 export const missingCopyBlocks = (
@@ -77,15 +79,21 @@ export const buildStylePlayLock = ({
   index?: number;
   avoidLabels?: string[];
 }): string => {
-  const seed = hashStylePlaySeed(`${copyKey || ""}|${copyLabel || ""}|${copyText || ""}|${index}`);
+  const seed = hashStylePlaySeed(
+    `${copyKey || ""}|${copyLabel || ""}|${copyText || ""}|${index}`,
+  );
   const play = pickStylePlay(seed);
   return [
     "STYLE PLAY — style means TECHNIQUE, color family, and composition approach. It is not a photocopy.",
     `This card's unique staging: ${play.cast}. Crop: ${play.crop}. Graphic marks: ${play.mark}.`,
     "Change characters, props, sketches, stamps, cut-outs, and crop so they illustrate THIS sentence.",
-    avoidLabels?.length ? `Do not echo these earlier cards: ${avoidLabels.join("; ")}.` : "",
+    avoidLabels?.length
+      ? `Do not echo these earlier cards: ${avoidLabels.join("; ")}.`
+      : "",
     "Two cards in the same style must be instantly distinguishable. If this still could be mistaken for another variation, it failed.",
-  ].filter(Boolean).join(" ");
+  ]
+    .filter(Boolean)
+    .join(" ");
 };
 
 export const buildStyleContinuityLock = ({
@@ -96,15 +104,19 @@ export const buildStyleContinuityLock = ({
   sourceLabel?: string;
   sourceIdea?: string;
   attachStill?: boolean;
-}): string => [
-  attachStill
-    ? "CAMPAIGN STYLE LOCK — an approved still is attached as a TECHNIQUE sample only (paper, ink, collage method, color family)."
-    : "CAMPAIGN STYLE LOCK — keep the same TECHNIQUE family (paper, ink, collage method, color family, composition approach). No still is attached to copy — invent a new picture.",
-  sourceLabel && `Technique sample from: ${sourceLabel}.`,
-  sourceIdea && `That card staged: "${sourceIdea}". Steal the craft, not the picture.`,
-  "STYLE ≠ CLONE. Style means technique, color family, and composition approach. It does NOT mean copy the face, pose, crop, props, or graphic marks 1-to-1.",
-  "Invent a NEW board for THIS copy: new people, new pose, new props, new sketches/stamps/cut-outs, new crop. Play with the arrangement.",
-  "A stranger must see the new message. If this still looks like a reprint of the sample, it failed.",
-  "No caption plates and no cream/white rectangles under type. Type sits flush in a designed pocket (torn paper, shadow, color bloom).",
-  "Same campaign art director — different picture every time.",
-].filter(Boolean).join(" ");
+}): string =>
+  [
+    attachStill
+      ? "CAMPAIGN STYLE LOCK — an approved still is attached as a TECHNIQUE sample only (paper, ink, collage method, color family)."
+      : "CAMPAIGN STYLE LOCK — keep the same TECHNIQUE family (paper, ink, collage method, color family, composition approach). No still is attached to copy — invent a new picture.",
+    sourceLabel && `Technique sample from: ${sourceLabel}.`,
+    sourceIdea &&
+      `That card staged: "${sourceIdea}". Steal the craft, not the picture.`,
+    "STYLE ≠ CLONE. Style means technique, color family, and composition approach. It does NOT mean copy the face, pose, crop, props, or graphic marks 1-to-1.",
+    "Invent a NEW board for THIS copy: new people, new pose, new props, new sketches/stamps/cut-outs, new crop. Play with the arrangement.",
+    "A stranger must see the new message. If this still looks like a reprint of the sample, it failed.",
+    "No caption plates and no cream/white rectangles under type. Type sits flush in a designed pocket (torn paper, shadow, color bloom).",
+    "Same campaign art director — different picture every time.",
+  ]
+    .filter(Boolean)
+    .join(" ");

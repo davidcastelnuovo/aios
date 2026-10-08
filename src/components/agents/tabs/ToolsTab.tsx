@@ -14,7 +14,9 @@ import { AGENT_TOOLS_CATALOG as ALL_TOOLS } from "@/lib/agentToolsCatalog";
 export function ToolsTab({ agent }: { agent: any }) {
   const qc = useQueryClient();
   const { tenantId } = useCurrentTenant();
-  const [selected, setSelected] = useState<Set<string>>(new Set(agent.allowed_tools || []));
+  const [selected, setSelected] = useState<Set<string>>(
+    new Set(agent.allowed_tools || []),
+  );
   const [search, setSearch] = useState("");
 
   useEffect(() => {
@@ -38,12 +40,16 @@ export function ToolsTab({ agent }: { agent: any }) {
 
   const toggle = (name: string) => {
     const next = new Set(selected);
-    if (next.has(name)) next.delete(name); else next.add(name);
+    if (next.has(name)) next.delete(name);
+    else next.add(name);
     setSelected(next);
   };
 
-  const filtered = ALL_TOOLS.filter(t =>
-    !search || t.label.includes(search) || t.name.includes(search.toLowerCase())
+  const filtered = ALL_TOOLS.filter(
+    (t) =>
+      !search ||
+      t.label.includes(search) ||
+      t.name.includes(search.toLowerCase()),
   );
   const groups: Record<string, typeof ALL_TOOLS> = {};
   for (const t of filtered) (groups[t.group] ||= []).push(t);
@@ -55,28 +61,48 @@ export function ToolsTab({ agent }: { agent: any }) {
       <div className="flex items-center gap-2">
         <Wrench className="h-5 w-5 text-primary" />
         <h3 className="font-semibold">כלים מאופשרים</h3>
-        <Badge variant="outline">{allSelected ? "כל הכלים" : `${selected.size} נבחרו`}</Badge>
+        <Badge variant="outline">
+          {allSelected ? "כל הכלים" : `${selected.size} נבחרו`}
+        </Badge>
         <div className="flex-1" />
-        <Button size="sm" variant="outline" onClick={() => setSelected(new Set())}>
+        <Button
+          size="sm"
+          variant="outline"
+          onClick={() => setSelected(new Set())}
+        >
           אפשר הכל
         </Button>
-        <Button size="sm" onClick={() => save.mutate()} disabled={save.isPending}>
+        <Button
+          size="sm"
+          onClick={() => save.mutate()}
+          disabled={save.isPending}
+        >
           {save.isPending ? "שומר..." : "שמור"}
         </Button>
       </div>
 
       <div className="relative">
         <Search className="absolute right-3 top-2.5 h-4 w-4 text-muted-foreground" />
-        <Input placeholder="חיפוש כלי..." value={search} onChange={e => setSearch(e.target.value)} className="pr-9" />
+        <Input
+          placeholder="חיפוש כלי..."
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          className="pr-9"
+        />
       </div>
 
       <div className="space-y-3">
         {Object.entries(groups).map(([group, tools]) => (
           <Card key={group} className="p-3">
-            <h4 className="text-sm font-medium mb-2 text-muted-foreground">{group}</h4>
+            <h4 className="text-sm font-medium mb-2 text-muted-foreground">
+              {group}
+            </h4>
             <div className="grid grid-cols-2 gap-2">
-              {tools.map(t => (
-                <label key={t.name} className="flex items-center gap-2 cursor-pointer text-sm">
+              {tools.map((t) => (
+                <label
+                  key={t.name}
+                  className="flex items-center gap-2 cursor-pointer text-sm"
+                >
                   <Checkbox
                     checked={selected.size === 0 || selected.has(t.name)}
                     onCheckedChange={() => toggle(t.name)}

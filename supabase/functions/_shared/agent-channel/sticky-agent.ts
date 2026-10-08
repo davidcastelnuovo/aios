@@ -12,7 +12,9 @@ export function asCloudAgentId(value?: string | null): string | null {
   return asCursorSessionId(value);
 }
 
-export function uniqueCloudAgentIds(...values: Array<string | null | undefined>): string[] {
+export function uniqueCloudAgentIds(
+  ...values: Array<string | null | undefined>
+): string[] {
   const out: string[] = [];
   for (const value of values) {
     const id = asCloudAgentId(value);
@@ -25,23 +27,36 @@ export function envOpenChatId(
   provider: OpenChatProvider,
   env: Record<string, string | undefined> = {},
 ): string | null {
-  return asCloudAgentId(env.CURSOR_DIRECT_AGENT_ID) || asCloudAgentId(env.CURSOR_STICKY_AGENT_ID);
+  return (
+    asCloudAgentId(env.CURSOR_DIRECT_AGENT_ID) ||
+    asCloudAgentId(env.CURSOR_STICKY_AGENT_ID)
+  );
 }
 
 /** Opt-in sticky reuse for Command Center Cursor Direct (default: new agent per message). */
-export function cursorDirectStickyEnabled(env: Record<string, string | undefined> = {}): boolean {
+export function cursorDirectStickyEnabled(
+  env: Record<string, string | undefined> = {},
+): boolean {
   if (lightweightBrainEnabled(env)) return true;
   return String(env.CURSOR_DIRECT_STICKY || "").toLowerCase() === "true";
 }
 
-export function allowCreateNewCloudAgent(env: Record<string, string | undefined> = {}): boolean {
+export function allowCreateNewCloudAgent(
+  env: Record<string, string | undefined> = {},
+): boolean {
   if (lightweightBrainEnabled(env)) {
-    return String(env.CURSOR_DIRECT_ALLOW_CREATE || "").toLowerCase() === "true";
+    return (
+      String(env.CURSOR_DIRECT_ALLOW_CREATE || "").toLowerCase() === "true"
+    );
   }
   if (cursorDirectStickyEnabled(env)) {
-    return String(env.CURSOR_DIRECT_ALLOW_CREATE || "").toLowerCase() === "true";
+    return (
+      String(env.CURSOR_DIRECT_ALLOW_CREATE || "").toLowerCase() === "true"
+    );
   }
-  return String(env.CURSOR_DIRECT_ALLOW_CREATE || "true").toLowerCase() !== "false";
+  return (
+    String(env.CURSOR_DIRECT_ALLOW_CREATE || "true").toLowerCase() !== "false"
+  );
 }
 
 export function billingNoteForSeat(provider: string): string {
@@ -69,7 +84,10 @@ export function missingOpenChatMessage(provider: OpenChatProvider): string {
   );
 }
 
-export function busyOpenChatMessage(provider: OpenChatProvider, url?: string | null): string {
+export function busyOpenChatMessage(
+  provider: OpenChatProvider,
+  url?: string | null,
+): string {
   const name = "Cursor";
   return (
     `הצ'אט הפתוח של ${name} עדיין רץ — נפתח סוכן מקביל.` +
@@ -95,7 +113,10 @@ export async function collectOpenChatIds(
     return uniqueCloudAgentIds(args.sessionId);
   }
 
-  const ids = uniqueCloudAgentIds(args.sessionId, envOpenChatId(args.provider, env));
+  const ids = uniqueCloudAgentIds(
+    args.sessionId,
+    envOpenChatId(args.provider, env),
+  );
 
   if (args.provider === "cursor") {
     const fixed = await resolveCursorDirectSession(sb, {
@@ -117,7 +138,9 @@ export async function collectOpenChatIds(
     for (const row of sessions || []) {
       ids.push(...uniqueCloudAgentIds(row?.external_session_id));
     }
-  } catch { /* ignore */ }
+  } catch {
+    /* ignore */
+  }
 
   return uniqueCloudAgentIds(...ids);
 }

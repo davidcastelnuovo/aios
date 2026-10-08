@@ -2,59 +2,64 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Headers":
+    "authorization, x-client-info, apikey, content-type",
 };
 
 serve(async (req) => {
-  if (req.method === 'OPTIONS') {
+  if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
   }
 
   try {
     const { tableId, startDate, endDate } = await req.json();
-    
 
     const supabase = createClient(
-      Deno.env.get('SUPABASE_URL') ?? '',
-      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
+      Deno.env.get("SUPABASE_URL") ?? "",
+      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "",
     );
 
     // Get table with integration settings
     const { data: table, error: tableError } = await supabase
-      .from('crm_tables')
-      .select('*')
-      .eq('id', tableId)
+      .from("crm_tables")
+      .select("*")
+      .eq("id", tableId)
       .single();
 
     if (tableError || !table) {
-      throw new Error('Table not found');
+      throw new Error("Table not found");
     }
 
     const settings = table.integration_settings as any;
     // Support both integrationId and integration_id
     const integrationId = settings?.integrationId || settings?.integration_id;
     const propertyIdRaw = settings?.propertyId || settings?.property_id;
-    
+
     if (!integrationId || !propertyIdRaw) {
-      throw new Error('Missing integration settings: integrationId=' + integrationId + ', propertyId=' + propertyIdRaw);
+      throw new Error(
+        "Missing integration settings: integrationId=" +
+          integrationId +
+          ", propertyId=" +
+          propertyIdRaw,
+      );
     }
 
     // Get integration (may be repointed to another org email below)
     let { data: integration, error: integrationError } = await supabase
-      .from('tenant_integrations')
-      .select('*')
-      .eq('id', integrationId)
+      .from("tenant_integrations")
+      .select("*")
+      .eq("id", integrationId)
       .single();
 
     if (integrationError || !integration) {
-      throw new Error('Integration not found');
+      throw new Error("Integration not found");
     }
 
     let accessToken = integration.api_key;
     let integrationSettings = { ...((integration.settings as any) || {}) };
-    const clientId = Deno.env.get('GOOGLE_CLIENT_ID');
-    const clientSecret = Deno.env.get('GOOGLE_CLIENT_SECRET');
+    const clientId = Deno.env.get("GOOGLE_CLIENT_ID");
+    const clientSecret = Deno.env.get("GOOGLE_CLIENT_SECRET");
 
     // Robust token refresh helper.
     // Refreshes proactively if expires_at missing/near expiry, or on demand (force=true after a 401).
@@ -65,45 +70,58 @@ serve(async (req) => {
         return accessToken;
       }
 
-      const expiresAt = integrationSettings?.expires_at ? new Date(integrationSettings.expires_at).getTime() : 0;
+      const expiresAt = integrationSettings?.expires_at
+        ? new Date(integrationSettings.expires_at).getTime()
+        : 0;
       const fiveMinFromNow = Date.now() + 5 * 60 * 1000;
       const stale = !expiresAt || expiresAt < fiveMinFromNow;
 
       if (!force && !stale) return accessToken;
 
-      const refreshResponse = await fetch('https://oauth2.googleapis.com/token', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-        body: new URLSearchParams({
-          client_id: clientId!,
-          client_secret: clientSecret!,
-          refresh_token: refreshToken,
-          grant_type: 'refresh_token',
-        }),
-      });
+      const refreshResponse = await fetch(
+        "https://oauth2.googleapis.com/token",
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/x-www-form-urlencoded" },
+          body: new URLSearchParams({
+            client_id: clientId!,
+            client_secret: clientSecret!,
+            refresh_token: refreshToken,
+            grant_type: "refresh_token",
+          }),
+        },
+      );
 
       const refreshData = await refreshResponse.json();
 
       if (!refreshResponse.ok || !refreshData.access_token) {
         // Mark as needing reauth so the UI can prompt the user.
         await supabase
-          .from('tenant_integrations')
+          .from("tenant_integrations")
           .update({
             settings: {
               ...integrationSettings,
               needs_reauth: true,
-              last_auth_error: refreshData?.error || refreshData?.error_description || 'refresh_failed',
+              last_auth_error:
+                refreshData?.error ||
+                refreshData?.error_description ||
+                "refresh_failed",
               last_auth_error_at: new Date().toISOString(),
             },
           })
-          .eq('id', integration.id);
+          .eq("id", integration.id);
         throw new Error(
-          'GOOGLE_AUTH_REVOKED: ' + (refreshData?.error_description || refreshData?.error || 'Refresh token rejected by Google. Please reconnect Google Analytics.')
+          "GOOGLE_AUTH_REVOKED: " +
+            (refreshData?.error_description ||
+              refreshData?.error ||
+              "Refresh token rejected by Google. Please reconnect Google Analytics."),
         );
       }
 
       accessToken = refreshData.access_token;
-      const newExpiresAt = new Date(Date.now() + (refreshData.expires_in * 1000)).toISOString();
+      const newExpiresAt = new Date(
+        Date.now() + refreshData.expires_in * 1000,
+      ).toISOString();
       integrationSettings.expires_at = newExpiresAt;
       // Clear reauth flag on success.
       delete integrationSettings.needs_reauth;
@@ -111,12 +129,12 @@ serve(async (req) => {
       delete integrationSettings.last_auth_error_at;
 
       await supabase
-        .from('tenant_integrations')
+        .from("tenant_integrations")
         .update({
           api_key: accessToken,
           settings: integrationSettings,
         })
-        .eq('id', integration.id);
+        .eq("id", integration.id);
 
       return accessToken;
     }
@@ -127,13 +145,19 @@ serve(async (req) => {
       await ensureFreshToken(false);
       let res = await fetch(url, {
         ...init,
-        headers: { ...(init.headers || {}), Authorization: `Bearer ${accessToken}` },
+        headers: {
+          ...(init.headers || {}),
+          Authorization: `Bearer ${accessToken}`,
+        },
       });
       if (res.status === 401) {
         await ensureFreshToken(true);
         res = await fetch(url, {
           ...init,
-          headers: { ...(init.headers || {}), Authorization: `Bearer ${accessToken}` },
+          headers: {
+            ...(init.headers || {}),
+            Authorization: `Bearer ${accessToken}`,
+          },
         });
       }
       return res;
@@ -143,31 +167,44 @@ serve(async (req) => {
     await ensureFreshToken(false);
 
     // Format property ID (remove 'properties/' prefix if present)
-    const propertyId = propertyIdRaw.replace('properties/', '');
+    const propertyId = propertyIdRaw.replace("properties/", "");
 
     // If the stored connection lacks Data API access, try other org GA emails
     // (Anna / Yuval / David's other accounts) and persist the working one.
     async function loadCandidateIntegrations(): Promise<any[]> {
-      const preferredNorm = String(propertyIdRaw).startsWith('properties/')
+      const preferredNorm = String(propertyIdRaw).startsWith("properties/")
         ? propertyIdRaw
         : `properties/${propertyId}`;
       const { data: rows } = await supabase
-        .from('tenant_integrations')
-        .select('*')
-        .eq('integration_type', 'google_analytics')
-        .eq('is_active', true)
-        .order('updated_at', { ascending: false });
+        .from("tenant_integrations")
+        .select("*")
+        .eq("integration_type", "google_analytics")
+        .eq("is_active", true)
+        .order("updated_at", { ascending: false });
 
-      const sameTenant = (rows || []).filter((r: any) => r.tenant_id === table.tenant_id);
-      const others = (rows || []).filter((r: any) => r.tenant_id !== table.tenant_id);
-      const ordered = [...sameTenant, ...others].filter((r: any) => r.id !== integration.id);
+      const sameTenant = (rows || []).filter(
+        (r: any) => r.tenant_id === table.tenant_id,
+      );
+      const others = (rows || []).filter(
+        (r: any) => r.tenant_id !== table.tenant_id,
+      );
+      const ordered = [...sameTenant, ...others].filter(
+        (r: any) => r.id !== integration.id,
+      );
 
       const listsProperty = (r: any) => {
         const props = (r.settings as any)?.available_properties;
         if (!Array.isArray(props)) return false;
         return props.some((p: any) => {
-          const id = typeof p === 'string' ? p : (p?.id || p?.propertyId || p?.property_id);
-          return id === preferredNorm || id === propertyId || id === `properties/${propertyId}`;
+          const id =
+            typeof p === "string"
+              ? p
+              : p?.id || p?.propertyId || p?.property_id;
+          return (
+            id === preferredNorm ||
+            id === propertyId ||
+            id === `properties/${propertyId}`
+          );
         });
       };
 
@@ -177,57 +214,73 @@ serve(async (req) => {
       return [integration, ...listed, ...rest];
     }
 
-    async function refreshTokenFor(integ: any, settingsObj: any, force = false): Promise<string> {
+    async function refreshTokenFor(
+      integ: any,
+      settingsObj: any,
+      force = false,
+    ): Promise<string> {
       let token = integ.api_key as string;
       const refreshToken = settingsObj?.refresh_token;
       if (!refreshToken) return token;
-      const expiresAt = settingsObj?.expires_at ? new Date(settingsObj.expires_at).getTime() : 0;
+      const expiresAt = settingsObj?.expires_at
+        ? new Date(settingsObj.expires_at).getTime()
+        : 0;
       const stale = !expiresAt || expiresAt < Date.now() + 5 * 60 * 1000;
       if (!force && !stale) return token;
 
-      const refreshResponse = await fetch('https://oauth2.googleapis.com/token', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-        body: new URLSearchParams({
-          client_id: clientId!,
-          client_secret: clientSecret!,
-          refresh_token: refreshToken,
-          grant_type: 'refresh_token',
-        }),
-      });
+      const refreshResponse = await fetch(
+        "https://oauth2.googleapis.com/token",
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/x-www-form-urlencoded" },
+          body: new URLSearchParams({
+            client_id: clientId!,
+            client_secret: clientSecret!,
+            refresh_token: refreshToken,
+            grant_type: "refresh_token",
+          }),
+        },
+      );
       const refreshData = await refreshResponse.json();
       if (!refreshResponse.ok || !refreshData.access_token) {
-        throw new Error('refresh_failed');
+        throw new Error("refresh_failed");
       }
       token = refreshData.access_token;
-      settingsObj.expires_at = new Date(Date.now() + (refreshData.expires_in * 1000)).toISOString();
+      settingsObj.expires_at = new Date(
+        Date.now() + refreshData.expires_in * 1000,
+      ).toISOString();
       delete settingsObj.needs_reauth;
       await supabase
-        .from('tenant_integrations')
+        .from("tenant_integrations")
         .update({ api_key: token, settings: settingsObj })
-        .eq('id', integ.id);
+        .eq("id", integ.id);
       return token;
     }
 
-    async function probePropertyAccess(token: string): Promise<{ ok: boolean; message?: string }> {
+    async function probePropertyAccess(
+      token: string,
+    ): Promise<{ ok: boolean; message?: string }> {
       const probe = await fetch(
         `https://analyticsdata.googleapis.com/v1beta/properties/${propertyId}:runReport`,
         {
-          method: 'POST',
+          method: "POST",
           headers: {
             Authorization: `Bearer ${token}`,
-            'Content-Type': 'application/json',
+            "Content-Type": "application/json",
           },
           body: JSON.stringify({
-            dateRanges: [{ startDate: '7daysAgo', endDate: 'yesterday' }],
-            metrics: [{ name: 'sessions' }],
+            dateRanges: [{ startDate: "7daysAgo", endDate: "yesterday" }],
+            metrics: [{ name: "sessions" }],
             limit: 1,
           }),
         },
       );
       const body = await probe.json().catch(() => ({}));
       if (body?.error) {
-        return { ok: false, message: String(body.error.message || body.error.status || 'error') };
+        return {
+          ok: false,
+          message: String(body.error.message || body.error.status || "error"),
+        };
       }
       return { ok: true };
     }
@@ -235,7 +288,7 @@ serve(async (req) => {
     {
       const candidates = await loadCandidateIntegrations();
       let resolved = false;
-      let lastErr = '';
+      let lastErr = "";
       for (const cand of candidates) {
         const candSettings = { ...((cand.settings as any) || {}) };
         if (candSettings.needs_reauth) continue;
@@ -243,7 +296,7 @@ serve(async (req) => {
           const token = await refreshTokenFor(cand, candSettings, false);
           const probe = await probePropertyAccess(token);
           if (!probe.ok) {
-            lastErr = probe.message || 'permission denied';
+            lastErr = probe.message || "permission denied";
             if (!/permission|Permission|403|PERMISSION/i.test(lastErr)) {
               // Non-permission errors (quota etc.) — keep trying others only for access issues
               if (cand.id === integration.id) {
@@ -259,11 +312,13 @@ serve(async (req) => {
           }
           accessToken = token;
           integration = cand;
-          Object.keys(integrationSettings).forEach((k) => delete integrationSettings[k]);
+          Object.keys(integrationSettings).forEach(
+            (k) => delete integrationSettings[k],
+          );
           Object.assign(integrationSettings, candSettings);
           if (cand.id !== integrationId) {
             await supabase
-              .from('crm_tables')
+              .from("crm_tables")
               .update({
                 integration_settings: {
                   ...(settings || {}),
@@ -271,8 +326,10 @@ serve(async (req) => {
                 },
                 updated_at: new Date().toISOString(),
               })
-              .eq('id', tableId);
-            console.log(`[sync-ga] repointed table ${tableId} → integration ${cand.id} (${candSettings.google_email || 'unknown'})`);
+              .eq("id", tableId);
+            console.log(
+              `[sync-ga] repointed table ${tableId} → integration ${cand.id} (${candSettings.google_email || "unknown"})`,
+            );
           }
           resolved = true;
           break;
@@ -282,47 +339,50 @@ serve(async (req) => {
         }
       }
       if (!resolved) {
-        throw new Error(lastErr || 'No Google Analytics connection in the org can access this property');
+        throw new Error(
+          lastErr ||
+            "No Google Analytics connection in the org can access this property",
+        );
       }
     }
 
     // Calculate date range
     const now = new Date();
-    const actualEndDate = endDate || now.toISOString().split('T')[0];
-    const actualStartDate = startDate || new Date(now.setDate(now.getDate() - 30)).toISOString().split('T')[0];
+    const actualEndDate = endDate || now.toISOString().split("T")[0];
+    const actualStartDate =
+      startDate ||
+      new Date(now.setDate(now.getDate() - 30)).toISOString().split("T")[0];
 
     // ====== REPORT 1: Traffic by Source/Medium (main metrics) ======
     const trafficSourceRequest = {
       dateRanges: [{ startDate: actualStartDate, endDate: actualEndDate }],
-      dimensions: [
-        { name: 'sessionSourceMedium' },
-      ],
+      dimensions: [{ name: "sessionSourceMedium" }],
       metrics: [
-        { name: 'sessions' },
-        { name: 'totalUsers' },
-        { name: 'newUsers' },
-        { name: 'screenPageViews' },
-        { name: 'bounceRate' },
-        { name: 'averageSessionDuration' },
-        { name: 'addToCarts' },
-        { name: 'ecommercePurchases' },
-        { name: 'purchaseRevenue' },
-        { name: 'totalRevenue' },
+        { name: "sessions" },
+        { name: "totalUsers" },
+        { name: "newUsers" },
+        { name: "screenPageViews" },
+        { name: "bounceRate" },
+        { name: "averageSessionDuration" },
+        { name: "addToCarts" },
+        { name: "ecommercePurchases" },
+        { name: "purchaseRevenue" },
+        { name: "totalRevenue" },
       ],
-      orderBys: [{ metric: { metricName: 'sessions' }, desc: true }],
+      orderBys: [{ metric: { metricName: "sessions" }, desc: true }],
       limit: 50,
     };
 
     const trafficResponse = await fetch(
       `https://analyticsdata.googleapis.com/v1beta/properties/${propertyId}:runReport`,
       {
-        method: 'POST',
+        method: "POST",
         headers: {
           Authorization: `Bearer ${accessToken}`,
-          'Content-Type': 'application/json',
+          "Content-Type": "application/json",
         },
         body: JSON.stringify(trafficSourceRequest),
-      }
+      },
     );
 
     const trafficData = await trafficResponse.json();
@@ -334,30 +394,30 @@ serve(async (req) => {
     // ====== REPORT 2: Daily trends ======
     const dailyRequest = {
       dateRanges: [{ startDate: actualStartDate, endDate: actualEndDate }],
-      dimensions: [{ name: 'date' }],
+      dimensions: [{ name: "date" }],
       metrics: [
-        { name: 'sessions' },
-        { name: 'totalUsers' },
-        { name: 'screenPageViews' },
-        { name: 'conversions' },
-        { name: 'addToCarts' },
-        { name: 'ecommercePurchases' },
-        { name: 'purchaseRevenue' },
-        { name: 'totalRevenue' },
+        { name: "sessions" },
+        { name: "totalUsers" },
+        { name: "screenPageViews" },
+        { name: "conversions" },
+        { name: "addToCarts" },
+        { name: "ecommercePurchases" },
+        { name: "purchaseRevenue" },
+        { name: "totalRevenue" },
       ],
-      orderBys: [{ dimension: { dimensionName: 'date' }, desc: false }],
+      orderBys: [{ dimension: { dimensionName: "date" }, desc: false }],
     };
 
     const dailyResponse = await fetch(
       `https://analyticsdata.googleapis.com/v1beta/properties/${propertyId}:runReport`,
       {
-        method: 'POST',
+        method: "POST",
         headers: {
           Authorization: `Bearer ${accessToken}`,
-          'Content-Type': 'application/json',
+          "Content-Type": "application/json",
         },
         body: JSON.stringify(dailyRequest),
-      }
+      },
     );
 
     const dailyData = await dailyResponse.json();
@@ -365,25 +425,22 @@ serve(async (req) => {
     // ====== REPORT 3: Daily source/medium breakdown (for date-synced source charts) ======
     const dailySourceRequest = {
       dateRanges: [{ startDate: actualStartDate, endDate: actualEndDate }],
-      dimensions: [
-        { name: 'date' },
-        { name: 'sessionSourceMedium' },
-      ],
+      dimensions: [{ name: "date" }, { name: "sessionSourceMedium" }],
       metrics: [
-        { name: 'sessions' },
-        { name: 'totalUsers' },
-        { name: 'newUsers' },
-        { name: 'screenPageViews' },
-        { name: 'bounceRate' },
-        { name: 'averageSessionDuration' },
-        { name: 'addToCarts' },
-        { name: 'ecommercePurchases' },
-        { name: 'purchaseRevenue' },
-        { name: 'totalRevenue' },
+        { name: "sessions" },
+        { name: "totalUsers" },
+        { name: "newUsers" },
+        { name: "screenPageViews" },
+        { name: "bounceRate" },
+        { name: "averageSessionDuration" },
+        { name: "addToCarts" },
+        { name: "ecommercePurchases" },
+        { name: "purchaseRevenue" },
+        { name: "totalRevenue" },
       ],
       orderBys: [
-        { dimension: { dimensionName: 'date' }, desc: false },
-        { metric: { metricName: 'sessions' }, desc: true },
+        { dimension: { dimensionName: "date" }, desc: false },
+        { metric: { metricName: "sessions" }, desc: true },
       ],
       limit: 10000,
     };
@@ -391,13 +448,13 @@ serve(async (req) => {
     const dailySourceResponse = await fetch(
       `https://analyticsdata.googleapis.com/v1beta/properties/${propertyId}:runReport`,
       {
-        method: 'POST',
+        method: "POST",
         headers: {
           Authorization: `Bearer ${accessToken}`,
-          'Content-Type': 'application/json',
+          "Content-Type": "application/json",
         },
         body: JSON.stringify(dailySourceRequest),
-      }
+      },
     );
 
     const dailySourceData = await dailySourceResponse.json();
@@ -407,22 +464,22 @@ serve(async (req) => {
     // (per-session classification, not first-user attribution)
     const channelGroupRequest = {
       dateRanges: [{ startDate: actualStartDate, endDate: actualEndDate }],
-      dimensions: [{ name: 'date' }, { name: 'sessionDefaultChannelGroup' }],
+      dimensions: [{ name: "date" }, { name: "sessionDefaultChannelGroup" }],
       metrics: [
-        { name: 'sessions' },
-        { name: 'engagedSessions' },
-        { name: 'engagementRate' },
-        { name: 'averageSessionDuration' },
-        { name: 'eventsPerSession' },
-        { name: 'totalUsers' },
-        { name: 'ecommercePurchases' },
-        { name: 'purchaseRevenue' },
-        { name: 'keyEvents' },
-        { name: 'totalRevenue' },
+        { name: "sessions" },
+        { name: "engagedSessions" },
+        { name: "engagementRate" },
+        { name: "averageSessionDuration" },
+        { name: "eventsPerSession" },
+        { name: "totalUsers" },
+        { name: "ecommercePurchases" },
+        { name: "purchaseRevenue" },
+        { name: "keyEvents" },
+        { name: "totalRevenue" },
       ],
       orderBys: [
-        { dimension: { dimensionName: 'date' }, desc: false },
-        { metric: { metricName: 'sessions' }, desc: true },
+        { dimension: { dimensionName: "date" }, desc: false },
+        { metric: { metricName: "sessions" }, desc: true },
       ],
       limit: 10000,
     };
@@ -430,13 +487,13 @@ serve(async (req) => {
     const channelGroupResponse = await fetch(
       `https://analyticsdata.googleapis.com/v1beta/properties/${propertyId}:runReport`,
       {
-        method: 'POST',
+        method: "POST",
         headers: {
           Authorization: `Bearer ${accessToken}`,
-          'Content-Type': 'application/json',
+          "Content-Type": "application/json",
         },
         body: JSON.stringify(channelGroupRequest),
-      }
+      },
     );
 
     const channelGroupData = await channelGroupResponse.json();
@@ -447,26 +504,26 @@ serve(async (req) => {
     // ====== REPORT 4: Top pages ======
     const pagesRequest = {
       dateRanges: [{ startDate: actualStartDate, endDate: actualEndDate }],
-      dimensions: [{ name: 'pagePath' }],
+      dimensions: [{ name: "pagePath" }],
       metrics: [
-        { name: 'screenPageViews' },
-        { name: 'sessions' },
-        { name: 'averageSessionDuration' },
+        { name: "screenPageViews" },
+        { name: "sessions" },
+        { name: "averageSessionDuration" },
       ],
-      orderBys: [{ metric: { metricName: 'screenPageViews' }, desc: true }],
+      orderBys: [{ metric: { metricName: "screenPageViews" }, desc: true }],
       limit: 20,
     };
 
     const pagesResponse = await fetch(
       `https://analyticsdata.googleapis.com/v1beta/properties/${propertyId}:runReport`,
       {
-        method: 'POST',
+        method: "POST",
         headers: {
           Authorization: `Bearer ${accessToken}`,
-          'Content-Type': 'application/json',
+          "Content-Type": "application/json",
         },
         body: JSON.stringify(pagesRequest),
-      }
+      },
     );
 
     const pagesData = await pagesResponse.json();
@@ -484,40 +541,76 @@ serve(async (req) => {
     }
 
     // Delete existing records for this table
-    await supabase
-      .from('crm_records')
-      .delete()
-      .eq('table_id', tableId);
+    await supabase.from("crm_records").delete().eq("table_id", tableId);
 
     // Ensure fields exist
     const fieldDefinitions = [
-      { key: 'report_type', name: 'סוג דוח', type: 'text', position: 0 },
-      { key: 'source_medium', name: 'מקור / ערוץ', type: 'text', position: 1 },
-      { key: 'date', name: 'תאריך', type: 'date', position: 2 },
-      { key: 'page_path', name: 'נתיב עמוד', type: 'text', position: 3 },
-      { key: 'sessions', name: 'Sessions', type: 'number', position: 4 },
-      { key: 'users', name: 'Users', type: 'number', position: 5 },
-      { key: 'new_users', name: 'New Users', type: 'number', position: 6 },
-      { key: 'pageviews', name: 'Pageviews', type: 'number', position: 7 },
-      { key: 'bounce_rate', name: 'Bounce Rate (%)', type: 'number', position: 8 },
-      { key: 'avg_session_duration', name: 'Avg Duration (sec)', type: 'number', position: 9 },
-      { key: 'conversions', name: 'Conversions', type: 'number', position: 10 },
-      { key: 'add_to_cart', name: 'Add To Cart', type: 'number', position: 11 },
-      { key: 'purchases', name: 'Purchases', type: 'number', position: 12 },
-      { key: 'purchase_value', name: 'Purchase Value', type: 'number', position: 13 },
-      { key: 'total_revenue', name: 'Total Revenue', type: 'number', position: 14 },
-      { key: 'channel_group', name: 'Channel Group', type: 'text', position: 15 },
-      { key: 'engaged_sessions', name: 'Engaged Sessions', type: 'number', position: 16 },
-      { key: 'engagement_rate', name: 'Engagement Rate', type: 'number', position: 17 },
-      { key: 'events_per_session', name: 'Events per Session', type: 'number', position: 18 },
-      { key: 'event_name', name: 'Event Name', type: 'text', position: 19 },
-      { key: 'event_count', name: 'Event Count', type: 'number', position: 20 },
+      { key: "report_type", name: "סוג דוח", type: "text", position: 0 },
+      { key: "source_medium", name: "מקור / ערוץ", type: "text", position: 1 },
+      { key: "date", name: "תאריך", type: "date", position: 2 },
+      { key: "page_path", name: "נתיב עמוד", type: "text", position: 3 },
+      { key: "sessions", name: "Sessions", type: "number", position: 4 },
+      { key: "users", name: "Users", type: "number", position: 5 },
+      { key: "new_users", name: "New Users", type: "number", position: 6 },
+      { key: "pageviews", name: "Pageviews", type: "number", position: 7 },
+      {
+        key: "bounce_rate",
+        name: "Bounce Rate (%)",
+        type: "number",
+        position: 8,
+      },
+      {
+        key: "avg_session_duration",
+        name: "Avg Duration (sec)",
+        type: "number",
+        position: 9,
+      },
+      { key: "conversions", name: "Conversions", type: "number", position: 10 },
+      { key: "add_to_cart", name: "Add To Cart", type: "number", position: 11 },
+      { key: "purchases", name: "Purchases", type: "number", position: 12 },
+      {
+        key: "purchase_value",
+        name: "Purchase Value",
+        type: "number",
+        position: 13,
+      },
+      {
+        key: "total_revenue",
+        name: "Total Revenue",
+        type: "number",
+        position: 14,
+      },
+      {
+        key: "channel_group",
+        name: "Channel Group",
+        type: "text",
+        position: 15,
+      },
+      {
+        key: "engaged_sessions",
+        name: "Engaged Sessions",
+        type: "number",
+        position: 16,
+      },
+      {
+        key: "engagement_rate",
+        name: "Engagement Rate",
+        type: "number",
+        position: 17,
+      },
+      {
+        key: "events_per_session",
+        name: "Events per Session",
+        type: "number",
+        position: 18,
+      },
+      { key: "event_name", name: "Event Name", type: "text", position: 19 },
+      { key: "event_count", name: "Event Count", type: "number", position: 20 },
     ];
 
     for (const field of fieldDefinitions) {
-      await supabase
-        .from('crm_fields')
-        .upsert({
+      await supabase.from("crm_fields").upsert(
+        {
           table_id: tableId,
           key: field.key,
           name: field.name,
@@ -526,23 +619,25 @@ serve(async (req) => {
           is_visible: true,
           is_required: false,
           config: {},
-        }, { onConflict: 'table_id,key' });
+        },
+        { onConflict: "table_id,key" },
+      );
     }
 
     // Process and insert data
     const records: any[] = [];
-    
+
     // Traffic sources
     if (trafficData.rows) {
       for (const row of trafficData.rows) {
         const sourceMedium = row.dimensionValues[0].value;
-        
+
         records.push({
           table_id: tableId,
           tenant_id: table.tenant_id,
           agency_id: table.agency_id,
           data: {
-            report_type: 'traffic_source',
+            report_type: "traffic_source",
             source_medium: sourceMedium,
             date: null,
             page_path: null,
@@ -550,8 +645,12 @@ serve(async (req) => {
             users: parseInt(row.metricValues[1].value) || 0,
             new_users: parseInt(row.metricValues[2].value) || 0,
             pageviews: parseInt(row.metricValues[3].value) || 0,
-            bounce_rate: (parseFloat(row.metricValues[4].value) * 100).toFixed(1),
-            avg_session_duration: parseFloat(row.metricValues[5].value).toFixed(1),
+            bounce_rate: (parseFloat(row.metricValues[4].value) * 100).toFixed(
+              1,
+            ),
+            avg_session_duration: parseFloat(row.metricValues[5].value).toFixed(
+              1,
+            ),
             add_to_cart: parseInt(row.metricValues[6]?.value) || 0,
             purchases: parseInt(row.metricValues[7]?.value) || 0,
             purchase_value: parseFloat(row.metricValues[8]?.value) || 0,
@@ -567,13 +666,13 @@ serve(async (req) => {
       for (const row of dailyData.rows) {
         const date = row.dimensionValues[0].value;
         const formattedDate = `${date.substring(0, 4)}-${date.substring(4, 6)}-${date.substring(6, 8)}`;
-        
+
         records.push({
           table_id: tableId,
           tenant_id: table.tenant_id,
           agency_id: table.agency_id,
           data: {
-            report_type: 'daily',
+            report_type: "daily",
             source_medium: null,
             date: formattedDate,
             page_path: null,
@@ -598,14 +697,14 @@ serve(async (req) => {
       for (const row of dailySourceData.rows) {
         const date = row.dimensionValues[0].value;
         const formattedDate = `${date.substring(0, 4)}-${date.substring(4, 6)}-${date.substring(6, 8)}`;
-        const sourceMedium = row.dimensionValues[1]?.value ?? 'Unknown';
+        const sourceMedium = row.dimensionValues[1]?.value ?? "Unknown";
 
         records.push({
           table_id: tableId,
           tenant_id: table.tenant_id,
           agency_id: table.agency_id,
           data: {
-            report_type: 'daily_source',
+            report_type: "daily_source",
             source_medium: sourceMedium,
             date: formattedDate,
             page_path: null,
@@ -613,8 +712,12 @@ serve(async (req) => {
             users: parseInt(row.metricValues[1].value) || 0,
             new_users: parseInt(row.metricValues[2].value) || 0,
             pageviews: parseInt(row.metricValues[3].value) || 0,
-            bounce_rate: (parseFloat(row.metricValues[4].value) * 100).toFixed(1),
-            avg_session_duration: parseFloat(row.metricValues[5].value).toFixed(1),
+            bounce_rate: (parseFloat(row.metricValues[4].value) * 100).toFixed(
+              1,
+            ),
+            avg_session_duration: parseFloat(row.metricValues[5].value).toFixed(
+              1,
+            ),
             add_to_cart: parseInt(row.metricValues[6]?.value) || 0,
             purchases: parseInt(row.metricValues[7]?.value) || 0,
             purchase_value: parseFloat(row.metricValues[8]?.value) || 0,
@@ -633,7 +736,7 @@ serve(async (req) => {
           tenant_id: table.tenant_id,
           agency_id: table.agency_id,
           data: {
-            report_type: 'top_pages',
+            report_type: "top_pages",
             source_medium: null,
             date: null,
             page_path: row.dimensionValues[0].value,
@@ -642,7 +745,9 @@ serve(async (req) => {
             new_users: null,
             pageviews: parseInt(row.metricValues[0].value) || 0,
             bounce_rate: null,
-            avg_session_duration: parseFloat(row.metricValues[2].value).toFixed(1),
+            avg_session_duration: parseFloat(row.metricValues[2].value).toFixed(
+              1,
+            ),
             conversions: null,
             add_to_cart: null,
             purchases: null,
@@ -663,16 +768,22 @@ serve(async (req) => {
           tenant_id: table.tenant_id,
           agency_id: table.agency_id,
           data: {
-            report_type: 'channel_group',
+            report_type: "channel_group",
             channel_group: row.dimensionValues[1].value,
             source_medium: null,
             date: formattedDate,
             page_path: null,
             sessions: parseInt(row.metricValues[0].value) || 0,
             engaged_sessions: parseInt(row.metricValues[1].value) || 0,
-            engagement_rate: (parseFloat(row.metricValues[2].value) * 100).toFixed(1),
-            avg_session_duration: parseFloat(row.metricValues[3].value).toFixed(1),
-            events_per_session: parseFloat(row.metricValues[4].value).toFixed(2),
+            engagement_rate: (
+              parseFloat(row.metricValues[2].value) * 100
+            ).toFixed(1),
+            avg_session_duration: parseFloat(row.metricValues[3].value).toFixed(
+              1,
+            ),
+            events_per_session: parseFloat(row.metricValues[4].value).toFixed(
+              2,
+            ),
             users: parseInt(row.metricValues[5].value) || 0,
             purchases: parseInt(row.metricValues[6]?.value) || 0,
             purchase_value: parseFloat(row.metricValues[7]?.value) || 0,
@@ -691,29 +802,18 @@ serve(async (req) => {
     // ====== REPORT 6: Event totals by day (for phone call tracking) ======
     const eventsRequest = {
       dateRanges: [{ startDate: actualStartDate, endDate: actualEndDate }],
-      dimensions: [
-        { name: 'date' },
-        { name: 'eventName' },
-      ],
-      metrics: [
-        { name: 'eventCount' },
-        { name: 'keyEvents' },
-      ],
-      orderBys: [{ metric: { metricName: 'eventCount' }, desc: true }],
+      dimensions: [{ name: "date" }, { name: "eventName" }],
+      metrics: [{ name: "eventCount" }, { name: "keyEvents" }],
+      orderBys: [{ metric: { metricName: "eventCount" }, desc: true }],
       limit: 5000,
     };
 
     // ====== REPORT 7: Aggregate key events by eventName (no date dimension for accurate totals) ======
     const aggregateEventsRequest = {
       dateRanges: [{ startDate: actualStartDate, endDate: actualEndDate }],
-      dimensions: [
-        { name: 'eventName' },
-      ],
-      metrics: [
-        { name: 'eventCount' },
-        { name: 'keyEvents' },
-      ],
-      orderBys: [{ metric: { metricName: 'eventCount' }, desc: true }],
+      dimensions: [{ name: "eventName" }],
+      metrics: [{ name: "eventCount" }, { name: "keyEvents" }],
+      orderBys: [{ metric: { metricName: "eventCount" }, desc: true }],
       limit: 500,
     };
 
@@ -724,38 +824,41 @@ serve(async (req) => {
         fetch(
           `https://analyticsdata.googleapis.com/v1beta/properties/${propertyId}:runReport`,
           {
-            method: 'POST',
+            method: "POST",
             headers: {
               Authorization: `Bearer ${accessToken}`,
-              'Content-Type': 'application/json',
+              "Content-Type": "application/json",
             },
             body: JSON.stringify(eventsRequest),
-          }
+          },
         ),
         fetch(
           `https://analyticsdata.googleapis.com/v1beta/properties/${propertyId}:runReport`,
           {
-            method: 'POST',
+            method: "POST",
             headers: {
               Authorization: `Bearer ${accessToken}`,
-              'Content-Type': 'application/json',
+              "Content-Type": "application/json",
             },
             body: JSON.stringify(aggregateEventsRequest),
-          }
+          },
         ),
       ]);
       eventsData = await eventsResponse.json();
       aggregateEventsData = await aggregateEventsResponse.json();
       if (eventsData.error) {
-        console.error('Events report error:', eventsData.error);
+        console.error("Events report error:", eventsData.error);
         eventsData = { rows: [] };
       }
       if (aggregateEventsData.error) {
-        console.error('Aggregate events report error:', aggregateEventsData.error);
+        console.error(
+          "Aggregate events report error:",
+          aggregateEventsData.error,
+        );
         aggregateEventsData = { rows: [] };
       }
     } catch (e) {
-      console.error('Events report fetch error:', e);
+      console.error("Events report fetch error:", e);
     }
 
     // Process daily event data
@@ -766,14 +869,16 @@ serve(async (req) => {
         const eventCount = parseInt(row.metricValues[0].value) || 0;
         const keyEvents = parseInt(row.metricValues[1]?.value) || 0;
         const finalCount = Math.max(eventCount, keyEvents);
-        const formattedDate = rawDate ? `${rawDate.slice(0,4)}-${rawDate.slice(4,6)}-${rawDate.slice(6,8)}` : null;
+        const formattedDate = rawDate
+          ? `${rawDate.slice(0, 4)}-${rawDate.slice(4, 6)}-${rawDate.slice(6, 8)}`
+          : null;
 
         records.push({
           table_id: tableId,
           tenant_id: table.tenant_id,
           agency_id: table.agency_id,
           data: {
-            report_type: 'event_total',
+            report_type: "event_total",
             event_name: eventName,
             channel_group: null,
             event_count: finalCount,
@@ -809,7 +914,7 @@ serve(async (req) => {
           tenant_id: table.tenant_id,
           agency_id: table.agency_id,
           data: {
-            report_type: 'event_aggregate',
+            report_type: "event_aggregate",
             event_name: eventName,
             channel_group: null,
             event_count: finalCount,
@@ -837,29 +942,28 @@ serve(async (req) => {
     const monthlyOrganicStartDate = new Date();
     monthlyOrganicStartDate.setMonth(monthlyOrganicStartDate.getMonth() - 24);
     const monthlyOrganicRequest = {
-      dateRanges: [{
-        startDate: monthlyOrganicStartDate.toISOString().split('T')[0],
-        endDate: new Date().toISOString().split('T')[0],
-      }],
+      dateRanges: [
+        {
+          startDate: monthlyOrganicStartDate.toISOString().split("T")[0],
+          endDate: new Date().toISOString().split("T")[0],
+        },
+      ],
       dimensions: [
-        { name: 'yearMonth' },
-        { name: 'sessionDefaultChannelGroup' },
+        { name: "yearMonth" },
+        { name: "sessionDefaultChannelGroup" },
       ],
-      metrics: [
-        { name: 'sessions' },
-        { name: 'totalUsers' },
-      ],
+      metrics: [{ name: "sessions" }, { name: "totalUsers" }],
       dimensionFilter: {
         filter: {
-          fieldName: 'sessionDefaultChannelGroup',
+          fieldName: "sessionDefaultChannelGroup",
           stringFilter: {
-            matchType: 'EXACT',
-            value: 'Organic Search',
+            matchType: "EXACT",
+            value: "Organic Search",
             caseSensitive: false,
           },
         },
       },
-      orderBys: [{ dimension: { dimensionName: 'yearMonth' }, desc: false }],
+      orderBys: [{ dimension: { dimensionName: "yearMonth" }, desc: false }],
       limit: 100,
     };
 
@@ -868,21 +972,24 @@ serve(async (req) => {
       const monthlyOrganicResponse = await fetch(
         `https://analyticsdata.googleapis.com/v1beta/properties/${propertyId}:runReport`,
         {
-          method: 'POST',
+          method: "POST",
           headers: {
             Authorization: `Bearer ${accessToken}`,
-            'Content-Type': 'application/json',
+            "Content-Type": "application/json",
           },
           body: JSON.stringify(monthlyOrganicRequest),
-        }
+        },
       );
       monthlyOrganicData = await monthlyOrganicResponse.json();
       if (monthlyOrganicData.error) {
-        console.error('Monthly organic report error:', monthlyOrganicData.error);
+        console.error(
+          "Monthly organic report error:",
+          monthlyOrganicData.error,
+        );
         monthlyOrganicData = { rows: [] };
       }
     } catch (e) {
-      console.error('Monthly organic report fetch error:', e);
+      console.error("Monthly organic report fetch error:", e);
     }
 
     // Process monthly organic data
@@ -898,11 +1005,11 @@ serve(async (req) => {
           tenant_id: table.tenant_id,
           agency_id: table.agency_id,
           data: {
-            report_type: 'monthly_organic',
+            report_type: "monthly_organic",
             month: formattedMonth,
             sessions,
             users,
-            channel_group: 'Organic Search',
+            channel_group: "Organic Search",
             source_medium: null,
             date: `${formattedMonth}-01`,
             page_path: null,
@@ -927,18 +1034,21 @@ serve(async (req) => {
     for (let i = 0; i < records.length; i += batchSize) {
       const batch = records.slice(i, i + batchSize);
       const { error: insertError } = await supabase
-        .from('crm_records')
+        .from("crm_records")
         .insert(batch);
 
       if (insertError) {
-        console.error(`Error inserting batch ${i / batchSize + 1}:`, insertError);
+        console.error(
+          `Error inserting batch ${i / batchSize + 1}:`,
+          insertError,
+        );
         throw insertError;
       }
     }
 
     // Update last sync timestamp
     await supabase
-      .from('crm_tables')
+      .from("crm_tables")
       .update({
         last_sync_at: new Date().toISOString(),
         integration_settings: {
@@ -946,18 +1056,20 @@ serve(async (req) => {
           last_sync_at: new Date().toISOString(),
         },
       })
-      .eq('id', tableId);
-
+      .eq("id", tableId);
 
     return new Response(
       JSON.stringify({ success: true, records_synced: records.length }),
-      { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      { headers: { ...corsHeaders, "Content-Type": "application/json" } },
     );
   } catch (error: any) {
-    console.error('Sync error:', error);
+    console.error("Sync error:", error);
     return new Response(
       JSON.stringify({ error: error.message || String(error) }),
-      { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      {
+        status: 500,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      },
     );
   }
 });

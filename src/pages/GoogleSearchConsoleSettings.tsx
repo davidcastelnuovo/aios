@@ -1,5 +1,11 @@
 import { useState } from "react";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import {
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+  CardDescription,
+} from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription } from "@/components/ui/alert";
@@ -9,7 +15,16 @@ import { useTenant } from "@/contexts/TenantContext";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
 import { useUserIntegrations } from "@/hooks/useUserIntegrations";
 import { toast } from "sonner";
-import { ArrowLeft, Search, RefreshCw, Loader2, ExternalLink, CheckCircle2, AlertCircle, Share2 } from "lucide-react";
+import {
+  ArrowLeft,
+  Search,
+  RefreshCw,
+  Loader2,
+  ExternalLink,
+  CheckCircle2,
+  AlertCircle,
+  Share2,
+} from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { useTenantPath } from "@/hooks/useTenantPath";
 import { ManageIntegrationPermissionsDialog } from "@/components/forms/ManageIntegrationPermissionsDialog";
@@ -21,12 +36,17 @@ export default function GoogleSearchConsoleSettings() {
   const { buildPath } = useTenantPath();
   const queryClient = useQueryClient();
   const [isConnecting, setIsConnecting] = useState(false);
-  const [sharingIntegrationId, setSharingIntegrationId] = useState<string | null>(null);
+  const [sharingIntegrationId, setSharingIntegrationId] = useState<
+    string | null
+  >(null);
   const [sharingIntegrationName, setSharingIntegrationName] = useState("");
   const [sharingOwnerId, setSharingOwnerId] = useState<string | null>(null);
 
   // Get all GSC integrations visible to the user (own + others in tenant)
-  const { data: integrations = [], isLoading } = useUserIntegrations(currentTenantId, 'google_search_console');
+  const { data: integrations = [], isLoading } = useUserIntegrations(
+    currentTenantId,
+    "google_search_console",
+  );
 
   // Connect to Google Search Console
   const handleConnect = async (addNew = false) => {
@@ -42,18 +62,26 @@ export default function GoogleSearchConsoleSettings() {
         throw new Error("No session found");
       }
 
-      const response = await supabase.functions.invoke('google-search-console-auth?action=authorize', {
-        body: { tenantId: currentTenantId, userId, addNew, origin: window.location.origin },
-        headers: { Authorization: `Bearer ${session.session.access_token}` },
-        method: 'POST',
-      });
+      const response = await supabase.functions.invoke(
+        "google-search-console-auth?action=authorize",
+        {
+          body: {
+            tenantId: currentTenantId,
+            userId,
+            addNew,
+            origin: window.location.origin,
+          },
+          headers: { Authorization: `Bearer ${session.session.access_token}` },
+          method: "POST",
+        },
+      );
 
       if (response.error) throw response.error;
       if (response.data?.authUrl) {
         window.location.href = response.data.authUrl;
       }
     } catch (error: any) {
-      console.error('Error connecting to Google Search Console:', error);
+      console.error("Error connecting to Google Search Console:", error);
       toast.error("שגיאה בהתחברות ל-Google Search Console");
     } finally {
       setIsConnecting(false);
@@ -64,18 +92,20 @@ export default function GoogleSearchConsoleSettings() {
   const disconnectMutation = useMutation({
     mutationFn: async (integrationId: string) => {
       const { error } = await supabase
-        .from('tenant_integrations')
+        .from("tenant_integrations")
         .update({ is_active: false })
-        .eq('id', integrationId);
-      
+        .eq("id", integrationId);
+
       if (error) throw error;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['user-integrations', currentTenantId] });
+      queryClient.invalidateQueries({
+        queryKey: ["user-integrations", currentTenantId],
+      });
       toast.success("החיבור ל-Google Search Console נותק");
     },
     onError: (error) => {
-      console.error('Error disconnecting:', error);
+      console.error("Error disconnecting:", error);
       toast.error("שגיאה בניתוק החיבור");
     },
   });
@@ -85,7 +115,11 @@ export default function GoogleSearchConsoleSettings() {
   return (
     <div className="container mx-auto p-6 space-y-6">
       <div className="flex items-center gap-4">
-        <Button variant="ghost" size="icon" onClick={() => navigate(buildPath('integrations'))}>
+        <Button
+          variant="ghost"
+          size="icon"
+          onClick={() => navigate(buildPath("integrations"))}
+        >
           <ArrowLeft className="h-5 w-5" />
         </Button>
         <div>
@@ -105,10 +139,14 @@ export default function GoogleSearchConsoleSettings() {
             <div>
               <CardTitle>חיבורים פעילים</CardTitle>
               <CardDescription>
-                כל חבר בארגון יכול לחבר את חשבון Google Search Console שלו. הנתונים זמינים לכל מי שיש לו גישה ללקוח.
+                כל חבר בארגון יכול לחבר את חשבון Google Search Console שלו.
+                הנתונים זמינים לכל מי שיש לו גישה ללקוח.
               </CardDescription>
             </div>
-            <Badge variant={hasAnyConnection ? "default" : "secondary"} className={hasAnyConnection ? "bg-green-500" : ""}>
+            <Badge
+              variant={hasAnyConnection ? "default" : "secondary"}
+              className={hasAnyConnection ? "bg-green-500" : ""}
+            >
               {hasAnyConnection ? `${integrations.length} מחובר` : "לא מחובר"}
             </Badge>
           </div>
@@ -123,9 +161,12 @@ export default function GoogleSearchConsoleSettings() {
               {integrations.map((integration: any) => {
                 const settings = integration?.settings as any;
                 const isOwn = !!integration._isOwn;
-                const label = settings?.google_email || 'חשבון Google';
+                const label = settings?.google_email || "חשבון Google";
                 return (
-                  <Alert key={integration.id} className="bg-green-50 border-green-200">
+                  <Alert
+                    key={integration.id}
+                    className="bg-green-50 border-green-200"
+                  >
                     <CheckCircle2 className="h-4 w-4 text-green-600" />
                     <AlertDescription className="text-green-800">
                       <div className="flex items-center justify-between gap-3 flex-wrap">
@@ -133,16 +174,24 @@ export default function GoogleSearchConsoleSettings() {
                           <div className="flex items-center gap-2">
                             <span className="font-medium">{label}</span>
                             {isOwn ? (
-                              <Badge variant="secondary" className="text-xs">שלך</Badge>
+                              <Badge variant="secondary" className="text-xs">
+                                שלך
+                              </Badge>
                             ) : (
                               <Badge variant="secondary" className="text-xs">
-                                שותף {integration._sharedByName ? `ע"י ${integration._sharedByName}` : ''}
+                                שותף{" "}
+                                {integration._sharedByName
+                                  ? `ע"י ${integration._sharedByName}`
+                                  : ""}
                               </Badge>
                             )}
                           </div>
                           {settings?.connected_at && (
                             <span className="text-xs text-green-700/80">
-                              חובר בתאריך: {new Date(settings.connected_at).toLocaleDateString('he-IL')}
+                              חובר בתאריך:{" "}
+                              {new Date(
+                                settings.connected_at,
+                              ).toLocaleDateString("he-IL")}
                             </span>
                           )}
                         </div>
@@ -154,7 +203,9 @@ export default function GoogleSearchConsoleSettings() {
                                 variant="outline"
                                 onClick={() => {
                                   setSharingIntegrationId(integration.id);
-                                  setSharingIntegrationName(settings?.google_email || 'GSC');
+                                  setSharingIntegrationName(
+                                    settings?.google_email || "GSC",
+                                  );
                                   setSharingOwnerId(integration.user_id);
                                 }}
                               >
@@ -167,13 +218,17 @@ export default function GoogleSearchConsoleSettings() {
                                 onClick={() => handleConnect(false)}
                                 disabled={isConnecting}
                               >
-                                <RefreshCw className={`h-4 w-4 ml-2 ${isConnecting ? 'animate-spin' : ''}`} />
+                                <RefreshCw
+                                  className={`h-4 w-4 ml-2 ${isConnecting ? "animate-spin" : ""}`}
+                                />
                                 חיבור מחדש
                               </Button>
                               <Button
                                 size="sm"
                                 variant="destructive"
-                                onClick={() => disconnectMutation.mutate(integration.id)}
+                                onClick={() =>
+                                  disconnectMutation.mutate(integration.id)
+                                }
                                 disabled={disconnectMutation.isPending}
                               >
                                 נתק
@@ -207,7 +262,8 @@ export default function GoogleSearchConsoleSettings() {
               <Alert>
                 <AlertCircle className="h-4 w-4" />
                 <AlertDescription>
-                  חבר את חשבון Google Search Console שלך כדי לסנכרן נתוני SEO וביצועים בחיפוש
+                  חבר את חשבון Google Search Console שלך כדי לסנכרן נתוני SEO
+                  וביצועים בחיפוש
                 </AlertDescription>
               </Alert>
 
@@ -237,24 +293,36 @@ export default function GoogleSearchConsoleSettings() {
         </CardHeader>
         <CardContent className="space-y-3">
           <div className="flex items-start gap-3">
-            <div className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center text-blue-600 font-medium">1</div>
+            <div className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center text-blue-600 font-medium">
+              1
+            </div>
             <div>
               <p className="font-medium">צור טבלה דינמית חדשה</p>
-              <p className="text-sm text-muted-foreground">עבור לדף "טבלאות דינמיות" ובחר "Google Search Console"</p>
+              <p className="text-sm text-muted-foreground">
+                עבור לדף "טבלאות דינמיות" ובחר "Google Search Console"
+              </p>
             </div>
           </div>
           <div className="flex items-start gap-3">
-            <div className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center text-blue-600 font-medium">2</div>
+            <div className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center text-blue-600 font-medium">
+              2
+            </div>
             <div>
               <p className="font-medium">בחר אתר</p>
-              <p className="text-sm text-muted-foreground">בחר את האתר שממנו תרצה למשוך נתוני SEO</p>
+              <p className="text-sm text-muted-foreground">
+                בחר את האתר שממנו תרצה למשוך נתוני SEO
+              </p>
             </div>
           </div>
           <div className="flex items-start gap-3">
-            <div className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center text-blue-600 font-medium">3</div>
+            <div className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center text-blue-600 font-medium">
+              3
+            </div>
             <div>
               <p className="font-medium">סנכרן נתונים</p>
-              <p className="text-sm text-muted-foreground">לחץ על "סנכרון" כדי למשוך נתונים עדכניים מהחשבון</p>
+              <p className="text-sm text-muted-foreground">
+                לחץ על "סנכרון" כדי למשוך נתונים עדכניים מהחשבון
+              </p>
             </div>
           </div>
         </CardContent>
@@ -263,7 +331,9 @@ export default function GoogleSearchConsoleSettings() {
       <Card>
         <CardHeader>
           <CardTitle>נתונים זמינים</CardTitle>
-          <CardDescription>הנתונים שיסונכרנו מ-Google Search Console</CardDescription>
+          <CardDescription>
+            הנתונים שיסונכרנו מ-Google Search Console
+          </CardDescription>
         </CardHeader>
         <CardContent>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
@@ -287,8 +357,10 @@ export default function GoogleSearchConsoleSettings() {
       {/* Share Integration Dialog */}
       <ManageIntegrationPermissionsDialog
         open={!!sharingIntegrationId}
-        onOpenChange={(open) => { if (!open) setSharingIntegrationId(null); }}
-        integrationId={sharingIntegrationId || ''}
+        onOpenChange={(open) => {
+          if (!open) setSharingIntegrationId(null);
+        }}
+        integrationId={sharingIntegrationId || ""}
         integrationName={`Google Search Console - ${sharingIntegrationName}`}
         integrationOwnerId={sharingOwnerId}
       />

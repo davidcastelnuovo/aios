@@ -19,7 +19,15 @@ export function UsagePanel({ tenantId, clientId }: Props) {
         .eq("client_id", clientId);
       const ids = (items ?? []).map((i: any) => i.id);
       if (ids.length === 0) {
-        return { total: 0, success: 0, failed: 0, tokensIn: 0, tokensOut: 0, cost: 0, runs: [] };
+        return {
+          total: 0,
+          success: 0,
+          failed: 0,
+          tokensIn: 0,
+          tokensOut: 0,
+          cost: 0,
+          runs: [],
+        };
       }
       const { data: runs } = await supabase
         .from("marketing_runs")
@@ -40,7 +48,8 @@ export function UsagePanel({ tenantId, clientId }: Props) {
     },
   });
 
-  if (!stats) return <div className="p-6 text-sm text-muted-foreground">טוען...</div>;
+  if (!stats)
+    return <div className="p-6 text-sm text-muted-foreground">טוען...</div>;
 
   return (
     <div className="space-y-4 p-4" dir="rtl">
@@ -55,7 +64,9 @@ export function UsagePanel({ tenantId, clientId }: Props) {
           <div className="flex items-center gap-2 text-xs text-muted-foreground">
             <CheckCircle2 className="h-3 w-3" /> הצלחה
           </div>
-          <div className="mt-1 text-2xl font-semibold text-emerald-600">{stats.success}</div>
+          <div className="mt-1 text-2xl font-semibold text-emerald-600">
+            {stats.success}
+          </div>
         </Card>
         <Card className="p-3">
           <div className="flex items-center gap-2 text-xs text-muted-foreground">
@@ -65,39 +76,48 @@ export function UsagePanel({ tenantId, clientId }: Props) {
             {(stats.tokensIn + stats.tokensOut).toLocaleString()}
           </div>
           <div className="text-[10px] text-muted-foreground">
-            {stats.tokensIn.toLocaleString()} in · {stats.tokensOut.toLocaleString()} out
+            {stats.tokensIn.toLocaleString()} in ·{" "}
+            {stats.tokensOut.toLocaleString()} out
           </div>
         </Card>
         <Card className="p-3">
           <div className="flex items-center gap-2 text-xs text-muted-foreground">
             <AlertTriangle className="h-3 w-3" /> עלות
           </div>
-          <div className="mt-1 text-2xl font-semibold">${stats.cost.toFixed(4)}</div>
+          <div className="mt-1 text-2xl font-semibold">
+            ${stats.cost.toFixed(4)}
+          </div>
         </Card>
       </div>
 
       <Card className="p-3">
         <div className="mb-2 text-sm font-medium">ריצות אחרונות</div>
         {stats.runs.length === 0 ? (
-          <div className="py-4 text-center text-sm text-muted-foreground">אין ריצות עדיין</div>
+          <div className="py-4 text-center text-sm text-muted-foreground">
+            אין ריצות עדיין
+          </div>
         ) : (
           <div className="space-y-1 text-xs">
             {stats.runs.slice(0, 30).map((r: any, idx: number) => (
-              <div key={idx} className="flex items-center gap-2 border-b py-1 last:border-0">
+              <div
+                key={idx}
+                className="flex items-center gap-2 border-b py-1 last:border-0"
+              >
                 <span className="text-muted-foreground">
                   {new Date(r.created_at).toLocaleString("he-IL")}
                 </span>
                 <span>{r.model ?? "—"}</span>
                 <span className="ms-auto text-muted-foreground">
-                  {(r.tokens_in ?? 0) + (r.tokens_out ?? 0)} tok · ${Number(r.cost_usd ?? 0).toFixed(4)}
+                  {(r.tokens_in ?? 0) + (r.tokens_out ?? 0)} tok · $
+                  {Number(r.cost_usd ?? 0).toFixed(4)}
                 </span>
                 <span
                   className={
                     r.status === "completed"
                       ? "text-emerald-600"
                       : r.status === "failed"
-                      ? "text-destructive"
-                      : "text-muted-foreground"
+                        ? "text-destructive"
+                        : "text-muted-foreground"
                   }
                 >
                   {r.status}

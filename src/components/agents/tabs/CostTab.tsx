@@ -32,13 +32,17 @@ interface LogRow {
   action_type: string;
 }
 
-export function CostTab({ agent }: { agent: { id: string; tenant_id: string } }) {
+export function CostTab({
+  agent,
+}: {
+  agent: { id: string; tenant_id: string };
+}) {
   const [range, setRange] = useState<Range>("7d");
 
   const days = range === "7d" ? 7 : 30;
   const fromDate = useMemo(
     () => startOfDay(subDays(new Date(), days - 1)).toISOString(),
-    [days]
+    [days],
   );
 
   const { data, isLoading } = useQuery({
@@ -47,7 +51,7 @@ export function CostTab({ agent }: { agent: { id: string; tenant_id: string } })
       const { data, error } = await supabase
         .from("agent_action_log" as any)
         .select(
-          "created_at,status,tokens_in,tokens_out,cost_usd,duration_ms,model,action_type"
+          "created_at,status,tokens_in,tokens_out,cost_usd,duration_ms,model,action_type",
         )
         .eq("agent_id", agent.id)
         .eq("tenant_id", agent.tenant_id)
@@ -66,8 +70,14 @@ export function CostTab({ agent }: { agent: { id: string; tenant_id: string } })
     let costUsd = 0;
     let durationMs = 0;
     let errors = 0;
-    const byDay: Record<string, { date: string; cost: number; tokens: number; calls: number }> = {};
-    const byModel: Record<string, { model: string; cost: number; tokens: number; calls: number }> = {};
+    const byDay: Record<
+      string,
+      { date: string; cost: number; tokens: number; calls: number }
+    > = {};
+    const byModel: Record<
+      string,
+      { model: string; cost: number; tokens: number; calls: number }
+    > = {};
 
     // Pre-fill days for chart continuity
     for (let i = 0; i < days; i++) {
@@ -191,7 +201,10 @@ export function CostTab({ agent }: { agent: { id: string; tenant_id: string } })
           <div className="h-64">
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={stats.byDay}>
-                <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+                <CartesianGrid
+                  strokeDasharray="3 3"
+                  stroke="hsl(var(--border))"
+                />
                 <XAxis
                   dataKey="date"
                   tickFormatter={(d) =>
@@ -215,7 +228,12 @@ export function CostTab({ agent }: { agent: { id: string; tenant_id: string } })
                   }}
                 />
                 <Legend wrapperStyle={{ fontSize: 12 }} />
-                <Bar dataKey="cost" name="עלות $" fill="hsl(var(--primary))" radius={[4, 4, 0, 0]} />
+                <Bar
+                  dataKey="cost"
+                  name="עלות $"
+                  fill="hsl(var(--primary))"
+                  radius={[4, 4, 0, 0]}
+                />
               </BarChart>
             </ResponsiveContainer>
           </div>
@@ -277,7 +295,9 @@ function KpiCard({
           {icon}
         </div>
         <div className="text-xl font-bold tabular-nums">{value}</div>
-        {sub && <div className="text-[11px] text-muted-foreground mt-0.5">{sub}</div>}
+        {sub && (
+          <div className="text-[11px] text-muted-foreground mt-0.5">{sub}</div>
+        )}
       </CardContent>
     </Card>
   );

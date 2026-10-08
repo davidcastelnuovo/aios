@@ -13,15 +13,15 @@ Copy Staging keys from **Supabase → AIOS Staging → Project Settings → API*
 
 ## Mapping
 
-| Vercel variable | Source (Staging API settings) |
-| --- | --- |
-| `VITE_SUPABASE_URL` | Project URL |
-| `VITE_SUPABASE_ANON_KEY` | Publishable / Anon key |
-| `SUPABASE_URL` | Project URL |
-| `SUPABASE_ANON_KEY` | Publishable / Anon key |
-| `SUPABASE_SERVICE_ROLE_KEY` | Secret / Service Role key |
-| `APP_ENV` | `staging` |
-| `STAGING_SAFE_MODE` | `true` |
+| Vercel variable             | Source (Staging API settings) |
+| --------------------------- | ----------------------------- |
+| `VITE_SUPABASE_URL`         | Project URL                   |
+| `VITE_SUPABASE_ANON_KEY`    | Publishable / Anon key        |
+| `SUPABASE_URL`              | Project URL                   |
+| `SUPABASE_ANON_KEY`         | Publishable / Anon key        |
+| `SUPABASE_SERVICE_ROLE_KEY` | Secret / Service Role key     |
+| `APP_ENV`                   | `staging`                     |
+| `STAGING_SAFE_MODE`         | `true`                        |
 
 The frontend client also reads `VITE_SUPABASE_PUBLISHABLE_KEY`. Set that Preview value to the same Staging publishable/anon key, or the Preview build will still talk to the wrong backend.
 

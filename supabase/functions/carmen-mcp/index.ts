@@ -25,7 +25,8 @@ import {
 } from "../_shared/mcp-streamable-http.ts";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL") || "";
-const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
+const SUPABASE_SERVICE_ROLE_KEY =
+  Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -56,19 +57,23 @@ const TOOLS = [
       properties: {
         message: {
           type: "string",
-          description: "What to ask or tell Carmen — full request in plain language (Hebrew or English).",
+          description:
+            "What to ask or tell Carmen — full request in plain language (Hebrew or English).",
         },
         context: {
           type: "string",
-          description: "Optional extra context from Grok Bot: files read, investigation notes, constraints.",
+          description:
+            "Optional extra context from Grok Bot: files read, investigation notes, constraints.",
         },
         conversation_id: {
           type: "string",
-          description: "Optional UUID from a previous ask_carmen response — continues the same Carmen conversation.",
+          description:
+            "Optional UUID from a previous ask_carmen response — continues the same Carmen conversation.",
         },
         conversation_history: {
           type: "array",
-          description: "Optional prior turns [{role,user|assistant,content}] when conversation_id is not yet known.",
+          description:
+            "Optional prior turns [{role,user|assistant,content}] when conversation_id is not yet known.",
           items: {
             type: "object",
             properties: {
@@ -86,21 +91,37 @@ const TOOLS = [
 ];
 
 function rpcResult(id: unknown, result: unknown) {
-  return new Response(JSON.stringify({ jsonrpc: "2.0", id: id ?? null, result }), {
-    status: 200,
-    headers: { ...corsHeaders, "Content-Type": "application/json" },
-  });
+  return new Response(
+    JSON.stringify({ jsonrpc: "2.0", id: id ?? null, result }),
+    {
+      status: 200,
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    },
+  );
 }
 
-function rpcError(id: unknown, code: number, message: string, httpStatus = 200) {
-  return new Response(JSON.stringify({ jsonrpc: "2.0", id: id ?? null, error: { code, message } }), {
-    status: httpStatus,
-    headers: { ...corsHeaders, "Content-Type": "application/json" },
-  });
+function rpcError(
+  id: unknown,
+  code: number,
+  message: string,
+  httpStatus = 200,
+) {
+  return new Response(
+    JSON.stringify({
+      jsonrpc: "2.0",
+      id: id ?? null,
+      error: { code, message },
+    }),
+    {
+      status: httpStatus,
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    },
+  );
 }
 
 function bearerFrom(req: Request): string | undefined {
-  const h = req.headers.get("authorization") || req.headers.get("Authorization");
+  const h =
+    req.headers.get("authorization") || req.headers.get("Authorization");
   const m = h?.match(/^Bearer\s+(.+)$/i);
   return m ? m[1].trim() : undefined;
 }
@@ -110,7 +131,9 @@ function requiredBearer(): string {
 }
 
 function sb() {
-  return createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, { auth: { persistSession: false } });
+  return createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
+    auth: { persistSession: false },
+  });
 }
 
 function resolveTenantId(): string | null {
@@ -132,8 +155,16 @@ type HistoryItem = { role: "user" | "assistant"; content: string };
 function normalizeHistory(raw: unknown): HistoryItem[] {
   if (!Array.isArray(raw)) return [];
   return raw
-    .filter((m) => m && (m.role === "user" || m.role === "assistant") && typeof m.content === "string")
-    .map((m) => ({ role: m.role as "user" | "assistant", content: String(m.content).slice(0, 8000) }))
+    .filter(
+      (m) =>
+        m &&
+        (m.role === "user" || m.role === "assistant") &&
+        typeof m.content === "string",
+    )
+    .map((m) => ({
+      role: m.role as "user" | "assistant",
+      content: String(m.content).slice(0, 8000),
+    }))
     .slice(-24);
 }
 
@@ -144,7 +175,11 @@ async function invokeCarmen(opts: {
   context?: string;
   conversationId?: string | null;
   conversationHistory?: HistoryItem[];
-}): Promise<{ output: string; conversation_id: string | null; tools_used: string[] }> {
+}): Promise<{
+  output: string;
+  conversation_id: string | null;
+  tools_used: string[];
+}> {
   const body = opts.context?.trim()
     ? `${opts.message}\n\n[הקשר מ-Grok Bot]\n${opts.context.trim()}`
     : opts.message;
@@ -158,7 +193,7 @@ async function invokeCarmen(opts: {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
-      "Authorization": `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
+      Authorization: `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
     },
     body: JSON.stringify({
       tenant_id: opts.tenantId,
@@ -166,7 +201,9 @@ async function invokeCarmen(opts: {
       command_text: commandText,
       surface: "grok_bot",
       conversation_id: opts.conversationId || undefined,
-      conversation_history: opts.conversationHistory?.length ? opts.conversationHistory : undefined,
+      conversation_history: opts.conversationHistory?.length
+        ? opts.conversationHistory
+        : undefined,
     }),
   });
 
@@ -175,7 +212,9 @@ async function invokeCarmen(opts: {
     let detail = raw.slice(0, 500);
     try {
       detail = JSON.parse(raw)?.error || JSON.parse(raw)?.message || detail;
-    } catch { /* keep */ }
+    } catch {
+      /* keep */
+    }
     throw new Error(`Carmen run-ai-agent ${res.status}: ${detail}`);
   }
 
@@ -191,8 +230,12 @@ async function invokeCarmen(opts: {
   if (!output) throw new Error("Carmen returned an empty reply");
   return {
     output,
-    conversation_id: data?.conversation_id ? String(data.conversation_id) : null,
-    tools_used: Array.isArray(data?.tools_used) ? data.tools_used.map(String) : [],
+    conversation_id: data?.conversation_id
+      ? String(data.conversation_id)
+      : null,
+    tools_used: Array.isArray(data?.tools_used)
+      ? data.tools_used.map(String)
+      : [],
   };
 }
 
@@ -207,16 +250,18 @@ async function logDispatch(args: {
   error?: string;
 }): Promise<void> {
   try {
-    await sb().from("carmen_mcp_dispatches").insert({
-      tenant_id: args.tenantId,
-      tool: args.tool,
-      request_text: args.requestText,
-      context: args.context || null,
-      conversation_id: args.conversationId,
-      tools_used: args.toolsUsed.length ? args.toolsUsed : null,
-      status: args.status,
-      error: args.error || null,
-    });
+    await sb()
+      .from("carmen_mcp_dispatches")
+      .insert({
+        tenant_id: args.tenantId,
+        tool: args.tool,
+        request_text: args.requestText,
+        context: args.context || null,
+        conversation_id: args.conversationId,
+        tools_used: args.toolsUsed.length ? args.toolsUsed : null,
+        status: args.status,
+        error: args.error || null,
+      });
   } catch (e) {
     console.error("[carmen-mcp] logDispatch failed:", (e as any)?.message ?? e);
   }
@@ -280,10 +325,15 @@ async function handleToolCall(
 
 type RpcCtx = { tenantId: string; userId: string; grokMode: boolean };
 
-async function handleRpcMessage(msg: McpRpcMessage, ctx: RpcCtx): Promise<Response> {
+async function handleRpcMessage(
+  msg: McpRpcMessage,
+  ctx: RpcCtx,
+): Promise<Response> {
   const { id, method, params } = msg ?? {};
   const clientProtocol =
-    typeof (params as any)?.protocolVersion === "string" ? (params as any).protocolVersion : undefined;
+    typeof (params as any)?.protocolVersion === "string"
+      ? (params as any).protocolVersion
+      : undefined;
 
   try {
     switch (method) {
@@ -293,10 +343,10 @@ async function handleRpcMessage(msg: McpRpcMessage, ctx: RpcCtx): Promise<Respon
           ctx.grokMode
             ? grokCompatibleInitializeResult(clientProtocol, SERVER_INFO)
             : {
-              protocolVersion: PROTOCOL_VERSION,
-              capabilities: { tools: {} },
-              serverInfo: SERVER_INFO,
-            },
+                protocolVersion: PROTOCOL_VERSION,
+                capabilities: { tools: {} },
+                serverInfo: SERVER_INFO,
+              },
         );
       case "notifications/initialized":
       case "initialized":
@@ -304,12 +354,9 @@ async function handleRpcMessage(msg: McpRpcMessage, ctx: RpcCtx): Promise<Respon
       case "ping":
         return rpcResult(id, {});
       case "tools/list":
-        return rpcResult(
-          id,
-          {
-            tools: ctx.grokMode ? compactToolsForGrok(TOOLS) : TOOLS,
-          },
-        );
+        return rpcResult(id, {
+          tools: ctx.grokMode ? compactToolsForGrok(TOOLS) : TOOLS,
+        });
       case "tools/call": {
         const toolName = params?.name as string;
         const toolArgs = (params?.arguments ?? {}) as Record<string, any>;
@@ -337,10 +384,12 @@ function authFailure(id: unknown, message: string, httpStatus = 401): Response {
 }
 
 Deno.serve(async (req) => {
-  if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
+  if (req.method === "OPTIONS")
+    return new Response("ok", { headers: corsHeaders });
 
   const pathname = new URL(req.url).pathname;
-  const streamable = wantsStreamableHttp(req, pathname) || isStreamableMcpPath(pathname);
+  const streamable =
+    wantsStreamableHttp(req, pathname) || isStreamableMcpPath(pathname);
 
   if (!streamable && req.method === "GET") {
     return new Response(
@@ -352,7 +401,10 @@ Deno.serve(async (req) => {
         setup:
           "Grok Bot → Settings → Plugins → custom MCP → URL must end with /mcp + Authorization Bearer CARMEN_MCP_BEARER",
       }),
-      { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      {
+        status: 200,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      },
     );
   }
 
@@ -360,25 +412,55 @@ Deno.serve(async (req) => {
   if (!bearer) {
     if (streamable) {
       return handleStreamableMcpRequest(req, async (msg) =>
-        authFailure(msg.id, "CARMEN_MCP_BEARER secret is not configured on the server", 503));
+        authFailure(
+          msg.id,
+          "CARMEN_MCP_BEARER secret is not configured on the server",
+          503,
+        ),
+      );
     }
-    return rpcError(null, -32002, "CARMEN_MCP_BEARER secret is not configured on the server", 503);
+    return rpcError(
+      null,
+      -32002,
+      "CARMEN_MCP_BEARER secret is not configured on the server",
+      503,
+    );
   }
   if (bearerFrom(req) !== bearer) {
     if (streamable) {
       return handleStreamableMcpRequest(req, async (msg) =>
-        authFailure(msg.id, "Unauthorized: invalid or missing bearer token", 401));
+        authFailure(
+          msg.id,
+          "Unauthorized: invalid or missing bearer token",
+          401,
+        ),
+      );
     }
-    return rpcError(null, -32001, "Unauthorized: invalid or missing bearer token", 401);
+    return rpcError(
+      null,
+      -32001,
+      "Unauthorized: invalid or missing bearer token",
+      401,
+    );
   }
 
   const tenantId = resolveTenantId();
   if (!tenantId) {
     if (streamable) {
       return handleStreamableMcpRequest(req, async (msg) =>
-        authFailure(msg.id, "CARMEN_MCP_TENANT_ID (or CLAUDE_DEFAULT_TENANT_ID) is not configured", 503));
+        authFailure(
+          msg.id,
+          "CARMEN_MCP_TENANT_ID (or CLAUDE_DEFAULT_TENANT_ID) is not configured",
+          503,
+        ),
+      );
     }
-    return rpcError(null, -32002, "CARMEN_MCP_TENANT_ID (or CLAUDE_DEFAULT_TENANT_ID) is not configured", 503);
+    return rpcError(
+      null,
+      -32002,
+      "CARMEN_MCP_TENANT_ID (or CLAUDE_DEFAULT_TENANT_ID) is not configured",
+      503,
+    );
   }
 
   const ctx: RpcCtx = {

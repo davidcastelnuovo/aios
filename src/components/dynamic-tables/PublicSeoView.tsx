@@ -2,7 +2,13 @@ import { useMemo, useState } from "react";
 import DOMPurify from "dompurify";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Globe, FileText, Calendar } from "lucide-react";
 import { format } from "date-fns";
 import { he } from "date-fns/locale";
@@ -72,16 +78,23 @@ export function PublicSeoView({
   const validReports = useMemo(() => filterValidSeoReports(reports), [reports]);
 
   const selectedReport = useMemo(() => {
-    if (selectedReportId) return validReports.find((r) => r.id === selectedReportId) || validReports[0];
+    if (selectedReportId)
+      return (
+        validReports.find((r) => r.id === selectedReportId) || validReports[0]
+      );
     return validReports[0];
   }, [validReports, selectedReportId]);
 
   const reportData = (selectedReport?.report_data as any) || {};
   const snapshot = reportData?.snapshot || {};
-  const snapshotPrevMonth = reportData?.snapshot_prev_month || reportData?.snapshot_prev || {};
+  const snapshotPrevMonth =
+    reportData?.snapshot_prev_month || reportData?.snapshot_prev || {};
   const snapshotCampaignStart = reportData?.snapshot_campaign_start || {};
-  const campaignStartDate = reportData?.campaign_start_date || snapshotCampaignStart?.date;
-  const trafficHistory = Array.isArray(reportData?.traffic_history) ? reportData.traffic_history : [];
+  const campaignStartDate =
+    reportData?.campaign_start_date || snapshotCampaignStart?.date;
+  const trafficHistory = Array.isArray(reportData?.traffic_history)
+    ? reportData.traffic_history
+    : [];
 
   // Comparison cache (3-month / yearly)
   const comparison = useMemo(() => {
@@ -89,10 +102,12 @@ export function PublicSeoView({
     const threeMonth = new Map<string, any>();
     const yearly = new Map<string, any>();
     if (cached?.threeMonth) {
-      for (const [k, v] of Object.entries(cached.threeMonth)) threeMonth.set(k, v as any);
+      for (const [k, v] of Object.entries(cached.threeMonth))
+        threeMonth.set(k, v as any);
     }
     if (cached?.yearly) {
-      for (const [k, v] of Object.entries(cached.yearly)) yearly.set(k, v as any);
+      for (const [k, v] of Object.entries(cached.yearly))
+        yearly.set(k, v as any);
     }
     return { threeMonth, yearly };
   }, [selectedReport?.id]);
@@ -100,7 +115,8 @@ export function PublicSeoView({
   // Previous month report for prev-month positions fallback
   const prevMonthMap = useMemo(() => {
     const idx = validReports.findIndex((r) => r.id === selectedReport?.id);
-    const prev = idx >= 0 && idx < validReports.length - 1 ? validReports[idx + 1] : null;
+    const prev =
+      idx >= 0 && idx < validReports.length - 1 ? validReports[idx + 1] : null;
     const map = new Map<string, number | null>();
     if (!prev) return map;
     const rd = (prev.report_data as any) || {};
@@ -110,7 +126,8 @@ export function PublicSeoView({
     ];
     for (const kw of all) {
       const name = String(kw.keyword || "").toLowerCase();
-      if (!map.has(name)) map.set(name, kw.position ?? kw.best_position ?? null);
+      if (!map.has(name))
+        map.set(name, kw.position ?? kw.best_position ?? null);
     }
     return map;
   }, [validReports, selectedReport?.id]);
@@ -119,7 +136,9 @@ export function PublicSeoView({
   const gscMap = useMemo(() => {
     const m = new Map<string, PublicGscKeyword>();
     for (const g of gscData) {
-      const name = String(g.keyword || "").toLowerCase().trim();
+      const name = String(g.keyword || "")
+        .toLowerCase()
+        .trim();
       if (name) m.set(name, g);
     }
     return m;
@@ -130,14 +149,25 @@ export function PublicSeoView({
   const buildPeriodMap = (rows?: PublicGscKeyword[]) => {
     const m = new Map<string, PublicGscKeyword>();
     for (const g of rows || []) {
-      const name = String(g.keyword || "").toLowerCase().trim();
+      const name = String(g.keyword || "")
+        .toLowerCase()
+        .trim();
       if (name) m.set(name, g);
     }
     return m;
   };
-  const gscPrevMonthMap = useMemo(() => buildPeriodMap(gscMultiPeriod?.prevMonth), [gscMultiPeriod]);
-  const gscThreeMonthMap = useMemo(() => buildPeriodMap(gscMultiPeriod?.threeMonth), [gscMultiPeriod]);
-  const gscYearlyMap = useMemo(() => buildPeriodMap(gscMultiPeriod?.yearly), [gscMultiPeriod]);
+  const gscPrevMonthMap = useMemo(
+    () => buildPeriodMap(gscMultiPeriod?.prevMonth),
+    [gscMultiPeriod],
+  );
+  const gscThreeMonthMap = useMemo(
+    () => buildPeriodMap(gscMultiPeriod?.threeMonth),
+    [gscMultiPeriod],
+  );
+  const gscYearlyMap = useMemo(
+    () => buildPeriodMap(gscMultiPeriod?.yearly),
+    [gscMultiPeriod],
+  );
 
   function enrich(kw: any) {
     const n = normalizeKeyword(kw);
@@ -147,7 +177,8 @@ export function PublicSeoView({
     const gscRow = gscMap.get(lower);
 
     let prevPos = n.position_prev_month ?? prevMonthMap.get(lower) ?? null;
-    if (prevPos == null && api3?.best_position_prev != null) prevPos = api3.best_position_prev;
+    if (prevPos == null && api3?.best_position_prev != null)
+      prevPos = api3.best_position_prev;
     if (prevPos == null) {
       const gscPrev = gscPrevMonthMap.get(lower)?.position;
       if (gscPrev != null) prevPos = gscPrev;
@@ -165,9 +196,12 @@ export function PublicSeoView({
       if (gscY != null) posYear = gscY;
     }
 
-    if (n.volume == null && (api3 || apiY)?.volume != null) n.volume = (api3 || apiY).volume;
-    if (n.kd == null && (api3 || apiY)?.keyword_difficulty != null) n.kd = (api3 || apiY).keyword_difficulty;
-    if (n.cpc == null && (api3 || apiY)?.cpc != null) n.cpc = (api3 || apiY).cpc;
+    if (n.volume == null && (api3 || apiY)?.volume != null)
+      n.volume = (api3 || apiY).volume;
+    if (n.kd == null && (api3 || apiY)?.keyword_difficulty != null)
+      n.kd = (api3 || apiY).keyword_difficulty;
+    if (n.cpc == null && (api3 || apiY)?.cpc != null)
+      n.cpc = (api3 || apiY).cpc;
 
     return {
       ...n,
@@ -182,14 +216,28 @@ export function PublicSeoView({
     };
   }
 
-  const rawOrganic = Array.isArray(reportData?.organic_keywords) ? reportData.organic_keywords : [];
-  const rawTracked = Array.isArray(reportData?.tracked_keywords) ? reportData.tracked_keywords : [];
+  const rawOrganic = Array.isArray(reportData?.organic_keywords)
+    ? reportData.organic_keywords
+    : [];
+  const rawTracked = Array.isArray(reportData?.tracked_keywords)
+    ? reportData.tracked_keywords
+    : [];
 
   const organicKeywords = useMemo(() => {
     const enriched = rawOrganic.map(enrich);
     const existing = new Set<string>();
-    for (const kw of rawOrganic) existing.add(String(kw.keyword || "").toLowerCase().trim());
-    for (const kw of rawTracked) existing.add(String(kw.keyword || "").toLowerCase().trim());
+    for (const kw of rawOrganic)
+      existing.add(
+        String(kw.keyword || "")
+          .toLowerCase()
+          .trim(),
+      );
+    for (const kw of rawTracked)
+      existing.add(
+        String(kw.keyword || "")
+          .toLowerCase()
+          .trim(),
+      );
 
     const extra = new Map<string, any>();
     for (const [name, kw] of comparison.threeMonth) {
@@ -214,7 +262,10 @@ export function PublicSeoView({
     return enriched;
   }, [rawOrganic, rawTracked, comparison, prevMonthMap, gscMap]);
 
-  const trackedKeywords = useMemo(() => rawTracked.map(enrich), [rawTracked, comparison, prevMonthMap, gscMap]);
+  const trackedKeywords = useMemo(
+    () => rawTracked.map(enrich),
+    [rawTracked, comparison, prevMonthMap, gscMap],
+  );
 
   // GSC-only keywords: appear in GSC but not in Ahrefs organic/tracked.
   // Keep `position` populated (same as SeoDashboardView) so Top 20 מקודמים
@@ -222,15 +273,29 @@ export function PublicSeoView({
   const gscOnlyKeywords = useMemo(() => {
     if (gscData.length === 0) return [];
     const ahrefsNames = new Set<string>();
-    for (const kw of rawOrganic) ahrefsNames.add(String(kw.keyword || "").toLowerCase().trim());
-    for (const kw of rawTracked) ahrefsNames.add(String(kw.keyword || "").toLowerCase().trim());
+    for (const kw of rawOrganic)
+      ahrefsNames.add(
+        String(kw.keyword || "")
+          .toLowerCase()
+          .trim(),
+      );
+    for (const kw of rawTracked)
+      ahrefsNames.add(
+        String(kw.keyword || "")
+          .toLowerCase()
+          .trim(),
+      );
     return gscData
       .filter((g) => {
-        const name = String(g.keyword || "").toLowerCase().trim();
+        const name = String(g.keyword || "")
+          .toLowerCase()
+          .trim();
         return name && !ahrefsNames.has(name);
       })
       .map((g) => {
-        const key = String(g.keyword || "").toLowerCase().trim();
+        const key = String(g.keyword || "")
+          .toLowerCase()
+          .trim();
         const prev = gscPrevMonthMap.get(key)?.position ?? null;
         const m3 = gscThreeMonthMap.get(key)?.position ?? null;
         const y1 = gscYearlyMap.get(key)?.position ?? null;
@@ -252,14 +317,23 @@ export function PublicSeoView({
           _source: "gsc" as const,
         };
       });
-  }, [gscData, rawOrganic, rawTracked, gscPrevMonthMap, gscThreeMonthMap, gscYearlyMap]);
+  }, [
+    gscData,
+    rawOrganic,
+    rawTracked,
+    gscPrevMonthMap,
+    gscThreeMonthMap,
+    gscYearlyMap,
+  ]);
 
   if (!validReports || validReports.length === 0) {
     return (
       <Card className="p-8 text-center" dir="rtl">
         <FileText className="h-12 w-12 mx-auto text-muted-foreground mb-3" />
         <h3 className="font-semibold text-lg mb-1">אין דוחות SEO</h3>
-        <p className="text-muted-foreground text-sm">לא נמצאו דוחות לטבלה זו.</p>
+        <p className="text-muted-foreground text-sm">
+          לא נמצאו דוחות לטבלה זו.
+        </p>
       </Card>
     );
   }
@@ -272,10 +346,12 @@ export function PublicSeoView({
           <span className="font-semibold text-base sm:text-lg break-words">
             {reportData?.domain || selectedReport?.domain || tableName}
           </span>
-          {reportData?.project_name && <Badge variant="outline">{reportData.project_name}</Badge>}
+          {reportData?.project_name && (
+            <Badge variant="outline">{reportData.project_name}</Badge>
+          )}
         </div>
         <div className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground w-full sm:w-auto min-w-0">
-           {validReports.length > 1 && (
+          {validReports.length > 1 && (
             <Select
               value={selectedReport?.id || ""}
               onValueChange={(val) => setSelectedReportId(val)}
@@ -284,13 +360,17 @@ export function PublicSeoView({
                 <SelectValue placeholder="בחר תאריך דוח" />
               </SelectTrigger>
               <SelectContent>
-                 {validReports.map((r) => (
+                {validReports.map((r) => (
                   <SelectItem key={r.id} value={r.id}>
                     <div className="flex items-center gap-2">
                       <Calendar className="h-3 w-3" />
                       {r.report_date
-                        ? format(new Date(r.report_date), "dd MMMM yyyy", { locale: he })
-                        : format(new Date(r.received_at), "dd MMMM yyyy", { locale: he })}
+                        ? format(new Date(r.report_date), "dd MMMM yyyy", {
+                            locale: he,
+                          })
+                        : format(new Date(r.received_at), "dd MMMM yyyy", {
+                            locale: he,
+                          })}
                     </div>
                   </SelectItem>
                 ))}
@@ -302,7 +382,7 @@ export function PublicSeoView({
               תחילת קידום: {format(new Date(campaignStartDate), "dd/MM/yyyy")}
             </Badge>
           )}
-           <Badge variant="secondary">{validReports.length} דוחות</Badge>
+          <Badge variant="secondary">{validReports.length} דוחות</Badge>
         </div>
       </div>
 
@@ -334,7 +414,19 @@ export function PublicSeoView({
           <CardContent className="p-4">
             <div
               className="prose prose-sm dark:prose-invert max-w-none text-right"
-              dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(reportData.html || "", { FORBID_TAGS: ["script", "style", "iframe", "object", "embed"], FORBID_ATTR: ["onerror", "onload", "onclick", "onmouseover", "onfocus", "onblur"] }) }}
+              dangerouslySetInnerHTML={{
+                __html: DOMPurify.sanitize(reportData.html || "", {
+                  FORBID_TAGS: ["script", "style", "iframe", "object", "embed"],
+                  FORBID_ATTR: [
+                    "onerror",
+                    "onload",
+                    "onclick",
+                    "onmouseover",
+                    "onfocus",
+                    "onblur",
+                  ],
+                }),
+              }}
             />
           </CardContent>
         </Card>

@@ -1,10 +1,11 @@
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.3';
-import { checkWhatsAppSend } from '../_shared/integration-guard.ts';
-import { claimIdenticalWhatsAppSend } from '../_shared/facebook-lead-dedup.ts';
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
+import { checkWhatsAppSend } from "../_shared/integration-guard.ts";
+import { claimIdenticalWhatsAppSend } from "../_shared/facebook-lead-dedup.ts";
 
 const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Headers":
+    "authorization, x-client-info, apikey, content-type",
 };
 
 type GreenApiIntegration = {
@@ -20,25 +21,28 @@ type GreenApiIntegration = {
 };
 
 Deno.serve(async (req) => {
-  if (req.method === 'OPTIONS') {
+  if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
   }
 
   try {
-    const authHeader = req.headers.get('Authorization');
+    const authHeader = req.headers.get("Authorization");
     if (!authHeader) {
-      console.error('❌ Missing Authorization header');
-      return new Response(JSON.stringify({ error: 'Missing authorization header' }), {
-        status: 401,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      });
+      console.error("❌ Missing Authorization header");
+      return new Response(
+        JSON.stringify({ error: "Missing authorization header" }),
+        {
+          status: 401,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        },
+      );
     }
 
-    const SUPABASE_URL = Deno.env.get('SUPABASE_URL') ?? '';
-    const SUPABASE_ANON_KEY = Deno.env.get('SUPABASE_ANON_KEY') ?? '';
-    const SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '';
+    const SUPABASE_URL = Deno.env.get("SUPABASE_URL") ?? "";
+    const SUPABASE_ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY") ?? "";
+    const SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
 
-    const token = authHeader.replace('Bearer ', '');
+    const token = authHeader.replace("Bearer ", "");
     const isServiceRole = token === SERVICE_ROLE_KEY;
 
     let userId: string;
@@ -46,26 +50,28 @@ Deno.serve(async (req) => {
     if (isServiceRole) {
       // Internal call from another edge function (e.g. run-ai-agent)
       // We'll read senderUserId from the body later
-      userId = ''; // will be set from body
+      userId = ""; // will be set from body
     } else {
-      const supabaseClient = createClient(
-        SUPABASE_URL,
-        SUPABASE_ANON_KEY,
-        { 
-          global: { headers: { Authorization: authHeader } },
-          auth: { persistSession: false, autoRefreshToken: false }
-        }
-      );
-      const { data: { user }, error: userError } = await supabaseClient.auth.getUser(token);
+      const supabaseClient = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+        global: { headers: { Authorization: authHeader } },
+        auth: { persistSession: false, autoRefreshToken: false },
+      });
+      const {
+        data: { user },
+        error: userError,
+      } = await supabaseClient.auth.getUser(token);
       if (userError || !user) {
-        console.error('❌ Authentication failed:', userError);
-        return new Response(JSON.stringify({ 
-          error: 'Unauthorized',
-          details: userError?.message 
-        }), {
-          status: 401,
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        });
+        console.error("❌ Authentication failed:", userError);
+        return new Response(
+          JSON.stringify({
+            error: "Unauthorized",
+            details: userError?.message,
+          }),
+          {
+            status: 401,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          },
+        );
       }
       userId = user.id;
     }
@@ -74,143 +80,170 @@ Deno.serve(async (req) => {
     const supabaseClient = createClient(
       SUPABASE_URL,
       isServiceRole ? SERVICE_ROLE_KEY : SUPABASE_ANON_KEY,
-      isServiceRole ? {
-        auth: { persistSession: false, autoRefreshToken: false }
-      } : { 
-        global: { headers: { Authorization: authHeader } },
-        auth: { persistSession: false, autoRefreshToken: false }
-      }
+      isServiceRole
+        ? {
+            auth: { persistSession: false, autoRefreshToken: false },
+          }
+        : {
+            global: { headers: { Authorization: authHeader } },
+            auth: { persistSession: false, autoRefreshToken: false },
+          },
     );
     const admin = createClient(SUPABASE_URL, SERVICE_ROLE_KEY, {
       auth: { persistSession: false, autoRefreshToken: false },
     });
     const {
-      clientId, leadId, groupId, message, phoneNumber, tenantId: providedTenantId,
-      quotedMessageId, senderUserId, integrationId,
+      clientId,
+      leadId,
+      groupId,
+      message,
+      phoneNumber,
+      tenantId: providedTenantId,
+      quotedMessageId,
+      senderUserId,
+      integrationId,
     } = await req.json();
 
     // For service role calls, use senderUserId from the body
     if (isServiceRole) {
       if (!senderUserId) {
-        return new Response(JSON.stringify({ error: 'senderUserId is required for service role calls' }), {
-          status: 400,
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        });
+        return new Response(
+          JSON.stringify({
+            error: "senderUserId is required for service role calls",
+          }),
+          {
+            status: 400,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          },
+        );
       }
       userId = senderUserId;
     }
-    
+
     if (!message) {
-      return new Response(JSON.stringify({ error: 'Missing message' }), {
+      return new Response(JSON.stringify({ error: "Missing message" }), {
         status: 400,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
     // Get tenant_id - from provided value, entity, or user's active tenant
     let tenantId: string | undefined = providedTenantId;
     let groupChatId: string | undefined;
-    
+
     if (!tenantId && clientId) {
       const { data: client } = await supabaseClient
-        .from('clients')
-        .select('tenant_id')
-        .eq('id', clientId)
+        .from("clients")
+        .select("tenant_id")
+        .eq("id", clientId)
         .single();
       tenantId = client?.tenant_id;
     } else if (!tenantId && leadId) {
       const { data: lead } = await supabaseClient
-        .from('leads')
-        .select('tenant_id')
-        .eq('id', leadId)
+        .from("leads")
+        .select("tenant_id")
+        .eq("id", leadId)
         .single();
       tenantId = lead?.tenant_id;
     } else if (!tenantId && groupId) {
       const { data: group } = await supabaseClient
-        .from('whatsapp_groups')
-        .select('tenant_id, group_chat_id')
-        .eq('id', groupId)
+        .from("whatsapp_groups")
+        .select("tenant_id, group_chat_id")
+        .eq("id", groupId)
         .single();
       tenantId = group?.tenant_id;
       groupChatId = group?.group_chat_id;
     } else if (groupId && tenantId) {
       // If tenantId is provided but we also have groupId, get the group_chat_id
       const { data: group } = await supabaseClient
-        .from('whatsapp_groups')
-        .select('group_chat_id')
-        .eq('id', groupId)
+        .from("whatsapp_groups")
+        .select("group_chat_id")
+        .eq("id", groupId)
         .single();
       groupChatId = group?.group_chat_id;
     }
-    
+
     // If still no tenant, get from user's active tenant
     if (!tenantId) {
       const { data: activeTenant } = await supabaseClient
-        .from('user_active_tenant')
-        .select('tenant_id')
-        .eq('user_id', userId)
+        .from("user_active_tenant")
+        .select("tenant_id")
+        .eq("user_id", userId)
         .single();
       tenantId = activeTenant?.tenant_id;
     }
 
     const [{ data: membership }, { data: superAdmin }] = await Promise.all([
-      admin.from('tenant_users').select('user_id').eq('tenant_id', tenantId).eq('user_id', userId).maybeSingle(),
-      admin.rpc('is_super_admin', { _user_id: userId }),
+      admin
+        .from("tenant_users")
+        .select("user_id")
+        .eq("tenant_id", tenantId)
+        .eq("user_id", userId)
+        .maybeSingle(),
+      admin.rpc("is_super_admin", { _user_id: userId }),
     ]);
     if (!membership && superAdmin !== true) {
-      return new Response(JSON.stringify({ error: 'Forbidden' }), {
+      return new Response(JSON.stringify({ error: "Forbidden" }), {
         status: 403,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
     if (!tenantId) {
-      console.error('❌ Could not determine tenant for user:', userId);
-      return new Response(JSON.stringify({ error: 'Tenant not found' }), {
+      console.error("❌ Could not determine tenant for user:", userId);
+      return new Response(JSON.stringify({ error: "Tenant not found" }), {
         status: 404,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
-    
 
     // Resolve either the caller's own connection or one explicitly shared with
     // their tenant. The canonical credential row stays in the owner tenant.
     let integration: GreenApiIntegration | null = null;
     if (integrationId) {
       const { data } = await admin
-        .from('tenant_integrations')
-        .select('*')
-        .eq('id', integrationId)
-        .eq('integration_type', 'green_api')
-        .eq('is_active', true)
+        .from("tenant_integrations")
+        .select("*")
+        .eq("id", integrationId)
+        .eq("integration_type", "green_api")
+        .eq("is_active", true)
         .maybeSingle();
       integration = data;
       if (integration?.tenant_id !== tenantId) {
-        const { data: canUse, error: accessError } = await admin.rpc('tenant_can_use_integration', {
-          p_tenant_id: tenantId,
-          p_integration_id: integrationId,
-        });
+        const { data: canUse, error: accessError } = await admin.rpc(
+          "tenant_can_use_integration",
+          {
+            p_tenant_id: tenantId,
+            p_integration_id: integrationId,
+          },
+        );
         if (accessError) throw accessError;
         if (canUse !== true && superAdmin !== true) integration = null;
       }
     } else {
       const { data } = await admin
-        .from('tenant_integrations')
-        .select('*')
-        .eq('tenant_id', tenantId)
-        .eq('user_id', userId)
-        .eq('integration_type', 'green_api')
-        .eq('is_active', true)
+        .from("tenant_integrations")
+        .select("*")
+        .eq("tenant_id", tenantId)
+        .eq("user_id", userId)
+        .eq("integration_type", "green_api")
+        .eq("is_active", true)
         .maybeSingle();
       integration = data;
     }
 
     if (!integration?.api_key || !integration?.settings?.instance_id) {
-      console.error('Green API integration not configured for user:', userId);
-      return new Response(JSON.stringify({ error: 'Green API not configured for your account. Please set up your connection in Settings.' }), {
-        status: 400,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      });
+      console.error("Green API integration not configured for user:", userId);
+      return new Response(
+        JSON.stringify({
+          error:
+            "Green API not configured for your account. Please set up your connection in Settings.",
+        }),
+        {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        },
+      );
     }
 
     const instanceId = integration.settings.instance_id;
@@ -222,23 +255,28 @@ Deno.serve(async (req) => {
     if (groupChatId) {
       chatId = groupChatId;
     } else {
-      const originalPhone = String(phoneNumber || '');
-      let digits = originalPhone.replace(/[^0-9]/g, '');
+      const originalPhone = String(phoneNumber || "");
+      let digits = originalPhone.replace(/[^0-9]/g, "");
 
       // Handle leading 00 (international prefix)
-      if (digits.startsWith('00')) {
+      if (digits.startsWith("00")) {
         digits = digits.slice(2);
       }
 
       // Determine country code from integration settings or fallback to IL (972)
-      const configuredCc = (integration.settings?.country_code || integration.settings?.default_country_code || '').toString();
-      const defaultCountryCode = configuredCc && /^(\d{1,3})$/.test(configuredCc) ? configuredCc : '972';
+      const configuredCc = (
+        integration.settings?.country_code ||
+        integration.settings?.default_country_code ||
+        ""
+      ).toString();
+      const defaultCountryCode =
+        configuredCc && /^(\d{1,3})$/.test(configuredCc) ? configuredCc : "972";
 
       let e164Digits = digits;
       // If already starts with country code, keep; else if starts with 0, strip 0 and prefix CC; else prefix CC
       if (e164Digits.startsWith(defaultCountryCode)) {
         // ok
-      } else if (e164Digits.startsWith('0')) {
+      } else if (e164Digits.startsWith("0")) {
         e164Digits = defaultCountryCode + e164Digits.slice(1);
       } else {
         e164Digits = defaultCountryCode + e164Digits;
@@ -247,17 +285,22 @@ Deno.serve(async (req) => {
       chatId = `${e164Digits}@c.us`;
     }
 
-    const guard = checkWhatsAppSend(groupChatId ? `group:${groupChatId}` : chatId);
-    if (guard.decision === 'BLOCK') {
-      console.warn('[send-green-api] blocked by integration-guard', guard);
-      return new Response(JSON.stringify({
-        error: 'blocked_by_staging_safe_mode',
-        reason: guard.reason,
-        environment: guard.environment,
-      }), {
-        status: 403,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      });
+    const guard = checkWhatsAppSend(
+      groupChatId ? `group:${groupChatId}` : chatId,
+    );
+    if (guard.decision === "BLOCK") {
+      console.warn("[send-green-api] blocked by integration-guard", guard);
+      return new Response(
+        JSON.stringify({
+          error: "blocked_by_staging_safe_mode",
+          reason: guard.reason,
+          environment: guard.environment,
+        }),
+        {
+          status: 403,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        },
+      );
     }
 
     if (tenantId) {
@@ -267,18 +310,21 @@ Deno.serve(async (req) => {
         message,
       });
       if (bodyClaim.duplicate) {
-        return new Response(JSON.stringify({
-          success: true,
-          skipped: 'duplicate_identical_whatsapp',
-        }), {
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        });
+        return new Response(
+          JSON.stringify({
+            success: true,
+            skipped: "duplicate_identical_whatsapp",
+          }),
+          {
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          },
+        );
       }
     }
 
     // Send message via Green API
     const greenApiUrl = `https://api.green-api.com/waInstance${instanceId}/sendMessage/${apiToken}`;
-    
+
     const messageBody: any = {
       chatId: chatId,
       message: message,
@@ -288,11 +334,11 @@ Deno.serve(async (req) => {
     if (quotedMessageId) {
       messageBody.quotedMessageId = quotedMessageId;
     }
-    
+
     const response = await fetch(greenApiUrl, {
-      method: 'POST',
+      method: "POST",
       headers: {
-        'Content-Type': 'application/json',
+        "Content-Type": "application/json",
       },
       body: JSON.stringify(messageBody),
     });
@@ -304,46 +350,50 @@ Deno.serve(async (req) => {
     }
 
     // Extract normalized phone from chatId (remove @c.us suffix if present)
-    const senderPhoneForDb = !groupChatId ? chatId.replace('@c.us', '') : null;
+    const senderPhoneForDb = !groupChatId ? chatId.replace("@c.us", "") : null;
 
     // Save message to database
-    const { error: insertError } = await admin
-      .from('chat_messages')
-      .insert({
-        client_id: clientId || null,
-        lead_id: leadId || null,
-        group_id: groupId || null,
-        tenant_id: tenantId,
-        connection_user_id: integration.user_id || userId,
-        integration_id: integration.id,
-        message_text: message,
-        direction: 'outbound',
-        channel: 'whatsapp',
-        provider: 'green_api',
-        sent_by_user_id: userId,
-        raw_provider_data: responseData,
-        sender_phone: senderPhoneForDb,
-      });
+    const { error: insertError } = await admin.from("chat_messages").insert({
+      client_id: clientId || null,
+      lead_id: leadId || null,
+      group_id: groupId || null,
+      tenant_id: tenantId,
+      connection_user_id: integration.user_id || userId,
+      integration_id: integration.id,
+      message_text: message,
+      direction: "outbound",
+      channel: "whatsapp",
+      provider: "green_api",
+      sent_by_user_id: userId,
+      raw_provider_data: responseData,
+      sender_phone: senderPhoneForDb,
+    });
 
     if (insertError) {
-      console.error('Failed to save message:', insertError);
+      console.error("Failed to save message:", insertError);
     }
 
-    return new Response(JSON.stringify({ 
-      success: true, 
-      messageId: responseData.idMessage,
-    }), {
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-    });
-
+    return new Response(
+      JSON.stringify({
+        success: true,
+        messageId: responseData.idMessage,
+      }),
+      {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      },
+    );
   } catch (error) {
-    console.error('Error in send-green-api-message:', error);
-    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-    return new Response(JSON.stringify({ 
-      error: errorMessage 
-    }), {
-      status: 500,
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-    });
+    console.error("Error in send-green-api-message:", error);
+    const errorMessage =
+      error instanceof Error ? error.message : "Unknown error";
+    return new Response(
+      JSON.stringify({
+        error: errorMessage,
+      }),
+      {
+        status: 500,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      },
+    );
   }
 });

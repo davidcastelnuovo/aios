@@ -2,14 +2,54 @@ import { useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { useSocialMediaPosts, useSocialMediaChannels, useDeletePost, usePublishPost, useUpdatePostStatus, SocialMediaPost } from "@/hooks/useSocialMedia";
-import { Trash2, Send, Loader2, Clock, CheckCircle2, XCircle, AlertCircle, FileText, Ban } from "lucide-react";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
+  useSocialMediaPosts,
+  useSocialMediaChannels,
+  useDeletePost,
+  usePublishPost,
+  useUpdatePostStatus,
+  SocialMediaPost,
+} from "@/hooks/useSocialMedia";
+import {
+  Trash2,
+  Send,
+  Loader2,
+  Clock,
+  CheckCircle2,
+  XCircle,
+  AlertCircle,
+  FileText,
+  Ban,
+} from "lucide-react";
 import { format } from "date-fns";
 import { he } from "date-fns/locale";
-import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 
-const statusConfig: Record<SocialMediaPost["status"], { label: string; icon: React.ElementType; variant: "default" | "secondary" | "destructive" | "outline" }> = {
+const statusConfig: Record<
+  SocialMediaPost["status"],
+  {
+    label: string;
+    icon: React.ElementType;
+    variant: "default" | "secondary" | "destructive" | "outline";
+  }
+> = {
   draft: { label: "טיוטה", icon: FileText, variant: "secondary" },
   scheduled: { label: "מתוזמן", icon: Clock, variant: "outline" },
   publishing: { label: "מפרסם...", icon: Loader2, variant: "default" },
@@ -20,7 +60,9 @@ const statusConfig: Record<SocialMediaPost["status"], { label: string; icon: Rea
 
 export function PostsList() {
   const [statusFilter, setStatusFilter] = useState<string>("all");
-  const { data: posts = [], isLoading } = useSocialMediaPosts(statusFilter === "all" ? undefined : statusFilter);
+  const { data: posts = [], isLoading } = useSocialMediaPosts(
+    statusFilter === "all" ? undefined : statusFilter,
+  );
   const deletePost = useDeletePost();
   const publishPost = usePublishPost();
   const updateStatus = useUpdatePostStatus();
@@ -57,23 +99,20 @@ export function PostsList() {
               const status = statusConfig[post.status];
               const StatusIcon = status.icon;
               return (
-                <div
-                  key={post.id}
-                  className="p-4 rounded-lg border space-y-2"
-                >
-                    {post.media_urls && post.media_urls.length > 0 && (
-                      <div className="flex gap-2 mb-3 overflow-x-auto">
-                        {post.media_urls.map((url, idx) => (
-                          <img
-                            key={idx}
-                            src={url}
-                            alt={`מדיה ${idx + 1}`}
-                            className="h-40 w-auto rounded-lg object-cover border"
-                          />
-                        ))}
-                      </div>
-                    )}
-                    <div className="flex items-start justify-between" dir="rtl">
+                <div key={post.id} className="p-4 rounded-lg border space-y-2">
+                  {post.media_urls && post.media_urls.length > 0 && (
+                    <div className="flex gap-2 mb-3 overflow-x-auto">
+                      {post.media_urls.map((url, idx) => (
+                        <img
+                          key={idx}
+                          src={url}
+                          alt={`מדיה ${idx + 1}`}
+                          className="h-40 w-auto rounded-lg object-cover border"
+                        />
+                      ))}
+                    </div>
+                  )}
+                  <div className="flex items-start justify-between" dir="rtl">
                     <div className="flex-1 min-w-0">
                       {post.title && (
                         <h4 className="font-medium text-right">{post.title}</h4>
@@ -82,8 +121,13 @@ export function PostsList() {
                         {post.content}
                       </p>
                     </div>
-                    <Badge variant={status.variant} className="ms-2 whitespace-nowrap shrink-0">
-                      <StatusIcon className={`h-3 w-3 me-1 ${post.status === "publishing" ? "animate-spin" : ""}`} />
+                    <Badge
+                      variant={status.variant}
+                      className="ms-2 whitespace-nowrap shrink-0"
+                    >
+                      <StatusIcon
+                        className={`h-3 w-3 me-1 ${post.status === "publishing" ? "animate-spin" : ""}`}
+                      />
                       {status.label}
                     </Badge>
                   </div>
@@ -91,21 +135,32 @@ export function PostsList() {
                   <div className="flex items-center justify-between text-xs text-muted-foreground">
                     <div className="flex items-center gap-3">
                       <span>
-                        נוצר {format(new Date(post.created_at), "dd/MM/yyyy HH:mm", { locale: he })}
+                        נוצר{" "}
+                        {format(new Date(post.created_at), "dd/MM/yyyy HH:mm", {
+                          locale: he,
+                        })}
                       </span>
                       {post.scheduled_at && (
                         <span className="flex items-center gap-1">
                           <Clock className="h-3 w-3" />
-                          מתוזמן ל-{format(new Date(post.scheduled_at), "dd/MM/yyyy HH:mm", { locale: he })}
+                          מתוזמן ל-
+                          {format(
+                            new Date(post.scheduled_at),
+                            "dd/MM/yyyy HH:mm",
+                            { locale: he },
+                          )}
                         </span>
                       )}
                       {post.publish_to_wordpress && (
-                        <Badge variant="outline" className="text-xs">WordPress</Badge>
+                        <Badge variant="outline" className="text-xs">
+                          WordPress
+                        </Badge>
                       )}
                     </div>
 
                     <div className="flex items-center gap-1">
-                      {(post.status === "draft" || post.status === "failed") && (
+                      {(post.status === "draft" ||
+                        post.status === "failed") && (
                         <Button
                           variant="ghost"
                           size="sm"
@@ -120,7 +175,12 @@ export function PostsList() {
                         <Button
                           variant="ghost"
                           size="sm"
-                          onClick={() => updateStatus.mutate({ postId: post.id, status: "cancelled" })}
+                          onClick={() =>
+                            updateStatus.mutate({
+                              postId: post.id,
+                              status: "cancelled",
+                            })
+                          }
                         >
                           <Ban className="h-3 w-3 me-1" />
                           בטל
@@ -128,7 +188,11 @@ export function PostsList() {
                       )}
                       <AlertDialog>
                         <AlertDialogTrigger asChild>
-                          <Button variant="ghost" size="icon" className="h-8 w-8">
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-8 w-8"
+                          >
                             <Trash2 className="h-3 w-3 text-destructive" />
                           </Button>
                         </AlertDialogTrigger>
@@ -141,7 +205,9 @@ export function PostsList() {
                           </AlertDialogHeader>
                           <AlertDialogFooter>
                             <AlertDialogCancel>ביטול</AlertDialogCancel>
-                            <AlertDialogAction onClick={() => deletePost.mutate(post.id)}>
+                            <AlertDialogAction
+                              onClick={() => deletePost.mutate(post.id)}
+                            >
                               מחק
                             </AlertDialogAction>
                           </AlertDialogFooter>

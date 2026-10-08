@@ -1,7 +1,19 @@
 import { getBrandKit } from "./brandKit";
-import type { CreativeFormat, CreativeItem, CreativeLayer, CreativeProjectDraft, CreativeProjectType, CreativeVariation, StoryboardFrame } from "./types";
+import type {
+  CreativeFormat,
+  CreativeItem,
+  CreativeLayer,
+  CreativeProjectDraft,
+  CreativeProjectType,
+  CreativeVariation,
+  StoryboardFrame,
+} from "./types";
 import { buildDesignedCopyLayers } from "./designedLayers";
-import { buildVisualStyleLock, getVisualStyleId, type CreativeVisualStyleId } from "./visualStyles";
+import {
+  buildVisualStyleLock,
+  getVisualStyleId,
+  type CreativeVisualStyleId,
+} from "./visualStyles";
 import {
   approvedCopyConcepts,
   formatCopyConceptsForCreative,
@@ -21,9 +33,12 @@ const FORMAT_CLASS: Record<CreativeFormat, string> = {
 export const aspectRatioClass = (format?: string) =>
   FORMAT_CLASS[(format as CreativeFormat) ?? "1:1"] ?? FORMAT_CLASS["1:1"];
 
-export const getProjectType = (payload: Record<string, unknown> | null | undefined): CreativeProjectType => {
+export const getProjectType = (
+  payload: Record<string, unknown> | null | undefined,
+): CreativeProjectType => {
   if (payload?.project_type === "video") return "video";
-  if (Array.isArray(payload?.storyboard) && payload.storyboard.length > 0) return "video";
+  if (Array.isArray(payload?.storyboard) && payload.storyboard.length > 0)
+    return "video";
   return "static";
 };
 
@@ -32,40 +47,69 @@ export const projectTypeLabel = (type: CreativeProjectType) =>
 
 export const STORYBOARD_FRAME_GAP = 300;
 
-export const storyboardFrameX = (order: number) => -(order - 1) * STORYBOARD_FRAME_GAP;
+export const storyboardFrameX = (order: number) =>
+  -(order - 1) * STORYBOARD_FRAME_GAP;
 
-export const layoutStoryboardRtl = (frames: StoryboardFrame[]): StoryboardFrame[] => {
+export const layoutStoryboardRtl = (
+  frames: StoryboardFrame[],
+): StoryboardFrame[] => {
   if (frames.length <= 1) return frames;
   const ordered = [...frames].sort((a, b) => a.order - b.order);
-  const alreadyRtl = ordered.every((frame, index) => index === 0 || frame.x < ordered[index - 1].x);
+  const alreadyRtl = ordered.every(
+    (frame, index) => index === 0 || frame.x < ordered[index - 1].x,
+  );
   if (alreadyRtl) return frames;
-  return frames.map((frame) => ({ ...frame, x: storyboardFrameX(frame.order) }));
+  return frames.map((frame) => ({
+    ...frame,
+    x: storyboardFrameX(frame.order),
+  }));
 };
 
-export const getStoryboard = (payload: Record<string, unknown> | null | undefined): StoryboardFrame[] => {
+export const getStoryboard = (
+  payload: Record<string, unknown> | null | undefined,
+): StoryboardFrame[] => {
   const value = payload?.storyboard;
   if (!Array.isArray(value)) return [];
-  const frames = value.filter((frame): frame is StoryboardFrame => {
-    if (!frame || typeof frame !== "object") return false;
-    return typeof (frame as StoryboardFrame).id === "string";
-  }).sort((a, b) => a.order - b.order);
+  const frames = value
+    .filter((frame): frame is StoryboardFrame => {
+      if (!frame || typeof frame !== "object") return false;
+      return typeof (frame as StoryboardFrame).id === "string";
+    })
+    .sort((a, b) => a.order - b.order);
   return layoutStoryboardRtl(frames);
 };
 
-export const getStoryboardStyle = (payload: Record<string, unknown> | null | undefined): { lock: string; referenceImageUrl?: string } => {
+export const getStoryboardStyle = (
+  payload: Record<string, unknown> | null | undefined,
+): { lock: string; referenceImageUrl?: string } => {
   const value = payload?.storyboard_style;
-  const stored = value && typeof value === "object" ? value as { referenceImageUrl?: unknown } : {};
+  const stored =
+    value && typeof value === "object"
+      ? (value as { referenceImageUrl?: unknown })
+      : {};
   return {
     lock: buildVisualStyleLock(payload, { storyboard: true }),
-    referenceImageUrl: typeof stored.referenceImageUrl === "string" ? stored.referenceImageUrl : undefined,
+    referenceImageUrl:
+      typeof stored.referenceImageUrl === "string"
+        ? stored.referenceImageUrl
+        : undefined,
   };
 };
 
-export const storyboardReferenceUrls = (frames: StoryboardFrame[], currentId: string): string[] => {
+export const storyboardReferenceUrls = (
+  frames: StoryboardFrame[],
+  currentId: string,
+): string[] => {
   const ordered = [...frames].sort((a, b) => a.order - b.order);
   const current = ordered.find((frame) => frame.id === currentId);
-  const previous = ordered.filter((frame) => frame.imageUrl && frame.order < (current?.order ?? Number.MAX_SAFE_INTEGER));
-  const urls = previous.map((frame) => frame.imageUrl).filter((url): url is string => !!url);
+  const previous = ordered.filter(
+    (frame) =>
+      frame.imageUrl &&
+      frame.order < (current?.order ?? Number.MAX_SAFE_INTEGER),
+  );
+  const urls = previous
+    .map((frame) => frame.imageUrl)
+    .filter((url): url is string => !!url);
   return urls.slice(-2);
 };
 
@@ -81,10 +125,16 @@ export const pickStoryboardReferences = (
     .sort((a, b) => a.order - b.order)
     .find((frame) => frame.imageUrl)?.imageUrl;
   const bible = styleUrl || firstGenerated;
-  return [bible, immediate].filter((url, index, list): url is string => !!url && list.indexOf(url) === index);
+  return [bible, immediate].filter(
+    (url, index, list): url is string => !!url && list.indexOf(url) === index,
+  );
 };
 
-export const makeStoryboardFrame = (order: number, x = storyboardFrameX(order), y = 100): StoryboardFrame => ({
+export const makeStoryboardFrame = (
+  order: number,
+  x = storyboardFrameX(order),
+  y = 100,
+): StoryboardFrame => ({
   id: crypto.randomUUID(),
   order,
   title: `סצנה ${order}`,
@@ -97,7 +147,9 @@ export const makeStoryboardFrame = (order: number, x = storyboardFrameX(order), 
   y,
 });
 
-export const itemToProjectDraft = (item: CreativeItem | null): CreativeProjectDraft => {
+export const itemToProjectDraft = (
+  item: CreativeItem | null,
+): CreativeProjectDraft => {
   const kit = getBrandKit(item?.payload);
   return {
     title: item?.title ?? "",
@@ -115,48 +167,73 @@ export const itemToProjectDraft = (item: CreativeItem | null): CreativeProjectDr
   };
 };
 
-export const defaultFormat = (payload: Record<string, unknown> | null | undefined): CreativeFormat => {
+export const defaultFormat = (
+  payload: Record<string, unknown> | null | undefined,
+): CreativeFormat => {
   const value = payload?.format;
-  if (value === "9:16" || value === "1:1" || value === "4:5" || value === "16:9") return value;
+  if (
+    value === "9:16" ||
+    value === "1:1" ||
+    value === "4:5" ||
+    value === "16:9"
+  )
+    return value;
   return "1:1";
 };
 
-export const isLiveTextLayers = (payload: Record<string, unknown> | null | undefined): boolean =>
-  payload?.live_text_layers === true;
+export const isLiveTextLayers = (
+  payload: Record<string, unknown> | null | undefined,
+): boolean => payload?.live_text_layers === true;
 
 /** Per-ad mode: explicit flag, or infer from designed layer chrome on legacy rows. */
 export const isVariationLiveText = (
   variation?: Pick<CreativeVariation, "liveTextLayers" | "layers"> | null,
 ): boolean => {
   if (!variation) return false;
-  if (typeof variation.liveTextLayers === "boolean") return variation.liveTextLayers;
-  return (variation.layers ?? []).some((layer) =>
-    layer.role === "footer" || layer.role === "cta_fill" || layer.role === "type_field",
+  if (typeof variation.liveTextLayers === "boolean")
+    return variation.liveTextLayers;
+  return (variation.layers ?? []).some(
+    (layer) =>
+      layer.role === "footer" ||
+      layer.role === "cta_fill" ||
+      layer.role === "type_field",
   );
 };
 
 const isVariation = (value: unknown): value is CreativeVariation => {
   if (!value || typeof value !== "object") return false;
   const variation = value as CreativeVariation;
-  return typeof variation.id === "string" && typeof variation.imageUrl === "string";
+  return (
+    typeof variation.id === "string" && typeof variation.imageUrl === "string"
+  );
 };
 
-export const getVariations = (payload: Record<string, unknown> | null | undefined): CreativeVariation[] => {
+export const getVariations = (
+  payload: Record<string, unknown> | null | undefined,
+): CreativeVariation[] => {
   const direct = payload?.variations;
   if (Array.isArray(direct)) {
-    return direct.filter(isVariation).sort(
-      (a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime(),
-    );
+    return direct
+      .filter(isVariation)
+      .sort(
+        (a, b) =>
+          new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime(),
+      );
   }
 
   const storyboard = payload?.storyboard;
   if (Array.isArray(storyboard) && payload?.project_type !== "video") {
     return storyboard
-      .filter((frame): frame is Record<string, unknown> => !!frame && typeof frame === "object")
+      .filter(
+        (frame): frame is Record<string, unknown> =>
+          !!frame && typeof frame === "object",
+      )
       .map((frame, index) => {
-        const imageUrl = typeof frame.imageUrl === "string" ? frame.imageUrl : "";
+        const imageUrl =
+          typeof frame.imageUrl === "string" ? frame.imageUrl : "";
         if (!imageUrl) return null;
-        const overlayText = typeof frame.overlayText === "string" ? frame.overlayText : "";
+        const overlayText =
+          typeof frame.overlayText === "string" ? frame.overlayText : "";
         return {
           id: String(frame.id ?? crypto.randomUUID()),
           name: String(frame.title ?? `סצנה ${index + 1}`),
@@ -173,16 +250,18 @@ export const getVariations = (payload: Record<string, unknown> | null | undefine
 
   const imageUrl = payload?.image_url;
   if (typeof imageUrl === "string" && imageUrl) {
-    return [{
-      id: crypto.randomUUID(),
-      name: "גרסה 1",
-      imageUrl,
-      format: defaultFormat(payload),
-      layers: [],
-      comments: [],
-      createdAt: new Date().toISOString(),
-      source: "ai",
-    }];
+    return [
+      {
+        id: crypto.randomUUID(),
+        name: "גרסה 1",
+        imageUrl,
+        format: defaultFormat(payload),
+        layers: [],
+        comments: [],
+        createdAt: new Date().toISOString(),
+        source: "ai",
+      },
+    ];
   }
 
   return [];
@@ -191,7 +270,12 @@ export const getVariations = (payload: Record<string, unknown> | null | undefine
 export const buildTextLayersFromCopy = (copyText: string): CreativeLayer[] => {
   const lines = copyText
     .split("\n")
-    .map((line) => line.replace(/^#+\s*/, "").replace(/\*\*/g, "").trim())
+    .map((line) =>
+      line
+        .replace(/^#+\s*/, "")
+        .replace(/\*\*/g, "")
+        .trim(),
+    )
     .filter(Boolean);
 
   if (lines.length === 0) return [];
@@ -199,20 +283,22 @@ export const buildTextLayersFromCopy = (copyText: string): CreativeLayer[] => {
   const headline = lines[0];
   const subline = lines[1] ?? "";
 
-  const layers: CreativeLayer[] = [{
-    id: crypto.randomUUID(),
-    type: "text",
-    x: 8,
-    y: 62,
-    width: 84,
-    height: 16,
-    text: headline,
-    fontFamily: "Rubik",
-    fontSize: 28,
-    fontWeight: "700",
-    color: "#ffffff",
-    textAlign: "right",
-  }];
+  const layers: CreativeLayer[] = [
+    {
+      id: crypto.randomUUID(),
+      type: "text",
+      x: 8,
+      y: 62,
+      width: 84,
+      height: 16,
+      text: headline,
+      fontFamily: "Rubik",
+      fontSize: 28,
+      fontWeight: "700",
+      color: "#ffffff",
+      textAlign: "right",
+    },
+  ];
 
   if (subline) {
     layers.push({
@@ -277,12 +363,22 @@ export const makeVariation = ({
   liveTextLayers?: boolean;
 }): CreativeVariation => ({
   id: crypto.randomUUID(),
-  name: name ?? `גרסה ${new Date().toLocaleTimeString("he-IL", { hour: "2-digit", minute: "2-digit" })}`,
+  name:
+    name ??
+    `גרסה ${new Date().toLocaleTimeString("he-IL", { hour: "2-digit", minute: "2-digit" })}`,
   imageUrl,
   format,
-  layers: liveTextLayers && visualStyle
-    ? buildDesignedCopyLayers({ copyText, format, styleId: visualStyle, title, compositionId, brandColors })
-    : [],
+  layers:
+    liveTextLayers && visualStyle
+      ? buildDesignedCopyLayers({
+          copyText,
+          format,
+          styleId: visualStyle,
+          title,
+          compositionId,
+          brandColors,
+        })
+      : [],
   comments: [],
   createdAt: new Date().toISOString(),
   source,
@@ -311,10 +407,15 @@ export const getBriefText = (item: CreativeItem | null) => {
   return String(item.payload.brief_text ?? item.payload.brief ?? "");
 };
 
-export const getApprovedCopyConcepts = (item: CreativeItem | null): CopyConcept[] => {
+export const getApprovedCopyConcepts = (
+  item: CreativeItem | null,
+): CopyConcept[] => {
   if (!item?.payload) return [];
-  const storedApproved = parseCopyConceptsFromPayload({ copy_concepts: item.payload.approved_concepts });
-  if (storedApproved.length > 0) return storedApproved.map((concept) => ({ ...concept, approved: true }));
+  const storedApproved = parseCopyConceptsFromPayload({
+    copy_concepts: item.payload.approved_concepts,
+  });
+  if (storedApproved.length > 0)
+    return storedApproved.map((concept) => ({ ...concept, approved: true }));
   return approvedCopyConcepts(parseCopyConceptsFromPayload(item.payload));
 };
 
@@ -328,9 +429,11 @@ export const getConceptBrief = (item: CreativeItem | null) => {
 export const cameFromCopy = (item: CreativeItem | null) => {
   const payload = item?.payload;
   if (!payload) return false;
-  return payload.handoff_from === "copy"
-    || payload.intake_source === "copy_link"
-    || payload.intake_source === "copy_handoff"
-    || typeof payload.linked_copy_item_id === "string"
-    || payload.department === "copy";
+  return (
+    payload.handoff_from === "copy" ||
+    payload.intake_source === "copy_link" ||
+    payload.intake_source === "copy_handoff" ||
+    typeof payload.linked_copy_item_id === "string" ||
+    payload.department === "copy"
+  );
 };

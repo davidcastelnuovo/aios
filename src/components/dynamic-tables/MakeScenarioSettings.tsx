@@ -13,7 +13,15 @@ import {
 } from "@/components/ui/select";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { toast } from "sonner";
-import { RefreshCw, Play, ExternalLink, Clock, Save, Calendar, Link2 } from "lucide-react";
+import {
+  RefreshCw,
+  Play,
+  ExternalLink,
+  Clock,
+  Save,
+  Calendar,
+  Link2,
+} from "lucide-react";
 import {
   Command,
   CommandEmpty,
@@ -62,38 +70,74 @@ const dateRangeOptions = [
   { value: "custom", label: "מותאם אישית" },
 ];
 
-function getDateRangeFromPreset(preset: string): { start_date: string; end_date: string } {
+function getDateRangeFromPreset(preset: string): {
+  start_date: string;
+  end_date: string;
+} {
   const today = startOfDay(new Date());
   const endDate = format(today, "yyyy-MM-dd");
-  
+
   switch (preset) {
     case "last_7_days":
-      return { start_date: format(subDays(today, 7), "yyyy-MM-dd"), end_date: endDate };
+      return {
+        start_date: format(subDays(today, 7), "yyyy-MM-dd"),
+        end_date: endDate,
+      };
     case "last_14_days":
-      return { start_date: format(subDays(today, 14), "yyyy-MM-dd"), end_date: endDate };
+      return {
+        start_date: format(subDays(today, 14), "yyyy-MM-dd"),
+        end_date: endDate,
+      };
     case "last_30_days":
-      return { start_date: format(subDays(today, 30), "yyyy-MM-dd"), end_date: endDate };
+      return {
+        start_date: format(subDays(today, 30), "yyyy-MM-dd"),
+        end_date: endDate,
+      };
     case "last_90_days":
-      return { start_date: format(subMonths(today, 3), "yyyy-MM-dd"), end_date: endDate };
+      return {
+        start_date: format(subMonths(today, 3), "yyyy-MM-dd"),
+        end_date: endDate,
+      };
     case "last_6_months":
-      return { start_date: format(subMonths(today, 6), "yyyy-MM-dd"), end_date: endDate };
+      return {
+        start_date: format(subMonths(today, 6), "yyyy-MM-dd"),
+        end_date: endDate,
+      };
     case "last_year":
-      return { start_date: format(subYears(today, 1), "yyyy-MM-dd"), end_date: endDate };
+      return {
+        start_date: format(subYears(today, 1), "yyyy-MM-dd"),
+        end_date: endDate,
+      };
     default:
-      return { start_date: format(subDays(today, 30), "yyyy-MM-dd"), end_date: endDate };
+      return {
+        start_date: format(subDays(today, 30), "yyyy-MM-dd"),
+        end_date: endDate,
+      };
   }
 }
 
-export function MakeScenarioSettings({ table, onSync, isSyncing }: MakeScenarioSettingsProps) {
+export function MakeScenarioSettings({
+  table,
+  onSync,
+  isSyncing,
+}: MakeScenarioSettingsProps) {
   const queryClient = useQueryClient();
   const settings = table?.integration_settings || {};
-  
+
   const [scenarioId, setScenarioId] = useState(settings.make_scenario_id || "");
-  const [syncSchedule, setSyncSchedule] = useState(settings.sync_schedule || "manual");
+  const [syncSchedule, setSyncSchedule] = useState(
+    settings.sync_schedule || "manual",
+  );
   const [webhookUrl, setWebhookUrl] = useState(settings.make_webhook_url || "");
-  const [syncDateRange, setSyncDateRange] = useState(settings.default_sync_range || "last_30_days");
-  const [customStartDate, setCustomStartDate] = useState<Date | undefined>(undefined);
-  const [customEndDate, setCustomEndDate] = useState<Date | undefined>(undefined);
+  const [syncDateRange, setSyncDateRange] = useState(
+    settings.default_sync_range || "last_30_days",
+  );
+  const [customStartDate, setCustomStartDate] = useState<Date | undefined>(
+    undefined,
+  );
+  const [customEndDate, setCustomEndDate] = useState<Date | undefined>(
+    undefined,
+  );
   const [showStartDatePicker, setShowStartDatePicker] = useState(false);
   const [showEndDatePicker, setShowEndDatePicker] = useState(false);
   const [hasChanges, setHasChanges] = useState(false);
@@ -106,25 +150,25 @@ export function MakeScenarioSettings({ table, onSync, isSyncing }: MakeScenarioS
     const currentSchedule = settings.sync_schedule || "manual";
     const currentWebhookUrl = settings.make_webhook_url || "";
     const currentSyncRange = settings.default_sync_range || "last_30_days";
-    
+
     setHasChanges(
-      scenarioId !== currentScenarioId || 
-      syncSchedule !== currentSchedule ||
-      webhookUrl !== currentWebhookUrl ||
-      syncDateRange !== currentSyncRange
+      scenarioId !== currentScenarioId ||
+        syncSchedule !== currentSchedule ||
+        webhookUrl !== currentWebhookUrl ||
+        syncDateRange !== currentSyncRange,
     );
   }, [scenarioId, syncSchedule, webhookUrl, syncDateRange, settings]);
 
   // Fetch Make API settings
   const { data: makeSettings } = useQuery({
-    queryKey: ['make-settings', table?.tenant_id],
+    queryKey: ["make-settings", table?.tenant_id],
     queryFn: async () => {
       if (!table?.tenant_id) return null;
       const { data, error } = await supabase
-        .from('tenant_integrations')
-        .select('*')
-        .eq('tenant_id', table.tenant_id)
-        .eq('integration_type', 'make_api')
+        .from("tenant_integrations")
+        .select("*")
+        .eq("tenant_id", table.tenant_id)
+        .eq("integration_type", "make_api")
         .maybeSingle();
       if (error) throw error;
       return data;
@@ -132,29 +176,29 @@ export function MakeScenarioSettings({ table, onSync, isSyncing }: MakeScenarioS
     enabled: !!table?.tenant_id,
   });
 
-  const makeApiSettings = makeSettings?.settings as { 
-    api_token?: string; 
-    team_id?: string; 
+  const makeApiSettings = makeSettings?.settings as {
+    api_token?: string;
+    team_id?: string;
     region?: string;
   } | null;
 
   // Fetch scenarios from Make.com
   const { data: scenarios = [], isLoading: loadingScenarios } = useQuery({
-    queryKey: ['make-scenarios', table?.tenant_id],
+    queryKey: ["make-scenarios", table?.tenant_id],
     queryFn: async () => {
       if (!makeApiSettings?.api_token || !makeApiSettings?.team_id) return [];
-      
-      const { data, error } = await supabase.functions.invoke('make-api', {
+
+      const { data, error } = await supabase.functions.invoke("make-api", {
         body: {
-          action: 'list_scenarios',
+          action: "list_scenarios",
           api_token: makeApiSettings.api_token,
           team_id: makeApiSettings.team_id,
-          region: makeApiSettings.region || 'eu1',
+          region: makeApiSettings.region || "eu1",
         },
       });
 
       if (error || data?.error) {
-        console.error('Error fetching scenarios:', error || data?.error);
+        console.error("Error fetching scenarios:", error || data?.error);
         return [];
       }
 
@@ -166,10 +210,10 @@ export function MakeScenarioSettings({ table, onSync, isSyncing }: MakeScenarioS
   // Save settings mutation
   const saveSettingsMutation = useMutation({
     mutationFn: async () => {
-      if (!table?.id) throw new Error('No table');
-      
+      if (!table?.id) throw new Error("No table");
+
       const { error } = await supabase
-        .from('crm_tables')
+        .from("crm_tables")
         .update({
           integration_settings: {
             ...settings,
@@ -179,17 +223,19 @@ export function MakeScenarioSettings({ table, onSync, isSyncing }: MakeScenarioS
             default_sync_range: syncDateRange,
           },
         })
-        .eq('id', table.id);
-      
+        .eq("id", table.id);
+
       if (error) throw error;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['crm-tables', table?.tenant_id] });
-      toast.success('ההגדרות נשמרו בהצלחה');
+      queryClient.invalidateQueries({
+        queryKey: ["crm-tables", table?.tenant_id],
+      });
+      toast.success("ההגדרות נשמרו בהצלחה");
       setHasChanges(false);
     },
     onError: (error: any) => {
-      toast.error('שגיאה בשמירת ההגדרות: ' + error.message);
+      toast.error("שגיאה בשמירת ההגדרות: " + error.message);
     },
   });
 
@@ -197,11 +243,11 @@ export function MakeScenarioSettings({ table, onSync, isSyncing }: MakeScenarioS
   const triggerWebhookMutation = useMutation({
     mutationFn: async () => {
       if (!webhookUrl) {
-        throw new Error('לא הוגדר Webhook URL');
+        throw new Error("לא הוגדר Webhook URL");
       }
 
       let dateRange: { start_date: string; end_date: string };
-      
+
       if (syncDateRange === "custom" && customStartDate && customEndDate) {
         dateRange = {
           start_date: format(customStartDate, "yyyy-MM-dd"),
@@ -211,12 +257,11 @@ export function MakeScenarioSettings({ table, onSync, isSyncing }: MakeScenarioS
         dateRange = getDateRangeFromPreset(syncDateRange);
       }
 
-
       // Send POST request to the webhook URL
       const response = await fetch(webhookUrl, {
-        method: 'POST',
+        method: "POST",
         headers: {
-          'Content-Type': 'application/json',
+          "Content-Type": "application/json",
         },
         body: JSON.stringify({
           table_id: table?.id,
@@ -233,15 +278,19 @@ export function MakeScenarioSettings({ table, onSync, isSyncing }: MakeScenarioS
       return response.json();
     },
     onSuccess: () => {
-      toast.success('הסנכרון הופעל! הנתונים יתעדכנו בקרוב.');
+      toast.success("הסנכרון הופעל! הנתונים יתעדכנו בקרוב.");
       // Refetch records after a delay
       setTimeout(() => {
-        queryClient.invalidateQueries({ queryKey: ['crm-records', table?.id, table?.tenant_id] });
-        queryClient.invalidateQueries({ queryKey: ['crm-tables', table?.tenant_id] });
+        queryClient.invalidateQueries({
+          queryKey: ["crm-records", table?.id, table?.tenant_id],
+        });
+        queryClient.invalidateQueries({
+          queryKey: ["crm-tables", table?.tenant_id],
+        });
       }, 5000);
     },
     onError: (error: any) => {
-      toast.error('שגיאה בהפעלת הסנכרון: ' + error.message);
+      toast.error("שגיאה בהפעלת הסנכרון: " + error.message);
     },
   });
 
@@ -249,15 +298,15 @@ export function MakeScenarioSettings({ table, onSync, isSyncing }: MakeScenarioS
   const runScenarioMutation = useMutation({
     mutationFn: async () => {
       if (!scenarioId || !makeApiSettings?.api_token) {
-        throw new Error('חסרים פרטי סנריו או הגדרות Make');
+        throw new Error("חסרים פרטי סנריו או הגדרות Make");
       }
-      
-      const { data, error } = await supabase.functions.invoke('make-api', {
+
+      const { data, error } = await supabase.functions.invoke("make-api", {
         body: {
-          action: 'run_scenario',
+          action: "run_scenario",
           api_token: makeApiSettings.api_token,
           team_id: makeApiSettings.team_id,
-          region: makeApiSettings.region || 'eu1',
+          region: makeApiSettings.region || "eu1",
           scenario_id: scenarioId,
         },
       });
@@ -266,14 +315,18 @@ export function MakeScenarioSettings({ table, onSync, isSyncing }: MakeScenarioS
       return data;
     },
     onSuccess: () => {
-      toast.success('הסנריו הורץ בהצלחה! הנתונים יתעדכנו בקרוב.');
+      toast.success("הסנריו הורץ בהצלחה! הנתונים יתעדכנו בקרוב.");
       setTimeout(() => {
-        queryClient.invalidateQueries({ queryKey: ['crm-records', table?.id, table?.tenant_id] });
-        queryClient.invalidateQueries({ queryKey: ['crm-tables', table?.tenant_id] });
+        queryClient.invalidateQueries({
+          queryKey: ["crm-records", table?.id, table?.tenant_id],
+        });
+        queryClient.invalidateQueries({
+          queryKey: ["crm-tables", table?.tenant_id],
+        });
       }, 5000);
     },
     onError: (error: any) => {
-      toast.error('שגיאה בהרצת הסנריו: ' + error.message);
+      toast.error("שגיאה בהרצת הסנריו: " + error.message);
     },
   });
 
@@ -289,11 +342,15 @@ export function MakeScenarioSettings({ table, onSync, isSyncing }: MakeScenarioS
       <div className="bg-muted p-4 rounded-lg space-y-3">
         <div className="flex items-center justify-between">
           <span className="text-sm text-muted-foreground">חיבור Make.com:</span>
-          <span className="font-medium">{settings.make_connection_name || 'לא מוגדר'}</span>
+          <span className="font-medium">
+            {settings.make_connection_name || "לא מוגדר"}
+          </span>
         </div>
         <div className="flex items-center justify-between">
           <span className="text-sm text-muted-foreground">Customer ID:</span>
-          <span className="font-mono text-sm">{settings.customer_id || 'לא מוגדר'}</span>
+          <span className="font-mono text-sm">
+            {settings.customer_id || "לא מוגדר"}
+          </span>
         </div>
       </div>
 
@@ -316,15 +373,16 @@ export function MakeScenarioSettings({ table, onSync, isSyncing }: MakeScenarioS
                   className="flex-1 justify-between"
                 >
                   {scenarioId
-                    ? scenarios.find((s: any) => String(s.id) === scenarioId)?.name || `סנריו #${scenarioId}`
+                    ? scenarios.find((s: any) => String(s.id) === scenarioId)
+                        ?.name || `סנריו #${scenarioId}`
                     : "בחר סנריו מ-Make.com"}
                   <ChevronsUpDown className="mr-2 h-4 w-4 shrink-0 opacity-50" />
                 </Button>
               </PopoverTrigger>
               <PopoverContent className="w-[400px] p-0" align="start">
                 <Command>
-                  <CommandInput 
-                    placeholder="חפש לפי שם..." 
+                  <CommandInput
+                    placeholder="חפש לפי שם..."
                     value={scenarioSearch}
                     onValueChange={setScenarioSearch}
                   />
@@ -332,9 +390,12 @@ export function MakeScenarioSettings({ table, onSync, isSyncing }: MakeScenarioS
                     <CommandEmpty>לא נמצאו סנריואים</CommandEmpty>
                     <CommandGroup>
                       {scenarios
-                        .filter((scenario: any) => 
-                          scenario.name.toLowerCase().includes(scenarioSearch.toLowerCase()) ||
-                          String(scenario.id).includes(scenarioSearch)
+                        .filter(
+                          (scenario: any) =>
+                            scenario.name
+                              .toLowerCase()
+                              .includes(scenarioSearch.toLowerCase()) ||
+                            String(scenario.id).includes(scenarioSearch),
                         )
                         .map((scenario: any) => (
                           <CommandItem
@@ -349,7 +410,9 @@ export function MakeScenarioSettings({ table, onSync, isSyncing }: MakeScenarioS
                             <Check
                               className={cn(
                                 "ml-2 h-4 w-4",
-                                scenarioId === String(scenario.id) ? "opacity-100" : "opacity-0"
+                                scenarioId === String(scenario.id)
+                                  ? "opacity-100"
+                                  : "opacity-0",
                               )}
                             />
                             {scenario.name} (#{scenario.id})
@@ -385,7 +448,8 @@ export function MakeScenarioSettings({ table, onSync, isSyncing }: MakeScenarioS
           dir="ltr"
         />
         <p className="text-xs text-muted-foreground">
-          העתק את ה-Webhook URL מהסנריו ב-Make.com (מופיע ב-Custom Webhook module)
+          העתק את ה-Webhook URL מהסנריו ב-Make.com (מופיע ב-Custom Webhook
+          module)
         </p>
       </div>
 
@@ -410,11 +474,16 @@ export function MakeScenarioSettings({ table, onSync, isSyncing }: MakeScenarioS
 
         {syncDateRange === "custom" && (
           <div className="flex gap-2 mt-2">
-            <Popover open={showStartDatePicker} onOpenChange={setShowStartDatePicker}>
+            <Popover
+              open={showStartDatePicker}
+              onOpenChange={setShowStartDatePicker}
+            >
               <PopoverTrigger asChild>
                 <Button variant="outline" className="flex-1 justify-start">
                   <Calendar className="ml-2 h-4 w-4" />
-                  {customStartDate ? format(customStartDate, "dd/MM/yyyy") : "מתאריך"}
+                  {customStartDate
+                    ? format(customStartDate, "dd/MM/yyyy")
+                    : "מתאריך"}
                 </Button>
               </PopoverTrigger>
               <PopoverContent className="w-auto p-0" align="start">
@@ -430,12 +499,17 @@ export function MakeScenarioSettings({ table, onSync, isSyncing }: MakeScenarioS
                 />
               </PopoverContent>
             </Popover>
-            
-            <Popover open={showEndDatePicker} onOpenChange={setShowEndDatePicker}>
+
+            <Popover
+              open={showEndDatePicker}
+              onOpenChange={setShowEndDatePicker}
+            >
               <PopoverTrigger asChild>
                 <Button variant="outline" className="flex-1 justify-start">
                   <Calendar className="ml-2 h-4 w-4" />
-                  {customEndDate ? format(customEndDate, "dd/MM/yyyy") : "עד תאריך"}
+                  {customEndDate
+                    ? format(customEndDate, "dd/MM/yyyy")
+                    : "עד תאריך"}
                 </Button>
               </PopoverTrigger>
               <PopoverContent className="w-auto p-0" align="start">
@@ -447,7 +521,10 @@ export function MakeScenarioSettings({ table, onSync, isSyncing }: MakeScenarioS
                     setShowEndDatePicker(false);
                   }}
                   locale={he}
-                  disabled={(date) => date > new Date() || (customStartDate ? date < customStartDate : false)}
+                  disabled={(date) =>
+                    date > new Date() ||
+                    (customStartDate ? date < customStartDate : false)
+                  }
                 />
               </PopoverContent>
             </Popover>
@@ -498,14 +575,15 @@ export function MakeScenarioSettings({ table, onSync, isSyncing }: MakeScenarioS
             size="icon"
             onClick={() => {
               navigator.clipboard.writeText(ourWebhookUrl);
-              toast.success('הכתובת הועתקה');
+              toast.success("הכתובת הועתקה");
             }}
           >
             <ExternalLink className="h-4 w-4" />
           </Button>
         </div>
         <p className="text-xs text-muted-foreground">
-          הגדר את ה-HTTP module בסנריו לשלוח POST לכתובת זו עם table_id: "{table?.id}"
+          הגדר את ה-HTTP module בסנריו לשלוח POST לכתובת זו עם table_id: "
+          {table?.id}"
         </p>
       </div>
 
@@ -519,7 +597,14 @@ export function MakeScenarioSettings({ table, onSync, isSyncing }: MakeScenarioS
               <li>פתח את הסנריו ב-Make.com</li>
               <li>הוסף Webhook → Custom Webhook בהתחלת הסנריו</li>
               <li>העתק את ה-Webhook URL והדבק אותו למעלה</li>
-              <li>ב-Google Ads module, השתמש ב-<code className="bg-muted px-1 rounded">{"{{start_date}}"}</code> ו-<code className="bg-muted px-1 rounded">{"{{end_date}}"}</code></li>
+              <li>
+                ב-Google Ads module, השתמש ב-
+                <code className="bg-muted px-1 rounded">
+                  {"{{start_date}}"}
+                </code>{" "}
+                ו-
+                <code className="bg-muted px-1 rounded">{"{{end_date}}"}</code>
+              </li>
             </ol>
           </AlertDescription>
         </Alert>
@@ -530,7 +615,9 @@ export function MakeScenarioSettings({ table, onSync, isSyncing }: MakeScenarioS
         <div className="flex items-center justify-between text-sm p-3 bg-muted/50 rounded-lg">
           <span className="text-muted-foreground">סנכרון אחרון:</span>
           <span className="font-medium">
-            {new Date(table.integration_settings.last_sync_at).toLocaleString('he-IL')}
+            {new Date(table.integration_settings.last_sync_at).toLocaleString(
+              "he-IL",
+            )}
           </span>
         </div>
       )}
@@ -551,7 +638,7 @@ export function MakeScenarioSettings({ table, onSync, isSyncing }: MakeScenarioS
             שמור הגדרות
           </Button>
         )}
-        
+
         <div className="flex gap-2 mr-auto">
           {scenarioId && !webhookUrl && (
             <Button
@@ -567,11 +654,15 @@ export function MakeScenarioSettings({ table, onSync, isSyncing }: MakeScenarioS
               הרץ סנריו
             </Button>
           )}
-          
+
           {webhookUrl ? (
-            <Button 
+            <Button
               onClick={() => triggerWebhookMutation.mutate()}
-              disabled={triggerWebhookMutation.isPending || (syncDateRange === "custom" && (!customStartDate || !customEndDate))}
+              disabled={
+                triggerWebhookMutation.isPending ||
+                (syncDateRange === "custom" &&
+                  (!customStartDate || !customEndDate))
+              }
             >
               {triggerWebhookMutation.isPending ? (
                 <>
@@ -586,10 +677,7 @@ export function MakeScenarioSettings({ table, onSync, isSyncing }: MakeScenarioS
               )}
             </Button>
           ) : (
-            <Button 
-              onClick={onSync}
-              disabled={isSyncing}
-            >
+            <Button onClick={onSync} disabled={isSyncing}>
               {isSyncing ? (
                 <>
                   <RefreshCw className="ml-2 h-4 w-4 animate-spin" />

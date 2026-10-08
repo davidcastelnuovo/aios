@@ -3,9 +3,28 @@ import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
-import { MessageSquare, Users, GripVertical, Calendar, CalendarClock, Megaphone, Check } from "lucide-react";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from "@/components/ui/command";
+import {
+  MessageSquare,
+  Users,
+  GripVertical,
+  Calendar,
+  CalendarClock,
+  Megaphone,
+  Check,
+} from "lucide-react";
 import { cn } from "@/lib/utils";
 import { embedCount } from "@/lib/embedCount";
 import { format } from "date-fns";
@@ -35,7 +54,17 @@ interface SortableTaskItemProps {
   onUpdateCampaigner?: (taskId: string, campaignerId: string | null) => void;
 }
 
-export function SortableTaskItem({ task, onToggleComplete, onClick, compact = false, slotHeight = 40, clientsList, campaignersList, onUpdateClient, onUpdateCampaigner }: SortableTaskItemProps) {
+export function SortableTaskItem({
+  task,
+  onToggleComplete,
+  onClick,
+  compact = false,
+  slotHeight = 40,
+  clientsList,
+  campaignersList,
+  onUpdateClient,
+  onUpdateCampaigner,
+}: SortableTaskItemProps) {
   const [clientOpen, setClientOpen] = useState(false);
   const [campaignerOpen, setCampaignerOpen] = useState(false);
 
@@ -55,7 +84,9 @@ export function SortableTaskItem({ task, onToggleComplete, onClick, compact = fa
   const style = {
     transform: CSS.Transform.toString(transform),
     transition,
-    ...(compact && taskHeight && durationMinutes > 30 ? { height: `${taskHeight - 4}px` } : {}),
+    ...(compact && taskHeight && durationMinutes > 30
+      ? { height: `${taskHeight - 4}px` }
+      : {}),
   };
 
   const isCompleted = task.status === "done";
@@ -71,7 +102,7 @@ export function SortableTaskItem({ task, onToggleComplete, onClick, compact = fa
           "group flex items-start gap-1 px-1 py-0.5 rounded border bg-card hover:bg-accent/50 cursor-pointer transition-all text-[11px]",
           isDragging && "opacity-50 shadow-lg z-50",
           isCompleted && "opacity-60",
-          durationMinutes > 30 && "flex-col"
+          durationMinutes > 30 && "flex-col",
         )}
       >
         <button
@@ -81,7 +112,7 @@ export function SortableTaskItem({ task, onToggleComplete, onClick, compact = fa
         >
           <GripVertical className="h-3 w-3 text-muted-foreground" />
         </button>
-        
+
         <Checkbox
           checked={isCompleted}
           onCheckedChange={(checked) => {
@@ -90,12 +121,15 @@ export function SortableTaskItem({ task, onToggleComplete, onClick, compact = fa
           onClick={(e) => e.stopPropagation()}
           className="h-3 w-3 shrink-0"
         />
-        
-        <div className="flex-1 min-w-0 whitespace-normal break-words" onClick={onClick}>
+
+        <div
+          className="flex-1 min-w-0 whitespace-normal break-words"
+          onClick={onClick}
+        >
           <span
             className={cn(
               "font-medium",
-              isCompleted && "line-through text-muted-foreground"
+              isCompleted && "line-through text-muted-foreground",
             )}
           >
             {task.title}
@@ -129,7 +163,7 @@ export function SortableTaskItem({ task, onToggleComplete, onClick, compact = fa
       className={cn(
         "group flex items-start gap-2 p-2 rounded-lg border bg-card hover:bg-accent/50 cursor-pointer transition-all",
         isDragging && "opacity-50 shadow-lg z-50",
-        isCompleted && "opacity-60"
+        isCompleted && "opacity-60",
       )}
     >
       <button
@@ -139,7 +173,7 @@ export function SortableTaskItem({ task, onToggleComplete, onClick, compact = fa
       >
         <GripVertical className="h-4 w-4 text-muted-foreground" />
       </button>
-      
+
       <Checkbox
         checked={isCompleted}
         onCheckedChange={(checked) => {
@@ -148,12 +182,12 @@ export function SortableTaskItem({ task, onToggleComplete, onClick, compact = fa
         onClick={(e) => e.stopPropagation()}
         className="mt-0.5"
       />
-      
+
       <div className="flex-1 min-w-0" onClick={onClick}>
         <p
           className={cn(
             "text-sm font-medium leading-tight break-words",
-            isCompleted && "line-through text-muted-foreground"
+            isCompleted && "line-through text-muted-foreground",
           )}
         >
           {task.title}
@@ -161,28 +195,62 @@ export function SortableTaskItem({ task, onToggleComplete, onClick, compact = fa
 
         {/* Inline client & campaigner selectors */}
         {(onUpdateClient || onUpdateCampaigner) && (
-          <div className="flex items-center gap-2 mt-1.5 flex-wrap" onClick={(e) => e.stopPropagation()}>
+          <div
+            className="flex items-center gap-2 mt-1.5 flex-wrap"
+            onClick={(e) => e.stopPropagation()}
+          >
             {onUpdateClient && clientsList && (
               <Popover open={clientOpen} onOpenChange={setClientOpen}>
                 <PopoverTrigger asChild>
                   <button className="flex items-center gap-1 h-6 text-[11px] w-[120px] px-2 rounded-md border bg-background hover:bg-accent/50 truncate">
                     <Users className="h-3 w-3 text-muted-foreground shrink-0" />
-                    <span className="truncate">{task.client_id ? clientsList.find(c => c.id === task.client_id)?.name || "לקוח" : "ללא לקוח"}</span>
+                    <span className="truncate">
+                      {task.client_id
+                        ? clientsList.find((c) => c.id === task.client_id)
+                            ?.name || "לקוח"
+                        : "ללא לקוח"}
+                    </span>
                   </button>
                 </PopoverTrigger>
                 <PopoverContent className="w-[200px] p-0 z-50" align="start">
                   <Command>
-                    <CommandInput placeholder="חיפוש לקוח..." className="h-8 text-xs" />
+                    <CommandInput
+                      placeholder="חיפוש לקוח..."
+                      className="h-8 text-xs"
+                    />
                     <CommandList>
                       <CommandEmpty>לא נמצא</CommandEmpty>
                       <CommandGroup>
-                        <CommandItem onSelect={() => { onUpdateClient(task.id, null); setClientOpen(false); }}>
-                          <Check className={cn("h-3 w-3 mr-1", !task.client_id ? "opacity-100" : "opacity-0")} />
+                        <CommandItem
+                          onSelect={() => {
+                            onUpdateClient(task.id, null);
+                            setClientOpen(false);
+                          }}
+                        >
+                          <Check
+                            className={cn(
+                              "h-3 w-3 mr-1",
+                              !task.client_id ? "opacity-100" : "opacity-0",
+                            )}
+                          />
                           ללא לקוח
                         </CommandItem>
                         {clientsList.map((c) => (
-                          <CommandItem key={c.id} onSelect={() => { onUpdateClient(task.id, c.id); setClientOpen(false); }}>
-                            <Check className={cn("h-3 w-3 mr-1", task.client_id === c.id ? "opacity-100" : "opacity-0")} />
+                          <CommandItem
+                            key={c.id}
+                            onSelect={() => {
+                              onUpdateClient(task.id, c.id);
+                              setClientOpen(false);
+                            }}
+                          >
+                            <Check
+                              className={cn(
+                                "h-3 w-3 mr-1",
+                                task.client_id === c.id
+                                  ? "opacity-100"
+                                  : "opacity-0",
+                              )}
+                            />
                             {c.name}
                           </CommandItem>
                         ))}
@@ -197,22 +265,54 @@ export function SortableTaskItem({ task, onToggleComplete, onClick, compact = fa
                 <PopoverTrigger asChild>
                   <button className="flex items-center gap-1 h-6 text-[11px] w-[120px] px-2 rounded-md border bg-background hover:bg-accent/50 truncate">
                     <Megaphone className="h-3 w-3 text-muted-foreground shrink-0" />
-                    <span className="truncate">{task.campaigner_id ? campaignersList.find(c => c.id === task.campaigner_id)?.full_name || "קמפיינר" : "ללא קמפיינר"}</span>
+                    <span className="truncate">
+                      {task.campaigner_id
+                        ? campaignersList.find(
+                            (c) => c.id === task.campaigner_id,
+                          )?.full_name || "קמפיינר"
+                        : "ללא קמפיינר"}
+                    </span>
                   </button>
                 </PopoverTrigger>
                 <PopoverContent className="w-[200px] p-0 z-50" align="start">
                   <Command>
-                    <CommandInput placeholder="חיפוש קמפיינר..." className="h-8 text-xs" />
+                    <CommandInput
+                      placeholder="חיפוש קמפיינר..."
+                      className="h-8 text-xs"
+                    />
                     <CommandList>
                       <CommandEmpty>לא נמצא</CommandEmpty>
                       <CommandGroup>
-                        <CommandItem onSelect={() => { onUpdateCampaigner(task.id, null); setCampaignerOpen(false); }}>
-                          <Check className={cn("h-3 w-3 mr-1", !task.campaigner_id ? "opacity-100" : "opacity-0")} />
+                        <CommandItem
+                          onSelect={() => {
+                            onUpdateCampaigner(task.id, null);
+                            setCampaignerOpen(false);
+                          }}
+                        >
+                          <Check
+                            className={cn(
+                              "h-3 w-3 mr-1",
+                              !task.campaigner_id ? "opacity-100" : "opacity-0",
+                            )}
+                          />
                           ללא קמפיינר
                         </CommandItem>
                         {campaignersList.map((c) => (
-                          <CommandItem key={c.id} onSelect={() => { onUpdateCampaigner(task.id, c.id); setCampaignerOpen(false); }}>
-                            <Check className={cn("h-3 w-3 mr-1", task.campaigner_id === c.id ? "opacity-100" : "opacity-0")} />
+                          <CommandItem
+                            key={c.id}
+                            onSelect={() => {
+                              onUpdateCampaigner(task.id, c.id);
+                              setCampaignerOpen(false);
+                            }}
+                          >
+                            <Check
+                              className={cn(
+                                "h-3 w-3 mr-1",
+                                task.campaigner_id === c.id
+                                  ? "opacity-100"
+                                  : "opacity-0",
+                              )}
+                            />
                             {c.full_name}
                           </CommandItem>
                         ))}
@@ -233,7 +333,10 @@ export function SortableTaskItem({ task, onToggleComplete, onClick, compact = fa
           )}
 
           {task.campaigners?.full_name && !onUpdateCampaigner && (
-            <Badge variant="outline" className="text-xs px-1.5 py-0 h-5 gap-0.5">
+            <Badge
+              variant="outline"
+              className="text-xs px-1.5 py-0 h-5 gap-0.5"
+            >
               <Megaphone className="h-3 w-3" />
               {task.campaigners.full_name}
             </Badge>
@@ -254,14 +357,20 @@ export function SortableTaskItem({ task, onToggleComplete, onClick, compact = fa
           )}
 
           {updatesCount > 0 && (
-            <Badge variant="outline" className="text-xs px-1.5 py-0 h-5 gap-0.5">
+            <Badge
+              variant="outline"
+              className="text-xs px-1.5 py-0 h-5 gap-0.5"
+            >
               <MessageSquare className="h-3 w-3" />
               {updatesCount}
             </Badge>
           )}
 
           {collaboratorsCount > 0 && (
-            <Badge variant="outline" className="text-xs px-1.5 py-0 h-5 gap-0.5">
+            <Badge
+              variant="outline"
+              className="text-xs px-1.5 py-0 h-5 gap-0.5"
+            >
               <Users className="h-3 w-3" />
               {collaboratorsCount}
             </Badge>

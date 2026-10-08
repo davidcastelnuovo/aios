@@ -37,7 +37,9 @@ export function ChangeAgencyDialog({
 }: ChangeAgencyDialogProps) {
   const { tenantId } = useCurrentTenant();
   const queryClient = useQueryClient();
-  const [selectedAgencyId, setSelectedAgencyId] = useState<string>(currentAgencyId || "");
+  const [selectedAgencyId, setSelectedAgencyId] = useState<string>(
+    currentAgencyId || "",
+  );
 
   const { data: agencies, isLoading: isLoadingAgencies } = useQuery({
     queryKey: ["agencies-for-change", tenantId],
@@ -56,7 +58,12 @@ export function ChangeAgencyDialog({
 
   const mutation = useMutation({
     mutationFn: async (agencyId: string) => {
-      const table = contactType === "client" ? "clients" : contactType === "lead" ? "leads" : "whatsapp_groups";
+      const table =
+        contactType === "client"
+          ? "clients"
+          : contactType === "lead"
+            ? "leads"
+            : "whatsapp_groups";
       const { error } = await supabase
         .from(table)
         .update({ agency_id: agencyId })
@@ -64,7 +71,9 @@ export function ChangeAgencyDialog({
       if (error) throw error;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["contact", contactId, tenantId] });
+      queryClient.invalidateQueries({
+        queryKey: ["contact", contactId, tenantId],
+      });
       queryClient.invalidateQueries({ queryKey: ["active-chats", tenantId] });
       queryClient.invalidateQueries({ queryKey: ["clients", tenantId] });
       queryClient.invalidateQueries({ queryKey: ["leads", tenantId] });
@@ -95,12 +104,20 @@ export function ChangeAgencyDialog({
       className="sm:max-w-md"
       footer={
         <>
-          <Button variant="outline" onClick={() => onOpenChange(false)} disabled={mutation.isPending}>
+          <Button
+            variant="outline"
+            onClick={() => onOpenChange(false)}
+            disabled={mutation.isPending}
+          >
             ביטול
           </Button>
           <Button
             onClick={handleSave}
-            disabled={mutation.isPending || !selectedAgencyId || selectedAgencyId === currentAgencyId}
+            disabled={
+              mutation.isPending ||
+              !selectedAgencyId ||
+              selectedAgencyId === currentAgencyId
+            }
           >
             {mutation.isPending ? "שומר..." : "שמור"}
           </Button>

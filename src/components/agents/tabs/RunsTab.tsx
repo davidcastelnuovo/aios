@@ -5,19 +5,51 @@ import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Activity, Brain, Wrench, Eye, CheckCircle2, AlertCircle, Clock, Shield, RotateCw, GitBranch } from "lucide-react";
+import {
+  Activity,
+  Brain,
+  Wrench,
+  Eye,
+  CheckCircle2,
+  AlertCircle,
+  Clock,
+  Shield,
+  RotateCw,
+  GitBranch,
+} from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import { he } from "date-fns/locale";
 import { toast } from "sonner";
 import { useCurrentTenant } from "@/hooks/useCurrentTenant";
 
-const STATUS_META: Record<string, { label: string; color: string; icon: any }> = {
-  running: { label: "רץ", color: "bg-blue-500/10 text-blue-700", icon: Activity },
-  waiting_approval: { label: "ממתין לאישור", color: "bg-amber-500/10 text-amber-700", icon: Shield },
-  completed: { label: "הסתיים", color: "bg-emerald-500/10 text-emerald-700", icon: CheckCircle2 },
-  failed: { label: "נכשל", color: "bg-destructive/10 text-destructive", icon: AlertCircle },
-  cancelled: { label: "בוטל", color: "bg-muted text-muted-foreground", icon: Clock },
-};
+const STATUS_META: Record<string, { label: string; color: string; icon: any }> =
+  {
+    running: {
+      label: "רץ",
+      color: "bg-blue-500/10 text-blue-700",
+      icon: Activity,
+    },
+    waiting_approval: {
+      label: "ממתין לאישור",
+      color: "bg-amber-500/10 text-amber-700",
+      icon: Shield,
+    },
+    completed: {
+      label: "הסתיים",
+      color: "bg-emerald-500/10 text-emerald-700",
+      icon: CheckCircle2,
+    },
+    failed: {
+      label: "נכשל",
+      color: "bg-destructive/10 text-destructive",
+      icon: AlertCircle,
+    },
+    cancelled: {
+      label: "בוטל",
+      color: "bg-muted text-muted-foreground",
+      icon: Clock,
+    },
+  };
 
 const STEP_ICON: Record<string, any> = {
   plan: Brain,
@@ -35,13 +67,19 @@ export function RunsTab({ agent }: { agent: any }) {
 
   const replay = useMutation({
     mutationFn: async (run_id: string) => {
-      const { data, error } = await supabase.functions.invoke("replay-agent-run", {
-        body: { run_id, tenant_id: tenantId },
-      });
+      const { data, error } = await supabase.functions.invoke(
+        "replay-agent-run",
+        {
+          body: { run_id, tenant_id: tenantId },
+        },
+      );
       if (error) throw error;
       return data;
     },
-    onSuccess: () => { toast.success("Replay החל"); qc.invalidateQueries({ queryKey: ["agent-runs", agent.id] }); },
+    onSuccess: () => {
+      toast.success("Replay החל");
+      qc.invalidateQueries({ queryKey: ["agent-runs", agent.id] });
+    },
     onError: (e: any) => toast.error(e.message),
   });
 
@@ -101,19 +139,44 @@ export function RunsTab({ agent }: { agent: any }) {
                 >
                   <div className="flex items-center gap-1.5 mb-1 flex-wrap">
                     <Icon className="h-3 w-3" />
-                    <Badge className={meta.color} variant="outline">{meta.label}</Badge>
-                    {r.parent_run_id && <Badge variant="secondary" className="text-[9px] px-1"><GitBranch className="h-2.5 w-2.5 me-0.5" />sub</Badge>}
-                    {r.replay_of_run_id && <Badge variant="secondary" className="text-[9px] px-1"><RotateCw className="h-2.5 w-2.5 me-0.5" />replay</Badge>}
+                    <Badge className={meta.color} variant="outline">
+                      {meta.label}
+                    </Badge>
+                    {r.parent_run_id && (
+                      <Badge variant="secondary" className="text-[9px] px-1">
+                        <GitBranch className="h-2.5 w-2.5 me-0.5" />
+                        sub
+                      </Badge>
+                    )}
+                    {r.replay_of_run_id && (
+                      <Badge variant="secondary" className="text-[9px] px-1">
+                        <RotateCw className="h-2.5 w-2.5 me-0.5" />
+                        replay
+                      </Badge>
+                    )}
                     <span className="text-muted-foreground text-[10px] mr-auto">
-                      {formatDistanceToNow(new Date(r.started_at), { addSuffix: true, locale: he })}
+                      {formatDistanceToNow(new Date(r.started_at), {
+                        addSuffix: true,
+                        locale: he,
+                      })}
                     </span>
                   </div>
                   <div className="line-clamp-2 text-right">{r.goal}</div>
                   <div className="text-[10px] text-muted-foreground mt-1 flex items-center justify-between">
-                    <span>{r.current_step}/{r.max_steps} צעדים · {r.total_tokens_in + r.total_tokens_out} tokens</span>
+                    <span>
+                      {r.current_step}/{r.max_steps} צעדים ·{" "}
+                      {r.total_tokens_in + r.total_tokens_out} tokens
+                    </span>
                     {(r.status === "completed" || r.status === "failed") && (
-                      <Button size="sm" variant="ghost" className="h-5 px-1 text-[10px]"
-                        onClick={(e) => { e.stopPropagation(); replay.mutate(r.id); }}>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        className="h-5 px-1 text-[10px]"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          replay.mutate(r.id);
+                        }}
+                      >
                         <RotateCw className="h-3 w-3" />
                       </Button>
                     )}
@@ -134,7 +197,9 @@ export function RunsTab({ agent }: { agent: any }) {
           <ScrollArea className="flex-1">
             <div className="space-y-2">
               {steps.length === 0 && (
-                <div className="text-xs text-muted-foreground p-3 text-center">אין צעדים מתועדים</div>
+                <div className="text-xs text-muted-foreground p-3 text-center">
+                  אין צעדים מתועדים
+                </div>
               )}
               {steps.map((s: any) => {
                 const Icon = STEP_ICON[s.step_kind] ?? Activity;
@@ -149,10 +214,14 @@ export function RunsTab({ agent }: { agent: any }) {
                           {s.action_details.tool_name}
                         </code>
                       )}
-                      {s.status === "error" && <Badge variant="destructive">שגיאה</Badge>}
+                      {s.status === "error" && (
+                        <Badge variant="destructive">שגיאה</Badge>
+                      )}
                       <span className="text-[10px] text-muted-foreground mr-auto">
                         {s.duration_ms ? `${s.duration_ms}ms` : ""}
-                        {s.tokens_in ? ` · ${s.tokens_in}↓${s.tokens_out ?? 0}↑` : ""}
+                        {s.tokens_in
+                          ? ` · ${s.tokens_in}↓${s.tokens_out ?? 0}↑`
+                          : ""}
                       </span>
                     </div>
                     {s.thought && (
@@ -167,11 +236,15 @@ export function RunsTab({ agent }: { agent: any }) {
                     )}
                     {s.observation && (
                       <pre className="text-[10px] bg-emerald-500/5 border border-emerald-500/20 p-2 rounded overflow-x-auto">
-                        {typeof s.observation === "string" ? s.observation : JSON.stringify(s.observation, null, 2)}
+                        {typeof s.observation === "string"
+                          ? s.observation
+                          : JSON.stringify(s.observation, null, 2)}
                       </pre>
                     )}
                     {s.error_message && (
-                      <div className="text-xs text-destructive mt-1">⚠️ {s.error_message}</div>
+                      <div className="text-xs text-destructive mt-1">
+                        ⚠️ {s.error_message}
+                      </div>
                     )}
                   </Card>
                 );

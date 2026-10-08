@@ -41,7 +41,8 @@ function filterDehydratedState(state: DehydratedState): DehydratedState {
   return {
     ...state,
     queries: (state.queries ?? []).filter((entry) => {
-      if (!isPersistedQueryKey(entry.queryKey as readonly unknown[])) return false;
+      if (!isPersistedQueryKey(entry.queryKey as readonly unknown[]))
+        return false;
       return hasPersistableReportData(entry.state?.data);
     }),
   };
@@ -51,7 +52,10 @@ export function hydrateReportQueryCache(queryClient: QueryClient): void {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (!raw) return;
-    const parsed = JSON.parse(raw) as { savedAt: number; state: DehydratedState };
+    const parsed = JSON.parse(raw) as {
+      savedAt: number;
+      state: DehydratedState;
+    };
     if (Date.now() - parsed.savedAt > MAX_AGE_MS) {
       localStorage.removeItem(STORAGE_KEY);
       return;
@@ -71,9 +75,13 @@ export function invalidateClientCrmTablesQueries(
   clientId?: string | null,
 ): void {
   if (tenantId && clientId) {
-    queryClient.invalidateQueries({ queryKey: ["client-crm-tables", tenantId, clientId] });
+    queryClient.invalidateQueries({
+      queryKey: ["client-crm-tables", tenantId, clientId],
+    });
   } else if (tenantId) {
-    queryClient.invalidateQueries({ queryKey: ["client-crm-tables", tenantId] });
+    queryClient.invalidateQueries({
+      queryKey: ["client-crm-tables", tenantId],
+    });
   } else {
     queryClient.invalidateQueries({ queryKey: ["client-crm-tables"] });
   }
@@ -82,7 +90,9 @@ export function invalidateClientCrmTablesQueries(
   }
 }
 
-export function setupReportQueryCachePersistence(queryClient: QueryClient): void {
+export function setupReportQueryCachePersistence(
+  queryClient: QueryClient,
+): void {
   hydrateReportQueryCache(queryClient);
 
   queryClient.getQueryCache().subscribe((event) => {

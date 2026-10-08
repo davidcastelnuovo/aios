@@ -4,26 +4,26 @@ import { useCurrentTenant } from "@/hooks/useCurrentTenant";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
 
 export type BroadcastStatus =
-  | "draft" | "scheduled" | "sending" | "sent" | "paused" | "failed" | "canceled";
+  "draft" | "scheduled" | "sending" | "sent" | "paused" | "failed" | "canceled";
 
 export type AudienceFilterMode = "include" | "exclude";
 
 export interface AudienceFilter {
   source: "clients" | "leads" | "campaigners" | "list" | "wa_groups";
-  statuses?: string[];       // clients
+  statuses?: string[]; // clients
   statusMode?: AudienceFilterMode;
-  serviceTags?: string[];    // clients
-  statusKeys?: string[];     // leads: response_status (lead_statuses)
-  stageKeys?: string[];      // leads: pipeline stage (leads.status)
+  serviceTags?: string[]; // clients
+  statusKeys?: string[]; // leads: response_status (lead_statuses)
+  stageKeys?: string[]; // leads: pipeline stage (leads.status)
   stageMode?: AudienceFilterMode;
   salesPersonIds?: string[]; // leads
-  tagIds?: string[];         // clients/leads
+  tagIds?: string[]; // clients/leads
   tagMode?: AudienceFilterMode;
-  roles?: string[];          // campaigners
-  activeOnly?: boolean;      // campaigners
-  listId?: string;           // source = list
-  groupIds?: string[];       // source = wa_groups (whatsapp_groups UUIDs)
-  includeIds?: string[];     // manual selection within a source
+  roles?: string[]; // campaigners
+  activeOnly?: boolean; // campaigners
+  listId?: string; // source = list
+  groupIds?: string[]; // source = wa_groups (whatsapp_groups UUIDs)
+  includeIds?: string[]; // manual selection within a source
   excludeIds?: string[];
 }
 
@@ -48,7 +48,14 @@ export interface Broadcast {
   throttle_min_seconds: number;
   throttle_max_seconds: number;
   daily_cap: number;
-  stats: { total?: number; sent?: number; delivered?: number; failed?: number; opened?: number; clicked?: number };
+  stats: {
+    total?: number;
+    sent?: number;
+    delivered?: number;
+    failed?: number;
+    opened?: number;
+    clicked?: number;
+  };
   started_at: string | null;
   completed_at: string | null;
   last_error: string | null;
@@ -92,7 +99,9 @@ export function useBroadcasts() {
           from_email: payload.from_email ?? null,
           from_name: payload.from_name ?? null,
           reply_to: payload.reply_to ?? null,
-          audience_filter: (payload.audience_filter ?? { source: "leads" }) as any,
+          audience_filter: (payload.audience_filter ?? {
+            source: "leads",
+          }) as any,
           scheduled_at: payload.scheduled_at ?? null,
           throttle_min_seconds: payload.throttle_min_seconds ?? 12,
           throttle_max_seconds: payload.throttle_max_seconds ?? 20,
@@ -103,15 +112,23 @@ export function useBroadcasts() {
       if (error) throw error;
       return data as unknown as Broadcast;
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["broadcasts", tenantId] }),
+    onSuccess: () =>
+      qc.invalidateQueries({ queryKey: ["broadcasts", tenantId] }),
   });
 
   const update = useMutation({
-    mutationFn: async ({ id, ...patch }: Partial<Broadcast> & { id: string }) => {
-      const { error } = await supabase.from("broadcasts").update(patch as any).eq("id", id);
+    mutationFn: async ({
+      id,
+      ...patch
+    }: Partial<Broadcast> & { id: string }) => {
+      const { error } = await supabase
+        .from("broadcasts")
+        .update(patch as any)
+        .eq("id", id);
       if (error) throw error;
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["broadcasts", tenantId] }),
+    onSuccess: () =>
+      qc.invalidateQueries({ queryKey: ["broadcasts", tenantId] }),
   });
 
   const remove = useMutation({
@@ -119,23 +136,33 @@ export function useBroadcasts() {
       const { error } = await supabase.from("broadcasts").delete().eq("id", id);
       if (error) throw error;
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["broadcasts", tenantId] }),
+    onSuccess: () =>
+      qc.invalidateQueries({ queryKey: ["broadcasts", tenantId] }),
   });
 
   /** Preview the audience size without committing recipients. */
-  const previewAudience = async (filter: AudienceFilter, channel: "whatsapp" | "email") => {
-    const { data, error } = await supabase.functions.invoke("broadcast-enqueue", {
-      body: { dryRun: true, filter, channel, tenantId },
-    });
+  const previewAudience = async (
+    filter: AudienceFilter,
+    channel: "whatsapp" | "email",
+  ) => {
+    const { data, error } = await supabase.functions.invoke(
+      "broadcast-enqueue",
+      {
+        body: { dryRun: true, filter, channel, tenantId },
+      },
+    );
     if (error) throw error;
     return data as { success: boolean; total: number; sample: any[] };
   };
 
   /** Freeze the recipient snapshot for a saved broadcast. */
   const enqueue = async (broadcastId: string) => {
-    const { data, error } = await supabase.functions.invoke("broadcast-enqueue", {
-      body: { broadcastId },
-    });
+    const { data, error } = await supabase.functions.invoke(
+      "broadcast-enqueue",
+      {
+        body: { broadcastId },
+      },
+    );
     if (error) throw error;
     return data as { success: boolean; total: number };
   };
@@ -146,18 +173,35 @@ export function useBroadcasts() {
    * otherwise 'scheduled' with scheduled_at.
    */
   const launch = useMutation({
-    mutationFn: async ({ id, sendNow, scheduledAt }: { id: string; sendNow: boolean; scheduledAt?: string | null }) => {
+    mutationFn: async ({
+      id,
+      sendNow,
+      scheduledAt,
+    }: {
+      id: string;
+      sendNow: boolean;
+      scheduledAt?: string | null;
+    }) => {
       const res = await enqueue(id);
-      if (!res?.total && res?.total !== 0) throw new Error("אין נמענים תקינים לדיוור");
+      if (!res?.total && res?.total !== 0)
+        throw new Error("אין נמענים תקינים לדיוור");
       if (res.total === 0) throw new Error("אין נמענים תקינים לדיוור");
       const patch: any = sendNow
-        ? { status: "sending", scheduled_at: new Date().toISOString(), started_at: new Date().toISOString() }
+        ? {
+            status: "sending",
+            scheduled_at: new Date().toISOString(),
+            started_at: new Date().toISOString(),
+          }
         : { status: "scheduled", scheduled_at: scheduledAt };
-      const { error } = await supabase.from("broadcasts").update(patch).eq("id", id);
+      const { error } = await supabase
+        .from("broadcasts")
+        .update(patch)
+        .eq("id", id);
       if (error) throw error;
       return res.total;
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["broadcasts", tenantId] }),
+    onSuccess: () =>
+      qc.invalidateQueries({ queryKey: ["broadcasts", tenantId] }),
   });
 
   return { list, create, update, remove, previewAudience, enqueue, launch };

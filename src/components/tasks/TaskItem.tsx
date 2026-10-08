@@ -1,11 +1,25 @@
 import { useDraggable } from "@dnd-kit/core";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
-import { MessageSquare, Users, GripVertical, Calendar, CalendarClock, Megaphone, Search, Bot, ExternalLink } from "lucide-react";
+import {
+  MessageSquare,
+  Users,
+  GripVertical,
+  Calendar,
+  CalendarClock,
+  Megaphone,
+  Search,
+  Bot,
+  ExternalLink,
+} from "lucide-react";
 import { cn } from "@/lib/utils";
 import { format } from "date-fns";
 import { useState, useMemo } from "react";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 
@@ -34,7 +48,15 @@ interface TaskItemProps {
   onUpdateCampaigner?: (taskId: string, campaignerId: string | null) => void;
 }
 
-export function TaskItem({ task, onToggleComplete, onClick, clientsList, campaignersList, onUpdateClient, onUpdateCampaigner }: TaskItemProps) {
+export function TaskItem({
+  task,
+  onToggleComplete,
+  onClick,
+  clientsList,
+  campaignersList,
+  onUpdateClient,
+  onUpdateCampaigner,
+}: TaskItemProps) {
   const [clientSearch, setClientSearch] = useState("");
   const [campaignerSearch, setCampaignerSearch] = useState("");
   const [clientOpen, setClientOpen] = useState(false);
@@ -43,25 +65,28 @@ export function TaskItem({ task, onToggleComplete, onClick, clientsList, campaig
   const filteredClients = useMemo(() => {
     if (!clientsList) return [];
     if (!clientSearch) return clientsList;
-    return clientsList.filter(c => c.name.toLowerCase().includes(clientSearch.toLowerCase()));
+    return clientsList.filter((c) =>
+      c.name.toLowerCase().includes(clientSearch.toLowerCase()),
+    );
   }, [clientsList, clientSearch]);
 
   const filteredCampaigners = useMemo(() => {
     if (!campaignersList) return [];
     if (!campaignerSearch) return campaignersList;
-    return campaignersList.filter(c => c.full_name.toLowerCase().includes(campaignerSearch.toLowerCase()));
+    return campaignersList.filter((c) =>
+      c.full_name.toLowerCase().includes(campaignerSearch.toLowerCase()),
+    );
   }, [campaignersList, campaignerSearch]);
 
-  const selectedClientName = clientsList?.find(c => c.id === task.client_id)?.name;
-  const selectedCampaignerName = campaignersList?.find(c => c.id === task.campaigner_id)?.full_name;
+  const selectedClientName = clientsList?.find(
+    (c) => c.id === task.client_id,
+  )?.name;
+  const selectedCampaignerName = campaignersList?.find(
+    (c) => c.id === task.campaigner_id,
+  )?.full_name;
 
-  const {
-    attributes,
-    listeners,
-    setNodeRef,
-    transform,
-    isDragging,
-  } = useDraggable({ id: task.id });
+  const { attributes, listeners, setNodeRef, transform, isDragging } =
+    useDraggable({ id: task.id });
 
   const style = transform
     ? {
@@ -73,8 +98,12 @@ export function TaskItem({ task, onToggleComplete, onClick, clientsList, campaig
   const updatesCount = task.task_updates?.length || 0;
   const collaboratorsCount = task.task_collaborators?.length || 0;
 
-  const createdDate = task.created_at ? format(new Date(task.created_at), "dd/MM/yy") : null;
-  const dueDate = task.due_date ? format(new Date(task.due_date), "dd/MM/yy") : null;
+  const createdDate = task.created_at
+    ? format(new Date(task.created_at), "dd/MM/yy")
+    : null;
+  const dueDate = task.due_date
+    ? format(new Date(task.due_date), "dd/MM/yy")
+    : null;
 
   return (
     <div
@@ -83,7 +112,7 @@ export function TaskItem({ task, onToggleComplete, onClick, clientsList, campaig
       className={cn(
         "group flex items-start gap-2 p-2 rounded-lg border bg-card hover:bg-accent/50 cursor-pointer transition-all",
         isDragging && "opacity-50 shadow-lg",
-        isCompleted && "opacity-60"
+        isCompleted && "opacity-60",
       )}
     >
       <button
@@ -93,7 +122,7 @@ export function TaskItem({ task, onToggleComplete, onClick, clientsList, campaig
       >
         <GripVertical className="h-4 w-4 text-muted-foreground" />
       </button>
-      
+
       <Checkbox
         checked={isCompleted}
         onCheckedChange={(checked) => {
@@ -102,26 +131,40 @@ export function TaskItem({ task, onToggleComplete, onClick, clientsList, campaig
         onClick={(e) => e.stopPropagation()}
         className="mt-0.5"
       />
-      
+
       <div className="flex-1 min-w-0" onClick={onClick}>
         <p
           className={cn(
             "text-sm font-medium leading-tight break-words",
-            isCompleted && "line-through text-muted-foreground"
+            isCompleted && "line-through text-muted-foreground",
           )}
         >
           {task.title}
         </p>
-        
+
         {/* Inline client & campaigner selectors */}
         {(onUpdateClient || onUpdateCampaigner) && (
-          <div className="flex items-center gap-2 mt-1.5 flex-wrap" onClick={(e) => e.stopPropagation()}>
+          <div
+            className="flex items-center gap-2 mt-1.5 flex-wrap"
+            onClick={(e) => e.stopPropagation()}
+          >
             {onUpdateClient && clientsList && (
-              <Popover open={clientOpen} onOpenChange={(open) => { setClientOpen(open); if (!open) setClientSearch(""); }}>
+              <Popover
+                open={clientOpen}
+                onOpenChange={(open) => {
+                  setClientOpen(open);
+                  if (!open) setClientSearch("");
+                }}
+              >
                 <PopoverTrigger asChild>
-                  <Button variant="outline" className="h-6 text-[11px] w-[120px] px-2 justify-start gap-1">
+                  <Button
+                    variant="outline"
+                    className="h-6 text-[11px] w-[120px] px-2 justify-start gap-1"
+                  >
                     <Users className="h-3 w-3 text-muted-foreground shrink-0" />
-                    <span className="truncate">{selectedClientName || "לקוח"}</span>
+                    <span className="truncate">
+                      {selectedClientName || "לקוח"}
+                    </span>
                   </Button>
                 </PopoverTrigger>
                 <PopoverContent className="w-[200px] p-2 z-50" align="start">
@@ -137,26 +180,53 @@ export function TaskItem({ task, onToggleComplete, onClick, clientsList, campaig
                   </div>
                   <div className="max-h-[200px] overflow-y-auto space-y-0.5">
                     <button
-                      className={cn("w-full text-right text-xs px-2 py-1.5 rounded hover:bg-accent", !task.client_id && "bg-accent")}
-                      onClick={() => { onUpdateClient(task.id, null); setClientOpen(false); }}
-                    >ללא לקוח</button>
+                      className={cn(
+                        "w-full text-right text-xs px-2 py-1.5 rounded hover:bg-accent",
+                        !task.client_id && "bg-accent",
+                      )}
+                      onClick={() => {
+                        onUpdateClient(task.id, null);
+                        setClientOpen(false);
+                      }}
+                    >
+                      ללא לקוח
+                    </button>
                     {filteredClients.map((c) => (
                       <button
                         key={c.id}
-                        className={cn("w-full text-right text-xs px-2 py-1.5 rounded hover:bg-accent", task.client_id === c.id && "bg-accent")}
-                        onClick={() => { onUpdateClient(task.id, c.id); setClientOpen(false); }}
-                      >{c.name}</button>
+                        className={cn(
+                          "w-full text-right text-xs px-2 py-1.5 rounded hover:bg-accent",
+                          task.client_id === c.id && "bg-accent",
+                        )}
+                        onClick={() => {
+                          onUpdateClient(task.id, c.id);
+                          setClientOpen(false);
+                        }}
+                      >
+                        {c.name}
+                      </button>
                     ))}
                   </div>
                 </PopoverContent>
               </Popover>
             )}
             {onUpdateCampaigner && campaignersList && (
-              <Popover open={campaignerOpen} onOpenChange={(open) => { setCampaignerOpen(open); if (!open) setCampaignerSearch(""); }}>
+              <Popover
+                open={campaignerOpen}
+                onOpenChange={(open) => {
+                  setCampaignerOpen(open);
+                  if (!open) setCampaignerSearch("");
+                }}
+              >
                 <PopoverTrigger asChild>
-                  <Button variant="outline" className="h-6 text-[11px] w-[120px] px-2 justify-start gap-1">
+                  <Button
+                    variant="outline"
+                    className="h-6 text-[11px] w-[120px] px-2 justify-start gap-1"
+                  >
                     <Megaphone className="h-3 w-3 text-muted-foreground shrink-0" />
-                    <span className="truncate">{selectedCampaignerName || "קמפיינר"}</span>
+                    <span className="truncate">
+                      {selectedCampaignerName || "קמפיינר"}
+                    </span>
                   </Button>
                 </PopoverTrigger>
                 <PopoverContent className="w-[200px] p-2 z-50" align="start">
@@ -172,15 +242,31 @@ export function TaskItem({ task, onToggleComplete, onClick, clientsList, campaig
                   </div>
                   <div className="max-h-[200px] overflow-y-auto space-y-0.5">
                     <button
-                      className={cn("w-full text-right text-xs px-2 py-1.5 rounded hover:bg-accent", !task.campaigner_id && "bg-accent")}
-                      onClick={() => { onUpdateCampaigner(task.id, null); setCampaignerOpen(false); }}
-                    >ללא קמפיינר</button>
+                      className={cn(
+                        "w-full text-right text-xs px-2 py-1.5 rounded hover:bg-accent",
+                        !task.campaigner_id && "bg-accent",
+                      )}
+                      onClick={() => {
+                        onUpdateCampaigner(task.id, null);
+                        setCampaignerOpen(false);
+                      }}
+                    >
+                      ללא קמפיינר
+                    </button>
                     {filteredCampaigners.map((c) => (
                       <button
                         key={c.id}
-                        className={cn("w-full text-right text-xs px-2 py-1.5 rounded hover:bg-accent", task.campaigner_id === c.id && "bg-accent")}
-                        onClick={() => { onUpdateCampaigner(task.id, c.id); setCampaignerOpen(false); }}
-                      >{c.full_name}</button>
+                        className={cn(
+                          "w-full text-right text-xs px-2 py-1.5 rounded hover:bg-accent",
+                          task.campaigner_id === c.id && "bg-accent",
+                        )}
+                        onClick={() => {
+                          onUpdateCampaigner(task.id, c.id);
+                          setCampaignerOpen(false);
+                        }}
+                      >
+                        {c.full_name}
+                      </button>
                     ))}
                   </div>
                 </PopoverContent>
@@ -197,7 +283,10 @@ export function TaskItem({ task, onToggleComplete, onClick, clientsList, campaig
           )}
 
           {task.campaigners?.full_name && (
-            <Badge variant="outline" className="text-xs px-1.5 py-0 h-5 gap-0.5">
+            <Badge
+              variant="outline"
+              className="text-xs px-1.5 py-0 h-5 gap-0.5"
+            >
               <Megaphone className="h-3 w-3" />
               {task.campaigners.full_name}
             </Badge>
@@ -218,21 +307,30 @@ export function TaskItem({ task, onToggleComplete, onClick, clientsList, campaig
           )}
 
           {updatesCount > 0 && (
-            <Badge variant="outline" className="text-xs px-1.5 py-0 h-5 gap-0.5">
+            <Badge
+              variant="outline"
+              className="text-xs px-1.5 py-0 h-5 gap-0.5"
+            >
               <MessageSquare className="h-3 w-3" />
               {updatesCount}
             </Badge>
           )}
 
           {collaboratorsCount > 0 && (
-            <Badge variant="outline" className="text-xs px-1.5 py-0 h-5 gap-0.5">
+            <Badge
+              variant="outline"
+              className="text-xs px-1.5 py-0 h-5 gap-0.5"
+            >
               <Users className="h-3 w-3" />
               {collaboratorsCount}
             </Badge>
           )}
 
           {task.assigned_agent && (
-            <Badge variant="outline" className="text-xs px-1.5 py-0 h-5 gap-0.5 bg-purple-50 border-purple-200 text-purple-700 dark:bg-purple-950/30 dark:border-purple-800 dark:text-purple-300">
+            <Badge
+              variant="outline"
+              className="text-xs px-1.5 py-0 h-5 gap-0.5 bg-purple-50 border-purple-200 text-purple-700 dark:bg-purple-950/30 dark:border-purple-800 dark:text-purple-300"
+            >
               <Bot className="h-3 w-3" />
               {task.assigned_agent}
             </Badge>
@@ -246,7 +344,10 @@ export function TaskItem({ task, onToggleComplete, onClick, clientsList, campaig
               onClick={(e) => e.stopPropagation()}
               className="inline-flex"
             >
-              <Badge variant="outline" className="text-xs px-1.5 py-0 h-5 gap-0.5 bg-sky-50 border-sky-200 text-sky-700 dark:bg-sky-950/30 dark:border-sky-800 dark:text-sky-300">
+              <Badge
+                variant="outline"
+                className="text-xs px-1.5 py-0 h-5 gap-0.5 bg-sky-50 border-sky-200 text-sky-700 dark:bg-sky-950/30 dark:border-sky-800 dark:text-sky-300"
+              >
                 <ExternalLink className="h-3 w-3" />
                 Cursor
               </Badge>

@@ -152,7 +152,9 @@ export function AssignPhoneFromWhatsAppDialog({
                     </AvatarFallback>
                   </Avatar>
                   <div className="flex-1 min-w-0 text-right">
-                    <p className="text-sm font-medium truncate">{contact.name || contact.sender_phone}</p>
+                    <p className="text-sm font-medium truncate">
+                      {contact.name || contact.sender_phone}
+                    </p>
                     <div className="flex items-center gap-1 justify-end text-xs text-muted-foreground">
                       <span dir="ltr">{contact.sender_phone}</span>
                       <Phone className="h-3 w-3" />

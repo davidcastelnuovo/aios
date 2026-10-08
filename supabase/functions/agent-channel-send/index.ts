@@ -2,7 +2,12 @@ import { corsHeaders } from "../_shared/cors.ts";
 import { requireAuth } from "../_shared/security.ts";
 import { dispatchSend } from "../_shared/agent-channel/adapters.ts";
 import type { InputMode, SendResult } from "../_shared/agent-channel/types.ts";
-import { cancelParliament, clarifyParliamentSeat, forceContinueParliament, forceSynthesizeParliament } from "../_shared/agent-channel/parliament.ts";
+import {
+  cancelParliament,
+  clarifyParliamentSeat,
+  forceContinueParliament,
+  forceSynthesizeParliament,
+} from "../_shared/agent-channel/parliament.ts";
 import {
   duplicateSendResult,
   ensureConversation,
@@ -18,7 +23,14 @@ import {
 } from "../_shared/agent-channel/store.ts";
 
 function parseAttachments(raw: unknown) {
-  if (!Array.isArray(raw)) return [] as Array<{ name: string; url: string; type: "image" | "file"; size?: number; path?: string }>;
+  if (!Array.isArray(raw))
+    return [] as Array<{
+      name: string;
+      url: string;
+      type: "image" | "file";
+      size?: number;
+      path?: string;
+    }>;
   return raw
     .map((item) => {
       if (!item || typeof item !== "object") return null;
@@ -30,12 +42,24 @@ function parseAttachments(raw: unknown) {
         name,
         url,
         type,
-        size: typeof (item as any).size === "number" ? (item as any).size : undefined,
-        path: typeof (item as any).path === "string" ? (item as any).path : undefined,
+        size:
+          typeof (item as any).size === "number"
+            ? (item as any).size
+            : undefined,
+        path:
+          typeof (item as any).path === "string"
+            ? (item as any).path
+            : undefined,
       };
     })
     .filter(Boolean)
-    .slice(0, 6) as Array<{ name: string; url: string; type: "image" | "file"; size?: number; path?: string }>;
+    .slice(0, 6) as Array<{
+    name: string;
+    url: string;
+    type: "image" | "file";
+    size?: number;
+    path?: string;
+  }>;
 }
 
 function json(status: number, body: unknown) {
@@ -46,14 +70,20 @@ function json(status: number, body: unknown) {
 }
 
 Deno.serve(async (req) => {
-  if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
+  if (req.method === "OPTIONS")
+    return new Response("ok", { headers: corsHeaders });
   if (req.method !== "POST") return json(405, { error: "POST only" });
 
   const auth = await requireAuth(req);
-  if (!auth || auth.kind !== "user" || !auth.userId) return json(401, { error: "Unauthorized" });
+  if (!auth || auth.kind !== "user" || !auth.userId)
+    return json(401, { error: "Unauthorized" });
 
   let body: any;
-  try { body = await req.json(); } catch { return json(400, { error: "Invalid JSON" }); }
+  try {
+    body = await req.json();
+  } catch {
+    return json(400, { error: "Invalid JSON" });
+  }
 
   const tenantId = String(body.tenant_id || "").trim();
   if (!tenantId) return json(400, { error: "tenant_id is required" });
@@ -74,15 +104,27 @@ Deno.serve(async (req) => {
   }
 
   if (action === "channel_health") {
-    const { probeCursorApiKey, cursorApiKey } = await import("../_shared/agent-channel/cursor-api.ts");
-    const { collectOpenChatIds } = await import("../_shared/agent-channel/sticky-agent.ts");
-    const { probeWorkspaceAgent } = await import("../_shared/agent-channel/workspace-agent.ts");
+    const { probeCursorApiKey, cursorApiKey } =
+      await import("../_shared/agent-channel/cursor-api.ts");
+    const { collectOpenChatIds } =
+      await import("../_shared/agent-channel/sticky-agent.ts");
+    const { probeWorkspaceAgent } =
+      await import("../_shared/agent-channel/workspace-agent.ts");
     let env: Record<string, string | undefined> = {};
-    try { env = Deno.env.toObject(); } catch { /* ignore */ }
+    try {
+      env = Deno.env.toObject();
+    } catch {
+      /* ignore */
+    }
     const cursor = await probeCursorApiKey(cursorApiKey());
     const codex = await probeWorkspaceAgent("codex", env);
-    const appEnv = Deno.env.get("APP_ENV") || Deno.env.get("VITE_APP_ENV") || "";
-    const cursorChats = await collectOpenChatIds(sb, { tenantId, provider: "cursor", env });
+    const appEnv =
+      Deno.env.get("APP_ENV") || Deno.env.get("VITE_APP_ENV") || "";
+    const cursorChats = await collectOpenChatIds(sb, {
+      tenantId,
+      provider: "cursor",
+      env,
+    });
     const canCreate = cursor.ok;
     return json(200, {
       ok: cursor.ok,
@@ -90,7 +132,11 @@ Deno.serve(async (req) => {
       codex,
       app_env: appEnv || null,
       seats: {
-        cursor: { bill: "cursor_cloud", open_chat: canCreate, chats: cursorChats.length },
+        cursor: {
+          bill: "cursor_cloud",
+          open_chat: canCreate,
+          chats: cursorChats.length,
+        },
         codex: {
           bill: "chatgpt_workspace",
           open_chat: codex.ok,
@@ -108,20 +154,23 @@ Deno.serve(async (req) => {
 
   if (action === "cancel_parliament") {
     const conversationId = String(body.conversation_id || "");
-    if (!conversationId) return json(400, { error: "conversation_id is required" });
+    if (!conversationId)
+      return json(400, { error: "conversation_id is required" });
     await cancelParliament(conversationId);
     return json(200, { ok: true, status: "idle" });
   }
 
   if (action === "parliament_continue") {
     const conversationId = String(body.conversation_id || "");
-    if (!conversationId) return json(400, { error: "conversation_id is required" });
+    if (!conversationId)
+      return json(400, { error: "conversation_id is required" });
     return json(200, await forceContinueParliament(conversationId));
   }
 
   if (action === "parliament_synthesize") {
     const conversationId = String(body.conversation_id || "");
-    if (!conversationId) return json(400, { error: "conversation_id is required" });
+    if (!conversationId)
+      return json(400, { error: "conversation_id is required" });
     return json(200, await forceSynthesizeParliament(conversationId));
   }
 
@@ -129,17 +178,24 @@ Deno.serve(async (req) => {
     const conversationId = String(body.conversation_id || "");
     const provider = String(body.provider || "");
     const question = String(body.content || body.question || "").trim();
-    if (!conversationId || !question) return json(400, { error: "conversation_id and content are required" });
+    if (!conversationId || !question)
+      return json(400, { error: "conversation_id and content are required" });
     if (provider !== "cursor" && provider !== "grok" && provider !== "codex") {
-      return json(400, { error: "clarify only supports cursor, grok, or codex" });
+      return json(400, {
+        error: "clarify only supports cursor, grok, or codex",
+      });
     }
-    return json(200, await clarifyParliamentSeat(conversationId, provider, question));
+    return json(
+      200,
+      await clarifyParliamentSeat(conversationId, provider, question),
+    );
   }
 
   if (action === "persist_assistant") {
     const conversationId = String(body.conversation_id || "");
     const content = String(body.content || "").trim();
-    if (!conversationId || !content) return json(400, { error: "conversation_id and content are required" });
+    if (!conversationId || !content)
+      return json(400, { error: "conversation_id and content are required" });
     const { row, duplicate } = await insertMessage(sb, {
       tenant_id: tenantId,
       conversation_id: conversationId,
@@ -147,8 +203,14 @@ Deno.serve(async (req) => {
       speaker: "carmen",
       channel: "internal",
       content,
-      idempotency_key: body.idempotency_key ? String(body.idempotency_key) : null,
-      metadata: { origin: "internal", input_mode: body.input_mode || "typed", delivery_mode: "text" },
+      idempotency_key: body.idempotency_key
+        ? String(body.idempotency_key)
+        : null,
+      metadata: {
+        origin: "internal",
+        input_mode: body.input_mode || "typed",
+        delivery_mode: "text",
+      },
     });
     await setConversationStatus(sb, conversationId, "idle");
     return json(200, { ok: true, duplicate, message_id: row.id });
@@ -168,16 +230,24 @@ Deno.serve(async (req) => {
 
   if (action === "select_route") {
     if (body.conversation_id) {
-      await sb.from("ai_conversations").update({
-        brain_route_id: route.id,
-        routing_mode: route.route_type,
-        agent_id: agentId,
-      }).eq("id", body.conversation_id).eq("tenant_id", tenantId);
+      await sb
+        .from("ai_conversations")
+        .update({
+          brain_route_id: route.id,
+          routing_mode: route.route_type,
+          agent_id: agentId,
+        })
+        .eq("id", body.conversation_id)
+        .eq("tenant_id", tenantId);
     }
-    await sb.from("ai_agents").update({
-      brain_mode: route.route_type,
-      brain_route_id: route.id,
-    }).eq("id", agentId).eq("tenant_id", tenantId);
+    await sb
+      .from("ai_agents")
+      .update({
+        brain_mode: route.route_type,
+        brain_route_id: route.id,
+      })
+      .eq("id", agentId)
+      .eq("tenant_id", tenantId);
     return json(200, { ok: true, route });
   }
 
@@ -198,7 +268,9 @@ Deno.serve(async (req) => {
   }
 
   if (conv.status === "debating" && route.route_type !== "parliament") {
-    return json(409, { error: "conversation is locked while parliament is running" });
+    return json(409, {
+      error: "conversation is locked while parliament is running",
+    });
   }
 
   const { duplicate } = await insertMessage(sb, {
@@ -225,8 +297,13 @@ Deno.serve(async (req) => {
   }
 
   const provider = String(route.provider || route.slug || "internal");
-  if (action === "send" && provider !== "internal" && provider !== "parliament") {
-    const { recordAndCheckLoopGuard } = await import("../_shared/carmen-brain-flags.ts");
+  if (
+    action === "send" &&
+    provider !== "internal" &&
+    provider !== "parliament"
+  ) {
+    const { recordAndCheckLoopGuard } =
+      await import("../_shared/carmen-brain-flags.ts");
     const loopHit = recordAndCheckLoopGuard({
       conversationId: conv.id,
       provider,
@@ -254,12 +331,18 @@ Deno.serve(async (req) => {
       attachments,
       inputMode: (body.input_mode || "typed") as InputMode,
       idempotencyKey,
-      history: Array.isArray(body.conversation_history) ? body.conversation_history : [],
+      history: Array.isArray(body.conversation_history)
+        ? body.conversation_history
+        : [],
     });
     await setConversationStatus(sb, conv.id, result.status);
-    await sb.from("ai_conversation_messages").update({
-      metadata: { dispatch: result, input_mode: body.input_mode || "typed" },
-    }).eq("tenant_id", tenantId).eq("idempotency_key", idempotencyKey);
+    await sb
+      .from("ai_conversation_messages")
+      .update({
+        metadata: { dispatch: result, input_mode: body.input_mode || "typed" },
+      })
+      .eq("tenant_id", tenantId)
+      .eq("idempotency_key", idempotencyKey);
     if (result.inline_reply) {
       await setConversationStatus(sb, conv.id, "idle");
     }

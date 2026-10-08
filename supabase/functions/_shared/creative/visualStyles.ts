@@ -30,7 +30,9 @@ const LABELS: Record<CreativeVisualStyleId, string> = {
   comic: "קומיקס",
 };
 
-export const visualStyleById = (id: CreativeVisualStyleId): CreativeVisualStyle => ({
+export const visualStyleById = (
+  id: CreativeVisualStyleId,
+): CreativeVisualStyle => ({
   id,
   label: LABELS[id] ?? id,
 });

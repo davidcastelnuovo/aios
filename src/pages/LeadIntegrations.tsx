@@ -1,4 +1,10 @@
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 import { Copy, ExternalLink, Webhook } from "lucide-react";
@@ -11,8 +17,8 @@ import { useCurrentTenant } from "@/hooks/useCurrentTenant";
 export default function LeadIntegrations() {
   const { toast } = useToast();
   const { tenant } = useCurrentTenant();
-  const tenantSlug = tenant?.slug || 'your-tenant-slug';
-  const projectUrl = import.meta.env.VITE_SUPABASE_URL || '';
+  const tenantSlug = tenant?.slug || "your-tenant-slug";
+  const projectUrl = import.meta.env.VITE_SUPABASE_URL || "";
   const webhookBaseUrl = `${projectUrl}/functions/v1/webhook-lead-intake`;
   const webhookUrl = `${webhookBaseUrl}?tenant_slug=${tenantSlug}`;
   const webhookSecretPlaceholder = "YOUR_WEBHOOK_SECRET";
@@ -53,7 +59,7 @@ export default function LeadIntegrations() {
   const curlExample = `curl -X POST ${webhookUrl} \\
   -H "Content-Type: application/json" \\
   -H "x-webhook-secret: ${webhookSecretPlaceholder}" \\
-  -d '${examplePayloadBasic.replace(/\n/g, '')}'`;
+  -d '${examplePayloadBasic.replace(/\n/g, "")}'`;
 
   return (
     <div className="container mx-auto p-6 space-y-6">
@@ -84,9 +90,13 @@ export default function LeadIntegrations() {
             </Button>
           </div>
           <p className="text-sm text-muted-foreground">
-            אבטחה: הוסף כותרת <code className="bg-muted px-1 py-0.5 rounded">x-webhook-secret</code> עם
-            הערך שקיבלת מהמנהל, או הוסף <code className="bg-muted px-1 py-0.5 rounded">?secret=...</code> ל-URL.
-            ללא הסוד, הבקשה תידחה כשהאימות מופעל בשרת.
+            אבטחה: הוסף כותרת{" "}
+            <code className="bg-muted px-1 py-0.5 rounded">
+              x-webhook-secret
+            </code>{" "}
+            עם הערך שקיבלת מהמנהל, או הוסף{" "}
+            <code className="bg-muted px-1 py-0.5 rounded">?secret=...</code>{" "}
+            ל-URL. ללא הסוד, הבקשה תידחה כשהאימות מופעל בשרת.
           </p>
         </AlertDescription>
       </Alert>
@@ -116,25 +126,89 @@ export default function LeadIntegrations() {
               <div>
                 <h3 className="font-semibold mb-2">שדות נדרשים:</h3>
                 <ul className="list-disc list-inside space-y-1 text-sm text-muted-foreground">
-                  <li><code className="bg-muted px-1 py-0.5 rounded">tenant_slug</code> - מזהה הארגון שלך: <strong><code className="bg-primary/20 text-primary px-1 py-0.5 rounded">{tenantSlug}</code></strong> (כלול אוטומטית ב-URL)</li>
-                  <li><code className="bg-muted px-1 py-0.5 rounded">company_name</code> - שם החברה (חובה)</li>
+                  <li>
+                    <code className="bg-muted px-1 py-0.5 rounded">
+                      tenant_slug
+                    </code>{" "}
+                    - מזהה הארגון שלך:{" "}
+                    <strong>
+                      <code className="bg-primary/20 text-primary px-1 py-0.5 rounded">
+                        {tenantSlug}
+                      </code>
+                    </strong>{" "}
+                    (כלול אוטומטית ב-URL)
+                  </li>
+                  <li>
+                    <code className="bg-muted px-1 py-0.5 rounded">
+                      company_name
+                    </code>{" "}
+                    - שם החברה (חובה)
+                  </li>
                 </ul>
               </div>
 
               <div>
                 <h3 className="font-semibold mb-2">שדות אופציונליים:</h3>
                 <ul className="list-disc list-inside space-y-1 text-sm text-muted-foreground">
-                  <li><code className="bg-muted px-1 py-0.5 rounded">contact_name</code> - שם איש קשר</li>
-                  <li><code className="bg-muted px-1 py-0.5 rounded">email</code> - כתובת אימייל</li>
-                  <li><code className="bg-muted px-1 py-0.5 rounded">phone</code> - מספר טלפון</li>
-                  <li><code className="bg-muted px-1 py-0.5 rounded">source</code> - מקור הליד (website/referral/social_media/paid_ads/cold_call/email_campaign/event/whatsapp/other)</li>
-                  <li><code className="bg-muted px-1 py-0.5 rounded">campaign_name</code> - שם הקמפיין</li>
-                  <li><code className="bg-muted px-1 py-0.5 rounded">notes</code> - הערות</li>
-                  <li><code className="bg-muted px-1 py-0.5 rounded">monthly_budget</code> - תקציב חודשי</li>
-                  <li><code className="bg-muted px-1 py-0.5 rounded">three_month_budget</code> - תקציב ל-3 חודשים</li>
-                  <li><code className="bg-muted px-1 py-0.5 rounded">products</code> - מוצרים מעוניינים</li>
-                  <li><code className="bg-muted px-1 py-0.5 rounded">industry</code> - תעשייה</li>
-                  <li><code className="bg-muted px-1 py-0.5 rounded">agency_id</code> - ID של סוכנות (אופציונלי; בלי זה הליד נכנס לארגון בלבד)</li>
+                  <li>
+                    <code className="bg-muted px-1 py-0.5 rounded">
+                      contact_name
+                    </code>{" "}
+                    - שם איש קשר
+                  </li>
+                  <li>
+                    <code className="bg-muted px-1 py-0.5 rounded">email</code>{" "}
+                    - כתובת אימייל
+                  </li>
+                  <li>
+                    <code className="bg-muted px-1 py-0.5 rounded">phone</code>{" "}
+                    - מספר טלפון
+                  </li>
+                  <li>
+                    <code className="bg-muted px-1 py-0.5 rounded">source</code>{" "}
+                    - מקור הליד
+                    (website/referral/social_media/paid_ads/cold_call/email_campaign/event/whatsapp/other)
+                  </li>
+                  <li>
+                    <code className="bg-muted px-1 py-0.5 rounded">
+                      campaign_name
+                    </code>{" "}
+                    - שם הקמפיין
+                  </li>
+                  <li>
+                    <code className="bg-muted px-1 py-0.5 rounded">notes</code>{" "}
+                    - הערות
+                  </li>
+                  <li>
+                    <code className="bg-muted px-1 py-0.5 rounded">
+                      monthly_budget
+                    </code>{" "}
+                    - תקציב חודשי
+                  </li>
+                  <li>
+                    <code className="bg-muted px-1 py-0.5 rounded">
+                      three_month_budget
+                    </code>{" "}
+                    - תקציב ל-3 חודשים
+                  </li>
+                  <li>
+                    <code className="bg-muted px-1 py-0.5 rounded">
+                      products
+                    </code>{" "}
+                    - מוצרים מעוניינים
+                  </li>
+                  <li>
+                    <code className="bg-muted px-1 py-0.5 rounded">
+                      industry
+                    </code>{" "}
+                    - תעשייה
+                  </li>
+                  <li>
+                    <code className="bg-muted px-1 py-0.5 rounded">
+                      agency_id
+                    </code>{" "}
+                    - ID של סוכנות (אופציונלי; בלי זה הליד נכנס לארגון בלבד)
+                  </li>
                 </ul>
               </div>
 
@@ -190,7 +264,11 @@ export default function LeadIntegrations() {
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
-                <img src="https://www.make.com/favicon.ico" alt="Make" className="h-5 w-5" />
+                <img
+                  src="https://www.make.com/favicon.ico"
+                  alt="Make"
+                  className="h-5 w-5"
+                />
                 אינטגרציה עם Make
               </CardTitle>
               <CardDescription>
@@ -207,11 +285,22 @@ export default function LeadIntegrations() {
                   <li>
                     הגדר את המודול:
                     <ul className="list-disc list-inside mr-6 mt-1 space-y-1">
-                      <li><strong>URL:</strong> {webhookUrl}</li>
-                      <li><strong>Method:</strong> POST</li>
-                      <li><strong>Headers:</strong> Content-Type: application/json, x-webhook-secret: (הסוד שלך)</li>
-                      <li><strong>Body type:</strong> Raw</li>
-                      <li><strong>Request content:</strong> JSON עם השדות הנדרשים</li>
+                      <li>
+                        <strong>URL:</strong> {webhookUrl}
+                      </li>
+                      <li>
+                        <strong>Method:</strong> POST
+                      </li>
+                      <li>
+                        <strong>Headers:</strong> Content-Type:
+                        application/json, x-webhook-secret: (הסוד שלך)
+                      </li>
+                      <li>
+                        <strong>Body type:</strong> Raw
+                      </li>
+                      <li>
+                        <strong>Request content:</strong> JSON עם השדות הנדרשים
+                      </li>
                     </ul>
                   </li>
                   <li>מפה את השדות מה-Trigger ל-JSON</li>
@@ -221,7 +310,8 @@ export default function LeadIntegrations() {
 
               <Alert>
                 <AlertDescription>
-                  <strong>טיפ:</strong> אתה יכול להשתמש בשדה Data Structure ב-Make כדי להגדיר את מבנה ה-JSON בקלות
+                  <strong>טיפ:</strong> אתה יכול להשתמש בשדה Data Structure
+                  ב-Make כדי להגדיר את מבנה ה-JSON בקלות
                 </AlertDescription>
               </Alert>
             </CardContent>
@@ -232,27 +322,39 @@ export default function LeadIntegrations() {
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
-                <img src="https://zapier.com/favicon.ico" alt="Zapier" className="h-5 w-5" />
+                <img
+                  src="https://zapier.com/favicon.ico"
+                  alt="Zapier"
+                  className="h-5 w-5"
+                />
                 אינטגרציה עם Zapier
               </CardTitle>
-              <CardDescription>
-                צור Zap לשליחת לידים אוטומטית
-              </CardDescription>
+              <CardDescription>צור Zap לשליחת לידים אוטומטית</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="space-y-2">
                 <h3 className="font-semibold">שלבי ההגדרה:</h3>
                 <ol className="list-decimal list-inside space-y-2 text-sm">
                   <li>צור Zap חדש ב-Zapier</li>
-                  <li>בחר Trigger לפי המקור שלך (Typeform, Google Forms, וכו')</li>
+                  <li>
+                    בחר Trigger לפי המקור שלך (Typeform, Google Forms, וכו')
+                  </li>
                   <li>הוסף Action: Webhooks by Zapier → POST</li>
                   <li>
                     הגדר את ה-Webhook:
                     <ul className="list-disc list-inside mr-6 mt-1 space-y-1">
-                      <li><strong>URL:</strong> {webhookUrl}</li>
-                      <li><strong>Payload Type:</strong> JSON</li>
-                      <li><strong>Headers:</strong> x-webhook-secret: (הסוד שלך)</li>
-                      <li><strong>Data:</strong> מפה את השדות מה-Trigger</li>
+                      <li>
+                        <strong>URL:</strong> {webhookUrl}
+                      </li>
+                      <li>
+                        <strong>Payload Type:</strong> JSON
+                      </li>
+                      <li>
+                        <strong>Headers:</strong> x-webhook-secret: (הסוד שלך)
+                      </li>
+                      <li>
+                        <strong>Data:</strong> מפה את השדות מה-Trigger
+                      </li>
                     </ul>
                   </li>
                   <li>לחץ על Test & Continue</li>
@@ -263,7 +365,7 @@ export default function LeadIntegrations() {
               <div className="bg-muted/50 p-4 rounded-lg">
                 <h3 className="font-semibold mb-2">דוגמת Data Mapping:</h3>
                 <pre className="text-xs overflow-x-auto bg-background p-3 rounded">
-{`company_name: {{Company Name}}
+                  {`company_name: {{Company Name}}
 contact_name: {{Full Name}}
 email: {{Email Address}}
 phone: {{Phone Number}}
@@ -287,7 +389,7 @@ campaign_name: {{Campaign}}`}
               <div className="space-y-2">
                 <h3 className="font-semibold">דוגמת קוד JavaScript:</h3>
                 <pre className="text-xs overflow-x-auto bg-muted p-4 rounded-lg">
-{`// בעת שליחה של טופס
+                  {`// בעת שליחה של טופס
 document.getElementById('contactForm').addEventListener('submit', async (e) => {
   e.preventDefault();
   
@@ -327,7 +429,9 @@ document.getElementById('contactForm').addEventListener('submit', async (e) => {
                 <Button
                   variant="outline"
                   size="sm"
-                  onClick={() => copyToClipboard(`// JavaScript example code...`)}
+                  onClick={() =>
+                    copyToClipboard(`// JavaScript example code...`)
+                  }
                 >
                   <Copy className="h-4 w-4 ml-2" />
                   העתק קוד
@@ -336,7 +440,8 @@ document.getElementById('contactForm').addEventListener('submit', async (e) => {
 
               <Alert>
                 <AlertDescription>
-                  <strong>שים לב:</strong> וודא שה-webhook URL מוגדר בצד שרת או מוסתר מהמשתמש כדי למנוע שימוש לא מורשה
+                  <strong>שים לב:</strong> וודא שה-webhook URL מוגדר בצד שרת או
+                  מוסתר מהמשתמש כדי למנוע שימוש לא מורשה
                 </AlertDescription>
               </Alert>
             </CardContent>
@@ -350,7 +455,7 @@ document.getElementById('contactForm').addEventListener('submit', async (e) => {
         </CardHeader>
         <CardContent>
           <pre className="text-xs overflow-x-auto bg-muted p-4 rounded-lg">
-{`{
+            {`{
   "success": true,
   "lead_id": "uuid-של-הליד-החדש",
   "message": "Lead created successfully"

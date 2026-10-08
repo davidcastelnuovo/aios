@@ -119,7 +119,9 @@ export function SEOPublishPanel({
       // Add Yoast SEO meta if available
       if (metaDescription || focusKeyword) {
         body.meta = {
-          ...(metaDescription ? { _yoast_wpseo_metadesc: metaDescription } : {}),
+          ...(metaDescription
+            ? { _yoast_wpseo_metadesc: metaDescription }
+            : {}),
           ...(focusKeyword ? { _yoast_wpseo_focuskw: focusKeyword } : {}),
         };
       }
@@ -135,7 +137,9 @@ export function SEOPublishPanel({
 
       if (!res.ok) {
         const errText = await res.text();
-        throw new Error(`WordPress error ${res.status}: ${errText.slice(0, 200)}`);
+        throw new Error(
+          `WordPress error ${res.status}: ${errText.slice(0, 200)}`,
+        );
       }
 
       const post = await res.json();
@@ -158,7 +162,9 @@ export function SEOPublishPanel({
 
       setResult({ success: true, post_url: post.link, post_id: post.id });
       toast.success(
-        postStatus === "publish" ? "המאמר פורסם בהצלחה!" : "הטיוטה נשמרה ב-WordPress"
+        postStatus === "publish"
+          ? "המאמר פורסם בהצלחה!"
+          : "הטיוטה נשמרה ב-WordPress",
       );
     } catch (err: any) {
       const msg = err.message ?? "שגיאה לא ידועה";
@@ -173,7 +179,10 @@ export function SEOPublishPanel({
 
   if (result?.success) {
     return (
-      <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-right" dir="rtl">
+      <div
+        className="rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-right"
+        dir="rtl"
+      >
         <div className="flex items-center gap-2 text-emerald-700">
           <CheckCircle2 className="h-5 w-5 shrink-0" />
           <span className="font-semibold">
@@ -212,7 +221,9 @@ export function SEOPublishPanel({
         </div>
         <div>
           <p className="text-sm font-semibold">פרסום SEO / GEO</p>
-          <p className="text-xs text-muted-foreground">פרסם מאמר ישירות ל-WordPress</p>
+          <p className="text-xs text-muted-foreground">
+            פרסם מאמר ישירות ל-WordPress
+          </p>
         </div>
       </div>
 
@@ -270,7 +281,9 @@ export function SEOPublishPanel({
 
       {/* Content */}
       <div>
-        <label className="mb-1 block text-xs text-muted-foreground">תוכן המאמר</label>
+        <label className="mb-1 block text-xs text-muted-foreground">
+          תוכן המאמר
+        </label>
         <Textarea
           value={postContent}
           onChange={(e) => setPostContent(e.target.value)}
@@ -331,8 +344,8 @@ export function SEOPublishPanel({
           {publishing
             ? "מפרסם..."
             : postStatus === "publish"
-            ? "פרסם ב-WordPress"
-            : "שמור טיוטה"}
+              ? "פרסם ב-WordPress"
+              : "שמור טיוטה"}
         </Button>
       </div>
     </div>

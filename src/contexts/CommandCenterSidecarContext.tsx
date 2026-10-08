@@ -1,4 +1,11 @@
-import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useState,
+} from "react";
 
 const STORAGE_KEY = "aios:cc-sidecar-open";
 
@@ -8,7 +15,9 @@ type SidecarContextValue = {
   toggle: () => void;
 };
 
-const CommandCenterSidecarContext = createContext<SidecarContextValue | null>(null);
+const CommandCenterSidecarContext = createContext<SidecarContextValue | null>(
+  null,
+);
 
 function readStoredOpen(): boolean {
   try {
@@ -18,7 +27,11 @@ function readStoredOpen(): boolean {
   }
 }
 
-export function CommandCenterSidecarProvider({ children }: { children: React.ReactNode }) {
+export function CommandCenterSidecarProvider({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
   const [open, setOpenState] = useState(readStoredOpen);
 
   const setOpen = useCallback((next: boolean) => {
@@ -40,7 +53,10 @@ export function CommandCenterSidecarProvider({ children }: { children: React.Rea
     }
   }, [open]);
 
-  const value = useMemo(() => ({ open, setOpen, toggle }), [open, setOpen, toggle]);
+  const value = useMemo(
+    () => ({ open, setOpen, toggle }),
+    [open, setOpen, toggle],
+  );
 
   return (
     <CommandCenterSidecarContext.Provider value={value}>
@@ -52,7 +68,9 @@ export function CommandCenterSidecarProvider({ children }: { children: React.Rea
 export function useCommandCenterSidecar(): SidecarContextValue {
   const ctx = useContext(CommandCenterSidecarContext);
   if (!ctx) {
-    throw new Error("useCommandCenterSidecar must be used within CommandCenterSidecarProvider");
+    throw new Error(
+      "useCommandCenterSidecar must be used within CommandCenterSidecarProvider",
+    );
   }
   return ctx;
 }

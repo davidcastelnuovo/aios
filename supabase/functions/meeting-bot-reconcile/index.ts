@@ -9,7 +9,8 @@ import { finalizeMeetingBotSession } from "../_shared/meeting-bot-finalize.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+  "Access-Control-Allow-Headers":
+    "authorization, x-client-info, apikey, content-type",
 };
 
 const json = (body: unknown, status = 200) =>
@@ -23,7 +24,8 @@ const MIN_AGE_SECONDS = 90;
 const BATCH_SIZE = 5;
 
 Deno.serve(async (req) => {
-  if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
+  if (req.method === "OPTIONS")
+    return new Response(null, { headers: corsHeaders });
 
   const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
   const SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
@@ -33,7 +35,9 @@ Deno.serve(async (req) => {
   try {
     const body = await req.json();
     sessionId = body?.session_id ?? null;
-  } catch { /* scheduled invocation sends no body */ }
+  } catch {
+    /* scheduled invocation sends no body */
+  }
 
   let query = admin
     .from("meeting_bot_sessions")
@@ -66,7 +70,8 @@ Deno.serve(async (req) => {
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       console.error("[meeting-bot-reconcile] failed", session.id, msg);
-      await admin.from("meeting_bot_sessions")
+      await admin
+        .from("meeting_bot_sessions")
         .update({ error: msg, updated_at: new Date().toISOString() })
         .eq("id", session.id);
       results.push({ session_id: session.id, outcome: "error", detail: msg });

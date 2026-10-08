@@ -30,16 +30,19 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.75.0";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL") || "";
-const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
+const SUPABASE_SERVICE_ROLE_KEY =
+  Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
 const MANUS_API_BASE = "https://api.manus.ai";
 // AfterLead project — tasks created here automatically inherit all project instructions + credentials.
-const MANUS_PROJECT_ID = Deno.env.get("MANUS_PROJECT_ID") || "oGUi7vCRzcPqA52KetUXnL";
+const MANUS_PROJECT_ID =
+  Deno.env.get("MANUS_PROJECT_ID") || "oGUi7vCRzcPqA52KetUXnL";
 // How long (ms) an active task is considered "continuable" for session reuse.
 const SESSION_REUSE_WINDOW_MS = 24 * 60 * 60 * 1000; // 24 hours
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+  "Access-Control-Allow-Headers":
+    "authorization, x-client-info, apikey, content-type",
   "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
 };
 
@@ -62,15 +65,18 @@ const TOOLS = [
       properties: {
         request: {
           type: "string",
-          description: "What you want Manus to do, in plain language. Be clear and self-contained.",
+          description:
+            "What you want Manus to do, in plain language. Be clear and self-contained.",
         },
         context: {
           type: "string",
-          description: "Optional extra context: links, file paths, data, constraints, acceptance criteria.",
+          description:
+            "Optional extra context: links, file paths, data, constraints, acceptance criteria.",
         },
         agent_profile: {
           type: "string",
-          description: "Optional Manus agent profile. Defaults to 'manus-1.6'. Options: manus-1.6, manus-lite, manus-max.",
+          description:
+            "Optional Manus agent profile. Defaults to 'manus-1.6'. Options: manus-1.6, manus-lite, manus-max.",
         },
       },
       required: ["request"],
@@ -89,15 +95,18 @@ const TOOLS = [
       properties: {
         task: {
           type: "string",
-          description: "Clear, self-contained description of the development work to perform.",
+          description:
+            "Clear, self-contained description of the development work to perform.",
         },
         branch: {
           type: "string",
-          description: "Optional target/base branch. If omitted Manus uses main.",
+          description:
+            "Optional target/base branch. If omitted Manus uses main.",
         },
         context: {
           type: "string",
-          description: "Optional extra context: error logs, file paths, links, constraints.",
+          description:
+            "Optional extra context: error logs, file paths, links, constraints.",
         },
       },
       required: ["task"],
@@ -108,21 +117,37 @@ const TOOLS = [
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
 function rpcResult(id: unknown, result: unknown) {
-  return new Response(JSON.stringify({ jsonrpc: "2.0", id: id ?? null, result }), {
-    status: 200,
-    headers: { ...corsHeaders, "Content-Type": "application/json" },
-  });
+  return new Response(
+    JSON.stringify({ jsonrpc: "2.0", id: id ?? null, result }),
+    {
+      status: 200,
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    },
+  );
 }
 
-function rpcError(id: unknown, code: number, message: string, httpStatus = 200) {
-  return new Response(JSON.stringify({ jsonrpc: "2.0", id: id ?? null, error: { code, message } }), {
-    status: httpStatus,
-    headers: { ...corsHeaders, "Content-Type": "application/json" },
-  });
+function rpcError(
+  id: unknown,
+  code: number,
+  message: string,
+  httpStatus = 200,
+) {
+  return new Response(
+    JSON.stringify({
+      jsonrpc: "2.0",
+      id: id ?? null,
+      error: { code, message },
+    }),
+    {
+      status: httpStatus,
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    },
+  );
 }
 
 function bearerFrom(req: Request): string | undefined {
-  const h = req.headers.get("authorization") || req.headers.get("Authorization");
+  const h =
+    req.headers.get("authorization") || req.headers.get("Authorization");
   if (!h) return undefined;
   const m = h.match(/^Bearer\s+(.+)$/i);
   return m ? m[1].trim() : undefined;
@@ -130,11 +155,15 @@ function bearerFrom(req: Request): string | undefined {
 
 function sbClient() {
   if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) return null;
-  return createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, { auth: { persistSession: false } });
+  return createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
+    auth: { persistSession: false },
+  });
 }
 
 // Resolve who is asking (tenant + agent), from the caller's bearer.
-async function resolveContext(bearer: string | undefined): Promise<{ tenantId: string | null; agentId: string | null }> {
+async function resolveContext(
+  bearer: string | undefined,
+): Promise<{ tenantId: string | null; agentId: string | null }> {
   const fallback = {
     tenantId: Deno.env.get("MANUS_DEFAULT_TENANT_ID") || null,
     agentId: null as string | null,
@@ -147,10 +176,17 @@ async function resolveContext(bearer: string | undefined): Promise<{ tenantId: s
       .select("tenant_id, agent_id")
       .eq("state", "ready")
       .filter("oauth_tokens->>bearer", "eq", bearer);
-    const rows = (data || []) as Array<{ tenant_id: string | null; agent_id: string | null }>;
-    const tenants = Array.from(new Set(rows.map((r) => r.tenant_id).filter(Boolean)));
+    const rows = (data || []) as Array<{
+      tenant_id: string | null;
+      agent_id: string | null;
+    }>;
+    const tenants = Array.from(
+      new Set(rows.map((r) => r.tenant_id).filter(Boolean)),
+    );
     if (tenants.length === 1) {
-      const agents = Array.from(new Set(rows.map((r) => r.agent_id).filter(Boolean)));
+      const agents = Array.from(
+        new Set(rows.map((r) => r.agent_id).filter(Boolean)),
+      );
       return {
         tenantId: tenants[0] as string,
         agentId: agents.length === 1 ? (agents[0] as string) : null,
@@ -158,7 +194,10 @@ async function resolveContext(bearer: string | undefined): Promise<{ tenantId: s
     }
     return fallback;
   } catch (e) {
-    console.error("[manus-mcp] resolveContext failed:", (e as any)?.message ?? e);
+    console.error(
+      "[manus-mcp] resolveContext failed:",
+      (e as any)?.message ?? e,
+    );
     return fallback;
   }
 }
@@ -167,7 +206,8 @@ async function resolveContext(bearer: string | undefined): Promise<{ tenantId: s
 async function getManusApiKey(tenantId: string | null): Promise<string> {
   const globalKey = Deno.env.get("MANUS_API_KEY") || "";
   if (!tenantId || !SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
-    if (!globalKey) throw new Error("Manus API key לא מוגדר — הגדר אותו בהגדרות אינטגרציות");
+    if (!globalKey)
+      throw new Error("Manus API key לא מוגדר — הגדר אותו בהגדרות אינטגרציות");
     return globalKey;
   }
   try {
@@ -182,7 +222,9 @@ async function getManusApiKey(tenantId: string | null): Promise<string> {
       .maybeSingle();
     const key = (data?.settings as any)?.api_key;
     if (typeof key === "string" && key.length > 0) return key;
-  } catch { /* fall through */ }
+  } catch {
+    /* fall through */
+  }
   if (globalKey) return globalKey;
   throw new Error("Manus API key לא מוגדר — הגדר אותו בהגדרות אינטגרציות");
 }
@@ -192,7 +234,7 @@ async function createManusTask(
   apiKey: string,
   prompt: string,
   agentProfile = "manus-1.6",
-  title?: string
+  title?: string,
 ): Promise<{ taskId: string; taskUrl: string; shareUrl: string }> {
   const body: Record<string, any> = {
     message: { text: prompt },
@@ -206,20 +248,30 @@ async function createManusTask(
     headers: {
       "x-manus-api-key": apiKey,
       "Content-Type": "application/json",
-      "accept": "application/json",
+      accept: "application/json",
     },
     body: JSON.stringify(body),
   });
   const raw = await res.text();
   if (!res.ok) {
     let detail = raw.slice(0, 500);
-    try { detail = JSON.parse(raw)?.error?.message || JSON.parse(raw)?.error || detail; } catch { /* keep raw */ }
+    try {
+      detail =
+        JSON.parse(raw)?.error?.message || JSON.parse(raw)?.error || detail;
+    } catch {
+      /* keep raw */
+    }
     throw new Error(`Manus API error [${res.status}]: ${detail}`);
   }
   let data: any = {};
-  try { data = JSON.parse(raw); } catch { /* ignore */ }
+  try {
+    data = JSON.parse(raw);
+  } catch {
+    /* ignore */
+  }
   const taskId = data?.data?.task_id || data?.task_id || data?.id || "—";
-  const taskUrl = data?.data?.task_url || data?.task_url || `https://manus.im/t/${taskId}`;
+  const taskUrl =
+    data?.data?.task_url || data?.task_url || `https://manus.im/t/${taskId}`;
   const shareUrl = data?.data?.share_url || data?.share_url || taskUrl;
   return { taskId, taskUrl, shareUrl };
 }
@@ -229,32 +281,44 @@ async function sendManusMessage(
   apiKey: string,
   taskId: string,
   prompt: string,
-  agentProfile = "manus-1.6"
+  agentProfile = "manus-1.6",
 ): Promise<{ taskId: string; taskUrl: string; shareUrl: string }> {
   const res = await fetch(`${MANUS_API_BASE}/v2/task.sendMessage`, {
     method: "POST",
     headers: {
       "x-manus-api-key": apiKey,
       "Content-Type": "application/json",
-      "accept": "application/json",
+      accept: "application/json",
     },
-    body: JSON.stringify({ task_id: taskId, message: { text: prompt }, agent_profile: agentProfile }),
+    body: JSON.stringify({
+      task_id: taskId,
+      message: { text: prompt },
+      agent_profile: agentProfile,
+    }),
   });
   const raw = await res.text();
   if (!res.ok) {
     // If the task no longer exists or is stopped, fall back to creating a new one.
-    console.warn(`[manus-mcp] sendMessage failed for task ${taskId} [${res.status}] — will create new task`);
+    console.warn(
+      `[manus-mcp] sendMessage failed for task ${taskId} [${res.status}] — will create new task`,
+    );
     return { taskId: "", taskUrl: "", shareUrl: "" }; // signal caller to retry with create
   }
   let data: any = {};
-  try { data = JSON.parse(raw); } catch { /* ignore */ }
+  try {
+    data = JSON.parse(raw);
+  } catch {
+    /* ignore */
+  }
   const taskUrl = data?.data?.task_url || `https://manus.im/t/${taskId}`;
   const shareUrl = data?.data?.share_url || taskUrl;
   return { taskId, taskUrl, shareUrl };
 }
 
 // Find an active (pending/running) task for this tenant created within SESSION_REUSE_WINDOW_MS.
-async function findActiveTask(tenantId: string): Promise<{ taskId: string; taskUrl: string } | null> {
+async function findActiveTask(
+  tenantId: string,
+): Promise<{ taskId: string; taskUrl: string } | null> {
   const sb = sbClient();
   if (!sb) return null;
   try {
@@ -268,9 +332,16 @@ async function findActiveTask(tenantId: string): Promise<{ taskId: string; taskU
       .order("created_at", { ascending: false })
       .limit(1);
     const row = (data || [])[0] as any;
-    if (row?.task_id) return { taskId: row.task_id, taskUrl: row.task_url || `https://manus.im/t/${row.task_id}` };
+    if (row?.task_id)
+      return {
+        taskId: row.task_id,
+        taskUrl: row.task_url || `https://manus.im/t/${row.task_id}`,
+      };
   } catch (e) {
-    console.error("[manus-mcp] findActiveTask failed:", (e as any)?.message ?? e);
+    console.error(
+      "[manus-mcp] findActiveTask failed:",
+      (e as any)?.message ?? e,
+    );
   }
   return null;
 }
@@ -291,7 +362,8 @@ async function logDispatch(args: {
   try {
     if (args.continued) {
       // Just update updated_at so we know the task is still active
-      await sb.from("manus_tasks")
+      await sb
+        .from("manus_tasks")
         .update({ updated_at: new Date().toISOString() })
         .eq("tenant_id", args.tenantId)
         .eq("task_id", args.taskId);
@@ -326,7 +398,9 @@ async function recentDispatchContext(tenantId: string | null): Promise<string> {
     const rows = (data || []) as Array<any>;
     if (!rows.length) return "";
     const lines = rows.map((r) => {
-      const when = String(r.created_at || "").slice(0, 16).replace("T", " ");
+      const when = String(r.created_at || "")
+        .slice(0, 16)
+        .replace("T", " ");
       const what = String(r.title || "").slice(0, 150);
       const url = r.task_url ? ` — ${r.task_url}` : "";
       return `• [${when} · ${r.status || "pending"}] ${what}${url}`;
@@ -337,7 +411,10 @@ async function recentDispatchContext(tenantId: string | null): Promise<string> {
       lines.join("\n")
     );
   } catch (e) {
-    console.error("[manus-mcp] recentDispatchContext failed:", (e as any)?.message ?? e);
+    console.error(
+      "[manus-mcp] recentDispatchContext failed:",
+      (e as any)?.message ?? e,
+    );
     return "";
   }
 }
@@ -347,11 +424,11 @@ async function recentDispatchContext(tenantId: string | null): Promise<string> {
 async function handleToolCall(
   name: string,
   args: Record<string, any>,
-  ctx: { tenantId: string | null; agentId: string | null }
+  ctx: { tenantId: string | null; agentId: string | null },
 ): Promise<string> {
   if (!ctx.tenantId) {
     throw new Error(
-      "Could not resolve tenant. Make sure the MCP connection bearer is configured correctly in agent settings."
+      "Could not resolve tenant. Make sure the MCP connection bearer is configured correctly in agent settings.",
     );
   }
 
@@ -383,23 +460,51 @@ async function handleToolCall(
 
     // Session continuity: reuse active task if available
     const activeTask = await findActiveTask(ctx.tenantId);
-    let taskId: string, taskUrl: string, shareUrl: string, continued = false;
+    let taskId: string,
+      taskUrl: string,
+      shareUrl: string,
+      continued = false;
     if (activeTask) {
-      const result = await sendManusMessage(apiKey, activeTask.taskId, prompt, agentProfile);
+      const result = await sendManusMessage(
+        apiKey,
+        activeTask.taskId,
+        prompt,
+        agentProfile,
+      );
       if (result.taskId) {
         // Successfully continued existing session
         ({ taskId, taskUrl, shareUrl } = result);
         continued = true;
       } else {
         // sendMessage failed — create a new task
-        ({ taskId, taskUrl, shareUrl } = await createManusTask(apiKey, prompt, agentProfile, request.slice(0, 120)));
+        ({ taskId, taskUrl, shareUrl } = await createManusTask(
+          apiKey,
+          prompt,
+          agentProfile,
+          request.slice(0, 120),
+        ));
       }
     } else {
-      ({ taskId, taskUrl, shareUrl } = await createManusTask(apiKey, prompt, agentProfile, request.slice(0, 120)));
+      ({ taskId, taskUrl, shareUrl } = await createManusTask(
+        apiKey,
+        prompt,
+        agentProfile,
+        request.slice(0, 120),
+      ));
     }
-    await logDispatch({ tenantId: ctx.tenantId, agentId: ctx.agentId, taskId, prompt: request, taskUrl, shareUrl, continued });
+    await logDispatch({
+      tenantId: ctx.tenantId,
+      agentId: ctx.agentId,
+      taskId,
+      prompt: request,
+      taskUrl,
+      shareUrl,
+      continued,
+    });
 
-    const sessionNote = continued ? " (continued existing session)" : " (new task in AfterLead project)";
+    const sessionNote = continued
+      ? " (continued existing session)"
+      : " (new task in AfterLead project)";
     return (
       `✅ Dispatched your request to Manus${sessionNote}. Manus is now working on it and will notify David on WhatsApp when finished.\n` +
       `Task: ${taskUrl}\n` +
@@ -425,8 +530,20 @@ async function handleToolCall(
       notifyInstruction;
 
     // Dev tasks always open a fresh task (each PR needs its own context)
-    const { taskId, taskUrl, shareUrl } = await createManusTask(apiKey, prompt, "manus-1.6", task.slice(0, 120));
-    await logDispatch({ tenantId: ctx.tenantId, agentId: ctx.agentId, taskId, prompt: task, taskUrl, shareUrl });
+    const { taskId, taskUrl, shareUrl } = await createManusTask(
+      apiKey,
+      prompt,
+      "manus-1.6",
+      task.slice(0, 120),
+    );
+    await logDispatch({
+      tenantId: ctx.tenantId,
+      agentId: ctx.agentId,
+      taskId,
+      prompt: task,
+      taskUrl,
+      shareUrl,
+    });
 
     return (
       `✅ Dispatched the dev task to Manus (new task in AfterLead project). Manus is now working on it and will open a pull request when finished.\n` +
@@ -441,12 +558,20 @@ async function handleToolCall(
 // ─── Main handler ─────────────────────────────────────────────────────────────
 
 Deno.serve(async (req) => {
-  if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
+  if (req.method === "OPTIONS")
+    return new Response("ok", { headers: corsHeaders });
 
   if (req.method === "GET") {
     return new Response(
-      JSON.stringify({ ok: true, server: SERVER_INFO, tools: TOOLS.map((t) => t.name) }),
-      { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      JSON.stringify({
+        ok: true,
+        server: SERVER_INFO,
+        tools: TOOLS.map((t) => t.name),
+      }),
+      {
+        status: 200,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      },
     );
   }
 
@@ -462,7 +587,12 @@ Deno.serve(async (req) => {
   // Bearer gate — MANUS_MCP_BEARER must match
   const requiredBearer = Deno.env.get("MANUS_MCP_BEARER");
   if (requiredBearer && bearerFrom(req) !== requiredBearer) {
-    return rpcError(id, -32001, "Unauthorized: invalid or missing bearer token", 401);
+    return rpcError(
+      id,
+      -32001,
+      "Unauthorized: invalid or missing bearer token",
+      401,
+    );
   }
 
   try {

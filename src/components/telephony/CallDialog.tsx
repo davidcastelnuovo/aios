@@ -1,12 +1,23 @@
 import { useState, useEffect, useRef } from "react";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Phone, PhoneOff, Loader2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { useCurrentTenant } from "@/hooks/useCurrentTenant";
 import { Textarea } from "@/components/ui/textarea";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
 
 interface CallDialogProps {
@@ -30,7 +41,14 @@ const STATUS_LABELS: Record<string, { label: string; color: string }> = {
   cancelled: { label: "בוטל", color: "text-muted-foreground" },
 };
 
-export function CallDialog({ open, onOpenChange, phoneNumber, contactName, leadId, clientId }: CallDialogProps) {
+export function CallDialog({
+  open,
+  onOpenChange,
+  phoneNumber,
+  contactName,
+  leadId,
+  clientId,
+}: CallDialogProps) {
   const { tenantId } = useCurrentTenant();
   const [callStatus, setCallStatus] = useState<string>("idle");
   const [callDuration, setCallDuration] = useState(0);
@@ -38,14 +56,16 @@ export function CallDialog({ open, onOpenChange, phoneNumber, contactName, leadI
   const [notes, setNotes] = useState("");
   const [callLogId, setCallLogId] = useState<string | null>(null);
   const [provider, setProvider] = useState<"paycall" | "maskyoo">(
-    () => (localStorage.getItem("telephony_provider") as "paycall" | "maskyoo") || "paycall"
+    () =>
+      (localStorage.getItem("telephony_provider") as "paycall" | "maskyoo") ||
+      "paycall",
   );
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   useEffect(() => {
     if (callStatus === "in-progress") {
       timerRef.current = setInterval(() => {
-        setCallDuration(prev => prev + 1);
+        setCallDuration((prev) => prev + 1);
       }, 1000);
     } else {
       if (timerRef.current) {
@@ -78,7 +98,8 @@ export function CallDialog({ open, onOpenChange, phoneNumber, contactName, leadI
     setIsLoading(true);
     localStorage.setItem("telephony_provider", provider);
     try {
-      const fnName = provider === "maskyoo" ? "make-maskyoo-call" : "make-paycall-call";
+      const fnName =
+        provider === "maskyoo" ? "make-maskyoo-call" : "make-paycall-call";
       const { data, error } = await supabase.functions.invoke(fnName, {
         body: {
           to_number: phoneNumber,
@@ -90,11 +111,15 @@ export function CallDialog({ open, onOpenChange, phoneNumber, contactName, leadI
 
       if (error) throw error;
 
-      if (data?.error === "Paycall not configured" || data?.error === "Maskyoo not configured") {
+      if (
+        data?.error === "Paycall not configured" ||
+        data?.error === "Maskyoo not configured"
+      ) {
         toast.error("מרכזיה לא מוגדרת", {
-          description: provider === "maskyoo"
-            ? "יש להגדיר את אינטגרציית Maskyoo בהגדרות"
-            : "יש להגדיר את אינטגרציית Paycall בהגדרות הטלפוניה",
+          description:
+            provider === "maskyoo"
+              ? "יש להגדיר את אינטגרציית Maskyoo בהגדרות"
+              : "יש להגדיר את אינטגרציית Paycall בהגדרות הטלפוניה",
         });
         setCallStatus("failed");
       } else {
@@ -114,7 +139,10 @@ export function CallDialog({ open, onOpenChange, phoneNumber, contactName, leadI
   const handleHangup = async () => {
     setCallStatus("completed");
     if (callLogId && notes) {
-      await supabase.from("call_logs").update({ notes, status: "completed", duration: callDuration }).eq("id", callLogId);
+      await supabase
+        .from("call_logs")
+        .update({ notes, status: "completed", duration: callDuration })
+        .eq("id", callLogId);
     }
   };
 
@@ -130,13 +158,17 @@ export function CallDialog({ open, onOpenChange, phoneNumber, contactName, leadI
         <div className="flex flex-col items-center gap-6 py-4">
           {/* Contact avatar */}
           <div className="w-20 h-20 rounded-full bg-primary/10 flex items-center justify-center">
-            <Phone className={`h-8 w-8 ${callStatus === "in-progress" ? "text-green-500 animate-pulse" : "text-primary"}`} />
+            <Phone
+              className={`h-8 w-8 ${callStatus === "in-progress" ? "text-green-500 animate-pulse" : "text-primary"}`}
+            />
           </div>
 
           {/* Contact info */}
           <div className="text-center">
             <h3 className="text-lg font-semibold">{contactName}</h3>
-            <p className="text-muted-foreground text-sm" dir="ltr">{phoneNumber}</p>
+            <p className="text-muted-foreground text-sm" dir="ltr">
+              {phoneNumber}
+            </p>
           </div>
 
           {/* Status */}
@@ -145,10 +177,14 @@ export function CallDialog({ open, onOpenChange, phoneNumber, contactName, leadI
               {statusInfo.label}
             </p>
             {(callStatus === "in-progress" || callStatus === "ringing") && (
-              <p className="text-2xl font-mono mt-2">{formatDuration(callDuration)}</p>
+              <p className="text-2xl font-mono mt-2">
+                {formatDuration(callDuration)}
+              </p>
             )}
             {callStatus === "completed" && callDuration > 0 && (
-              <p className="text-lg font-mono mt-1 text-muted-foreground">{formatDuration(callDuration)}</p>
+              <p className="text-lg font-mono mt-1 text-muted-foreground">
+                {formatDuration(callDuration)}
+              </p>
             )}
           </div>
 
@@ -166,8 +202,13 @@ export function CallDialog({ open, onOpenChange, phoneNumber, contactName, leadI
           {/* Provider selector - only when idle */}
           {(callStatus === "idle" || callStatus === "failed") && (
             <div className="w-full space-y-2">
-              <Label className="text-xs text-muted-foreground">ספק מרכזיה</Label>
-              <Select value={provider} onValueChange={(v) => setProvider(v as "paycall" | "maskyoo")}>
+              <Label className="text-xs text-muted-foreground">
+                ספק מרכזיה
+              </Label>
+              <Select
+                value={provider}
+                onValueChange={(v) => setProvider(v as "paycall" | "maskyoo")}
+              >
                 <SelectTrigger className="w-full">
                   <SelectValue />
                 </SelectTrigger>
@@ -188,9 +229,16 @@ export function CallDialog({ open, onOpenChange, phoneNumber, contactName, leadI
                 className="rounded-full h-14 w-14 bg-green-600 hover:bg-green-700"
                 size="icon"
               >
-                {isLoading ? <Loader2 className="h-6 w-6 animate-spin" /> : <Phone className="h-6 w-6" />}
+                {isLoading ? (
+                  <Loader2 className="h-6 w-6 animate-spin" />
+                ) : (
+                  <Phone className="h-6 w-6" />
+                )}
               </Button>
-            ) : callStatus === "completed" || callStatus === "no-answer" || callStatus === "busy" || callStatus === "cancelled" ? (
+            ) : callStatus === "completed" ||
+              callStatus === "no-answer" ||
+              callStatus === "busy" ||
+              callStatus === "cancelled" ? (
               <Button
                 onClick={() => onOpenChange(false)}
                 variant="outline"

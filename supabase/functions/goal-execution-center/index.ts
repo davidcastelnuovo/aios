@@ -42,12 +42,16 @@ serve(async (req) => {
     const userId = auth.kind === "user" ? auth.userId : null;
 
     if (action === "list") {
-      let q = supabase.from("goals").select("*")
+      let q = supabase
+        .from("goals")
+        .select("*")
         .eq("tenant_id", tenantId)
         .eq("execution_mode", true)
         .order("updated_at", { ascending: false });
       if (body.status) q = q.eq("status", body.status);
-      const { data, error } = await q.limit(Math.min(Number(body.limit) || 50, 100));
+      const { data, error } = await q.limit(
+        Math.min(Number(body.limit) || 50, 100),
+      );
       if (error) throw error;
       return json({ goals: data || [] });
     }
@@ -55,8 +59,12 @@ serve(async (req) => {
     if (action === "get") {
       const id = String(body.id || "");
       const report = await getGoalExecutionReport(supabase, tenantId, id);
-      const { data: events } = await supabase.from("goal_events").select("*")
-        .eq("goal_id", id).order("created_at", { ascending: false }).limit(40);
+      const { data: events } = await supabase
+        .from("goal_events")
+        .select("*")
+        .eq("goal_id", id)
+        .order("created_at", { ascending: false })
+        .limit(40);
       return json({ ...report, events: events || [] });
     }
 
@@ -64,7 +72,14 @@ serve(async (req) => {
       const title = String(body.title || "").trim();
       if (!title) return json({ duplicates: [] });
       const duplicates = await findDuplicateGoals(supabase, tenantId, title);
-      return json({ duplicates: duplicates.map((d) => ({ id: d.goal.id, title: d.goal.title, status: d.goal.status, score: d.score })) });
+      return json({
+        duplicates: duplicates.map((d) => ({
+          id: d.goal.id,
+          title: d.goal.title,
+          status: d.goal.status,
+          score: d.score,
+        })),
+      });
     }
 
     if (action === "create" || action === "autonomous_create") {
@@ -95,21 +110,34 @@ serve(async (req) => {
         for (const [i, m] of body.milestones.entries()) {
           if (m?.title) {
             await addGoalMilestone(supabase, {
-              tenantId, goalId: goal.id, title: String(m.title),
-              description: m.description, dueDate: m.due_date, sortOrder: i, actorUserId: userId,
+              tenantId,
+              goalId: goal.id,
+              title: String(m.title),
+              description: m.description,
+              dueDate: m.due_date,
+              sortOrder: i,
+              actorUserId: userId,
             });
           }
         }
       }
 
-      let kick: { status?: string; summary?: string; error?: string } | undefined;
+      let kick:
+        { status?: string; summary?: string; error?: string } | undefined;
       if (autonomous && goal.autonomous_mode && !autonomous_deferred) {
         try {
           const holder = userId ? `user:${userId}` : "create";
-          const outcome = await runGoalIteration(supabase, tenantId, goal.id, holder);
+          const outcome = await runGoalIteration(
+            supabase,
+            tenantId,
+            goal.id,
+            holder,
+          );
           kick = { status: outcome.status, summary: outcome.summary };
         } catch (kickErr: unknown) {
-          kick = { error: kickErr instanceof Error ? kickErr.message : String(kickErr) };
+          kick = {
+            error: kickErr instanceof Error ? kickErr.message : String(kickErr),
+          };
         }
       }
 
@@ -125,14 +153,36 @@ serve(async (req) => {
 
     if (action === "update") {
       const id = String(body.id || "");
-      const patch: Record<string, unknown> = { updated_at: new Date().toISOString() };
-      for (const key of ["title", "description", "status", "priority", "due_date", "next_action", "completion_criteria", "progress_percent"]) {
+      const patch: Record<string, unknown> = {
+        updated_at: new Date().toISOString(),
+      };
+      for (const key of [
+        "title",
+        "description",
+        "status",
+        "priority",
+        "due_date",
+        "next_action",
+        "completion_criteria",
+        "progress_percent",
+      ]) {
         if (body[key] !== undefined) patch[key] = body[key];
       }
-      const { data, error } = await supabase.from("goals").update(patch)
-        .eq("id", id).eq("tenant_id", tenantId).select("*").single();
+      const { data, error } = await supabase
+        .from("goals")
+        .update(patch)
+        .eq("id", id)
+        .eq("tenant_id", tenantId)
+        .select("*")
+        .single();
       if (error) throw error;
-      await logGoalEvent(supabase, { goalId: id, tenantId, eventType: "updated", actorUserId: userId, detail: patch });
+      await logGoalEvent(supabase, {
+        goalId: id,
+        tenantId,
+        eventType: "updated",
+        actorUserId: userId,
+        detail: patch,
+      });
       return json({ goal: data });
     }
 
@@ -162,12 +212,23 @@ serve(async (req) => {
 
     if (action === "resolve_blocker") {
       const blockerId = String(body.blocker_id || "");
-      const { data, error } = await supabase.from("goal_blockers").update({
-        status: "resolved", resolved_at: new Date().toISOString(), updated_at: new Date().toISOString(),
-      }).eq("id", blockerId).eq("tenant_id", tenantId).select("*").single();
+      const { data, error } = await supabase
+        .from("goal_blockers")
+        .update({
+          status: "resolved",
+          resolved_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", blockerId)
+        .eq("tenant_id", tenantId)
+        .select("*")
+        .single();
       if (error) throw error;
       await logGoalEvent(supabase, {
-        goalId: data.goal_id, tenantId, eventType: "blocker_resolved", actorUserId: userId,
+        goalId: data.goal_id,
+        tenantId,
+        eventType: "blocker_resolved",
+        actorUserId: userId,
         detail: { blocker_id: blockerId },
       });
       return json({ blocker: data });
@@ -175,13 +236,21 @@ serve(async (req) => {
 
     if (action === "link_task") {
       const task = await linkTaskToGoal(supabase, {
-        tenantId, goalId: String(body.goal_id), taskId: String(body.task_id), actorUserId: userId,
+        tenantId,
+        goalId: String(body.goal_id),
+        taskId: String(body.task_id),
+        actorUserId: userId,
       });
       return json({ task });
     }
 
     if (action === "report") {
-      const report = await getGoalExecutionReport(supabase, tenantId, String(body.id), Number(body.since_hours) || 24);
+      const report = await getGoalExecutionReport(
+        supabase,
+        tenantId,
+        String(body.id),
+        Number(body.since_hours) || 24,
+      );
       return json({ report });
     }
 
@@ -195,10 +264,16 @@ serve(async (req) => {
     if (action === "manual_guidance") {
       const goalId = String(body.goal_id || body.id || "");
       const guidance = String(body.guidance || body.message || "").trim();
-      if (!goalId || !guidance) return json({ error: "goal_id and guidance required" }, 400);
+      if (!goalId || !guidance)
+        return json({ error: "goal_id and guidance required" }, 400);
 
-      const { data: goal } = await supabase.from("goals").select("*")
-        .eq("id", goalId).eq("tenant_id", tenantId).eq("autonomous_mode", true).maybeSingle();
+      const { data: goal } = await supabase
+        .from("goals")
+        .select("*")
+        .eq("id", goalId)
+        .eq("tenant_id", tenantId)
+        .eq("autonomous_mode", true)
+        .maybeSingle();
       if (!goal) return json({ error: "autonomous goal not found" }, 404);
 
       await logGoalEvent(supabase, {
@@ -209,9 +284,12 @@ serve(async (req) => {
         detail: { guidance: guidance.slice(0, 2000) },
       });
 
-      const { loadGoalState, buildContextPackage } = await import("../_shared/autonomous-goal-engine.ts");
-      const { queueBrainRequest } = await import("../_shared/goal-cursor-brain.ts");
-      const { buildManualGuidanceBrainPrompt } = await import("../_shared/goal-brain-apply.ts");
+      const { loadGoalState, buildContextPackage } =
+        await import("../_shared/autonomous-goal-engine.ts");
+      const { queueBrainRequest } =
+        await import("../_shared/goal-cursor-brain.ts");
+      const { buildManualGuidanceBrainPrompt } =
+        await import("../_shared/goal-brain-apply.ts");
 
       const state = await loadGoalState(supabase, tenantId, goalId);
       const ctx = state ? buildContextPackage(state) : { goal_id: goalId };
@@ -223,7 +301,8 @@ serve(async (req) => {
       });
 
       const reasonMessages: Record<string, string> = {
-        no_cursor_direct_session: "לא נמצא Cursor Direct לטננט — חבר בפרופיל / MCP לפני הנחיה.",
+        no_cursor_direct_session:
+          "לא נמצא Cursor Direct לטננט — חבר בפרופיל / MCP לפני הנחיה.",
         inflight: "כבר יש הנחיה בתהליך ליעד הזה — המתן לתשובה.",
         cursor_busy: "Cursor Direct עסוק — נסה שוב בעוד דקה.",
       };
@@ -234,7 +313,9 @@ serve(async (req) => {
         awaiting: queued.awaiting,
         request_id: queued.requestId,
         reason: queued.reason,
-        message: queued.reason ? reasonMessages[queued.reason] || queued.reason : undefined,
+        message: queued.reason
+          ? reasonMessages[queued.reason] || queued.reason
+          : undefined,
       });
     }
 

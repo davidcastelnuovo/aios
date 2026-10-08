@@ -21,14 +21,29 @@ import {
 } from "@/components/ui/select";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
-import { AlertCircle, CheckCircle2, Facebook, Globe, Loader2, Lock, ShoppingCart, Users } from "lucide-react";
+import {
+  AlertCircle,
+  CheckCircle2,
+  Facebook,
+  Globe,
+  Loader2,
+  Lock,
+  ShoppingCart,
+  Users,
+} from "lucide-react";
 import { toast } from "sonner";
 import { useNavigate } from "react-router-dom";
 import { useTenantPath } from "@/hooks/useTenantPath";
 import { useCurrentTenant } from "@/hooks/useCurrentTenant";
-import { useAgencyClients, useTableDialogAgencies } from "@/hooks/useAgencyClients";
+import {
+  useAgencyClients,
+  useTableDialogAgencies,
+} from "@/hooks/useAgencyClients";
 import { useUserIntegrations } from "@/hooks/useUserIntegrations";
-import { defaultCategoryForCreate, ECOMMERCE_CATEGORY } from "@/lib/crmTableCategories";
+import {
+  defaultCategoryForCreate,
+  ECOMMERCE_CATEGORY,
+} from "@/lib/crmTableCategories";
 import { ADS_TABLE_CREATE_DATE_RANGE_OPTIONS } from "@/lib/dashboardDateFilters";
 
 interface FacebookEcommerceTableDialogProps {
@@ -58,9 +73,14 @@ const normalizeAdAccountId = (value: string) => {
   return /^(?:act_)?\d+$/i.test(trimmed) ? trimmed.replace(/^act_/i, "") : "";
 };
 
-const accountStatusLabel = (status?: number) => status === 1 ? "פעיל" : status ? `סטטוס ${status}` : "סטטוס לא זמין";
+const accountStatusLabel = (status?: number) =>
+  status === 1 ? "פעיל" : status ? `סטטוס ${status}` : "סטטוס לא זמין";
 
-export function FacebookEcommerceTableDialog({ open, onOpenChange, assignedClientIds }: FacebookEcommerceTableDialogProps) {
+export function FacebookEcommerceTableDialog({
+  open,
+  onOpenChange,
+  assignedClientIds,
+}: FacebookEcommerceTableDialogProps) {
   const navigate = useNavigate();
   const { buildPath } = useTenantPath();
   const queryClient = useQueryClient();
@@ -68,7 +88,9 @@ export function FacebookEcommerceTableDialog({ open, onOpenChange, assignedClien
 
   const [tableName, setTableName] = useState("");
   const [adAccountInput, setAdAccountInput] = useState("");
-  const [validatedAccount, setValidatedAccount] = useState<AdAccount | null>(null);
+  const [validatedAccount, setValidatedAccount] = useState<AdAccount | null>(
+    null,
+  );
   const [isValidating, setIsValidating] = useState(false);
   const [validationError, setValidationError] = useState("");
   const [dateRange, setDateRange] = useState("last_30_days");
@@ -78,14 +100,18 @@ export function FacebookEcommerceTableDialog({ open, onOpenChange, assignedClien
   const [clientSearch, setClientSearch] = useState("");
   const [selectedIntegrationId, setSelectedIntegrationId] = useState("");
 
-  const { data: fbIntegrations = [], isLoading: loadingIntegrations } = useUserIntegrations(
-    tenantId,
-    "facebook_lead_ads",
-    { enabled: open },
-  );
-  const { data: agencies = [] } = useTableDialogAgencies({ includeShared: true, enabled: open });
-  const { data: rawClients = [] } = useAgencyClients(agencyId || null, { enabled: open });
-  const clients = assignedClientIds ? rawClients.filter((client) => assignedClientIds.includes(client.id)) : rawClients;
+  const { data: fbIntegrations = [], isLoading: loadingIntegrations } =
+    useUserIntegrations(tenantId, "facebook_lead_ads", { enabled: open });
+  const { data: agencies = [] } = useTableDialogAgencies({
+    includeShared: true,
+    enabled: open,
+  });
+  const { data: rawClients = [] } = useAgencyClients(agencyId || null, {
+    enabled: open,
+  });
+  const clients = assignedClientIds
+    ? rawClients.filter((client) => assignedClientIds.includes(client.id))
+    : rawClients;
 
   useEffect(() => {
     if (!open) return;
@@ -93,8 +119,15 @@ export function FacebookEcommerceTableDialog({ open, onOpenChange, assignedClien
       setSelectedIntegrationId("");
       return;
     }
-    if (!selectedIntegrationId || !fbIntegrations.some((integration: any) => integration.id === selectedIntegrationId)) {
-      const preferred = (fbIntegrations as any[]).find((integration) => integration._isOwn) || fbIntegrations[0];
+    if (
+      !selectedIntegrationId ||
+      !fbIntegrations.some(
+        (integration: any) => integration.id === selectedIntegrationId,
+      )
+    ) {
+      const preferred =
+        (fbIntegrations as any[]).find((integration) => integration._isOwn) ||
+        fbIntegrations[0];
       setSelectedIntegrationId((preferred as any).id);
     }
   }, [fbIntegrations, open, selectedIntegrationId]);
@@ -126,16 +159,21 @@ export function FacebookEcommerceTableDialog({ open, onOpenChange, assignedClien
     setValidatedAccount(null);
 
     try {
-      const response = await supabase.functions.invoke("get-facebook-ad-accounts", {
-        method: "POST",
-        body: {
-          integration_id: selectedIntegrationId,
-          ad_account_id: normalizedId,
+      const response = await supabase.functions.invoke(
+        "get-facebook-ad-accounts",
+        {
+          method: "POST",
+          body: {
+            integration_id: selectedIntegrationId,
+            ad_account_id: normalizedId,
+          },
         },
-      });
+      );
       if (response.error) throw response.error;
-      if (response.data?.error) throw new Error(response.data.message || response.data.error);
-      const account = response.data?.ad_account || response.data?.ad_accounts?.[0];
+      if (response.data?.error)
+        throw new Error(response.data.message || response.data.error);
+      const account =
+        response.data?.ad_account || response.data?.ad_accounts?.[0];
       if (!account) throw new Error("לא התקבלו פרטי חשבון");
       setValidatedAccount(account);
       setAdAccountInput(account.id || `act_${normalizedId}`);
@@ -150,13 +188,17 @@ export function FacebookEcommerceTableDialog({ open, onOpenChange, assignedClien
   const createMutation = useMutation({
     mutationFn: async () => {
       if (!validatedAccount) throw new Error("יש לאמת את חשבון המודעות");
-      const slug = `${tableName.toLowerCase().replace(/\s+/g, "-").replace(/[^a-z0-9\u0590-\u05FF-]/g, "")}-${Date.now().toString(36)}`;
+      const slug = `${tableName
+        .toLowerCase()
+        .replace(/\s+/g, "-")
+        .replace(/[^a-z0-9\u0590-\u05FF-]/g, "")}-${Date.now().toString(36)}`;
       const response = await supabase.functions.invoke("crm-tables", {
         method: "POST",
         body: {
           name: tableName,
           slug,
-          category: category.trim() || defaultCategoryForCreate("facebook_ecommerce"),
+          category:
+            category.trim() || defaultCategoryForCreate("facebook_ecommerce"),
           integration_type: "facebook_ecommerce",
           integration_settings: {
             ad_account_id: validatedAccount.id,
@@ -190,7 +232,8 @@ export function FacebookEcommerceTableDialog({ open, onOpenChange, assignedClien
       handleClose();
       navigate(buildPath(`/table/${data.slug}`));
     },
-    onError: (error: any) => toast.error(`שגיאה ביצירת הטבלה: ${error.message}`),
+    onError: (error: any) =>
+      toast.error(`שגיאה ביצירת הטבלה: ${error.message}`),
   });
 
   const handleSubmit = (event: React.FormEvent) => {
@@ -226,17 +269,29 @@ export function FacebookEcommerceTableDialog({ open, onOpenChange, assignedClien
             <Facebook className="h-5 w-5 text-blue-600" />
             יצירת טבלת Facebook Ecommerce
           </DialogTitle>
-          <DialogDescription>הזן מזהה חשבון מודעות, אמת אותו וצור דוח מכירות בלי לטעון את כל החשבונות.</DialogDescription>
+          <DialogDescription>
+            הזן מזהה חשבון מודעות, אמת אותו וצור דוח מכירות בלי לטעון את כל
+            החשבונות.
+          </DialogDescription>
         </DialogHeader>
 
         {loadingIntegrations ? (
-          <div className="flex justify-center py-8"><Loader2 className="h-6 w-6 animate-spin" /></div>
+          <div className="flex justify-center py-8">
+            <Loader2 className="h-6 w-6 animate-spin" />
+          </div>
         ) : !isFacebookConfigured ? (
           <Alert variant="destructive">
             <AlertCircle className="h-4 w-4" />
             <AlertDescription>
               האינטגרציה עם פייסבוק לא מוגדרת. עבור ל
-              <Button variant="link" className="h-auto p-0" onClick={() => { handleClose(); navigate(buildPath("/integrations/facebook")); }}>
+              <Button
+                variant="link"
+                className="h-auto p-0"
+                onClick={() => {
+                  handleClose();
+                  navigate(buildPath("/integrations/facebook"));
+                }}
+              >
                 הגדרות פייסבוק
               </Button>
             </AlertDescription>
@@ -246,18 +301,32 @@ export function FacebookEcommerceTableDialog({ open, onOpenChange, assignedClien
             {fbIntegrations.length > 1 && (
               <div className="space-y-2">
                 <Label>חיבור Facebook לשימוש</Label>
-                <Select value={selectedIntegrationId} onValueChange={setSelectedIntegrationId}>
-                  <SelectTrigger><SelectValue placeholder="בחר חיבור" /></SelectTrigger>
+                <Select
+                  value={selectedIntegrationId}
+                  onValueChange={setSelectedIntegrationId}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="בחר חיבור" />
+                  </SelectTrigger>
                   <SelectContent>
                     {(fbIntegrations as any[]).map((integration) => {
                       const settings = integration.settings as any;
-                      const visibility = integration.connection_visibility || (integration._isOwn ? "private" : null);
+                      const visibility =
+                        integration.connection_visibility ||
+                        (integration._isOwn ? "private" : null);
                       return (
                         <SelectItem key={integration.id} value={integration.id}>
                           <div className="flex items-center gap-2">
                             {visibilityIcon(visibility)}
                             <span>{settings?.page_name || "Facebook"}</span>
-                            {integration._isOwn && <Badge variant="secondary" className="py-0 text-xs">שלי</Badge>}
+                            {integration._isOwn && (
+                              <Badge
+                                variant="secondary"
+                                className="py-0 text-xs"
+                              >
+                                שלי
+                              </Badge>
+                            )}
                           </div>
                         </SelectItem>
                       );
@@ -269,7 +338,13 @@ export function FacebookEcommerceTableDialog({ open, onOpenChange, assignedClien
 
             <div className="space-y-2">
               <Label htmlFor="ecommerce-table-name">שם הטבלה</Label>
-              <Input id="ecommerce-table-name" value={tableName} onChange={(event) => setTableName(event.target.value)} placeholder="למשל: מכירות בילבי Facebook" autoFocus />
+              <Input
+                id="ecommerce-table-name"
+                value={tableName}
+                onChange={(event) => setTableName(event.target.value)}
+                placeholder="למשל: מכירות בילבי Facebook"
+                autoFocus
+              />
             </div>
 
             <div className="space-y-2">
@@ -279,23 +354,51 @@ export function FacebookEcommerceTableDialog({ open, onOpenChange, assignedClien
                   id="ecommerce-ad-account-id"
                   dir="ltr"
                   value={adAccountInput}
-                  onChange={(event) => { setAdAccountInput(event.target.value); setValidatedAccount(null); setValidationError(""); }}
+                  onChange={(event) => {
+                    setAdAccountInput(event.target.value);
+                    setValidatedAccount(null);
+                    setValidationError("");
+                  }}
                   placeholder="act_123456789 או 123456789"
                 />
-                <Button type="button" variant="outline" onClick={validateAccount} disabled={isValidating || !selectedIntegrationId}>
-                  {isValidating ? <Loader2 className="h-4 w-4 animate-spin" /> : "בדוק חשבון"}
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={validateAccount}
+                  disabled={isValidating || !selectedIntegrationId}
+                >
+                  {isValidating ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    "בדוק חשבון"
+                  )}
                 </Button>
               </div>
-              <p className="text-xs text-muted-foreground">ניתן להדביק את המזהה עם או בלי התחילית act_.</p>
-              {validationError && <Alert variant="destructive"><AlertDescription>{validationError}</AlertDescription></Alert>}
+              <p className="text-xs text-muted-foreground">
+                ניתן להדביק את המזהה עם או בלי התחילית act_.
+              </p>
+              {validationError && (
+                <Alert variant="destructive">
+                  <AlertDescription>{validationError}</AlertDescription>
+                </Alert>
+              )}
               {validatedAccount && (
                 <Alert>
                   <CheckCircle2 className="h-4 w-4 text-green-600" />
                   <AlertDescription>
                     <div className="font-medium">{validatedAccount.name}</div>
-                    <div className="text-xs text-muted-foreground" dir="ltr">{validatedAccount.id} · {validatedAccount.currency || "ILS"}</div>
-                    <div className="text-xs text-muted-foreground">{accountStatusLabel(validatedAccount.account_status)}</div>
-                    {validatedAccount.business_name && <div className="text-xs text-muted-foreground">Business Manager: {validatedAccount.business_name}</div>}
+                    <div className="text-xs text-muted-foreground" dir="ltr">
+                      {validatedAccount.id} ·{" "}
+                      {validatedAccount.currency || "ILS"}
+                    </div>
+                    <div className="text-xs text-muted-foreground">
+                      {accountStatusLabel(validatedAccount.account_status)}
+                    </div>
+                    {validatedAccount.business_name && (
+                      <div className="text-xs text-muted-foreground">
+                        Business Manager: {validatedAccount.business_name}
+                      </div>
+                    )}
                   </AlertDescription>
                 </Alert>
               )}
@@ -304,47 +407,103 @@ export function FacebookEcommerceTableDialog({ open, onOpenChange, assignedClien
             <div className="space-y-2">
               <Label>טווח תאריכים לסנכרון</Label>
               <Select value={dateRange} onValueChange={setDateRange}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>{dateRangeOptions.map((option) => <SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>)}</SelectContent>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {dateRangeOptions.map((option) => (
+                    <SelectItem key={option.value} value={option.value}>
+                      {option.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
               </Select>
             </div>
 
             <div className="space-y-2">
               <Label>קטגוריה (אופציונלי)</Label>
-              <Input value={category} onChange={(event) => setCategory(event.target.value)} placeholder={ECOMMERCE_CATEGORY} />
+              <Input
+                value={category}
+                onChange={(event) => setCategory(event.target.value)}
+                placeholder={ECOMMERCE_CATEGORY}
+              />
             </div>
 
             <div className="space-y-2">
               <Label>שיוך לסוכנות (אופציונלי)</Label>
-              <Select value={agencyId || "__none__"} onValueChange={(value) => setAgencyId(value === "__none__" ? "" : value)}>
-                <SelectTrigger><SelectValue placeholder="ללא שיוך" /></SelectTrigger>
+              <Select
+                value={agencyId || "__none__"}
+                onValueChange={(value) =>
+                  setAgencyId(value === "__none__" ? "" : value)
+                }
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="ללא שיוך" />
+                </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="__none__">ללא שיוך</SelectItem>
-                  {agencies.map((agency) => <SelectItem key={agency.id} value={agency.id}>{agency.name}</SelectItem>)}
+                  {agencies.map((agency) => (
+                    <SelectItem key={agency.id} value={agency.id}>
+                      {agency.name}
+                    </SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
             </div>
 
             {agencyId && (
               <div className="space-y-2">
-                <Label>{assignedClientIds ? "שיוך ללקוח" : "שיוך ללקוח (אופציונלי)"}</Label>
-                <Input value={clientSearch} onChange={(event) => setClientSearch(event.target.value)} placeholder="חפש לקוח..." />
-                <Select value={clientId || "__none__"} onValueChange={(value) => setClientId(value === "__none__" ? "" : value)}>
-                  <SelectTrigger><SelectValue placeholder="ללא שיוך" /></SelectTrigger>
+                <Label>
+                  {assignedClientIds ? "שיוך ללקוח" : "שיוך ללקוח (אופציונלי)"}
+                </Label>
+                <Input
+                  value={clientSearch}
+                  onChange={(event) => setClientSearch(event.target.value)}
+                  placeholder="חפש לקוח..."
+                />
+                <Select
+                  value={clientId || "__none__"}
+                  onValueChange={(value) =>
+                    setClientId(value === "__none__" ? "" : value)
+                  }
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="ללא שיוך" />
+                  </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="__none__">ללא שיוך</SelectItem>
-                    {clients.filter((client) => client.name?.toLowerCase().includes(clientSearch.toLowerCase())).map((client) => (
-                      <SelectItem key={client.id} value={client.id}>{client.name}</SelectItem>
-                    ))}
+                    {clients
+                      .filter((client) =>
+                        client.name
+                          ?.toLowerCase()
+                          .includes(clientSearch.toLowerCase()),
+                      )
+                      .map((client) => (
+                        <SelectItem key={client.id} value={client.id}>
+                          {client.name}
+                        </SelectItem>
+                      ))}
                   </SelectContent>
                 </Select>
               </div>
             )}
 
             <DialogFooter>
-              <Button type="button" variant="outline" onClick={handleClose}>ביטול</Button>
-              <Button type="submit" disabled={createMutation.isPending || !validatedAccount}>
-                {createMutation.isPending ? <><Loader2 className="ml-2 h-4 w-4 animate-spin" />יוצר...</> : "צור טבלה"}
+              <Button type="button" variant="outline" onClick={handleClose}>
+                ביטול
+              </Button>
+              <Button
+                type="submit"
+                disabled={createMutation.isPending || !validatedAccount}
+              >
+                {createMutation.isPending ? (
+                  <>
+                    <Loader2 className="ml-2 h-4 w-4 animate-spin" />
+                    יוצר...
+                  </>
+                ) : (
+                  "צור טבלה"
+                )}
               </Button>
             </DialogFooter>
           </form>

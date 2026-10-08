@@ -1,5 +1,8 @@
 import { formatCloudAgentError } from "./cloud-errors.ts";
-import { cursorModelBody, resolveCodingCursorModel } from "../cursorCreativeModel.ts";
+import {
+  cursorModelBody,
+  resolveCodingCursorModel,
+} from "../cursorCreativeModel.ts";
 
 export type CloudAgentResult = { url: string; id: string; reused: boolean };
 export type FollowUpOutcome =
@@ -18,11 +21,18 @@ function authHeaders(apiKey: string, basic = false): Record<string, string> {
   };
 }
 
-export async function cursorFetch(apiKey: string, url: string, init: RequestInit): Promise<Response> {
+export async function cursorFetch(
+  apiKey: string,
+  url: string,
+  init: RequestInit,
+): Promise<Response> {
   const headers = { ...authHeaders(apiKey, false), ...(init.headers || {}) };
   let resp = await fetch(url, { ...init, headers });
   if (resp.status === 401 || resp.status === 403) {
-    const basicHeaders = { ...authHeaders(apiKey, true), ...(init.headers || {}) };
+    const basicHeaders = {
+      ...authHeaders(apiKey, true),
+      ...(init.headers || {}),
+    };
     resp = await fetch(url, { ...init, headers: basicHeaders });
   }
   return resp;
@@ -30,7 +40,11 @@ export async function cursorFetch(apiKey: string, url: string, init: RequestInit
 
 export function parseAgentResponse(raw: string): { url: string; id: string } {
   let data: any = {};
-  try { data = JSON.parse(raw); } catch { /* ignore */ }
+  try {
+    data = JSON.parse(raw);
+  } catch {
+    /* ignore */
+  }
   const agent = data?.agent || data;
   const id = String(agent?.id || data?.id || "");
   const url = String(
@@ -69,14 +83,23 @@ export async function followUpCloudAgent(
       continue;
     }
     if (resp.status === 404 || resp.status === 410 || resp.status === 400) {
-      console.warn(`[agent-channel] follow-up ${resp.status}: ${raw.slice(0, 200)}`);
+      console.warn(
+        `[agent-channel] follow-up ${resp.status}: ${raw.slice(0, 200)}`,
+      );
       return { kind: "gone" };
     }
     let detail = raw.slice(0, 500);
-    try { detail = JSON.parse(raw)?.error?.message || JSON.parse(raw)?.message || detail; } catch { /* keep */ }
+    try {
+      detail =
+        JSON.parse(raw)?.error?.message || JSON.parse(raw)?.message || detail;
+    } catch {
+      /* keep */
+    }
     throw new Error(`Cloud agent follow-up ${resp.status}: ${detail}`);
   }
-  console.warn(`[agent-channel] follow-up 409 busy on ${agentId}; not creating a new agent`);
+  console.warn(
+    `[agent-channel] follow-up 409 busy on ${agentId}; not creating a new agent`,
+  );
   return { kind: "busy", id: agentId, url: sessionUrl };
 }
 
@@ -90,26 +113,40 @@ export async function createCloudAgent(args: {
   autoCreatePR?: boolean;
 }): Promise<CloudAgentResult> {
   const repoUrl = Deno.env.get("CURSOR_REPO_URL") || DEFAULT_REPO;
-  const startingRef = args.startingRef || Deno.env.get("CURSOR_STARTING_REF") || "main";
+  const startingRef =
+    args.startingRef || Deno.env.get("CURSOR_STARTING_REF") || "main";
   const envName = args.envName || Deno.env.get("CURSOR_CLOUD_ENV_NAME") || "";
-  const autoCreatePR = args.autoCreatePR ?? ((Deno.env.get("CURSOR_AUTO_CREATE_PR") || "true").toLowerCase() !== "false");
+  const autoCreatePR =
+    args.autoCreatePR ??
+    (Deno.env.get("CURSOR_AUTO_CREATE_PR") || "true").toLowerCase() !== "false";
   const body: Record<string, unknown> = {
     prompt: { text: args.promptText },
     autoCreatePR,
     name: args.name.slice(0, 100),
-    model: cursorModelBody(resolveCodingCursorModel(args.modelId || Deno.env.get("CURSOR_MODEL_ID"))),
+    model: cursorModelBody(
+      resolveCodingCursorModel(args.modelId || Deno.env.get("CURSOR_MODEL_ID")),
+    ),
   };
   if (envName) body.env = { type: "cloud", name: envName };
   else body.repos = [{ url: repoUrl, startingRef }];
 
-  const resp = await cursorFetch(args.apiKey, "https://api.cursor.com/v1/agents", {
-    method: "POST",
-    body: JSON.stringify(body),
-  });
+  const resp = await cursorFetch(
+    args.apiKey,
+    "https://api.cursor.com/v1/agents",
+    {
+      method: "POST",
+      body: JSON.stringify(body),
+    },
+  );
   const raw = await resp.text();
   if (!resp.ok) {
     let detail = raw.slice(0, 500);
-    try { detail = JSON.parse(raw)?.error?.message || JSON.parse(raw)?.message || detail; } catch { /* keep */ }
+    try {
+      detail =
+        JSON.parse(raw)?.error?.message || JSON.parse(raw)?.message || detail;
+    } catch {
+      /* keep */
+    }
     throw new Error(formatCloudAgentError(resp.status, detail));
   }
   const parsed = parseAgentResponse(raw);
@@ -117,11 +154,17 @@ export async function createCloudAgent(args: {
 }
 
 export function cursorApiKey(): string {
-  return Deno.env.get("CURSOR_API_KEY") || Deno.env.get("GROK_BOT_API_KEY") || "";
+  return (
+    Deno.env.get("CURSOR_API_KEY") || Deno.env.get("GROK_BOT_API_KEY") || ""
+  );
 }
 
-export async function probeCursorApiKey(apiKey: string): Promise<{ ok: boolean; status: number }> {
+export async function probeCursorApiKey(
+  apiKey: string,
+): Promise<{ ok: boolean; status: number }> {
   if (!apiKey) return { ok: false, status: 0 };
-  const resp = await cursorFetch(apiKey, "https://api.cursor.com/v1/models", { method: "GET" });
+  const resp = await cursorFetch(apiKey, "https://api.cursor.com/v1/models", {
+    method: "GET",
+  });
   return { ok: resp.ok, status: resp.status };
 }

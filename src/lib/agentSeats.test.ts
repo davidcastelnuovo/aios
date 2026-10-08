@@ -12,14 +12,18 @@ import {
 } from "./agentSeats.ts";
 
 test("seat key maps parliament to shared and cursor to direct", () => {
-  const parliament = FALLBACK_BRAIN_ROUTES.find((r) => r.slug === "parliament")!;
+  const parliament = FALLBACK_BRAIN_ROUTES.find(
+    (r) => r.slug === "parliament",
+  )!;
   const cursor = FALLBACK_BRAIN_ROUTES.find((r) => r.slug === "cursor")!;
   assert.equal(seatKeyFromRoute(parliament), "shared");
   assert.equal(seatKeyFromRoute(cursor), "cursor");
 });
 
 test("shared space shows all agent lines; direct hides other agents and their user lines", () => {
-  const parliament = FALLBACK_BRAIN_ROUTES.find((r) => r.slug === "parliament")!;
+  const parliament = FALLBACK_BRAIN_ROUTES.find(
+    (r) => r.slug === "parliament",
+  )!;
   const cursor = FALLBACK_BRAIN_ROUTES.find((r) => r.slug === "cursor")!;
   const carmen = FALLBACK_BRAIN_ROUTES.find((r) => r.slug === "internal")!;
   const msgs = [
@@ -39,7 +43,10 @@ test("shared space shows all agent lines; direct hides other agents and their us
     filterMessagesForRoute(msgs, carmen).map((m) => m.content),
     ["ask carmen", "c"],
   );
-  assert.equal(messageSpeakerKey({ role: "assistant", speaker: "codex" }), "codex");
+  assert.equal(
+    messageSpeakerKey({ role: "assistant", speaker: "codex" }),
+    "codex",
+  );
 });
 
 test("topic rail picks agent sprite from brain_route_id", () => {
@@ -49,7 +56,10 @@ test("topic rail picks agent sprite from brain_route_id", () => {
   assert.match(topicAgentSprite(conv, FALLBACK_BRAIN_ROUTES), /ghost-cursor/);
   assert.equal(topicAgentLabel(conv, FALLBACK_BRAIN_ROUTES), "Cursor Direct");
   const carmenConv = { brain_route_id: internal.id, routing_mode: "internal" };
-  assert.match(topicAgentSprite(carmenConv, FALLBACK_BRAIN_ROUTES), /ghost-carmen/);
+  assert.match(
+    topicAgentSprite(carmenConv, FALLBACK_BRAIN_ROUTES),
+    /ghost-carmen/,
+  );
 });
 
 test("untagged legacy user lines stay on Carmen, not Cursor Direct", () => {
@@ -64,22 +74,59 @@ test("untagged legacy user lines stay on Carmen, not Cursor Direct", () => {
 });
 
 test("conversation list is scoped to the active seat", () => {
-  const cursor = { ...FALLBACK_BRAIN_ROUTES.find((r) => r.slug === "cursor")!, id: "route-cursor" };
-  const grok = { ...FALLBACK_BRAIN_ROUTES.find((r) => r.slug === "grok")!, id: "route-grok" };
+  const cursor = {
+    ...FALLBACK_BRAIN_ROUTES.find((r) => r.slug === "cursor")!,
+    id: "route-cursor",
+  };
+  const grok = {
+    ...FALLBACK_BRAIN_ROUTES.find((r) => r.slug === "grok")!,
+    id: "route-grok",
+  };
   const carmen = FALLBACK_BRAIN_ROUTES.find((r) => r.slug === "internal")!;
-  const parliament = FALLBACK_BRAIN_ROUTES.find((r) => r.slug === "parliament")!;
+  const parliament = FALLBACK_BRAIN_ROUTES.find(
+    (r) => r.slug === "parliament",
+  )!;
   const routes = [cursor, grok, carmen, parliament];
   const items = [
-    { id: "1", updated_at: "2026-01-01", routing_mode: "direct_channel", brain_route_id: "route-cursor" },
+    {
+      id: "1",
+      updated_at: "2026-01-01",
+      routing_mode: "direct_channel",
+      brain_route_id: "route-cursor",
+    },
     { id: "2", updated_at: "2026-01-02", routing_mode: "internal" },
     { id: "3", updated_at: "2026-01-03", routing_mode: "parliament" },
     { id: "4", updated_at: "2026-01-04" },
-    { id: "5", updated_at: "2026-01-05", routing_mode: "direct_channel", brain_route_id: "route-grok" },
+    {
+      id: "5",
+      updated_at: "2026-01-05",
+      routing_mode: "direct_channel",
+      brain_route_id: "route-grok",
+    },
     { id: "6", updated_at: "2026-01-06", routing_mode: "direct_channel" },
   ];
-  assert.deepEqual(conversationsForRoute(items, cursor, routes).map((c) => c.id), ["1"]);
-  assert.deepEqual(conversationsForRoute(items, grok, routes).map((c) => c.id), ["5"]);
-  assert.deepEqual(conversationsForRoute(items, carmen, routes).map((c) => c.id), ["2", "4"]);
-  assert.deepEqual(conversationsForRoute(items, parliament, routes).map((c) => c.id), ["3"]);
-  assert.equal(conversationMatchesRoute({ routing_mode: "direct_channel" }, cursor, routes), false);
+  assert.deepEqual(
+    conversationsForRoute(items, cursor, routes).map((c) => c.id),
+    ["1"],
+  );
+  assert.deepEqual(
+    conversationsForRoute(items, grok, routes).map((c) => c.id),
+    ["5"],
+  );
+  assert.deepEqual(
+    conversationsForRoute(items, carmen, routes).map((c) => c.id),
+    ["2", "4"],
+  );
+  assert.deepEqual(
+    conversationsForRoute(items, parliament, routes).map((c) => c.id),
+    ["3"],
+  );
+  assert.equal(
+    conversationMatchesRoute(
+      { routing_mode: "direct_channel" },
+      cursor,
+      routes,
+    ),
+    false,
+  );
 });

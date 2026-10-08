@@ -1,7 +1,13 @@
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -17,7 +23,11 @@ interface ShareDashboardDialogProps {
   tenantId: string;
 }
 
-export function ShareDashboardDialog({ dashboardId, dashboardName, tenantId }: ShareDashboardDialogProps) {
+export function ShareDashboardDialog({
+  dashboardId,
+  dashboardName,
+  tenantId,
+}: ShareDashboardDialogProps) {
   const [open, setOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editingValue, setEditingValue] = useState("");
@@ -97,36 +107,60 @@ export function ShareDashboardDialog({ dashboardId, dashboardName, tenantId }: S
       return data;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["dashboard-shares", dashboardId] });
+      queryClient.invalidateQueries({
+        queryKey: ["dashboard-shares", dashboardId],
+      });
       toast.success("קישור שיתוף נוצר בהצלחה");
     },
     onError: () => toast.error("שגיאה ביצירת קישור"),
   });
 
   const toggleActiveMutation = useMutation({
-    mutationFn: async ({ shareId, isActive }: { shareId: string; isActive: boolean }) => {
+    mutationFn: async ({
+      shareId,
+      isActive,
+    }: {
+      shareId: string;
+      isActive: boolean;
+    }) => {
       const { error } = await supabase
         .from("dashboard_shares")
-        .update({ is_active: isActive, updated_at: new Date().toISOString() } as any)
+        .update({
+          is_active: isActive,
+          updated_at: new Date().toISOString(),
+        } as any)
         .eq("id", shareId);
       if (error) throw error;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["dashboard-shares", dashboardId] });
+      queryClient.invalidateQueries({
+        queryKey: ["dashboard-shares", dashboardId],
+      });
       toast.success("הקישור עודכן");
     },
   });
 
   const updateSlugMutation = useMutation({
-    mutationFn: async ({ shareId, slug }: { shareId: string; slug: string }) => {
+    mutationFn: async ({
+      shareId,
+      slug,
+    }: {
+      shareId: string;
+      slug: string;
+    }) => {
       const { error } = await supabase
         .from("dashboard_shares")
-        .update({ share_token: slug, updated_at: new Date().toISOString() } as any)
+        .update({
+          share_token: slug,
+          updated_at: new Date().toISOString(),
+        } as any)
         .eq("id", shareId);
       if (error) throw error;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["dashboard-shares", dashboardId] });
+      queryClient.invalidateQueries({
+        queryKey: ["dashboard-shares", dashboardId],
+      });
       toast.success("הסלאג עודכן");
       setEditingId(null);
       setEditingValue("");
@@ -142,11 +176,16 @@ export function ShareDashboardDialog({ dashboardId, dashboardName, tenantId }: S
 
   const deleteShareMutation = useMutation({
     mutationFn: async (shareId: string) => {
-      const { error } = await supabase.from("dashboard_shares").delete().eq("id", shareId);
+      const { error } = await supabase
+        .from("dashboard_shares")
+        .delete()
+        .eq("id", shareId);
       if (error) throw error;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["dashboard-shares", dashboardId] });
+      queryClient.invalidateQueries({
+        queryKey: ["dashboard-shares", dashboardId],
+      });
       toast.success("הקישור נמחק");
     },
   });
@@ -171,7 +210,9 @@ export function ShareDashboardDialog({ dashboardId, dashboardName, tenantId }: S
   const saveSlug = (shareId: string) => {
     const trimmed = editingValue.trim();
     if (!SLUG_REGEX.test(trimmed)) {
-      toast.error("סלאג חייב להיות 3-64 תווים: אותיות באנגלית, מספרים, מקפים או קווים תחתונים");
+      toast.error(
+        "סלאג חייב להיות 3-64 תווים: אותיות באנגלית, מספרים, מקפים או קווים תחתונים",
+      );
       return;
     }
     updateSlugMutation.mutate({ shareId, slug: trimmed });
@@ -185,7 +226,10 @@ export function ShareDashboardDialog({ dashboardId, dashboardName, tenantId }: S
           שתף דשבורד
         </Button>
       </DialogTrigger>
-      <DialogContent className="max-w-lg max-h-[85vh] overflow-y-auto" dir="rtl">
+      <DialogContent
+        className="max-w-lg max-h-[85vh] overflow-y-auto"
+        dir="rtl"
+      >
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Share2 className="h-5 w-5" />
@@ -194,7 +238,10 @@ export function ShareDashboardDialog({ dashboardId, dashboardName, tenantId }: S
         </DialogHeader>
 
         <div className="space-y-4">
-          <Button onClick={() => createShareMutation.mutate()} disabled={createShareMutation.isPending}>
+          <Button
+            onClick={() => createShareMutation.mutate()}
+            disabled={createShareMutation.isPending}
+          >
             <Plus className="ml-2 h-4 w-4" />
             צור קישור שיתוף חדש
           </Button>
@@ -208,7 +255,9 @@ export function ShareDashboardDialog({ dashboardId, dashboardName, tenantId }: S
           {shares.map((share: any) => (
             <div key={share.id} className="border rounded-lg p-4 space-y-3">
               <div className="space-y-2">
-                <Label className="text-xs text-muted-foreground">סלאג (מזהה הקישור)</Label>
+                <Label className="text-xs text-muted-foreground">
+                  סלאג (מזהה הקישור)
+                </Label>
                 {editingId === share.id ? (
                   <div className="flex items-center gap-2">
                     <Input
@@ -236,7 +285,10 @@ export function ShareDashboardDialog({ dashboardId, dashboardName, tenantId }: S
                   </div>
                 ) : (
                   <div className="flex items-center gap-2">
-                    <code className="flex-1 px-2 py-1.5 bg-muted rounded text-xs font-mono text-left truncate" dir="ltr">
+                    <code
+                      className="flex-1 px-2 py-1.5 bg-muted rounded text-xs font-mono text-left truncate"
+                      dir="ltr"
+                    >
                       {share.share_token}
                     </code>
                     <Button
@@ -248,13 +300,21 @@ export function ShareDashboardDialog({ dashboardId, dashboardName, tenantId }: S
                     </Button>
                   </div>
                 )}
-                <p className="text-xs text-muted-foreground text-left" dir="ltr">
+                <p
+                  className="text-xs text-muted-foreground text-left"
+                  dir="ltr"
+                >
                   {getShareUrl(share.share_token)}
                 </p>
               </div>
 
               <div className="flex items-center gap-2 justify-end">
-                <Button variant="default" size="sm" onClick={() => copyLink(share.share_token)} className="shrink-0">
+                <Button
+                  variant="default"
+                  size="sm"
+                  onClick={() => copyLink(share.share_token)}
+                  className="shrink-0"
+                >
                   <Copy className="ml-1 h-4 w-4" />
                   העתק קישור
                 </Button>
@@ -265,12 +325,17 @@ export function ShareDashboardDialog({ dashboardId, dashboardName, tenantId }: S
                 <Switch
                   checked={share.is_active}
                   onCheckedChange={(checked) =>
-                    toggleActiveMutation.mutate({ shareId: share.id, isActive: checked })
+                    toggleActiveMutation.mutate({
+                      shareId: share.id,
+                      isActive: checked,
+                    })
                   }
                 />
               </div>
 
-              <p className="text-xs text-muted-foreground">כל מי שיש לו את הקישור יכול לצפות בדשבורד.</p>
+              <p className="text-xs text-muted-foreground">
+                כל מי שיש לו את הקישור יכול לצפות בדשבורד.
+              </p>
 
               <div className="flex justify-end">
                 <Button

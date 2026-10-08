@@ -20,7 +20,9 @@ export function isSuperAdminRole(role) {
 }
 
 export function monthUtcBounds(now = new Date()) {
-  const start = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1, 0, 0, 0));
+  const start = new Date(
+    Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1, 0, 0, 0),
+  );
   const end = now;
   return {
     start_time: Math.floor(start.getTime() / 1000),
@@ -41,7 +43,10 @@ export function sumOrganizationCosts(payload) {
     const results = Array.isArray(bucket?.results) ? bucket.results : [];
     for (const row of results) {
       const amount = row?.amount;
-      const value = typeof amount?.value === "number" ? amount.value : Number(amount?.value);
+      const value =
+        typeof amount?.value === "number"
+          ? amount.value
+          : Number(amount?.value);
       if (!Number.isFinite(value)) continue;
       total += value;
       if (amount?.currency) currency = String(amount.currency).toLowerCase();
@@ -95,16 +100,18 @@ export function extractDailyCostBuckets(payload) {
   const out = [];
   for (const bucket of buckets) {
     const ts = bucket?.start_time ?? bucket?.startTime;
-    const date = typeof ts === "number"
-      ? new Date(ts * 1000).toISOString().slice(0, 10)
-      : null;
+    const date =
+      typeof ts === "number"
+        ? new Date(ts * 1000).toISOString().slice(0, 10)
+        : null;
     if (!date) continue;
     let cost = 0;
     const lineItems = {};
     for (const row of Array.isArray(bucket?.results) ? bucket.results : []) {
-      const value = typeof row?.amount?.value === "number"
-        ? row.amount.value
-        : Number(row?.amount?.value);
+      const value =
+        typeof row?.amount?.value === "number"
+          ? row.amount.value
+          : Number(row?.amount?.value);
       if (!Number.isFinite(value)) continue;
       cost += value;
       const li = row?.line_item || "other";
@@ -121,9 +128,10 @@ export function extractDailyUsageBuckets(payload) {
   const out = [];
   for (const bucket of buckets) {
     const ts = bucket?.start_time ?? bucket?.startTime;
-    const date = typeof ts === "number"
-      ? new Date(ts * 1000).toISOString().slice(0, 10)
-      : null;
+    const date =
+      typeof ts === "number"
+        ? new Date(ts * 1000).toISOString().slice(0, 10)
+        : null;
     if (!date) continue;
     let inputTokens = 0;
     let outputTokens = 0;
@@ -170,7 +178,9 @@ export function buildOpenAiBillingStatus({
         }
       : {
           available: false,
-          reason: spendLimitsError || "Spend limits endpoint unavailable or not configured",
+          reason:
+            spendLimitsError ||
+            "Spend limits endpoint unavailable or not configured",
         };
 
   return {
@@ -232,7 +242,9 @@ export function formatOpenAiBillingWhatsApp(status) {
   lines.push(`תקופה: ${status.period || "החודש הנוכחי"} (UTC)`);
 
   if (status.remaining_credit_available && status.remaining_credit != null) {
-    lines.push(`יתרה: ${status.remaining_credit} ${String(status.currency || "usd").toUpperCase()}`);
+    lines.push(
+      `יתרה: ${status.remaining_credit} ${String(status.currency || "usd").toUpperCase()}`,
+    );
   } else {
     lines.push("יתרת קרדיט: לא זמינה ב-API הרשמי (רק בדשבורד OpenAI)");
   }
@@ -252,7 +264,11 @@ export function formatOpenAiBillingWhatsApp(status) {
     );
   }
 
-  if (status.limits?.available && Array.isArray(status.limits.raw) && status.limits.raw.length) {
+  if (
+    status.limits?.available &&
+    Array.isArray(status.limits.raw) &&
+    status.limits.raw.length
+  ) {
     const lim = status.limits.raw[0];
     lines.push(
       `מגבלת הוצאה: ${lim.threshold_amount ?? "?"} ${String(lim.currency || status.currency || "").toUpperCase()} / ${lim.interval || "?"}`,
@@ -269,7 +285,9 @@ export function formatOpenAiBillingWhatsApp(status) {
 }
 
 function shortErr(msg) {
-  const s = String(msg || "").replace(/\s+/g, " ").trim();
+  const s = String(msg || "")
+    .replace(/\s+/g, " ")
+    .trim();
   return s.length > 120 ? `${s.slice(0, 117)}…` : s;
 }
 

@@ -4,11 +4,28 @@ import { useUserRole } from "./useUserRole";
 import { useTenant } from "@/contexts/TenantContext";
 
 export function useUserAgencies() {
-  const { isOwner, isTeamManager, isCampaigner, isSalesPerson, userId, salesPersonAgencyIds, campaignerId } = useUserRole();
+  const {
+    isOwner,
+    isTeamManager,
+    isCampaigner,
+    isSalesPerson,
+    userId,
+    salesPersonAgencyIds,
+    campaignerId,
+  } = useUserRole();
   const { currentTenantId } = useTenant();
 
   const { data: userAgencyIds, isLoading } = useQuery({
-    queryKey: ["user-agency-ids", userId, currentTenantId, isOwner, isTeamManager, isCampaigner, isSalesPerson, campaignerId],
+    queryKey: [
+      "user-agency-ids",
+      userId,
+      currentTenantId,
+      isOwner,
+      isTeamManager,
+      isCampaigner,
+      isSalesPerson,
+      campaignerId,
+    ],
     queryFn: async () => {
       if (isOwner) {
         return null; // null means "all agencies"
@@ -21,13 +38,17 @@ export function useUserAgencies() {
       const aggregated = new Set<string>();
 
       // 🔒 Sales Person: Filter agencies by current tenant
-      if (isSalesPerson && salesPersonAgencyIds && salesPersonAgencyIds.length > 0) {
+      if (
+        isSalesPerson &&
+        salesPersonAgencyIds &&
+        salesPersonAgencyIds.length > 0
+      ) {
         const { data: filteredAgencies } = await supabase
           .from("agencies")
           .select("id")
           .in("id", salesPersonAgencyIds)
           .eq("tenant_id", currentTenantId);
-        
+
         filteredAgencies?.forEach((a) => aggregated.add(a.id));
       }
 

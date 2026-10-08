@@ -10,19 +10,21 @@ import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
 import { Lock } from "lucide-react";
 
-const passwordSchema = z.object({
-  newPassword: z
-    .string()
-    .min(8, { message: "הסיסמה חייבת להכיל לפחות 8 תווים" })
-    .max(72, { message: "הסיסמה חייבת להכיל עד 72 תווים" })
-    .regex(/[A-Z]/, { message: "הסיסמה חייבת להכיל לפחות אות גדולה אחת" })
-    .regex(/[a-z]/, { message: "הסיסמה חייבת להכיל לפחות אות קטנה אחת" })
-    .regex(/[0-9]/, { message: "הסיסמה חייבת להכיל לפחות ספרה אחת" }),
-  confirmPassword: z.string(),
-}).refine((data) => data.newPassword === data.confirmPassword, {
-  message: "הסיסמאות אינן תואמות",
-  path: ["confirmPassword"],
-});
+const passwordSchema = z
+  .object({
+    newPassword: z
+      .string()
+      .min(8, { message: "הסיסמה חייבת להכיל לפחות 8 תווים" })
+      .max(72, { message: "הסיסמה חייבת להכיל עד 72 תווים" })
+      .regex(/[A-Z]/, { message: "הסיסמה חייבת להכיל לפחות אות גדולה אחת" })
+      .regex(/[a-z]/, { message: "הסיסמה חייבת להכיל לפחות אות קטנה אחת" })
+      .regex(/[0-9]/, { message: "הסיסמה חייבת להכיל לפחות ספרה אחת" }),
+    confirmPassword: z.string(),
+  })
+  .refine((data) => data.newPassword === data.confirmPassword, {
+    message: "הסיסמאות אינן תואמות",
+    path: ["confirmPassword"],
+  });
 
 type PasswordFormData = z.infer<typeof passwordSchema>;
 
@@ -53,9 +55,10 @@ export function ChangePasswordForm() {
       }
 
       // Create challenge
-      const { data: challengeData, error: challengeError } = await supabase.auth.mfa.challenge({
-        factorId: totpFactor.id,
-      });
+      const { data: challengeData, error: challengeError } =
+        await supabase.auth.mfa.challenge({
+          factorId: totpFactor.id,
+        });
 
       if (challengeError) throw challengeError;
 

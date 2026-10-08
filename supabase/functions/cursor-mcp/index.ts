@@ -30,8 +30,14 @@ import {
   wantsStreamableHttp,
   type McpRpcMessage,
 } from "../_shared/mcp-streamable-http.ts";
-import { completeHumanCursorTask, extractHumanTaskId } from "../_shared/cursor-task-queue.ts";
-import { cursorModelBody, resolveCodingCursorModel } from "../_shared/cursorCreativeModel.ts";
+import {
+  completeHumanCursorTask,
+  extractHumanTaskId,
+} from "../_shared/cursor-task-queue.ts";
+import {
+  cursorModelBody,
+  resolveCodingCursorModel,
+} from "../_shared/cursorCreativeModel.ts";
 import {
   cursorSessionUrl,
   missingCursorDirectSessionError,
@@ -50,7 +56,8 @@ import {
 } from "../_shared/cursor-session-tracker.ts";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL") || "";
-const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
+const SUPABASE_SERVICE_ROLE_KEY =
+  Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -66,7 +73,8 @@ const CURSOR_MCP_STREAMABLE_URL =
 const PROTOCOL_VERSION = "2024-11-05";
 const MAX_TEXT = 100_000;
 const DEFAULT_REPO = "https://github.com/davidcastelnuovo/aios";
-const STICKY_ENABLED = (Deno.env.get("CURSOR_STICKY") || "true").toLowerCase() !== "false";
+const STICKY_ENABLED =
+  (Deno.env.get("CURSOR_STICKY") || "true").toLowerCase() !== "false";
 
 const TOOLS = [
   {
@@ -83,7 +91,8 @@ const TOOLS = [
       properties: {
         task: {
           type: "string",
-          description: "Clear, self-contained description of the development work to perform.",
+          description:
+            "Clear, self-contained description of the development work to perform.",
         },
         branch: {
           type: "string",
@@ -91,11 +100,13 @@ const TOOLS = [
         },
         goal_id: {
           type: "string",
-          description: "Optional execution/autonomous goal id — reuses that goal's sticky Cursor agent (bc-…) instead of opening a new one.",
+          description:
+            "Optional execution/autonomous goal id — reuses that goal's sticky Cursor agent (bc-…) instead of opening a new one.",
         },
         context: {
           type: "string",
-          description: "Optional extra context: error logs, file paths, links, constraints, acceptance criteria.",
+          description:
+            "Optional extra context: error logs, file paths, links, constraints, acceptance criteria.",
         },
       },
       required: ["task"],
@@ -133,9 +144,18 @@ const TOOLS = [
     inputSchema: {
       type: "object",
       properties: {
-        item_id: { type: "string", description: "marketing_work_items.id of the creative project." },
-        director_note: { type: "string", description: "Optional fix request for a revision." },
-        copy_label: { type: "string", description: "Optional copy-variation label to generate." },
+        item_id: {
+          type: "string",
+          description: "marketing_work_items.id of the creative project.",
+        },
+        director_note: {
+          type: "string",
+          description: "Optional fix request for a revision.",
+        },
+        copy_label: {
+          type: "string",
+          description: "Optional copy-variation label to generate.",
+        },
       },
       required: ["item_id"],
     },
@@ -168,7 +188,8 @@ const TOOLS = [
       properties: {
         session_id: {
           type: "string",
-          description: "Optional bc-… id. Omit to use the configured fixed Cursor Direct session.",
+          description:
+            "Optional bc-… id. Omit to use the configured fixed Cursor Direct session.",
         },
         message: {
           type: "string",
@@ -176,7 +197,8 @@ const TOOLS = [
         },
         context: {
           type: "string",
-          description: "Optional extra notes (files, links, what you did). May include conversation_id.",
+          description:
+            "Optional extra notes (files, links, what you did). May include conversation_id.",
         },
         conversation_id: {
           type: "string",
@@ -217,7 +239,8 @@ const TOOLS = [
       properties: {
         status: {
           type: "string",
-          description: "Optional filter: active | running | completed | busy | failed",
+          description:
+            "Optional filter: active | running | completed | busy | failed",
         },
         limit: { type: "number", description: "Max rows (default 20)." },
       },
@@ -246,8 +269,14 @@ const TOOLS = [
     inputSchema: {
       type: "object",
       properties: {
-        task_id: { type: "string", description: "UUID from human_task_id in the task context." },
-        summary: { type: "string", description: "Short completion note for the task log." },
+        task_id: {
+          type: "string",
+          description: "UUID from human_task_id in the task context.",
+        },
+        summary: {
+          type: "string",
+          description: "Short completion note for the task log.",
+        },
       },
       required: ["task_id"],
     },
@@ -260,8 +289,14 @@ const TOOLS = [
     inputSchema: {
       type: "object",
       properties: {
-        dev_task_id: { type: "string", description: "UUID from dev_task_id in the task context." },
-        summary: { type: "string", description: "Optional completion note (PR link may be parsed)." },
+        dev_task_id: {
+          type: "string",
+          description: "UUID from dev_task_id in the task context.",
+        },
+        summary: {
+          type: "string",
+          description: "Optional completion note (PR link may be parsed).",
+        },
         pr_url: { type: "string", description: "Optional GitHub PR URL." },
       },
       required: ["dev_task_id"],
@@ -270,17 +305,32 @@ const TOOLS = [
 ];
 
 function rpcResult(id: unknown, result: unknown) {
-  return new Response(JSON.stringify({ jsonrpc: "2.0", id: id ?? null, result }), {
-    status: 200,
-    headers: { ...corsHeaders, "Content-Type": "application/json" },
-  });
+  return new Response(
+    JSON.stringify({ jsonrpc: "2.0", id: id ?? null, result }),
+    {
+      status: 200,
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    },
+  );
 }
 
-function rpcError(id: unknown, code: number, message: string, httpStatus = 200) {
-  return new Response(JSON.stringify({ jsonrpc: "2.0", id: id ?? null, error: { code, message } }), {
-    status: httpStatus,
-    headers: { ...corsHeaders, "Content-Type": "application/json" },
-  });
+function rpcError(
+  id: unknown,
+  code: number,
+  message: string,
+  httpStatus = 200,
+) {
+  return new Response(
+    JSON.stringify({
+      jsonrpc: "2.0",
+      id: id ?? null,
+      error: { code, message },
+    }),
+    {
+      status: httpStatus,
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    },
+  );
 }
 
 function acceptedBearers(): string[] {
@@ -297,7 +347,8 @@ function isAuthorizedBearer(bearer: string | undefined): boolean {
 }
 
 function bearerFrom(req: Request): string | undefined {
-  const h = req.headers.get("authorization") || req.headers.get("Authorization");
+  const h =
+    req.headers.get("authorization") || req.headers.get("Authorization");
   if (!h) return undefined;
   const m = h.match(/^Bearer\s+(.+)$/i);
   return m ? m[1].trim() : undefined;
@@ -305,31 +356,46 @@ function bearerFrom(req: Request): string | undefined {
 
 function sbClient() {
   if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) return null;
-  return createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, { auth: { persistSession: false } });
+  return createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
+    auth: { persistSession: false },
+  });
 }
 
 async function resolveContext(
   bearer: string | undefined,
 ): Promise<{ tenantId: string | null; agentId: string | null }> {
   const fallback = {
-    tenantId: Deno.env.get("CURSOR_DEFAULT_TENANT_ID") ||
+    tenantId:
+      Deno.env.get("CURSOR_DEFAULT_TENANT_ID") ||
       Deno.env.get("CLAUDE_DEFAULT_TENANT_ID") ||
       null,
     agentId: null as string | null,
   };
   if (!bearer || !SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) return fallback;
   try {
-    const sb = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, { auth: { persistSession: false } });
+    const sb = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
+      auth: { persistSession: false },
+    });
     const { data } = await sb
       .from("agent_mcp_connections")
       .select("tenant_id, agent_id")
       .eq("state", "ready")
       .filter("oauth_tokens->>bearer", "eq", bearer);
-    const rows = (data || []) as Array<{ tenant_id: string | null; agent_id: string | null }>;
-    const tenants = Array.from(new Set(rows.map((r) => r.tenant_id).filter(Boolean)));
+    const rows = (data || []) as Array<{
+      tenant_id: string | null;
+      agent_id: string | null;
+    }>;
+    const tenants = Array.from(
+      new Set(rows.map((r) => r.tenant_id).filter(Boolean)),
+    );
     if (tenants.length === 1) {
-      const agents = Array.from(new Set(rows.map((r) => r.agent_id).filter(Boolean)));
-      return { tenantId: tenants[0] as string, agentId: agents.length === 1 ? (agents[0] as string) : null };
+      const agents = Array.from(
+        new Set(rows.map((r) => r.agent_id).filter(Boolean)),
+      );
+      return {
+        tenantId: tenants[0] as string,
+        agentId: agents.length === 1 ? (agents[0] as string) : null,
+      };
     }
     return fallback;
   } catch {
@@ -346,20 +412,33 @@ type FireResult = {
   stickyUrl?: string;
 };
 
-function cursorAuthHeaders(apiKey: string, basic = false): Record<string, string> {
+function cursorAuthHeaders(
+  apiKey: string,
+  basic = false,
+): Record<string, string> {
   return {
-    "Authorization": basic ? `Basic ${btoa(`${apiKey}:`)}` : `Bearer ${apiKey}`,
+    Authorization: basic ? `Basic ${btoa(`${apiKey}:`)}` : `Bearer ${apiKey}`,
     "Content-Type": "application/json",
-    "Accept": "application/json",
+    Accept: "application/json",
     "User-Agent": "aios-cursor-mcp/1.1",
   };
 }
 
-async function cursorFetch(apiKey: string, url: string, init: RequestInit): Promise<Response> {
-  const headers = { ...cursorAuthHeaders(apiKey, false), ...(init.headers || {}) };
+async function cursorFetch(
+  apiKey: string,
+  url: string,
+  init: RequestInit,
+): Promise<Response> {
+  const headers = {
+    ...cursorAuthHeaders(apiKey, false),
+    ...(init.headers || {}),
+  };
   let resp = await fetch(url, { ...init, headers });
   if (resp.status === 401 || resp.status === 403) {
-    const basicHeaders = { ...cursorAuthHeaders(apiKey, true), ...(init.headers || {}) };
+    const basicHeaders = {
+      ...cursorAuthHeaders(apiKey, true),
+      ...(init.headers || {}),
+    };
     resp = await fetch(url, { ...init, headers: basicHeaders });
   }
   return resp;
@@ -367,7 +446,11 @@ async function cursorFetch(apiKey: string, url: string, init: RequestInit): Prom
 
 function parseAgentResponse(raw: string): { url: string; id: string } {
   let data: any = {};
-  try { data = JSON.parse(raw); } catch { /* ignore */ }
+  try {
+    data = JSON.parse(raw);
+  } catch {
+    /* ignore */
+  }
   const agent = data?.agent || data;
   const id = String(agent?.id || data?.id || "");
   const url = String(
@@ -379,7 +462,9 @@ function parseAgentResponse(raw: string): { url: string; id: string } {
   return { url, id: id || url };
 }
 
-async function getStickyAgentId(tenantId: string | null): Promise<string | null> {
+async function getStickyAgentId(
+  tenantId: string | null,
+): Promise<string | null> {
   const forced = Deno.env.get("CURSOR_STICKY_AGENT_ID") || "";
   if (forced.startsWith("bc-")) return forced;
   if (!tenantId) return null;
@@ -405,24 +490,37 @@ async function getStickyAgentId(tenantId: string | null): Promise<string | null>
     const lastId = String((last as any)?.cursor_agent_id || "");
     return lastId.startsWith("bc-") ? lastId : null;
   } catch (e) {
-    console.error("[cursor-mcp] getStickyAgentId failed:", (e as any)?.message ?? e);
+    console.error(
+      "[cursor-mcp] getStickyAgentId failed:",
+      (e as any)?.message ?? e,
+    );
     return null;
   }
 }
 
-async function saveStickyAgent(tenantId: string | null, agentId: string, sessionUrl: string): Promise<void> {
+async function saveStickyAgent(
+  tenantId: string | null,
+  agentId: string,
+  sessionUrl: string,
+): Promise<void> {
   if (!tenantId || !agentId.startsWith("bc-")) return;
   const sb = sbClient();
   if (!sb) return;
   try {
-    await sb.from("cursor_sticky_agents").upsert({
-      tenant_id: tenantId,
-      cursor_agent_id: agentId,
-      session_url: sessionUrl,
-      updated_at: new Date().toISOString(),
-    }, { onConflict: "tenant_id" });
+    await sb.from("cursor_sticky_agents").upsert(
+      {
+        tenant_id: tenantId,
+        cursor_agent_id: agentId,
+        session_url: sessionUrl,
+        updated_at: new Date().toISOString(),
+      },
+      { onConflict: "tenant_id" },
+    );
   } catch (e) {
-    console.error("[cursor-mcp] saveStickyAgent failed:", (e as any)?.message ?? e);
+    console.error(
+      "[cursor-mcp] saveStickyAgent failed:",
+      (e as any)?.message ?? e,
+    );
   }
 }
 
@@ -432,7 +530,9 @@ async function clearStickyAgent(tenantId: string | null): Promise<void> {
   if (!sb) return;
   try {
     await sb.from("cursor_sticky_agents").delete().eq("tenant_id", tenantId);
-  } catch { /* ignore */ }
+  } catch {
+    /* ignore */
+  }
 }
 
 /** Follow-up on an existing sticky agent (preserves conversation + workspace). */
@@ -466,11 +566,18 @@ async function followUpStickyAgent(
     }
     // Dead / archived / not found → caller should create a new agent.
     if (resp.status === 404 || resp.status === 410 || resp.status === 400) {
-      console.warn(`[cursor-mcp] sticky follow-up ${resp.status}: ${raw.slice(0, 200)}`);
+      console.warn(
+        `[cursor-mcp] sticky follow-up ${resp.status}: ${raw.slice(0, 200)}`,
+      );
       return null;
     }
     let detail = raw.slice(0, 500);
-    try { detail = JSON.parse(raw)?.error?.message || JSON.parse(raw)?.message || detail; } catch { /* keep */ }
+    try {
+      detail =
+        JSON.parse(raw)?.error?.message || JSON.parse(raw)?.message || detail;
+    } catch {
+      /* keep */
+    }
     throw new Error(`Cursor follow-up ${resp.status}: ${detail}`);
   }
   return {
@@ -482,15 +589,21 @@ async function followUpStickyAgent(
 }
 
 /** Create a brand-new Cursor Cloud Agent. */
-async function createCursorAgent(apiKey: string, promptText: string, opts?: {
-  name?: string;
-  startingRef?: string;
-}): Promise<FireResult> {
+async function createCursorAgent(
+  apiKey: string,
+  promptText: string,
+  opts?: {
+    name?: string;
+    startingRef?: string;
+  },
+): Promise<FireResult> {
   const repoUrl = Deno.env.get("CURSOR_REPO_URL") || DEFAULT_REPO;
-  const startingRef = opts?.startingRef || Deno.env.get("CURSOR_STARTING_REF") || "main";
+  const startingRef =
+    opts?.startingRef || Deno.env.get("CURSOR_STARTING_REF") || "main";
   const envName = Deno.env.get("CURSOR_CLOUD_ENV_NAME") || "";
   const modelId = Deno.env.get("CURSOR_MODEL_ID") || "";
-  const autoCreatePR = (Deno.env.get("CURSOR_AUTO_CREATE_PR") || "true").toLowerCase() !== "false";
+  const autoCreatePR =
+    (Deno.env.get("CURSOR_AUTO_CREATE_PR") || "true").toLowerCase() !== "false";
 
   const body: Record<string, unknown> = {
     prompt: { text: promptText },
@@ -511,33 +624,50 @@ async function createCursorAgent(apiKey: string, promptText: string, opts?: {
   const raw = await resp.text();
   if (!resp.ok) {
     let detail = raw.slice(0, 500);
-    try { detail = JSON.parse(raw)?.error?.message || JSON.parse(raw)?.message || detail; } catch { /* keep */ }
+    try {
+      detail =
+        JSON.parse(raw)?.error?.message || JSON.parse(raw)?.message || detail;
+    } catch {
+      /* keep */
+    }
     throw new Error(`Cursor agent create ${resp.status}: ${detail}`);
   }
   const parsed = parseAgentResponse(raw);
-  console.log(`[cursor-mcp] new_background_agent action=create_agent id=${parsed.id}`);
+  console.log(
+    `[cursor-mcp] new_background_agent action=create_agent id=${parsed.id}`,
+  );
   return { ...parsed, reused: false };
 }
 
 /** Prefer sticky agent (history), else create new and remember it per tenant. */
-async function fireCursorAgent(promptText: string, opts?: {
-  name?: string;
-  startingRef?: string;
-  tenantId?: string | null;
-}): Promise<FireResult> {
+async function fireCursorAgent(
+  promptText: string,
+  opts?: {
+    name?: string;
+    startingRef?: string;
+    tenantId?: string | null;
+  },
+): Promise<FireResult> {
   const apiKey = Deno.env.get("CURSOR_API_KEY") || "";
   if (!apiKey) {
     throw new Error("Cursor is not configured (set CURSOR_API_KEY secret).");
   }
-  const text = promptText.length > MAX_TEXT ? promptText.slice(0, MAX_TEXT) : promptText;
+  const text =
+    promptText.length > MAX_TEXT ? promptText.slice(0, MAX_TEXT) : promptText;
 
   if (STICKY_ENABLED) {
     const stickyId = await getStickyAgentId(opts?.tenantId ?? null);
     if (stickyId) {
       const followed = await followUpStickyAgent(apiKey, stickyId, text);
       if (followed?.delivered) {
-        console.log(`[cursor-mcp] coding_sticky_followup session_id=${stickyId}`);
-        await saveStickyAgent(opts?.tenantId ?? null, followed.id, followed.url);
+        console.log(
+          `[cursor-mcp] coding_sticky_followup session_id=${stickyId}`,
+        );
+        await saveStickyAgent(
+          opts?.tenantId ?? null,
+          followed.id,
+          followed.url,
+        );
         return followed;
       }
       if (followed && followed.delivered === false) {
@@ -564,13 +694,17 @@ function formatDispatchReply(kind: string, fired: FireResult): string {
     return (
       `✅ Sticky Cursor session is mid-run so this ${kind} was opened in a PARALLEL agent (message was delivered there, not dropped).\n` +
       `Parallel session: ${fired.url}\n` +
-      (fired.stickyUrl ? `Original sticky (still busy): ${fired.stickyUrl}\n` : "") +
+      (fired.stickyUrl
+        ? `Original sticky (still busy): ${fired.stickyUrl}\n`
+        : "") +
       `To talk inside the live sticky chat, use reply_to_cursor_session when that run is idle.`
     );
   }
   return (
     `✅ Sent your ${kind} to Cursor` +
-    (fired.reused ? ` (same sticky agent — history preserved)` : ` (new sticky agent for this tenant)`) +
+    (fired.reused
+      ? ` (same sticky agent — history preserved)`
+      : ` (new sticky agent for this tenant)`) +
     `. A Cloud Agent session is now running on it.\n` +
     `Session: ${fired.url}`
   );
@@ -590,8 +724,12 @@ async function recentDispatchContext(tenantId: string | null): Promise<string> {
     const rows = (data || []) as Array<any>;
     if (!rows.length) return "";
     const lines = rows.map((r) => {
-      const when = String(r.created_at || "").slice(0, 16).replace("T", " ");
-      const what = String(r.request_text || "").replace(/\s+/g, " ").slice(0, 200);
+      const when = String(r.created_at || "")
+        .slice(0, 16)
+        .replace("T", " ");
+      const what = String(r.request_text || "")
+        .replace(/\s+/g, " ")
+        .slice(0, 200);
       const tag = r.tool === "request_dev_task" ? "DEV" : "ASK";
       const sess = r.session_url ? ` — ${r.session_url}` : "";
       return `• [${when} · ${tag} · ${r.status || "dispatched"}] ${what}${sess}`;
@@ -604,7 +742,10 @@ async function recentDispatchContext(tenantId: string | null): Promise<string> {
       lines.join("\n")
     );
   } catch (e) {
-    console.error("[cursor-mcp] recentDispatchContext failed:", (e as any)?.message ?? e);
+    console.error(
+      "[cursor-mcp] recentDispatchContext failed:",
+      (e as any)?.message ?? e,
+    );
     return "";
   }
 }
@@ -642,15 +783,19 @@ async function logDispatch(args: {
 
     if (args.reused) {
       await touchCursorTaskSession(sb, args.cursorAgentId, "running");
-      console.log(`[cursor-mcp] session_touch session_id=${args.cursorAgentId} tool=${args.tool}`);
+      console.log(
+        `[cursor-mcp] session_touch session_id=${args.cursorAgentId} tool=${args.tool}`,
+      );
       return;
     }
 
-    const displayName = args.displayName || cursorSessionDisplayName({
-      taskTitle: args.taskTitle,
-      requestText: args.requestText,
-      sourceTool: args.tool,
-    });
+    const displayName =
+      args.displayName ||
+      cursorSessionDisplayName({
+        taskTitle: args.taskTitle,
+        requestText: args.requestText,
+        sourceTool: args.tool,
+      });
     await trackCursorTaskSession(sb, {
       tenantId: args.tenantId,
       cursorAgentId: args.cursorAgentId,
@@ -661,7 +806,9 @@ async function logDispatch(args: {
       sourceTool: args.tool,
       appEnv: resolveAppEnv(),
     });
-    console.log(`[cursor-mcp] new_background_agent tracked session_id=${args.cursorAgentId} name="${displayName}"`);
+    console.log(
+      `[cursor-mcp] new_background_agent tracked session_id=${args.cursorAgentId} name="${displayName}"`,
+    );
   } catch (e) {
     console.error("[cursor-mcp] logDispatch failed:", (e as any)?.message ?? e);
   }
@@ -672,7 +819,11 @@ async function resolveDispatchMeta(
   context: string,
   requestText: string,
   tool: string,
-): Promise<{ humanTaskId: string | null; taskTitle: string | null; displayName: string }> {
+): Promise<{
+  humanTaskId: string | null;
+  taskTitle: string | null;
+  displayName: string;
+}> {
   const humanTaskId = extractHumanTaskId(context);
   let taskTitle: string | null = null;
   const sb = sbClient();
@@ -682,7 +833,11 @@ async function resolveDispatchMeta(
   return {
     humanTaskId,
     taskTitle,
-    displayName: cursorSessionDisplayName({ taskTitle, requestText, sourceTool: tool }),
+    displayName: cursorSessionDisplayName({
+      taskTitle,
+      requestText,
+      sourceTool: tool,
+    }),
   };
 }
 
@@ -755,12 +910,14 @@ async function executeDirectSessionReply(args: {
   conversationIdHint?: string | null;
 }): Promise<string> {
   const apiKey = Deno.env.get("CURSOR_API_KEY") || "";
-  if (!apiKey) throw new Error("Cursor is not configured (set CURSOR_API_KEY secret).");
+  if (!apiKey)
+    throw new Error("Cursor is not configured (set CURSOR_API_KEY secret).");
 
   let callbackBlock = "";
   const sb = sbClient();
   if (args.tenantId && sb) {
-    const { buildAiosCallbackBlock } = await import("../_shared/agent-channel/callback-block.ts");
+    const { buildAiosCallbackBlock } =
+      await import("../_shared/agent-channel/callback-block.ts");
     callbackBlock = await buildAiosCallbackBlock(sb, {
       tenantId: args.tenantId,
       conversationIdHint: args.conversationIdHint,
@@ -781,11 +938,15 @@ async function executeDirectSessionReply(args: {
     `[cursor-mcp] direct_session_reply session_id=${args.session.sessionId} source=${args.session.source}`,
   );
 
-  const followed = await followUpStickyAgent(apiKey, args.session.sessionId, text);
+  const followed = await followUpStickyAgent(
+    apiKey,
+    args.session.sessionId,
+    text,
+  );
   if (!followed) {
     throw new Error(
       `Cursor Direct session ${args.session.sessionId} is gone (404/410). ` +
-      `Update CURSOR_DIRECT_AGENT_ID or cursor_sticky_agents for this tenant.`,
+        `Update CURSOR_DIRECT_AGENT_ID or cursor_sticky_agents for this tenant.`,
     );
   }
   if (followed.delivered === false) {
@@ -794,27 +955,30 @@ async function executeDirectSessionReply(args: {
     }
     throw new Error(
       `Cursor Direct session ${args.session.sessionId} is BUSY (only one run at a time). ` +
-      `The message was NOT delivered. Retry when that run finishes: ${followed.url}. ` +
-      `Do not call ask_cursor or request_dev_task — those open a new Background Agent.`,
+        `The message was NOT delivered. Retry when that run finishes: ${followed.url}. ` +
+        `Do not call ask_cursor or request_dev_task — those open a new Background Agent.`,
     );
   }
   if (args.tenantId) {
-    await touchCursorTaskSession(sbClient()!, args.session.sessionId, "running");
+    await touchCursorTaskSession(
+      sbClient()!,
+      args.session.sessionId,
+      "running",
+    );
   }
   await logDispatch({
     tenantId: args.tenantId,
     agentId: args.agentId,
     tool: "reply_to_cursor_session",
     requestText: args.message,
-    context: `direct_session_reply;source=${args.session.source};${args.session.sessionId}` +
+    context:
+      `direct_session_reply;source=${args.session.source};${args.session.sessionId}` +
       (args.context ? `\n${args.context}` : ""),
     branch: "",
     sessionUrl: followed.url,
     cursorAgentId: args.session.sessionId,
   });
-  return (
-    `✅ direct_session_reply — נשלח לצ׳אט Cursor הישיר (${args.session.source}) ${followed.url}`
-  );
+  return `✅ direct_session_reply — נשלח לצ׳אט Cursor הישיר (${args.session.source}) ${followed.url}`;
 }
 
 async function handleToolCall(
@@ -830,10 +994,12 @@ async function handleToolCall(
     let callbackBlock = "";
     const sb = sbClient();
     if (ctx.tenantId && sb) {
-      const { buildAiosCallbackBlock } = await import("../_shared/agent-channel/callback-block.ts");
+      const { buildAiosCallbackBlock } =
+        await import("../_shared/agent-channel/callback-block.ts");
       callbackBlock = await buildAiosCallbackBlock(sb, {
         tenantId: ctx.tenantId,
-        conversationIdHint: String(args?.conversation_id ?? "").trim() || undefined,
+        conversationIdHint:
+          String(args?.conversation_id ?? "").trim() || undefined,
         messageHint: task,
         contextHint: context,
         origin: "cursor",
@@ -849,14 +1015,24 @@ async function handleToolCall(
       (await recentDispatchContext(ctx.tenantId)) +
       teachingBlock(ctx.tenantId) +
       callbackBlock;
-    const meta = await resolveDispatchMeta(ctx.tenantId, context, task, "request_dev_task");
+    const meta = await resolveDispatchMeta(
+      ctx.tenantId,
+      context,
+      task,
+      "request_dev_task",
+    );
     const goalId = String(args?.goal_id ?? "").trim();
     let fired: FireResult;
     if (goalId && ctx.tenantId && sb) {
-      const { data: goalRow } = await sb.from("goals").select("id, title, objective, constraints")
-        .eq("id", goalId).eq("tenant_id", ctx.tenantId).maybeSingle();
+      const { data: goalRow } = await sb
+        .from("goals")
+        .select("id, title, objective, constraints")
+        .eq("id", goalId)
+        .eq("tenant_id", ctx.tenantId)
+        .maybeSingle();
       if (goalRow) {
-        const { dispatchToGoalCursor } = await import("../_shared/goal-cursor-dispatch.ts");
+        const { dispatchToGoalCursor } =
+          await import("../_shared/goal-cursor-dispatch.ts");
         const g = await dispatchToGoalCursor(sb, {
           tenantId: ctx.tenantId,
           goalId,
@@ -906,11 +1082,15 @@ async function handleToolCall(
   }
 
   if (name === "list_cursor_task_sessions") {
-    const tenantId = ctx.tenantId || Deno.env.get("CURSOR_DEFAULT_TENANT_ID") || "";
-    if (!tenantId) throw new Error("list_cursor_task_sessions requires a tenant context.");
+    const tenantId =
+      ctx.tenantId || Deno.env.get("CURSOR_DEFAULT_TENANT_ID") || "";
+    if (!tenantId)
+      throw new Error("list_cursor_task_sessions requires a tenant context.");
     const sb = sbClient();
     if (!sb) throw new Error("Supabase not configured.");
-    const statusRaw = String(args?.status || "active").trim().toLowerCase();
+    const statusRaw = String(args?.status || "active")
+      .trim()
+      .toLowerCase();
     const limit = Number(args?.limit || 20);
     const rows = await listCursorTaskSessions(sb, tenantId, {
       status: (statusRaw === "active" ? "active" : statusRaw) as any,
@@ -920,16 +1100,20 @@ async function handleToolCall(
   }
 
   if (name === "get_cursor_task_session") {
-    const tenantId = ctx.tenantId || Deno.env.get("CURSOR_DEFAULT_TENANT_ID") || "";
+    const tenantId =
+      ctx.tenantId || Deno.env.get("CURSOR_DEFAULT_TENANT_ID") || "";
     const taskId = String(args?.task_id ?? "").trim();
-    if (!tenantId || !taskId) throw new Error("get_cursor_task_session requires task_id and tenant context.");
+    if (!tenantId || !taskId)
+      throw new Error(
+        "get_cursor_task_session requires task_id and tenant context.",
+      );
     const sb = sbClient();
     if (!sb) throw new Error("Supabase not configured.");
     const row = await findCursorSessionForTask(sb, tenantId, taskId);
     if (!row) {
       throw new Error(
         `No Cursor session tracked for task ${taskId}. ` +
-        `Use list_cursor_task_sessions or assign the task to Cursor and dispatch again.`,
+          `Use list_cursor_task_sessions or assign the task to Cursor and dispatch again.`,
       );
     }
     return formatCursorSessionsForAgent([row]);
@@ -939,11 +1123,17 @@ async function handleToolCall(
     const taskId = String(args?.task_id ?? "").trim();
     if (!taskId) throw new Error("complete_human_task requires task_id.");
     const summary = String(args?.summary ?? "").trim();
-    const tenantId = ctx.tenantId || Deno.env.get("CURSOR_DEFAULT_TENANT_ID") || "";
-    if (!tenantId) throw new Error("complete_human_task requires a tenant context.");
+    const tenantId =
+      ctx.tenantId || Deno.env.get("CURSOR_DEFAULT_TENANT_ID") || "";
+    if (!tenantId)
+      throw new Error("complete_human_task requires a tenant context.");
     const sb = sbClient();
     if (!sb) throw new Error("Supabase not configured.");
-    const result = await completeHumanCursorTask(sb, { tenantId, taskId, summary });
+    const result = await completeHumanCursorTask(sb, {
+      tenantId,
+      taskId,
+      summary,
+    });
     return result.advanced
       ? `✅ משימה ${taskId} הושלמה. המשימה הבאה בתור נשלחה ל-Cursor.`
       : `✅ משימה ${taskId} הושלמה.`;
@@ -952,8 +1142,10 @@ async function handleToolCall(
   if (name === "complete_dev_task") {
     const devTaskId = String(args?.dev_task_id ?? "").trim();
     if (!devTaskId) throw new Error("complete_dev_task requires dev_task_id.");
-    const tenantId = ctx.tenantId || Deno.env.get("CURSOR_DEFAULT_TENANT_ID") || "";
-    if (!tenantId) throw new Error("complete_dev_task requires a tenant context.");
+    const tenantId =
+      ctx.tenantId || Deno.env.get("CURSOR_DEFAULT_TENANT_ID") || "";
+    if (!tenantId)
+      throw new Error("complete_dev_task requires a tenant context.");
     const sb = sbClient();
     if (!sb) throw new Error("Supabase not configured.");
     const { completeDevTaskById } = await import("../_shared/dev-tasks.ts");
@@ -977,7 +1169,12 @@ async function handleToolCall(
       (context ? `\nContext:\n${context}\n` : ``) +
       (await recentDispatchContext(ctx.tenantId)) +
       teachingBlock(ctx.tenantId);
-    const meta = await resolveDispatchMeta(ctx.tenantId, context, request, "ask_cursor");
+    const meta = await resolveDispatchMeta(
+      ctx.tenantId,
+      context,
+      request,
+      "ask_cursor",
+    );
     const fired = await fireCursorAgent(text, {
       name: meta.displayName,
       tenantId: ctx.tenantId,
@@ -1020,7 +1217,8 @@ async function handleToolCall(
 
   if (name === "reply_to_cursor_session") {
     const message = String(args?.message ?? "").trim();
-    if (!message) throw new Error("reply_to_cursor_session requires a non-empty message.");
+    if (!message)
+      throw new Error("reply_to_cursor_session requires a non-empty message.");
     const context = String(args?.context ?? "").trim();
     const session = await resolveDirectSessionForReply(
       String(args?.session_id ?? args?.bc_id ?? ""),
@@ -1033,21 +1231,26 @@ async function handleToolCall(
       originLabel: "[Carmen / Grok → Cursor Direct]",
       tenantId: ctx.tenantId,
       agentId: ctx.agentId,
-      conversationIdHint: String(args?.conversation_id ?? "").trim() || undefined,
+      conversationIdHint:
+        String(args?.conversation_id ?? "").trim() || undefined,
     });
   }
 
   if (name === "reply_to_aios_session") {
-    const { ingestChannelReply } = await import("../_shared/agent-channel/ingest.ts");
+    const { ingestChannelReply } =
+      await import("../_shared/agent-channel/ingest.ts");
     const conversationId = String(args?.conversation_id ?? "").trim();
     const content = String(args?.content ?? "").trim();
-    if (!conversationId || !content) throw new Error("conversation_id and content are required");
+    if (!conversationId || !content)
+      throw new Error("conversation_id and content are required");
     const result = await ingestChannelReply({
       conversation_id: conversationId,
       session_id: args?.session_id ? String(args.session_id) : undefined,
       origin: (args?.origin || "cursor") as any,
       content,
-      idempotency_key: args?.idempotency_key ? String(args.idempotency_key) : undefined,
+      idempotency_key: args?.idempotency_key
+        ? String(args.idempotency_key)
+        : undefined,
       tenant_id: ctx.tenantId || undefined,
     });
     return result.duplicate
@@ -1058,37 +1261,52 @@ async function handleToolCall(
   if (name === "generate_creative") {
     const itemId = String(args?.item_id ?? "").trim();
     if (!itemId) throw new Error("generate_creative requires item_id.");
-    if (!ctx.tenantId) throw new Error("generate_creative needs a tenant on the MCP connection.");
+    if (!ctx.tenantId)
+      throw new Error(
+        "generate_creative needs a tenant on the MCP connection.",
+      );
     const directorNote = String(args?.director_note ?? "").trim();
     const copyLabel = String(args?.copy_label ?? "").trim();
-    const resp = await fetch(`${SUPABASE_URL}/functions/v1/cursor-generate-creative`, {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        action: "dispatch",
-        tenant_id: ctx.tenantId,
-        item_id: itemId,
-        prompt: [
-          "JOB only. Follow standing skill (.cursor/skills/creative-direct and ai_skills.creative_direct). Do not ask to be re-briefed.",
-          `Load APPROVED CONCEPTS from marketing_work_items id=${itemId}. Photograph the concept. Type the copy.`,
-          copyLabel && `Copy variation «${copyLabel}».`,
-          directorNote && `DIRECTOR / REJECT: ${directorNote}`,
-        ].filter(Boolean).join("\n"),
-        lesson: directorNote || undefined,
-        variation: {
-          name: copyLabel || "וריאציה",
-          copy_label: copyLabel || undefined,
+    const resp = await fetch(
+      `${SUPABASE_URL}/functions/v1/cursor-generate-creative`,
+      {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
+          "Content-Type": "application/json",
         },
-      }),
-    });
+        body: JSON.stringify({
+          action: "dispatch",
+          tenant_id: ctx.tenantId,
+          item_id: itemId,
+          prompt: [
+            "JOB only. Follow standing skill (.cursor/skills/creative-direct and ai_skills.creative_direct). Do not ask to be re-briefed.",
+            `Load APPROVED CONCEPTS from marketing_work_items id=${itemId}. Photograph the concept. Type the copy.`,
+            copyLabel && `Copy variation «${copyLabel}».`,
+            directorNote && `DIRECTOR / REJECT: ${directorNote}`,
+          ]
+            .filter(Boolean)
+            .join("\n"),
+          lesson: directorNote || undefined,
+          variation: {
+            name: copyLabel || "וריאציה",
+            copy_label: copyLabel || undefined,
+          },
+        }),
+      },
+    );
     const raw = await resp.text();
     let data: any = {};
-    try { data = JSON.parse(raw); } catch { /* ignore */ }
+    try {
+      data = JSON.parse(raw);
+    } catch {
+      /* ignore */
+    }
     if (!resp.ok || data?.error) {
-      throw new Error(data?.error || `cursor-generate-creative ${resp.status}: ${raw.slice(0, 200)}`);
+      throw new Error(
+        data?.error ||
+          `cursor-generate-creative ${resp.status}: ${raw.slice(0, 200)}`,
+      );
     }
     await logDispatch({
       tenantId: ctx.tenantId,
@@ -1110,7 +1328,11 @@ async function handleToolCall(
   throw new Error(`Unknown tool: ${name}`);
 }
 
-type RpcCtx = { tenantId: string | null; agentId: string | null; grokMode: boolean };
+type RpcCtx = {
+  tenantId: string | null;
+  agentId: string | null;
+  grokMode: boolean;
+};
 
 async function handleRpcMessage(
   msg: McpRpcMessage,
@@ -1119,7 +1341,9 @@ async function handleRpcMessage(
 ): Promise<Response> {
   const { id, method, params } = msg ?? {};
   const clientProtocol =
-    typeof (params as any)?.protocolVersion === "string" ? (params as any).protocolVersion : undefined;
+    typeof (params as any)?.protocolVersion === "string"
+      ? (params as any).protocolVersion
+      : undefined;
 
   try {
     switch (method) {
@@ -1129,10 +1353,10 @@ async function handleRpcMessage(
           ctx.grokMode
             ? grokCompatibleInitializeResult(clientProtocol, SERVER_INFO)
             : {
-              protocolVersion: PROTOCOL_VERSION,
-              capabilities: { tools: {} },
-              serverInfo: SERVER_INFO,
-            },
+                protocolVersion: PROTOCOL_VERSION,
+                capabilities: { tools: {} },
+                serverInfo: SERVER_INFO,
+              },
         );
       case "notifications/initialized":
       case "initialized":
@@ -1147,9 +1371,10 @@ async function handleRpcMessage(
         const name = params?.name as string;
         const args = (params?.arguments ?? {}) as Record<string, any>;
         try {
-          const callCtx = ctx.tenantId || ctx.agentId
-            ? { tenantId: ctx.tenantId, agentId: ctx.agentId }
-            : await resolveContext(bearer);
+          const callCtx =
+            ctx.tenantId || ctx.agentId
+              ? { tenantId: ctx.tenantId, agentId: ctx.agentId }
+              : await resolveContext(bearer);
           const text = await handleToolCall(name, args, callCtx);
           return rpcResult(id, { content: [{ type: "text", text }] });
         } catch (e: any) {
@@ -1169,10 +1394,12 @@ async function handleRpcMessage(
 }
 
 Deno.serve(async (req) => {
-  if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
+  if (req.method === "OPTIONS")
+    return new Response("ok", { headers: corsHeaders });
 
   const pathname = new URL(req.url).pathname;
-  const streamable = wantsStreamableHttp(req, pathname) || isStreamableMcpPath(pathname);
+  const streamable =
+    wantsStreamableHttp(req, pathname) || isStreamableMcpPath(pathname);
 
   if (!streamable && req.method === "GET") {
     return new Response(
@@ -1181,9 +1408,13 @@ Deno.serve(async (req) => {
         server: SERVER_INFO,
         tools: TOOLS.map((t) => t.name),
         streamable_http: CURSOR_MCP_STREAMABLE_URL,
-        setup: "Grok Bot direct → /mcp + GROK_CURSOR_MCP_BEARER. Carmen → /cursor-mcp + CURSOR_MCP_BEARER.",
+        setup:
+          "Grok Bot direct → /mcp + GROK_CURSOR_MCP_BEARER. Carmen → /cursor-mcp + CURSOR_MCP_BEARER.",
       }),
-      { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      {
+        status: 200,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      },
     );
   }
 
@@ -1191,9 +1422,20 @@ Deno.serve(async (req) => {
   if (!isAuthorizedBearer(bearer)) {
     if (streamable) {
       return handleStreamableMcpRequest(req, async (msg) =>
-        rpcError(msg.id, -32001, "Unauthorized: invalid or missing bearer token", 401));
+        rpcError(
+          msg.id,
+          -32001,
+          "Unauthorized: invalid or missing bearer token",
+          401,
+        ),
+      );
     }
-    return rpcError(null, -32001, "Unauthorized: invalid or missing bearer token", 401);
+    return rpcError(
+      null,
+      -32001,
+      "Unauthorized: invalid or missing bearer token",
+      401,
+    );
   }
 
   const ctx: RpcCtx = {
@@ -1203,7 +1445,9 @@ Deno.serve(async (req) => {
   };
 
   if (streamable) {
-    return handleStreamableMcpRequest(req, (msg) => handleRpcMessage(msg, ctx, bearer));
+    return handleStreamableMcpRequest(req, (msg) =>
+      handleRpcMessage(msg, ctx, bearer),
+    );
   }
 
   let msg: McpRpcMessage;

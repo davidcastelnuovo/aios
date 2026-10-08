@@ -3,9 +3,24 @@ import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { CreativeImage } from "@/components/marketing/departments/creative/CreativeImage";
 import { OfferIconMark, isIconLayer } from "./layerMarks";
-import { hebrewTextDir, hebrewTextStyle, overlayBoxDir, overlayBoxStyle } from "./rtlText";
+import {
+  hebrewTextDir,
+  hebrewTextStyle,
+  overlayBoxDir,
+  overlayBoxStyle,
+} from "./rtlText";
 import { cn } from "@/lib/utils";
-import { Eraser, Layers, Layers2, Loader2, RotateCcw, Sparkles, ThumbsDown, Trash2, WandSparkles } from "lucide-react";
+import {
+  Eraser,
+  Layers,
+  Layers2,
+  Loader2,
+  RotateCcw,
+  Sparkles,
+  ThumbsDown,
+  Trash2,
+  WandSparkles,
+} from "lucide-react";
 import type { CreativeVariation } from "./types";
 import { aspectRatioClass, isVariationLiveText } from "./utils";
 import { isLogoLayer, styleLabelForId } from "./designedLayers";
@@ -49,7 +64,12 @@ export function CreativeVariationGrid({
           {agentUrl && (
             <>
               {progressLabel ? " · " : null}
-              <a href={agentUrl} target="_blank" rel="noreferrer" className="underline">
+              <a
+                href={agentUrl}
+                target="_blank"
+                rel="noreferrer"
+                className="underline"
+              >
                 פתח את קריאייטיב דיירקט
               </a>
             </>
@@ -76,10 +96,17 @@ export function CreativeVariationGrid({
             >
               <button
                 type="button"
-                className={cn("relative block w-full overflow-hidden bg-muted", aspectRatioClass(variation.format))}
+                className={cn(
+                  "relative block w-full overflow-hidden bg-muted",
+                  aspectRatioClass(variation.format),
+                )}
                 onClick={() => onRevise(variation)}
               >
-                <CreativeImage src={variation.imageUrl} alt={variation.name} className="absolute inset-0 h-full w-full object-cover" />
+                <CreativeImage
+                  src={variation.imageUrl}
+                  alt={variation.name}
+                  className="absolute inset-0 h-full w-full object-cover"
+                />
                 {overlayLayers.map((layer) => (
                   <div
                     key={layer.id}
@@ -89,12 +116,21 @@ export function CreativeVariationGrid({
                       top: `${layer.y}%`,
                       width: `${layer.width}%`,
                       height: `${layer.height}%`,
-                      display: layer.type === "text" || isIconLayer(layer) ? "flex" : undefined,
-                      alignItems: layer.type === "text" || isIconLayer(layer) ? "center" : undefined,
+                      display:
+                        layer.type === "text" || isIconLayer(layer)
+                          ? "flex"
+                          : undefined,
+                      alignItems:
+                        layer.type === "text" || isIconLayer(layer)
+                          ? "center"
+                          : undefined,
                       ...overlayBoxStyle(layer.textAlign),
-                      background: layer.type === "shape" ? layer.fill : undefined,
+                      background:
+                        layer.type === "shape" ? layer.fill : undefined,
                       borderRadius: layer.borderRadius,
-                      transform: layer.rotation ? `rotate(${layer.rotation}deg)` : undefined,
+                      transform: layer.rotation
+                        ? `rotate(${layer.rotation}deg)`
+                        : undefined,
                       transformOrigin: "center center",
                       color: layer.color,
                       fontFamily: layer.fontFamily,
@@ -109,13 +145,32 @@ export function CreativeVariationGrid({
                     dir={layer.type === "text" ? overlayBoxDir : undefined}
                   >
                     {layer.type === "image" && layer.src ? (
-                      <CreativeImage src={layer.src} alt="לוגו" className="h-full w-full object-contain" />
+                      <CreativeImage
+                        src={layer.src}
+                        alt="לוגו"
+                        className="h-full w-full object-contain"
+                      />
                     ) : isIconLayer(layer) ? (
-                      <span className="flex h-full w-full items-center justify-center rounded-full border-2" style={{ borderColor: layer.color || layer.fill || "#dc2626" }}>
-                        <OfferIconMark name={layer.icon} color={layer.color || layer.fill} className="h-[62%] w-[62%]" />
+                      <span
+                        className="flex h-full w-full items-center justify-center rounded-full border-2"
+                        style={{
+                          borderColor: layer.color || layer.fill || "#dc2626",
+                        }}
+                      >
+                        <OfferIconMark
+                          name={layer.icon}
+                          color={layer.color || layer.fill}
+                          className="h-[62%] w-[62%]"
+                        />
                       </span>
                     ) : layer.type === "text" ? (
-                      <span dir={hebrewTextDir} className="block w-full overflow-hidden whitespace-pre-wrap break-words px-0.5" style={hebrewTextStyle(layer.textAlign)}>{layer.text}</span>
+                      <span
+                        dir={hebrewTextDir}
+                        className="block w-full overflow-hidden whitespace-pre-wrap break-words px-0.5"
+                        style={hebrewTextStyle(layer.textAlign)}
+                      >
+                        {layer.text}
+                      </span>
                     ) : null}
                   </div>
                 ))}
@@ -125,60 +180,130 @@ export function CreativeVariationGrid({
                   </span>
                 )}
                 {variation.rejected && (
-                  <span className="absolute inset-x-3 top-3 rounded-full bg-black/70 px-2 py-1 text-[10px] text-white">נדחה</span>
+                  <span className="absolute inset-x-3 top-3 rounded-full bg-black/70 px-2 py-1 text-[10px] text-white">
+                    נדחה
+                  </span>
                 )}
               </button>
               <div className="space-y-2 p-3">
                 <div className="flex items-start justify-between gap-2">
                   <div className="min-w-0">
                     {variation.conceptName && (
-                      <div className="truncate text-sm font-semibold">{variation.conceptName}</div>
+                      <div className="truncate text-sm font-semibold">
+                        {variation.conceptName}
+                      </div>
                     )}
-                    <div className={cn("truncate", variation.conceptName ? "mt-0.5 text-[11px] text-violet-700" : "text-sm font-semibold")}>
+                    <div
+                      className={cn(
+                        "truncate",
+                        variation.conceptName
+                          ? "mt-0.5 text-[11px] text-violet-700"
+                          : "text-sm font-semibold",
+                      )}
+                    >
                       {variation.copyLabel || variation.name}
                     </div>
                     {!variation.conceptName && (
-                      <div className="truncate text-[11px] text-muted-foreground">{variation.name}</div>
+                      <div className="truncate text-[11px] text-muted-foreground">
+                        {variation.name}
+                      </div>
                     )}
                   </div>
-                  {variation.visualStyle && <Badge variant="outline">{styleLabelForId(variation.visualStyle)}</Badge>}
+                  {variation.visualStyle && (
+                    <Badge variant="outline">
+                      {styleLabelForId(variation.visualStyle)}
+                    </Badge>
+                  )}
                 </div>
                 <div className="flex items-center justify-between gap-2 rounded-lg border bg-muted/20 px-2 py-1.5">
-                  <span className="text-[10px] text-muted-foreground">מצב מודעה</span>
+                  <span className="text-[10px] text-muted-foreground">
+                    מצב מודעה
+                  </span>
                   <div className="flex items-center gap-1.5">
-                    <span className={cn("text-[10px] font-medium", !liveText ? "text-foreground" : "text-muted-foreground")}>סופי</span>
+                    <span
+                      className={cn(
+                        "text-[10px] font-medium",
+                        !liveText ? "text-foreground" : "text-muted-foreground",
+                      )}
+                    >
+                      סופי
+                    </span>
                     <Switch
                       checked={liveText}
-                      onCheckedChange={(checked) => onLiveTextChange?.(variation, checked)}
+                      onCheckedChange={(checked) =>
+                        onLiveTextChange?.(variation, checked)
+                      }
                       aria-label={`מצב טקסט עבור ${variation.copyLabel || variation.name}`}
                     />
-                    <span className={cn("text-[10px] font-medium", liveText ? "text-foreground" : "text-muted-foreground")}>שכבות</span>
+                    <span
+                      className={cn(
+                        "text-[10px] font-medium",
+                        liveText ? "text-foreground" : "text-muted-foreground",
+                      )}
+                    >
+                      שכבות
+                    </span>
                   </div>
                 </div>
                 {variation.copyText && (
-                  <p className="line-clamp-3 whitespace-pre-wrap text-[11px] leading-relaxed text-muted-foreground [unicode-bidi:plaintext]" dir="auto">
-                    {variation.copyText.replace(/^(?:וריאציה|variation)\s*\d+[^\n]*\n/i, "").trim()}
+                  <p
+                    className="line-clamp-3 whitespace-pre-wrap text-[11px] leading-relaxed text-muted-foreground [unicode-bidi:plaintext]"
+                    dir="auto"
+                  >
+                    {variation.copyText
+                      .replace(/^(?:וריאציה|variation)\s*\d+[^\n]*\n/i, "")
+                      .trim()}
                   </p>
                 )}
                 {variation.rejectNote && (
-                  <p className="line-clamp-2 text-[11px] text-destructive">רג׳קט: {variation.rejectNote}</p>
+                  <p className="line-clamp-2 text-[11px] text-destructive">
+                    רג׳קט: {variation.rejectNote}
+                  </p>
                 )}
                 <div className="flex flex-wrap gap-1.5">
-                  <Button size="sm" variant="outline" className="h-8 gap-1" onClick={() => onRevise(variation)}>
-                    <Sparkles className="h-3.5 w-3.5" />תקן עם Cursor
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="h-8 gap-1"
+                    onClick={() => onRevise(variation)}
+                  >
+                    <Sparkles className="h-3.5 w-3.5" />
+                    תקן עם Cursor
                   </Button>
                   {onErase && (
-                    <Button size="sm" variant="outline" className="h-8 gap-1" onClick={() => onErase(variation)}>
-                      <Eraser className="h-3.5 w-3.5" />מחק אזור
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="h-8 gap-1"
+                      onClick={() => onErase(variation)}
+                    >
+                      <Eraser className="h-3.5 w-3.5" />
+                      מחק אזור
                     </Button>
                   )}
                   {liveText && onEditLayers && (
-                    <Button size="sm" variant="outline" className="h-8 gap-1" onClick={() => onEditLayers(variation)}>
-                      <Layers className="h-3.5 w-3.5" />שכבות
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="h-8 gap-1"
+                      onClick={() => onEditLayers(variation)}
+                    >
+                      <Layers className="h-3.5 w-3.5" />
+                      שכבות
                     </Button>
                   )}
-                  <Button size="sm" variant="outline" className="h-8 gap-1" onClick={() => onRegenerate(variation)} disabled={busy}>
-                    {busy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RotateCcw className="h-3.5 w-3.5" />}
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="h-8 gap-1"
+                    onClick={() => onRegenerate(variation)}
+                    disabled={busy}
+                  >
+                    {busy ? (
+                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                    ) : (
+                      <RotateCcw className="h-3.5 w-3.5" />
+                    )}
                     ג׳נרט
                   </Button>
                   {onExpandStyle && (
@@ -188,20 +313,38 @@ export function CreativeVariationGrid({
                       className="h-8 gap-1"
                       onClick={() => onExpandStyle(variation)}
                       disabled={(remainingCopyCount?.(variation) ?? 0) === 0}
-                      title={(remainingCopyCount?.(variation) ?? 0) === 0 ? "כל וריאציות הקופי כבר בגריד" : "צור את שאר הקופי באותו סגנון"}
+                      title={
+                        (remainingCopyCount?.(variation) ?? 0) === 0
+                          ? "כל וריאציות הקופי כבר בגריד"
+                          : "צור את שאר הקופי באותו סגנון"
+                      }
                     >
                       <Layers2 className="h-3.5 w-3.5" />
                       עוד בסגנון הזה
                       {(remainingCopyCount?.(variation) ?? 0) > 0 && (
-                        <span className="text-[10px] text-muted-foreground">{remainingCopyCount?.(variation)}</span>
+                        <span className="text-[10px] text-muted-foreground">
+                          {remainingCopyCount?.(variation)}
+                        </span>
                       )}
                     </Button>
                   )}
-                  <Button size="sm" variant="outline" className="h-8 gap-1" onClick={() => onReject(variation)}>
-                    <ThumbsDown className="h-3.5 w-3.5" />רג׳קט
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="h-8 gap-1"
+                    onClick={() => onReject(variation)}
+                  >
+                    <ThumbsDown className="h-3.5 w-3.5" />
+                    רג׳קט
                   </Button>
-                  <Button size="sm" variant="ghost" className="h-8 gap-1 text-destructive" onClick={() => onDelete(variation)}>
-                    <Trash2 className="h-3.5 w-3.5" />מחק
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    className="h-8 gap-1 text-destructive"
+                    onClick={() => onDelete(variation)}
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                    מחק
                   </Button>
                 </div>
               </div>

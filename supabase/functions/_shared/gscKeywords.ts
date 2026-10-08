@@ -1,4 +1,7 @@
-import { createClient, type SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
+import {
+  createClient,
+  type SupabaseClient,
+} from "https://esm.sh/@supabase/supabase-js@2";
 
 export type GscKeywordRow = {
   keyword: string;
@@ -8,7 +11,8 @@ export type GscKeywordRow = {
   position: number;
 };
 
-export type GscPeriodKey = "current_90d" | "prev_month" | "three_month" | "yearly";
+export type GscPeriodKey =
+  "current_90d" | "prev_month" | "three_month" | "yearly";
 
 export type GscPeriodDefinition = {
   key: GscPeriodKey;
@@ -30,14 +34,23 @@ export function gscDateMinus(days: number): string {
   return d.toISOString().split("T")[0];
 }
 
-export function gscPeriodBounds(def: GscPeriodDefinition): { startDate: string; endDate: string } {
+export function gscPeriodBounds(def: GscPeriodDefinition): {
+  startDate: string;
+  endDate: string;
+} {
   return {
     startDate: gscDateMinus(def.startOffset),
     endDate: gscDateMinus(def.endOffset),
   };
 }
 
-export function mapGscApiRow(row: { keys?: string[]; clicks?: number; impressions?: number; ctr?: number; position?: number }): GscKeywordRow {
+export function mapGscApiRow(row: {
+  keys?: string[];
+  clicks?: number;
+  impressions?: number;
+  ctr?: number;
+  position?: number;
+}): GscKeywordRow {
   return {
     keyword: row.keys?.[0] || "",
     clicks: row.clicks || 0,
@@ -63,7 +76,10 @@ export async function fetchGscKeywordsFromApi(
   for (let page = 0; page < maxPages; page++) {
     const resp = await fetch(gscApiUrl, {
       method: "POST",
-      headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json" },
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        "Content-Type": "application/json",
+      },
       body: JSON.stringify({
         startDate,
         endDate,
@@ -74,7 +90,12 @@ export async function fetchGscKeywordsFromApi(
       }),
     });
     if (!resp.ok) {
-      console.error("GSC API error for site", siteUrl, resp.status, await resp.text());
+      console.error(
+        "GSC API error for site",
+        siteUrl,
+        resp.status,
+        await resp.text(),
+      );
       break;
     }
     const json = await resp.json();
@@ -103,29 +124,38 @@ export async function resolveGscAccessToken(
   for (const integration of integrations || []) {
     try {
       let tok = integration.api_key as string;
-      const intSettings: Record<string, unknown> = (integration.settings as Record<string, unknown>) || {};
+      const intSettings: Record<string, unknown> =
+        (integration.settings as Record<string, unknown>) || {};
       if (
         intSettings.expires_at &&
         new Date(String(intSettings.expires_at)) < new Date() &&
         intSettings.refresh_token
       ) {
-        const refreshResponse = await fetch("https://oauth2.googleapis.com/token", {
-          method: "POST",
-          headers: { "Content-Type": "application/x-www-form-urlencoded" },
-          body: new URLSearchParams({
-            client_id: googleClientId,
-            client_secret: googleClientSecret,
-            refresh_token: String(intSettings.refresh_token),
-            grant_type: "refresh_token",
-          }),
-        });
+        const refreshResponse = await fetch(
+          "https://oauth2.googleapis.com/token",
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/x-www-form-urlencoded" },
+            body: new URLSearchParams({
+              client_id: googleClientId,
+              client_secret: googleClientSecret,
+              refresh_token: String(intSettings.refresh_token),
+              grant_type: "refresh_token",
+            }),
+          },
+        );
         const refreshData = await refreshResponse.json();
         if (refreshData.access_token) {
           tok = refreshData.access_token;
-          const newExpiresAt = new Date(Date.now() + (refreshData.expires_in * 1000)).toISOString();
+          const newExpiresAt = new Date(
+            Date.now() + refreshData.expires_in * 1000,
+          ).toISOString();
           await supabase
             .from("tenant_integrations")
-            .update({ api_key: tok, settings: { ...intSettings, expires_at: newExpiresAt } })
+            .update({
+              api_key: tok,
+              settings: { ...intSettings, expires_at: newExpiresAt },
+            })
             .eq("id", integration.id);
         }
       }
@@ -179,14 +209,24 @@ export async function readGscSnapshots(
   for (const row of data) {
     const key = row.period_key as GscPeriodKey;
     if (!(key in bundle)) continue;
-    const keywords = Array.isArray(row.keywords) ? (row.keywords as GscKeywordRow[]) : [];
+    const keywords = Array.isArray(row.keywords)
+      ? (row.keywords as GscKeywordRow[])
+      : [];
     bundle[key] = keywords;
-    if (row.synced_at && (!bundle.synced_at || row.synced_at > bundle.synced_at)) {
+    if (
+      row.synced_at &&
+      (!bundle.synced_at || row.synced_at > bundle.synced_at)
+    ) {
       bundle.synced_at = row.synced_at;
     }
   }
 
-  if (!bundle.current_90d.length && !bundle.prev_month.length && !bundle.three_month.length && !bundle.yearly.length) {
+  if (
+    !bundle.current_90d.length &&
+    !bundle.prev_month.length &&
+    !bundle.three_month.length &&
+    !bundle.yearly.length
+  ) {
     return null;
   }
   return bundle;
@@ -204,22 +244,20 @@ export async function upsertGscSnapshot(
     keywords: GscKeywordRow[];
   },
 ): Promise<void> {
-  const { error } = await supabase
-    .from("gsc_keyword_snapshots")
-    .upsert(
-      {
-        tenant_id: params.tenantId,
-        client_id: params.clientId || null,
-        site_url: params.siteUrl,
-        period_key: params.periodKey,
-        start_date: params.startDate,
-        end_date: params.endDate,
-        keywords: params.keywords,
-        row_count: params.keywords.length,
-        synced_at: new Date().toISOString(),
-      },
-      { onConflict: "tenant_id,site_url,period_key" },
-    );
+  const { error } = await supabase.from("gsc_keyword_snapshots").upsert(
+    {
+      tenant_id: params.tenantId,
+      client_id: params.clientId || null,
+      site_url: params.siteUrl,
+      period_key: params.periodKey,
+      start_date: params.startDate,
+      end_date: params.endDate,
+      keywords: params.keywords,
+      row_count: params.keywords.length,
+      synced_at: new Date().toISOString(),
+    },
+    { onConflict: "tenant_id,site_url,period_key" },
+  );
   if (error) console.error("upsertGscSnapshot error:", error);
 }
 
@@ -257,7 +295,10 @@ export async function readSeoShareCacheFromDb(
     .maybeSingle();
   if (error || !data) return null;
   if (new Date(data.expires_at) < new Date()) {
-    await supabase.from("seo_share_response_cache").delete().eq("share_token", shareToken);
+    await supabase
+      .from("seo_share_response_cache")
+      .delete()
+      .eq("share_token", shareToken);
     return null;
   }
   return JSON.stringify(data.payload);

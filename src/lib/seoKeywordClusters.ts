@@ -40,16 +40,84 @@ const GENERIC_CLUSTER_TOKENS = new Set([
 ]);
 
 const HE_STOP = new Set([
-  "של", "את", "על", "עם", "זה", "זו", "זאת", "או", "גם", "אם", "כי", "יש",
-  "אין", "הוא", "היא", "הם", "הן", "אני", "אנחנו", "אתה", "אתם", "כל", "מה",
-  "מי", "איך", "למה", "איפה", "כמה", "עוד", "רק", "לא", "כן", "בין", "אחר",
-  "אחרי", "לפני", "תוך", "בלי", "עד", "אל", "מן", "ליד", "כמו", "יותר", "פחות",
+  "של",
+  "את",
+  "על",
+  "עם",
+  "זה",
+  "זו",
+  "זאת",
+  "או",
+  "גם",
+  "אם",
+  "כי",
+  "יש",
+  "אין",
+  "הוא",
+  "היא",
+  "הם",
+  "הן",
+  "אני",
+  "אנחנו",
+  "אתה",
+  "אתם",
+  "כל",
+  "מה",
+  "מי",
+  "איך",
+  "למה",
+  "איפה",
+  "כמה",
+  "עוד",
+  "רק",
+  "לא",
+  "כן",
+  "בין",
+  "אחר",
+  "אחרי",
+  "לפני",
+  "תוך",
+  "בלי",
+  "עד",
+  "אל",
+  "מן",
+  "ליד",
+  "כמו",
+  "יותר",
+  "פחות",
 ]);
 
 const EN_STOP = new Set([
-  "the", "a", "an", "of", "in", "on", "for", "to", "and", "or", "at", "by",
-  "from", "with", "as", "is", "are", "was", "be", "this", "that", "it", "its",
-  "near", "how", "what", "where", "when", "who", "why",
+  "the",
+  "a",
+  "an",
+  "of",
+  "in",
+  "on",
+  "for",
+  "to",
+  "and",
+  "or",
+  "at",
+  "by",
+  "from",
+  "with",
+  "as",
+  "is",
+  "are",
+  "was",
+  "be",
+  "this",
+  "that",
+  "it",
+  "its",
+  "near",
+  "how",
+  "what",
+  "where",
+  "when",
+  "who",
+  "why",
 ]);
 
 function wordCount(phrase: string): number {
@@ -62,7 +130,11 @@ function keywordRank(kw: KeywordLike): number | null {
 }
 
 export function stemToken(token: string): string {
-  if (/[\u0590-\u05FF]/.test(token) && token.length >= 4 && token.endsWith("ים")) {
+  if (
+    /[\u0590-\u05FF]/.test(token) &&
+    token.length >= 4 &&
+    token.endsWith("ים")
+  ) {
     return token.slice(0, -2);
   }
   if (/^[a-z]+s$/.test(token) && token.length >= 5) {
@@ -117,10 +189,17 @@ function phraseBigrams(stems: string[]): string[] {
 
 function average(values: number[]): number | null {
   if (values.length === 0) return null;
-  return Math.round((values.reduce((sum, n) => sum + n, 0) / values.length) * 10) / 10;
+  return (
+    Math.round((values.reduce((sum, n) => sum + n, 0) / values.length) * 10) /
+    10
+  );
 }
 
-function summarizeCluster<T extends KeywordLike>(key: string, label: string, keywords: T[]): KeywordCluster<T> {
+function summarizeCluster<T extends KeywordLike>(
+  key: string,
+  label: string,
+  keywords: T[],
+): KeywordCluster<T> {
   const ranks = keywords.map(keywordRank).filter((n): n is number => n != null);
   let shortTail = 0;
   let longTail = 0;
@@ -131,7 +210,9 @@ function summarizeCluster<T extends KeywordLike>(key: string, label: string, key
   return {
     key,
     label,
-    keywords: [...keywords].sort((a, b) => (keywordRank(a) ?? 999) - (keywordRank(b) ?? 999)),
+    keywords: [...keywords].sort(
+      (a, b) => (keywordRank(a) ?? 999) - (keywordRank(b) ?? 999),
+    ),
     avgPosition: average(ranks),
     bestPosition: ranks.length ? Math.min(...ranks) : null,
     shortTail,
@@ -166,7 +247,8 @@ export function clusterKeywords<T extends KeywordLike>(
     const keys = [...new Set([...stems, ...phraseBigrams(stems)])];
     for (const key of keys) {
       if (!key || GENERIC_CLUSTER_TOKENS.has(key)) continue;
-      if (!key.includes(" ") && key.length < 3 && !/[\u0590-\u05FF]/.test(key)) continue;
+      if (!key.includes(" ") && key.length < 3 && !/[\u0590-\u05FF]/.test(key))
+        continue;
       add(key, key, kw);
     }
   }
@@ -180,16 +262,24 @@ export function clusterKeywords<T extends KeywordLike>(
     if (unique.length < minSize) continue;
     if (unique.length / total > maxCoverage && !key.includes(" ")) continue;
     clusters.push(summarizeCluster(key, labels.get(key) || key, unique));
-    for (const row of unique) assigned.add(String(row.keyword || "").trim().toLowerCase());
+    for (const row of unique)
+      assigned.add(
+        String(row.keyword || "")
+          .trim()
+          .toLowerCase(),
+      );
   }
 
   clusters.sort((a, b) => {
-    if (b.keywords.length !== a.keywords.length) return b.keywords.length - a.keywords.length;
+    if (b.keywords.length !== a.keywords.length)
+      return b.keywords.length - a.keywords.length;
     return (a.avgPosition ?? 999) - (b.avgPosition ?? 999);
   });
 
   const leftovers = keywords.filter((kw) => {
-    const phrase = String(kw.keyword || "").trim().toLowerCase();
+    const phrase = String(kw.keyword || "")
+      .trim()
+      .toLowerCase();
     return phrase && !assigned.has(phrase);
   });
   if (leftovers.length > 0) {
@@ -202,7 +292,9 @@ function dedupeKeywords<T extends KeywordLike>(rows: T[]): T[] {
   const seen = new Set<string>();
   const out: T[] = [];
   for (const row of rows) {
-    const key = String(row.keyword || "").trim().toLowerCase();
+    const key = String(row.keyword || "")
+      .trim()
+      .toLowerCase();
     if (!key || seen.has(key)) continue;
     seen.add(key);
     out.push(row);

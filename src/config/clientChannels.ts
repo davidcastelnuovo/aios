@@ -23,11 +23,11 @@ export interface ChannelField {
 // client field that must be filled for the table to be created/synced.
 export interface ChannelTable {
   integrationType: string; // crm_tables.integration_type
-  syncFunction: string;    // edge function name
+  syncFunction: string; // edge function name
   requiresField: ChannelFieldKey;
-  tableLabel: string;      // display name prefix (client name appended at runtime)
+  tableLabel: string; // display name prefix (client name appended at runtime)
   /** Map from integration_type to integration_settings keys populated from client fields */
-  settingsKey: string;     // the integration_settings key for the requiresField value
+  settingsKey: string; // the integration_settings key for the requiresField value
 }
 
 export interface ClientChannel {
@@ -49,10 +49,20 @@ export const CLIENT_CHANNELS: ClientChannel[] = [
     services: [], // always shown
     fields: [
       { key: "website", label: "אתר ראשי לקידום", placeholder: "https://" },
-      { key: "ga_property_id", label: "Google Analytics (GA4) Property", placeholder: "properties/123456789" },
+      {
+        key: "ga_property_id",
+        label: "Google Analytics (GA4) Property",
+        placeholder: "properties/123456789",
+      },
     ],
     tables: [
-      { integrationType: "google_analytics", syncFunction: "sync-google-analytics-data", requiresField: "ga_property_id", tableLabel: "Google Analytics", settingsKey: "property_id" },
+      {
+        integrationType: "google_analytics",
+        syncFunction: "sync-google-analytics-data",
+        requiresField: "ga_property_id",
+        tableLabel: "Google Analytics",
+        settingsKey: "property_id",
+      },
     ],
   },
   {
@@ -60,10 +70,20 @@ export const CLIENT_CHANNELS: ClientChannel[] = [
     label: "Google Ads (PPC)",
     services: ["ppc_google"],
     fields: [
-      { key: "google_ads_account_id", label: "Google Ads Account ID", placeholder: "123-456-7890" },
+      {
+        key: "google_ads_account_id",
+        label: "Google Ads Account ID",
+        placeholder: "123-456-7890",
+      },
     ],
     tables: [
-      { integrationType: "google_ads", syncFunction: "sync-google-ads-data", requiresField: "google_ads_account_id", tableLabel: "Google Ads", settingsKey: "customer_id" },
+      {
+        integrationType: "google_ads",
+        syncFunction: "sync-google-ads-data",
+        requiresField: "google_ads_account_id",
+        tableLabel: "Google Ads",
+        settingsKey: "customer_id",
+      },
     ],
   },
   {
@@ -71,11 +91,21 @@ export const CLIENT_CHANNELS: ClientChannel[] = [
     label: "Meta Ads (פייסבוק/אינסטגרם)",
     services: ["ppc_meta"],
     fields: [
-      { key: "meta_ads_account_id", label: "Meta Ads Account ID", placeholder: "act_..." },
+      {
+        key: "meta_ads_account_id",
+        label: "Meta Ads Account ID",
+        placeholder: "act_...",
+      },
     ],
     showFacebookPages: true,
     tables: [
-      { integrationType: "facebook_insights", syncFunction: "sync-facebook-insights", requiresField: "meta_ads_account_id", tableLabel: "Facebook Insights", settingsKey: "ad_account_id" },
+      {
+        integrationType: "facebook_insights",
+        syncFunction: "sync-facebook-insights",
+        requiresField: "meta_ads_account_id",
+        tableLabel: "Facebook Insights",
+        settingsKey: "ad_account_id",
+      },
     ],
   },
   {
@@ -83,18 +113,41 @@ export const CLIENT_CHANNELS: ClientChannel[] = [
     label: "SEO (Ahrefs + Search Console)",
     services: ["seo"],
     fields: [
-      { key: "ahrefs_domain", label: "דומיין Ahrefs (SEO)", placeholder: "example.com" },
-      { key: "gsc_site_url", label: "Search Console (GSC)", placeholder: "sc-domain:example.com" },
+      {
+        key: "ahrefs_domain",
+        label: "דומיין Ahrefs (SEO)",
+        placeholder: "example.com",
+      },
+      {
+        key: "gsc_site_url",
+        label: "Search Console (GSC)",
+        placeholder: "sc-domain:example.com",
+      },
     ],
     tables: [
-      { integrationType: "ahrefs", syncFunction: "sync-ahrefs-data", requiresField: "ahrefs_domain", tableLabel: "Ahrefs SEO", settingsKey: "targetDomain" },
-      { integrationType: "google_search_console", syncFunction: "sync-google-search-console-data", requiresField: "gsc_site_url", tableLabel: "Search Console", settingsKey: "site_url" },
+      {
+        integrationType: "ahrefs",
+        syncFunction: "sync-ahrefs-data",
+        requiresField: "ahrefs_domain",
+        tableLabel: "Ahrefs SEO",
+        settingsKey: "targetDomain",
+      },
+      {
+        integrationType: "google_search_console",
+        syncFunction: "sync-google-search-console-data",
+        requiresField: "gsc_site_url",
+        tableLabel: "Search Console",
+        settingsKey: "site_url",
+      },
     ],
   },
 ];
 
 /** Is the channel active for a client with the given `services`? Empty services list => always-on channel. */
-export function isChannelActive(channel: ClientChannel, services: string[] | null | undefined): boolean {
+export function isChannelActive(
+  channel: ClientChannel,
+  services: string[] | null | undefined,
+): boolean {
   if (channel.services.length === 0) return true;
   const s = Array.isArray(services) ? services : [];
   return channel.services.some((svc) => s.includes(svc));
@@ -102,5 +155,5 @@ export function isChannelActive(channel: ClientChannel, services: string[] | nul
 
 /** All connection field keys across all channels (for building the save payload). */
 export const ALL_CHANNEL_FIELD_KEYS: ChannelFieldKey[] = Array.from(
-  new Set(CLIENT_CHANNELS.flatMap((c) => c.fields.map((f) => f.key)))
+  new Set(CLIENT_CHANNELS.flatMap((c) => c.fields.map((f) => f.key))),
 );

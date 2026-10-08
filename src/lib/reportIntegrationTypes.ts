@@ -17,6 +17,8 @@ export const REPORT_TENANT_SCOPED_INTEGRATION_TYPES = new Set([
   "tiktok",
 ]);
 
-export function isReportTenantScopedIntegration(type: string | null | undefined): boolean {
+export function isReportTenantScopedIntegration(
+  type: string | null | undefined,
+): boolean {
   return !!type && REPORT_TENANT_SCOPED_INTEGRATION_TYPES.has(type);
 }

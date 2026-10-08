@@ -39,7 +39,13 @@ interface UnifiedSession {
   raw: any;
 }
 
-const STATUS_LABELS: Record<string, { label: string; variant: "default" | "secondary" | "destructive" | "outline" }> = {
+const STATUS_LABELS: Record<
+  string,
+  {
+    label: string;
+    variant: "default" | "secondary" | "destructive" | "outline";
+  }
+> = {
   active: { label: "פעיל", variant: "default" },
   paused: { label: "מושהה", variant: "secondary" },
   ended: { label: "הסתיים", variant: "outline" },
@@ -100,13 +106,29 @@ export default function AgentSessionsPanel() {
       .channel(`agent-sessions-${tenantId}`)
       .on(
         "postgres_changes",
-        { event: "*", schema: "public", table: "carmen_whatsapp_sessions", filter: `tenant_id=eq.${tenantId}` },
-        () => queryClient.invalidateQueries({ queryKey: ["agent-sessions-carmen", tenantId] })
+        {
+          event: "*",
+          schema: "public",
+          table: "carmen_whatsapp_sessions",
+          filter: `tenant_id=eq.${tenantId}`,
+        },
+        () =>
+          queryClient.invalidateQueries({
+            queryKey: ["agent-sessions-carmen", tenantId],
+          }),
       )
       .on(
         "postgres_changes",
-        { event: "*", schema: "public", table: "ai_conversations", filter: `tenant_id=eq.${tenantId}` },
-        () => queryClient.invalidateQueries({ queryKey: ["agent-sessions-internal", tenantId] })
+        {
+          event: "*",
+          schema: "public",
+          table: "ai_conversations",
+          filter: `tenant_id=eq.${tenantId}`,
+        },
+        () =>
+          queryClient.invalidateQueries({
+            queryKey: ["agent-sessions-internal", tenantId],
+          }),
       )
       .subscribe();
     return () => {
@@ -123,7 +145,9 @@ export default function AgentSessionsPanel() {
       status: s.status,
       lastActivity: s.last_message_at || s.created_at,
       agentName: s.agent?.name || "כרמן",
-      messages: Array.isArray(s.conversation_history) ? s.conversation_history : [],
+      messages: Array.isArray(s.conversation_history)
+        ? s.conversation_history
+        : [],
       raw: s,
     }));
     const internal: UnifiedSession[] = aiConversations.map((c: any) => ({
@@ -138,13 +162,18 @@ export default function AgentSessionsPanel() {
       raw: c,
     }));
     return [...carmen, ...internal].sort(
-      (a, b) => new Date(b.lastActivity).getTime() - new Date(a.lastActivity).getTime()
+      (a, b) =>
+        new Date(b.lastActivity).getTime() - new Date(a.lastActivity).getTime(),
     );
   }, [carmenSessions, aiConversations]);
 
-  const selected = sessions.find((s) => s.id === selectedId) || sessions[0] || null;
+  const selected =
+    sessions.find((s) => s.id === selectedId) || sessions[0] || null;
 
-  const updateCarmenStatus = async (sessionId: string, newStatus: "active" | "paused" | "ended") => {
+  const updateCarmenStatus = async (
+    sessionId: string,
+    newStatus: "active" | "paused" | "ended",
+  ) => {
     const updates: any = { status: newStatus };
     if (newStatus === "ended") updates.ended_at = new Date().toISOString();
     const { error } = await supabase
@@ -156,9 +185,15 @@ export default function AgentSessionsPanel() {
       console.error(error);
     } else {
       toast.success(
-        newStatus === "active" ? "הסשן הופעל מחדש" : newStatus === "paused" ? "הסשן הושהה" : "הסשן נסגר"
+        newStatus === "active"
+          ? "הסשן הופעל מחדש"
+          : newStatus === "paused"
+            ? "הסשן הושהה"
+            : "הסשן נסגר",
       );
-      queryClient.invalidateQueries({ queryKey: ["agent-sessions-carmen", tenantId] });
+      queryClient.invalidateQueries({
+        queryKey: ["agent-sessions-carmen", tenantId],
+      });
     }
   };
 
@@ -170,7 +205,9 @@ export default function AgentSessionsPanel() {
           <div className="flex items-center gap-2">
             <Bot className="h-5 w-5 text-primary" />
             <h2 className="text-lg font-semibold">סשנים עם סוכני AI</h2>
-            <Badge variant="secondary" className="ms-auto">{sessions.length}</Badge>
+            <Badge variant="secondary" className="ms-auto">
+              {sessions.length}
+            </Badge>
           </div>
           <p className="text-xs text-muted-foreground mt-1">
             שיחות פעילות והיסטוריה. לחץ על "השהה" כדי לעצור את הסוכן מלענות.
@@ -178,7 +215,9 @@ export default function AgentSessionsPanel() {
         </div>
         <ScrollArea className="flex-1">
           <div className="p-2 space-y-1">
-            {loadingCarmen && <div className="p-4 text-sm text-muted-foreground">טוען...</div>}
+            {loadingCarmen && (
+              <div className="p-4 text-sm text-muted-foreground">טוען...</div>
+            )}
             {!loadingCarmen && sessions.length === 0 && (
               <div className="p-8 text-center text-sm text-muted-foreground">
                 אין סשנים פעילים עם סוכני AI
@@ -186,7 +225,10 @@ export default function AgentSessionsPanel() {
             )}
             {sessions.map((s) => {
               const isSelected = selected?.id === s.id;
-              const statusInfo = STATUS_LABELS[s.status] || { label: s.status, variant: "outline" as const };
+              const statusInfo = STATUS_LABELS[s.status] || {
+                label: s.status,
+                variant: "outline" as const,
+              };
               return (
                 <button
                   key={s.id}
@@ -198,22 +240,35 @@ export default function AgentSessionsPanel() {
                   <div className="flex items-start gap-3">
                     <Avatar className="h-9 w-9">
                       <AvatarFallback className="bg-primary/10 text-primary">
-                        {s.source === "whatsapp" ? <Phone className="h-4 w-4" /> : <MessageSquare className="h-4 w-4" />}
+                        {s.source === "whatsapp" ? (
+                          <Phone className="h-4 w-4" />
+                        ) : (
+                          <MessageSquare className="h-4 w-4" />
+                        )}
                       </AvatarFallback>
                     </Avatar>
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2">
-                        <span className="font-medium text-sm truncate">{s.title}</span>
-                        <Badge variant={statusInfo.variant} className="text-[10px] py-0 px-1.5 h-4">
+                        <span className="font-medium text-sm truncate">
+                          {s.title}
+                        </span>
+                        <Badge
+                          variant={statusInfo.variant}
+                          className="text-[10px] py-0 px-1.5 h-4"
+                        >
                           {statusInfo.label}
                         </Badge>
                       </div>
                       <div className="text-xs text-muted-foreground truncate">
-                        {s.agentName} · {s.source === "whatsapp" ? "WhatsApp" : "פנימי"}
+                        {s.agentName} ·{" "}
+                        {s.source === "whatsapp" ? "WhatsApp" : "פנימי"}
                       </div>
                       <div className="text-xs text-muted-foreground mt-0.5">
                         {s.lastActivity
-                          ? formatDistanceToNow(new Date(s.lastActivity), { addSuffix: true, locale: he })
+                          ? formatDistanceToNow(new Date(s.lastActivity), {
+                              addSuffix: true,
+                              locale: he,
+                            })
                           : "—"}
                       </div>
                     </div>
@@ -240,12 +295,19 @@ export default function AgentSessionsPanel() {
               <div className="min-w-0">
                 <div className="flex items-center gap-2">
                   <h3 className="font-semibold truncate">{selected.title}</h3>
-                  <Badge variant={STATUS_LABELS[selected.status]?.variant || "outline"}>
+                  <Badge
+                    variant={
+                      STATUS_LABELS[selected.status]?.variant || "outline"
+                    }
+                  >
                     {STATUS_LABELS[selected.status]?.label || selected.status}
                   </Badge>
                 </div>
                 <p className="text-xs text-muted-foreground">
-                  {selected.agentName} · {selected.source === "whatsapp" ? `WhatsApp · ${selected.subtitle}` : "שיחה פנימית"}
+                  {selected.agentName} ·{" "}
+                  {selected.source === "whatsapp"
+                    ? `WhatsApp · ${selected.subtitle}`
+                    : "שיחה פנימית"}
                 </p>
               </div>
               {selected.source === "whatsapp" && (
@@ -254,7 +316,9 @@ export default function AgentSessionsPanel() {
                     <Button
                       size="sm"
                       variant="secondary"
-                      onClick={() => updateCarmenStatus(selected.raw.id, "paused")}
+                      onClick={() =>
+                        updateCarmenStatus(selected.raw.id, "paused")
+                      }
                     >
                       <Pause className="h-3.5 w-3.5 ms-1" />
                       השהה
@@ -264,17 +328,22 @@ export default function AgentSessionsPanel() {
                     <Button
                       size="sm"
                       variant="secondary"
-                      onClick={() => updateCarmenStatus(selected.raw.id, "active")}
+                      onClick={() =>
+                        updateCarmenStatus(selected.raw.id, "active")
+                      }
                     >
                       <Play className="h-3.5 w-3.5 ms-1" />
                       המשך
                     </Button>
                   )}
-                  {(selected.status === "active" || selected.status === "paused") && (
+                  {(selected.status === "active" ||
+                    selected.status === "paused") && (
                     <Button
                       size="sm"
                       variant="destructive"
-                      onClick={() => updateCarmenStatus(selected.raw.id, "ended")}
+                      onClick={() =>
+                        updateCarmenStatus(selected.raw.id, "ended")
+                      }
                     >
                       <Square className="h-3.5 w-3.5 ms-1" />
                       סיים
@@ -293,7 +362,10 @@ export default function AgentSessionsPanel() {
                   selected.messages.map((m, i) => {
                     const isUser = m.role === "user";
                     return (
-                      <div key={i} className={`flex ${isUser ? "justify-start" : "justify-end"}`}>
+                      <div
+                        key={i}
+                        className={`flex ${isUser ? "justify-start" : "justify-end"}`}
+                      >
                         <div
                           className={`max-w-[75%] rounded-lg px-3 py-2 text-sm whitespace-pre-wrap ${
                             isUser

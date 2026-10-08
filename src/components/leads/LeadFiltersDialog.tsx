@@ -17,8 +17,19 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Calendar } from "@/components/ui/calendar";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Calendar as CalendarIcon, Save, RotateCcw, X, Search, Check } from "lucide-react";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
+import {
+  Calendar as CalendarIcon,
+  Save,
+  RotateCcw,
+  X,
+  Search,
+  Check,
+} from "lucide-react";
 import { format } from "date-fns";
 import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
@@ -52,7 +63,12 @@ interface LeadFiltersDialogProps {
   currentFilters: FilterState;
   onApply: (filters: FilterState) => void;
   salesPeople: Array<{ id: string; full_name: string }>;
-  pipelineStages: Array<{ id: string; label: string; color?: string; hexColor?: string }>;
+  pipelineStages: Array<{
+    id: string;
+    label: string;
+    color?: string;
+    hexColor?: string;
+  }>;
   leadStatuses: Array<{ status_key: string; label: string; color: string }>;
   allTags: Array<{ id: string; name: string; color: string }>;
   editingPreset?: EditingPreset | null;
@@ -75,18 +91,18 @@ export function LeadFiltersDialog({
   const { tenantId } = useCurrentTenant();
   const { userId } = useCurrentUser();
   const queryClient = useQueryClient();
-  
+
   const [filters, setFilters] = useState<FilterState>(currentFilters);
   const [saveDialogOpen, setSaveDialogOpen] = useState(false);
   const [presetName, setPresetName] = useState("");
   const [isSaving, setIsSaving] = useState(false);
   const [isUpdating, setIsUpdating] = useState(false);
-  
+
   // Search states for multi-select dropdowns
   const [statusSearch, setStatusSearch] = useState("");
   const [tagSearch, setTagSearch] = useState("");
   const [salesPersonSearch, setSalesPersonSearch] = useState("");
-  
+
   // Popover open states
   const [statusPopoverOpen, setStatusPopoverOpen] = useState(false);
   const [tagPopoverOpen, setTagPopoverOpen] = useState(false);
@@ -103,19 +119,23 @@ export function LeadFiltersDialog({
   const filteredStatuses = useMemo(() => {
     if (!statusSearch.trim()) return leadStatuses;
     const searchLower = statusSearch.toLowerCase();
-    return leadStatuses.filter(s => s.label.toLowerCase().includes(searchLower));
+    return leadStatuses.filter((s) =>
+      s.label.toLowerCase().includes(searchLower),
+    );
   }, [leadStatuses, statusSearch]);
 
   const filteredTags = useMemo(() => {
     if (!tagSearch.trim()) return allTags;
     const searchLower = tagSearch.toLowerCase();
-    return allTags.filter(t => t.name.toLowerCase().includes(searchLower));
+    return allTags.filter((t) => t.name.toLowerCase().includes(searchLower));
   }, [allTags, tagSearch]);
 
   const filteredSalesPeople = useMemo(() => {
     if (!salesPersonSearch.trim()) return salesPeople;
     const searchLower = salesPersonSearch.toLowerCase();
-    return salesPeople.filter(sp => sp.full_name.toLowerCase().includes(searchLower));
+    return salesPeople.filter((sp) =>
+      sp.full_name.toLowerCase().includes(searchLower),
+    );
   }, [salesPeople, salesPersonSearch]);
 
   // Sync with current filters when dialog opens or when currentFilters change while dialog is open
@@ -175,14 +195,12 @@ export function LeadFiltersDialog({
         followUpToday: filters.followUpToday,
       };
 
-      const { error } = await supabase
-        .from("lead_filter_presets")
-        .insert({
-          tenant_id: tenantId,
-          user_id: userId,
-          name: presetName.trim(),
-          filters: filtersToSave,
-        });
+      const { error } = await supabase.from("lead_filter_presets").insert({
+        tenant_id: tenantId,
+        user_id: userId,
+        name: presetName.trim(),
+        filters: filtersToSave,
+      });
 
       if (error) throw error;
 
@@ -190,7 +208,9 @@ export function LeadFiltersDialog({
         title: "פריסט נשמר בהצלחה",
       });
 
-      queryClient.invalidateQueries({ queryKey: ["lead-filter-presets", tenantId] });
+      queryClient.invalidateQueries({
+        queryKey: ["lead-filter-presets", tenantId],
+      });
       setSaveDialogOpen(false);
       setPresetName("");
     } catch (error: any) {
@@ -232,7 +252,9 @@ export function LeadFiltersDialog({
         title: "פריסט עודכן בהצלחה",
       });
 
-      queryClient.invalidateQueries({ queryKey: ["lead-filter-presets", tenantId] });
+      queryClient.invalidateQueries({
+        queryKey: ["lead-filter-presets", tenantId],
+      });
       onPresetUpdated?.();
       onOpenChange(false);
     } catch (error: any) {
@@ -248,10 +270,13 @@ export function LeadFiltersDialog({
 
   // Toggle status selection
   const toggleStatus = (statusKey: string) => {
-    setFilters(prev => {
+    setFilters((prev) => {
       const currentStatuses = prev.responseStatus;
       if (currentStatuses.includes(statusKey)) {
-        return { ...prev, responseStatus: currentStatuses.filter(s => s !== statusKey) };
+        return {
+          ...prev,
+          responseStatus: currentStatuses.filter((s) => s !== statusKey),
+        };
       } else {
         return { ...prev, responseStatus: [...currentStatuses, statusKey] };
       }
@@ -260,10 +285,10 @@ export function LeadFiltersDialog({
 
   // Toggle tag selection
   const toggleTag = (tagId: string) => {
-    setFilters(prev => {
+    setFilters((prev) => {
       const currentTags = prev.tagIds;
       if (currentTags.includes(tagId)) {
-        return { ...prev, tagIds: currentTags.filter(t => t !== tagId) };
+        return { ...prev, tagIds: currentTags.filter((t) => t !== tagId) };
       } else {
         return { ...prev, tagIds: [...currentTags, tagId] };
       }
@@ -272,10 +297,13 @@ export function LeadFiltersDialog({
 
   // Toggle sales person selection
   const toggleSalesPerson = (spId: string) => {
-    setFilters(prev => {
+    setFilters((prev) => {
       const currentSPs = prev.salesPersonIds;
       if (currentSPs.includes(spId)) {
-        return { ...prev, salesPersonIds: currentSPs.filter(sp => sp !== spId) };
+        return {
+          ...prev,
+          salesPersonIds: currentSPs.filter((sp) => sp !== spId),
+        };
       } else {
         return { ...prev, salesPersonIds: [...currentSPs, spId] };
       }
@@ -285,17 +313,17 @@ export function LeadFiltersDialog({
   // Get selected status labels for display - show max 2 items then "+X"
   const selectedStatusLabels = useMemo(() => {
     if (filters.responseStatus.length === 0) return "כל הסטטוסים";
-    
+
     const labels: string[] = [];
     if (filters.responseStatus.includes("none")) {
       labels.push("ללא סטטוס");
     }
     const otherLabels = filters.responseStatus
-      .filter(s => s !== "none")
-      .map(s => leadStatuses.find(ls => ls.status_key === s)?.label)
+      .filter((s) => s !== "none")
+      .map((s) => leadStatuses.find((ls) => ls.status_key === s)?.label)
       .filter(Boolean) as string[];
     labels.push(...otherLabels);
-    
+
     if (labels.length <= 2) {
       return labels.join(", ");
     }
@@ -305,17 +333,17 @@ export function LeadFiltersDialog({
   // Get selected tag labels for display - show max 2 items then "+X"
   const selectedTagLabels = useMemo(() => {
     if (filters.tagIds.length === 0) return "כל התגיות";
-    
+
     const labels: string[] = [];
     if (filters.tagIds.includes("none")) {
       labels.push("ללא תגית");
     }
     const otherLabels = filters.tagIds
-      .filter(t => t !== "none")
-      .map(t => allTags.find(at => at.id === t)?.name)
+      .filter((t) => t !== "none")
+      .map((t) => allTags.find((at) => at.id === t)?.name)
       .filter(Boolean) as string[];
     labels.push(...otherLabels);
-    
+
     if (labels.length <= 2) {
       return labels.join(", ");
     }
@@ -325,24 +353,24 @@ export function LeadFiltersDialog({
   // Get selected sales people labels for display - show max 2 items then "+X"
   const selectedSalesPersonLabels = useMemo(() => {
     if (filters.salesPersonIds.length === 0) return "כל אנשי המכירות";
-    
+
     const labels: string[] = [];
     if (filters.salesPersonIds.includes("none")) {
       labels.push("ללא שיוך");
     }
     const otherLabels = filters.salesPersonIds
-      .filter(sp => sp !== "none")
-      .map(sp => salesPeople.find(p => p.id === sp)?.full_name)
+      .filter((sp) => sp !== "none")
+      .map((sp) => salesPeople.find((p) => p.id === sp)?.full_name)
       .filter(Boolean) as string[];
     labels.push(...otherLabels);
-    
+
     if (labels.length <= 2) {
       return labels.join(", ");
     }
     return `${labels.slice(0, 2).join(", ")} +${labels.length - 2}`;
   }, [filters.salesPersonIds, salesPeople]);
 
-  const hasActiveFilters = 
+  const hasActiveFilters =
     filters.salesPersonIds.length > 0 ||
     filters.stageId !== "all" ||
     filters.responseStatus.length > 0 ||
@@ -357,7 +385,9 @@ export function LeadFiltersDialog({
         <DialogContent className="sm:max-w-[500px]" dir="rtl">
           <DialogHeader>
             <DialogTitle className="text-xl">
-              {editingPreset ? `עריכת פריסט: ${editingPreset.name}` : "סינון לידים"}
+              {editingPreset
+                ? `עריכת פריסט: ${editingPreset.name}`
+                : "סינון לידים"}
             </DialogTitle>
           </DialogHeader>
 
@@ -365,14 +395,19 @@ export function LeadFiltersDialog({
             {/* Sales Person - Multi-select with search */}
             <div className="space-y-2">
               <Label>אנשי מכירות</Label>
-              <Popover open={salesPersonPopoverOpen} onOpenChange={setSalesPersonPopoverOpen}>
+              <Popover
+                open={salesPersonPopoverOpen}
+                onOpenChange={setSalesPersonPopoverOpen}
+              >
                 <PopoverTrigger asChild>
                   <Button
                     variant="outline"
                     role="combobox"
                     className="w-full justify-between font-normal"
                   >
-                    <span className="truncate">{selectedSalesPersonLabels}</span>
+                    <span className="truncate">
+                      {selectedSalesPersonLabels}
+                    </span>
                     {filters.salesPersonIds.length > 0 && (
                       <Badge variant="secondary" className="mr-2 shrink-0">
                         {filters.salesPersonIds.length}
@@ -380,7 +415,10 @@ export function LeadFiltersDialog({
                     )}
                   </Button>
                 </PopoverTrigger>
-                <PopoverContent className="w-[300px] p-0 bg-popover z-[200]" align="start">
+                <PopoverContent
+                  className="w-[300px] p-0 bg-popover z-[200]"
+                  align="start"
+                >
                   <div className="p-2 border-b">
                     <div className="relative">
                       <Search className="absolute right-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
@@ -392,12 +430,13 @@ export function LeadFiltersDialog({
                       />
                     </div>
                   </div>
-                  <div className="max-h-[200px] overflow-y-auto" onWheel={handleScrollWheel}>
+                  <div
+                    className="max-h-[200px] overflow-y-auto"
+                    onWheel={handleScrollWheel}
+                  >
                     <div className="p-2 space-y-1">
                       {/* "None" option */}
-                      <label
-                        className="flex items-center gap-2 p-2 rounded-md cursor-pointer hover:bg-accent"
-                      >
+                      <label className="flex items-center gap-2 p-2 rounded-md cursor-pointer hover:bg-accent">
                         <Checkbox
                           checked={filters.salesPersonIds.includes("none")}
                           onCheckedChange={() => toggleSalesPerson("none")}
@@ -429,7 +468,12 @@ export function LeadFiltersDialog({
                         variant="ghost"
                         size="sm"
                         className="w-full"
-                        onClick={() => setFilters(prev => ({ ...prev, salesPersonIds: [] }))}
+                        onClick={() =>
+                          setFilters((prev) => ({
+                            ...prev,
+                            salesPersonIds: [],
+                          }))
+                        }
                       >
                         <X className="h-4 w-4 ml-2" />
                         נקה בחירה
@@ -443,9 +487,11 @@ export function LeadFiltersDialog({
             {/* Pipeline Stage */}
             <div className="space-y-2">
               <Label>שלב Pipeline</Label>
-              <Select 
-                value={filters.stageId} 
-                onValueChange={(val) => setFilters(prev => ({ ...prev, stageId: val }))}
+              <Select
+                value={filters.stageId}
+                onValueChange={(val) =>
+                  setFilters((prev) => ({ ...prev, stageId: val }))
+                }
               >
                 <SelectTrigger>
                   <SelectValue placeholder="בחר שלב" />
@@ -464,7 +510,10 @@ export function LeadFiltersDialog({
             {/* Response Status - Multi-select with search */}
             <div className="space-y-2">
               <Label>סטטוס תגובה</Label>
-              <Popover open={statusPopoverOpen} onOpenChange={setStatusPopoverOpen}>
+              <Popover
+                open={statusPopoverOpen}
+                onOpenChange={setStatusPopoverOpen}
+              >
                 <PopoverTrigger asChild>
                   <Button
                     variant="outline"
@@ -479,7 +528,10 @@ export function LeadFiltersDialog({
                     )}
                   </Button>
                 </PopoverTrigger>
-                <PopoverContent className="w-[300px] p-0 bg-popover z-[200]" align="start">
+                <PopoverContent
+                  className="w-[300px] p-0 bg-popover z-[200]"
+                  align="start"
+                >
                   <div className="p-2 border-b">
                     <div className="relative">
                       <Search className="absolute right-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
@@ -491,12 +543,13 @@ export function LeadFiltersDialog({
                       />
                     </div>
                   </div>
-                  <div className="max-h-[200px] overflow-y-auto" onWheel={handleScrollWheel}>
+                  <div
+                    className="max-h-[200px] overflow-y-auto"
+                    onWheel={handleScrollWheel}
+                  >
                     <div className="p-2 space-y-1">
                       {/* "None" option */}
-                      <label
-                        className="flex items-center gap-2 p-2 rounded-md cursor-pointer hover:bg-accent"
-                      >
+                      <label className="flex items-center gap-2 p-2 rounded-md cursor-pointer hover:bg-accent">
                         <Checkbox
                           checked={filters.responseStatus.includes("none")}
                           onCheckedChange={() => toggleStatus("none")}
@@ -509,8 +562,12 @@ export function LeadFiltersDialog({
                           className="flex items-center gap-2 p-2 rounded-md cursor-pointer hover:bg-accent"
                         >
                           <Checkbox
-                            checked={filters.responseStatus.includes(status.status_key)}
-                            onCheckedChange={() => toggleStatus(status.status_key)}
+                            checked={filters.responseStatus.includes(
+                              status.status_key,
+                            )}
+                            onCheckedChange={() =>
+                              toggleStatus(status.status_key)
+                            }
                           />
                           <div
                             className="w-3 h-3 rounded-full shrink-0"
@@ -532,7 +589,12 @@ export function LeadFiltersDialog({
                         variant="ghost"
                         size="sm"
                         className="w-full"
-                        onClick={() => setFilters(prev => ({ ...prev, responseStatus: [] }))}
+                        onClick={() =>
+                          setFilters((prev) => ({
+                            ...prev,
+                            responseStatus: [],
+                          }))
+                        }
                       >
                         <X className="h-4 w-4 ml-2" />
                         נקה בחירה
@@ -561,7 +623,10 @@ export function LeadFiltersDialog({
                     )}
                   </Button>
                 </PopoverTrigger>
-                <PopoverContent className="w-[300px] p-0 bg-popover z-[200]" align="start">
+                <PopoverContent
+                  className="w-[300px] p-0 bg-popover z-[200]"
+                  align="start"
+                >
                   <div className="p-2 border-b">
                     <div className="relative">
                       <Search className="absolute right-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
@@ -573,12 +638,13 @@ export function LeadFiltersDialog({
                       />
                     </div>
                   </div>
-                  <div className="max-h-[200px] overflow-y-auto" onWheel={handleScrollWheel}>
+                  <div
+                    className="max-h-[200px] overflow-y-auto"
+                    onWheel={handleScrollWheel}
+                  >
                     <div className="p-2 space-y-1">
                       {/* "None" option */}
-                      <label
-                        className="flex items-center gap-2 p-2 rounded-md cursor-pointer hover:bg-accent"
-                      >
+                      <label className="flex items-center gap-2 p-2 rounded-md cursor-pointer hover:bg-accent">
                         <Checkbox
                           checked={filters.tagIds.includes("none")}
                           onCheckedChange={() => toggleTag("none")}
@@ -614,7 +680,9 @@ export function LeadFiltersDialog({
                         variant="ghost"
                         size="sm"
                         className="w-full"
-                        onClick={() => setFilters(prev => ({ ...prev, tagIds: [] }))}
+                        onClick={() =>
+                          setFilters((prev) => ({ ...prev, tagIds: [] }))
+                        }
                       >
                         <X className="h-4 w-4 ml-2" />
                         נקה בחירה
@@ -635,18 +703,22 @@ export function LeadFiltersDialog({
                       variant="outline"
                       className={cn(
                         "flex-1 justify-start text-right font-normal",
-                        !filters.startDate && "text-muted-foreground"
+                        !filters.startDate && "text-muted-foreground",
                       )}
                     >
                       <CalendarIcon className="ml-2 h-4 w-4" />
-                      {filters.startDate ? format(filters.startDate, "dd/MM/yyyy") : "מתאריך"}
+                      {filters.startDate
+                        ? format(filters.startDate, "dd/MM/yyyy")
+                        : "מתאריך"}
                     </Button>
                   </PopoverTrigger>
                   <PopoverContent className="w-auto p-0" align="start">
                     <Calendar
                       mode="single"
                       selected={filters.startDate}
-                      onSelect={(date) => setFilters(prev => ({ ...prev, startDate: date }))}
+                      onSelect={(date) =>
+                        setFilters((prev) => ({ ...prev, startDate: date }))
+                      }
                       initialFocus
                     />
                   </PopoverContent>
@@ -658,18 +730,22 @@ export function LeadFiltersDialog({
                       variant="outline"
                       className={cn(
                         "flex-1 justify-start text-right font-normal",
-                        !filters.endDate && "text-muted-foreground"
+                        !filters.endDate && "text-muted-foreground",
                       )}
                     >
                       <CalendarIcon className="ml-2 h-4 w-4" />
-                      {filters.endDate ? format(filters.endDate, "dd/MM/yyyy") : "עד תאריך"}
+                      {filters.endDate
+                        ? format(filters.endDate, "dd/MM/yyyy")
+                        : "עד תאריך"}
                     </Button>
                   </PopoverTrigger>
                   <PopoverContent className="w-auto p-0" align="start">
                     <Calendar
                       mode="single"
                       selected={filters.endDate}
-                      onSelect={(date) => setFilters(prev => ({ ...prev, endDate: date }))}
+                      onSelect={(date) =>
+                        setFilters((prev) => ({ ...prev, endDate: date }))
+                      }
                       initialFocus
                     />
                   </PopoverContent>
@@ -679,7 +755,13 @@ export function LeadFiltersDialog({
                   <Button
                     variant="ghost"
                     size="icon"
-                    onClick={() => setFilters(prev => ({ ...prev, startDate: undefined, endDate: undefined }))}
+                    onClick={() =>
+                      setFilters((prev) => ({
+                        ...prev,
+                        startDate: undefined,
+                        endDate: undefined,
+                      }))
+                    }
                   >
                     <X className="h-4 w-4" />
                   </Button>
@@ -692,13 +774,18 @@ export function LeadFiltersDialog({
               <label className="flex items-center gap-3 p-3 rounded-lg border cursor-pointer hover:bg-accent/50 transition-colors">
                 <Checkbox
                   checked={filters.followUpToday}
-                  onCheckedChange={(checked) => 
-                    setFilters(prev => ({ ...prev, followUpToday: checked === true }))
+                  onCheckedChange={(checked) =>
+                    setFilters((prev) => ({
+                      ...prev,
+                      followUpToday: checked === true,
+                    }))
                   }
                 />
                 <div className="flex flex-col">
                   <span className="font-medium">לידים לחזרה היום</span>
-                  <span className="text-xs text-muted-foreground">הצג רק לידים עם תאריך חזרה להיום</span>
+                  <span className="text-xs text-muted-foreground">
+                    הצג רק לידים עם תאריך חזרה להיום
+                  </span>
                 </div>
               </label>
             </div>
@@ -710,8 +797,8 @@ export function LeadFiltersDialog({
               איפוס
             </Button>
             {editingPreset ? (
-              <Button 
-                onClick={handleUpdatePreset} 
+              <Button
+                onClick={handleUpdatePreset}
                 disabled={isUpdating}
                 className="gap-2"
               >
@@ -720,8 +807,8 @@ export function LeadFiltersDialog({
               </Button>
             ) : (
               <>
-                <Button 
-                  variant="outline" 
+                <Button
+                  variant="outline"
                   onClick={() => setSaveDialogOpen(true)}
                   disabled={!hasActiveFilters}
                   className="gap-2"

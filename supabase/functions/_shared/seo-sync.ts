@@ -1,7 +1,9 @@
 /** Shared SEO Ahrefs sync helpers — keep cron + fetch paths aligned with the UI. */
 
 export function normalizeSeoDomain(value?: string | null): string {
-  let v = String(value || "").trim().toLowerCase();
+  let v = String(value || "")
+    .trim()
+    .toLowerCase();
   if (!v) return "";
   v = v.replace(/^sc-domain:/, "");
   v = v.replace(/^https?:\/\//, "");
@@ -14,7 +16,9 @@ export function normalizeSeoDomain(value?: string | null): string {
 export function looksLikeSeoDomain(value?: string | null): boolean {
   const n = normalizeSeoDomain(value);
   if (!n || n.includes(" ")) return false;
-  return /^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]*[a-z0-9])?)+$/.test(n);
+  return /^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]*[a-z0-9])?)+$/.test(
+    n,
+  );
 }
 
 export function extractDomainHint(text?: string | null): string {
@@ -33,13 +37,19 @@ export function pickSeoSyncDomain(input: {
   latestReportDomain?: string | null;
 }): { domain: string; from: string | null } {
   const settings = input.settings || {};
-  const tryPick = (raw: unknown, from: string): { domain: string; from: string } | null => {
+  const tryPick = (
+    raw: unknown,
+    from: string,
+  ): { domain: string; from: string } | null => {
     const n = normalizeSeoDomain(String(raw || ""));
     return looksLikeSeoDomain(n) ? { domain: n, from } : null;
   };
 
   const chain: Array<{ raw: unknown; from: string }> = [
-    { raw: settings.targetDomain || settings.target || settings.domain, from: "targetDomain" },
+    {
+      raw: settings.targetDomain || settings.target || settings.domain,
+      from: "targetDomain",
+    },
     { raw: settings.linkedGscSiteUrl, from: "linkedGscSiteUrl" },
     { raw: input.client?.ahrefs_domain, from: "ahrefs_domain" },
     { raw: input.client?.website, from: "website" },
@@ -64,8 +74,12 @@ export function needsSeoSyncThisMonth(
     if (!iso) return false;
     const d = new Date(iso);
     if (Number.isNaN(d.getTime())) return false;
-    return d.getUTCFullYear() === now.getUTCFullYear() && d.getUTCMonth() === now.getUTCMonth();
+    return (
+      d.getUTCFullYear() === now.getUTCFullYear() &&
+      d.getUTCMonth() === now.getUTCMonth()
+    );
   };
-  if (inCurrentMonth(lastSyncAt) || inCurrentMonth(latestReportReceivedAt)) return false;
+  if (inCurrentMonth(lastSyncAt) || inCurrentMonth(latestReportReceivedAt))
+    return false;
   return true;
 }

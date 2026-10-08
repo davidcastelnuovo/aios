@@ -81,13 +81,13 @@ export function AddAgencyForm() {
       if (error) throw error;
     },
     onSuccess: () => {
-      toast.success(`${t('agency')} נוספה בהצלחה`);
+      toast.success(`${t("agency")} נוספה בהצלחה`);
       queryClient.invalidateQueries({ queryKey: ["agencies", tenantId] });
       form.reset();
       setOpen(false);
     },
     onError: (error) => {
-      toast.error(`שגיאה בהוספת ${t('agency')}: ` + error.message);
+      toast.error(`שגיאה בהוספת ${t("agency")}: ` + error.message);
     },
   });
 
@@ -100,12 +100,15 @@ export function AddAgencyForm() {
       <DialogTrigger asChild>
         <Button>
           <Plus className="ml-2 h-4 w-4" />
-          הוסף {t('agency')}
+          הוסף {t("agency")}
         </Button>
       </DialogTrigger>
-      <DialogContent dir="rtl" className="max-w-2xl max-h-[90vh] overflow-y-auto">
+      <DialogContent
+        dir="rtl"
+        className="max-w-2xl max-h-[90vh] overflow-y-auto"
+      >
         <DialogHeader>
-          <DialogTitle>הוסף {t('agency')} חדשה</DialogTitle>
+          <DialogTitle>הוסף {t("agency")} חדשה</DialogTitle>
         </DialogHeader>
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
@@ -114,7 +117,7 @@ export function AddAgencyForm() {
               name="name"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>שם ה{t('agency')}</FormLabel>
+                  <FormLabel>שם ה{t("agency")}</FormLabel>
                   <FormControl>
                     <Input {...field} />
                   </FormControl>
@@ -207,7 +210,11 @@ export function AddAgencyForm() {
               )}
             />
 
-            <Button type="submit" className="w-full" disabled={mutation.isPending}>
+            <Button
+              type="submit"
+              className="w-full"
+              disabled={mutation.isPending}
+            >
               {mutation.isPending ? "מוסיף..." : "הוסף סוכנות"}
             </Button>
           </form>

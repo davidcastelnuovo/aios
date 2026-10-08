@@ -1,5 +1,5 @@
-import assert from 'node:assert/strict';
-import test from 'node:test';
+import assert from "node:assert/strict";
+import test from "node:test";
 
 /**
  * Pure merge/dedupe logic used by fetchAccessibleDashboards — kept here so we
@@ -29,48 +29,61 @@ function pickHomeTenant(opts: {
   return opts.agencyTenantId || opts.clientTenantId || opts.uiTenantId;
 }
 
-test('owned MC dashboards + DMM shared-agency dashboards union without duplicates', () => {
-  const owned = [
-    { id: 'aviali-mc', created_at: '2026-08-02T00:00:00Z' },
-  ];
+test("owned MC dashboards + DMM shared-agency dashboards union without duplicates", () => {
+  const owned = [{ id: "aviali-mc", created_at: "2026-08-02T00:00:00Z" }];
   const foreign = [
-    { id: 'man-dmm', created_at: '2026-07-01T00:00:00Z' },
-    { id: 'holder-dmm', created_at: '2026-06-15T00:00:00Z' },
-    { id: 'berliner-dmm', created_at: '2026-05-01T00:00:00Z' },
-    { id: 'aviali-mc', created_at: '2026-08-02T00:00:00Z' },
+    { id: "man-dmm", created_at: "2026-07-01T00:00:00Z" },
+    { id: "holder-dmm", created_at: "2026-06-15T00:00:00Z" },
+    { id: "berliner-dmm", created_at: "2026-05-01T00:00:00Z" },
+    { id: "aviali-mc", created_at: "2026-08-02T00:00:00Z" },
   ];
   const merged = mergeDashboardRows(owned, foreign);
   assert.equal(merged.length, 4);
   assert.deepEqual(
     merged.map((r) => r.id),
-    ['aviali-mc', 'man-dmm', 'holder-dmm', 'berliner-dmm'],
+    ["aviali-mc", "man-dmm", "holder-dmm", "berliner-dmm"],
   );
 });
 
-test('shared-agency create prefers agency home tenant over UI tenant', () => {
-  const DMM = 'dmm-tenant';
-  const MC = 'mc-tenant';
+test("shared-agency create prefers agency home tenant over UI tenant", () => {
+  const DMM = "dmm-tenant";
+  const MC = "mc-tenant";
   assert.equal(
-    pickHomeTenant({ uiTenantId: MC, agencyTenantId: DMM, clientTenantId: DMM }),
+    pickHomeTenant({
+      uiTenantId: MC,
+      agencyTenantId: DMM,
+      clientTenantId: DMM,
+    }),
     DMM,
   );
   assert.equal(
-    pickHomeTenant({ uiTenantId: MC, agencyTenantId: null, clientTenantId: DMM }),
+    pickHomeTenant({
+      uiTenantId: MC,
+      agencyTenantId: null,
+      clientTenantId: DMM,
+    }),
     DMM,
   );
   assert.equal(
-    pickHomeTenant({ uiTenantId: MC, agencyTenantId: null, clientTenantId: null }),
+    pickHomeTenant({
+      uiTenantId: MC,
+      agencyTenantId: null,
+      clientTenantId: null,
+    }),
     MC,
   );
 });
 
-test('owned-agency foreign rows are part of the accessible union (DMM sees MC orphans)', () => {
+test("owned-agency foreign rows are part of the accessible union (DMM sees MC orphans)", () => {
   // After a mistaken create on MC, DMM (agency owner) must still see the row
   // via owned-agency foreign fetch — not only via sharedAgencyIds.
-  const ownedOnDmm = [{ id: 'man-dmm', created_at: '2026-07-01T00:00:00Z' }];
+  const ownedOnDmm = [{ id: "man-dmm", created_at: "2026-07-01T00:00:00Z" }];
   const foreignOnMcOwnedAgency = [
-    { id: 'aviali-mc-orphan', created_at: '2026-08-02T00:00:00Z' },
+    { id: "aviali-mc-orphan", created_at: "2026-08-02T00:00:00Z" },
   ];
   const merged = mergeDashboardRows(ownedOnDmm, foreignOnMcOwnedAgency);
-  assert.equal(merged.some((r) => r.id === 'aviali-mc-orphan'), true);
+  assert.equal(
+    merged.some((r) => r.id === "aviali-mc-orphan"),
+    true,
+  );
 });

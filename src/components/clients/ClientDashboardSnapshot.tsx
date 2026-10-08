@@ -26,7 +26,9 @@ export const ClientDashboardSnapshot = forwardRef<HTMLDivElement, Props>(
     const [client] = useState(
       () =>
         new QueryClient({
-          defaultOptions: { queries: { retry: false, staleTime: 0, gcTime: 0 } },
+          defaultOptions: {
+            queries: { retry: false, staleTime: 0, gcTime: 0 },
+          },
         }),
     );
 
@@ -41,12 +43,14 @@ export const ClientDashboardSnapshot = forwardRef<HTMLDivElement, Props>(
         }}
       >
         <QueryClientProvider client={client}>
-          <Suspense fallback={<div aria-busy="true" style={{ minHeight: 600 }} />}>
-          <SharedDashboard
-            shareTokenOverride={shareToken}
-            initialDateFilter={dateFilter}
-            snapshotMode
-          />
+          <Suspense
+            fallback={<div aria-busy="true" style={{ minHeight: 600 }} />}
+          >
+            <SharedDashboard
+              shareTokenOverride={shareToken}
+              initialDateFilter={dateFilter}
+              snapshotMode
+            />
           </Suspense>
         </QueryClientProvider>
       </div>

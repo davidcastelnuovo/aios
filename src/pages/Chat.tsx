@@ -15,12 +15,32 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
-import { MessageCircle, Search, Settings, Pencil, Trash2, Tags, SquareCheck, CheckCheck, SlidersHorizontal } from "lucide-react";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import {
+  MessageCircle,
+  Search,
+  Settings,
+  Pencil,
+  Trash2,
+  Tags,
+  SquareCheck,
+  CheckCheck,
+  SlidersHorizontal,
+} from "lucide-react";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -37,10 +57,16 @@ import AgentSessionsPanel from "@/components/chat/AgentSessionsPanel";
 import { EditClientDialog } from "@/components/forms/EditClientDialog";
 import { EditLeadDialog } from "@/components/forms/EditLeadDialog";
 import { ChatTagsManager } from "@/components/chat/ChatTagsManager";
-import { ChatTagSelector, ContactTagBadges } from "@/components/chat/ChatTagSelector";
+import {
+  ChatTagSelector,
+  ContactTagBadges,
+} from "@/components/chat/ChatTagSelector";
 import { ChatMultiSelectToolbar } from "@/components/chat/ChatMultiSelectToolbar";
 import { useChatConnections } from "@/hooks/useChatConnections";
-import { ChatConnectionSelector, type ChatFilter } from "@/components/chat/ChatConnectionSelector";
+import {
+  ChatConnectionSelector,
+  type ChatFilter,
+} from "@/components/chat/ChatConnectionSelector";
 
 interface Contact {
   id: string;
@@ -53,7 +79,7 @@ interface Contact {
   manychat_subscriber_id: string | null;
   active_chat_provider: string | null;
   unread_count: number;
-  contact_type: 'client' | 'lead' | 'group' | 'unknown' | 'telegram';
+  contact_type: "client" | "lead" | "group" | "unknown" | "telegram";
   last_message_at: string | null;
   sender_phone?: string;
   is_blocked?: boolean;
@@ -64,7 +90,7 @@ interface Contact {
 
 type SelectedContact = {
   id: string;
-  type: 'client' | 'lead' | 'group' | 'unknown' | 'telegram';
+  type: "client" | "lead" | "group" | "unknown" | "telegram";
   senderPhone?: string;
   name?: string;
   telegramChatId?: string;
@@ -72,11 +98,11 @@ type SelectedContact = {
 };
 
 const normalizePhone = (phone?: string | null) => {
-  if (!phone) return '';
-  const digits = (phone.match(/\d+/g) || []).join('');
-  let p = digits.replace(/^00/, '');
-  if (p.startsWith('972')) p = p.slice(3);
-  if (p.startsWith('0')) p = p.slice(1);
+  if (!phone) return "";
+  const digits = (phone.match(/\d+/g) || []).join("");
+  let p = digits.replace(/^00/, "");
+  if (p.startsWith("972")) p = p.slice(3);
+  if (p.startsWith("0")) p = p.slice(1);
   return p.slice(-9);
 };
 
@@ -90,34 +116,45 @@ export default function Chat() {
   const queryClient = useQueryClient();
   const [searchTerm, setSearchTerm] = useState("");
   const debouncedSearch = useDebouncedValue(searchTerm, 300);
-  const [contactFilter, setContactFilter] = useState<"all" | "clients" | "leads" | "groups" | "unknown" | "telegram">("all");
+  const [contactFilter, setContactFilter] = useState<
+    "all" | "clients" | "leads" | "groups" | "unknown" | "telegram"
+  >("all");
   const [chatFilter, setChatFilter] = useState<ChatFilter>({ kind: "all" });
   const [showTodayOnly, setShowTodayOnly] = useState(false);
   const [showUnreadOnly, setShowUnreadOnly] = useState(false);
-  const [selectedContact, setSelectedContact] = useState<SelectedContact | null>(
-    clientId ? { id: clientId, type: 'client' } : null
-  );
-  const [editingContact, setEditingContact] = useState<{ id: string; type: 'client' | 'lead'; data: any } | null>(null);
+  const [selectedContact, setSelectedContact] =
+    useState<SelectedContact | null>(
+      clientId ? { id: clientId, type: "client" } : null,
+    );
+  const [editingContact, setEditingContact] = useState<{
+    id: string;
+    type: "client" | "lead";
+    data: any;
+  } | null>(null);
   const [showClearHistoryDialog, setShowClearHistoryDialog] = useState(false);
-  
+
   // Multi-select state
   const [isMultiSelectMode, setIsMultiSelectMode] = useState(false);
-  const [selectedChatIds, setSelectedChatIds] = useState<Set<string>>(new Set());
-  
+  const [selectedChatIds, setSelectedChatIds] = useState<Set<string>>(
+    new Set(),
+  );
+
   // Tag filter state
-  const [selectedTagFilter, setSelectedTagFilter] = useState<string | null>(null);
+  const [selectedTagFilter, setSelectedTagFilter] = useState<string | null>(
+    null,
+  );
 
   // Fetch all tags for display
   const { data: allTags = [] } = useQuery({
-    queryKey: ['chat-tags', tenantId],
+    queryKey: ["chat-tags", tenantId],
     queryFn: async () => {
       if (!tenantId) return [];
       const { data, error } = await supabase
-        .from('chat_tags')
-        .select('*')
-        .eq('tenant_id', tenantId)
-        .order('sort_order', { ascending: true });
-      
+        .from("chat_tags")
+        .select("*")
+        .eq("tenant_id", tenantId)
+        .order("sort_order", { ascending: true });
+
       if (error) throw error;
       return data;
     },
@@ -126,19 +163,21 @@ export default function Chat() {
 
   // Fetch contact-tag associations for the list view
   const { data: allContactTags = [] } = useQuery({
-    queryKey: ['contact-tags-for-list', tenantId],
+    queryKey: ["contact-tags-for-list", tenantId],
     queryFn: async () => {
-      const { data: { user } } = await supabase.auth.getUser();
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
       if (!user || !tenantId) return [];
 
       const { data, error } = await supabase
-        .from('chat_contact_tags')
-        .select('*')
-        .eq('user_id', user.id)
-        .eq('tenant_id', tenantId);
+        .from("chat_contact_tags")
+        .select("*")
+        .eq("user_id", user.id)
+        .eq("tenant_id", tenantId);
 
       if (error) {
-        console.error('Error fetching contact tags:', error);
+        console.error("Error fetching contact tags:", error);
         return [];
       }
       return data || [];
@@ -146,19 +185,29 @@ export default function Chat() {
     enabled: !!tenantId,
   });
 
-
   // Get tags for a specific contact
-  const getContactTagIds = useCallback((contact: Contact): string[] => {
-    return allContactTags
-      .filter(ct => {
-        if (contact.contact_type === 'client' && ct.client_id === contact.id) return true;
-        if (contact.contact_type === 'lead' && ct.lead_id === contact.id) return true;
-        if (contact.contact_type === 'group' && ct.group_id === contact.id) return true;
-        if (contact.contact_type === 'unknown' && contact.sender_phone && ct.sender_phone === contact.sender_phone) return true;
-        return false;
-      })
-      .map(ct => ct.tag_id);
-  }, [allContactTags]);
+  const getContactTagIds = useCallback(
+    (contact: Contact): string[] => {
+      return allContactTags
+        .filter((ct) => {
+          if (contact.contact_type === "client" && ct.client_id === contact.id)
+            return true;
+          if (contact.contact_type === "lead" && ct.lead_id === contact.id)
+            return true;
+          if (contact.contact_type === "group" && ct.group_id === contact.id)
+            return true;
+          if (
+            contact.contact_type === "unknown" &&
+            contact.sender_phone &&
+            ct.sender_phone === contact.sender_phone
+          )
+            return true;
+          return false;
+        })
+        .map((ct) => ct.tag_id);
+    },
+    [allContactTags],
+  );
 
   // Fetch active chats (default mode - no search)
   const { data: chatConnections = [] } = useChatConnections(tenantId);
@@ -172,7 +221,11 @@ export default function Chat() {
       return c?.user_id ? [c.user_id] : null;
     }
     const ids = Array.from(
-      new Set(chatConnections.map((c) => c.user_id).filter((id): id is string => !!id))
+      new Set(
+        chatConnections
+          .map((c) => c.user_id)
+          .filter((id): id is string => !!id),
+      ),
     );
     return ids.length > 0 ? ids : null;
   }, [chatConnections, chatFilter]);
@@ -186,21 +239,28 @@ export default function Chat() {
   }, [chatConnections, chatFilter]);
 
   const { data: activeChats, isLoading: activeChatsLoading } = useQuery({
-    queryKey: ['active-chats', tenantId, userAgencyIds, selectedAgency, connectionUserIds?.join(',') ?? 'self', providerFilter ?? 'any'],
+    queryKey: [
+      "active-chats",
+      tenantId,
+      userAgencyIds,
+      selectedAgency,
+      connectionUserIds?.join(",") ?? "self",
+      providerFilter ?? "any",
+    ],
     queryFn: async () => {
       if (!tenantId) return [];
 
-      const { data, error } = await supabase.rpc('get_chat_contacts', {
+      const { data, error } = await supabase.rpc("get_chat_contacts", {
         p_tenant_id: tenantId,
         p_connection_user_ids: connectionUserIds ?? null,
         p_provider: providerFilter ?? null,
       } as any);
 
       if (error) {
-        console.error('Error fetching active chats:', error);
+        console.error("Error fetching active chats:", error);
         throw error;
       }
-      
+
       return (data || []).map((contact: any) => ({
         id: contact.contact_id,
         name: contact.name,
@@ -231,19 +291,21 @@ export default function Chat() {
     if (!tenantId) return;
 
     const channel = supabase
-      .channel('whatsapp-groups-changes')
+      .channel("whatsapp-groups-changes")
       .on(
-        'postgres_changes',
+        "postgres_changes",
         {
-          event: 'UPDATE',
-          schema: 'public',
-          table: 'whatsapp_groups',
+          event: "UPDATE",
+          schema: "public",
+          table: "whatsapp_groups",
         },
         (payload) => {
           // Invalidate queries to refresh the list with new group name
-          queryClient.invalidateQueries({ queryKey: ['active-chats', tenantId] });
-          queryClient.invalidateQueries({ queryKey: ['contact', tenantId] });
-        }
+          queryClient.invalidateQueries({
+            queryKey: ["active-chats", tenantId],
+          });
+          queryClient.invalidateQueries({ queryKey: ["contact", tenantId] });
+        },
       )
       .subscribe();
 
@@ -252,13 +314,12 @@ export default function Chat() {
     };
   }, [tenantId, queryClient]);
 
-
   const { data: searchResults, isLoading: searchLoading } = useQuery({
-    queryKey: ['search-contacts', tenantId, debouncedSearch],
+    queryKey: ["search-contacts", tenantId, debouncedSearch],
     queryFn: async () => {
       if (!tenantId || !debouncedSearch) return [];
 
-      const { data, error } = await supabase.rpc('search_contacts_for_chat', {
+      const { data, error } = await supabase.rpc("search_contacts_for_chat", {
         p_search_term: debouncedSearch,
         p_tenant_id: tenantId,
       });
@@ -292,19 +353,21 @@ export default function Chat() {
 
   // Fetch Telegram contacts
   const { data: telegramContacts = [] } = useQuery({
-    queryKey: ['telegram-contacts', tenantId],
+    queryKey: ["telegram-contacts", tenantId],
     queryFn: async () => {
       if (!tenantId) return [];
       // Get distinct chat_ids from telegram_messages for all user's tenants (RLS handles filtering)
       const { data, error } = await supabase
-        .from('telegram_messages')
-        .select('chat_id, sender_name, sender_username, created_at, text, direction, tenant_id')
-        .eq('tenant_id', tenantId)
-        .order('created_at', { ascending: false })
+        .from("telegram_messages")
+        .select(
+          "chat_id, sender_name, sender_username, created_at, text, direction, tenant_id",
+        )
+        .eq("tenant_id", tenantId)
+        .order("created_at", { ascending: false })
         .limit(500);
-      
+
       if (error || !data) return [];
-      
+
       // Group by chat_id to get unique contacts.
       // Names live on inbound messages (sender_name/sender_username may be null on outbound),
       // so iterate ordered by created_at desc but upgrade the name when we find a better one.
@@ -326,7 +389,7 @@ export default function Chat() {
           existing.name = msg.sender_name || msg.sender_username;
         }
       }
-      
+
       return Array.from(chatMap.values());
     },
     enabled: !!tenantId && !debouncedSearch,
@@ -348,8 +411,8 @@ export default function Chat() {
         agency_id: null,
         agency_name: null,
         manychat_subscriber_id: null,
-        active_chat_provider: 'telegram',
-        contact_type: 'telegram' as const,
+        active_chat_provider: "telegram",
+        contact_type: "telegram" as const,
         unread_count: tc.unread_count || 0,
         last_message_at: tc.last_message_at,
         sender_phone: undefined,
@@ -358,14 +421,18 @@ export default function Chat() {
         whatsapp_avatar_url: null,
         telegram_chat_id: tc.chat_id,
       }));
-      
+
       base = [...base, ...normalizedTelegram];
     }
 
     // Sort combined list by last_message_at descending (newest first)
     return base.sort((a, b) => {
-      const aTime = a.last_message_at ? new Date(a.last_message_at).getTime() : 0;
-      const bTime = b.last_message_at ? new Date(b.last_message_at).getTime() : 0;
+      const aTime = a.last_message_at
+        ? new Date(a.last_message_at).getTime()
+        : 0;
+      const bTime = b.last_message_at
+        ? new Date(b.last_message_at).getTime()
+        : 0;
       return bTime - aTime;
     });
   }, [contacts, telegramContacts, debouncedSearch]);
@@ -378,141 +445,199 @@ export default function Chat() {
   const isTodayLocal = (iso?: string | null) => {
     if (!iso) return false;
     const d = new Date(iso);
-    return d.getFullYear() === todayParts.y && d.getMonth() === todayParts.m && d.getDate() === todayParts.d;
+    return (
+      d.getFullYear() === todayParts.y &&
+      d.getMonth() === todayParts.m &&
+      d.getDate() === todayParts.d
+    );
   };
-
 
   // Filter contacts
   const filteredContacts = useMemo(() => {
     let allContacts = allContactsBeforeTypeFilter;
 
     // Filter out blocked contacts
-    allContacts = allContacts.filter(contact => !contact.is_blocked);
+    allContacts = allContacts.filter((contact) => !contact.is_blocked);
 
     // Apply platform / connection filter
-    if (chatFilter.kind === 'platform') {
-      if (chatFilter.platform === 'whatsapp') {
-        allContacts = allContacts.filter(c => c.active_chat_provider === 'green_api' || c.active_chat_provider === 'manus_wa' || (!c.active_chat_provider && c.contact_type !== 'telegram'));
-      } else if (chatFilter.platform === 'telegram') {
-        allContacts = allContacts.filter(c => c.contact_type === 'telegram' || c.active_chat_provider === 'telegram');
-      } else if (chatFilter.platform === 'manychat') {
-        allContacts = allContacts.filter(c => c.active_chat_provider === 'manychat');
+    if (chatFilter.kind === "platform") {
+      if (chatFilter.platform === "whatsapp") {
+        allContacts = allContacts.filter(
+          (c) =>
+            c.active_chat_provider === "green_api" ||
+            c.active_chat_provider === "manus_wa" ||
+            (!c.active_chat_provider && c.contact_type !== "telegram"),
+        );
+      } else if (chatFilter.platform === "telegram") {
+        allContacts = allContacts.filter(
+          (c) =>
+            c.contact_type === "telegram" ||
+            c.active_chat_provider === "telegram",
+        );
+      } else if (chatFilter.platform === "manychat") {
+        allContacts = allContacts.filter(
+          (c) => c.active_chat_provider === "manychat",
+        );
       }
-    } else if (chatFilter.kind === 'connection') {
-      const conn = chatConnections.find(c => c.id === chatFilter.integrationId);
+    } else if (chatFilter.kind === "connection") {
+      const conn = chatConnections.find(
+        (c) => c.id === chatFilter.integrationId,
+      );
       if (conn) {
-        if (conn.platform === 'telegram') {
-          allContacts = allContacts.filter(c => c.contact_type === 'telegram' || c.active_chat_provider === 'telegram');
-        } else if (conn.platform === 'manychat') {
-          allContacts = allContacts.filter(c => c.active_chat_provider === 'manychat');
+        if (conn.platform === "telegram") {
+          allContacts = allContacts.filter(
+            (c) =>
+              c.contact_type === "telegram" ||
+              c.active_chat_provider === "telegram",
+          );
+        } else if (conn.platform === "manychat") {
+          allContacts = allContacts.filter(
+            (c) => c.active_chat_provider === "manychat",
+          );
         } else {
-          allContacts = allContacts.filter(c => c.active_chat_provider === conn.active_chat_provider);
+          allContacts = allContacts.filter(
+            (c) => c.active_chat_provider === conn.active_chat_provider,
+          );
         }
       }
     }
 
     // Apply contact type filter
     if (contactFilter !== "all") {
-      const typeToMatch = contactFilter === 'groups' ? 'group' : 
-                          contactFilter === 'clients' ? 'client' : 
-                          contactFilter === 'leads' ? 'lead' : 
-                          contactFilter;
-      allContacts = allContacts.filter(contact => contact.contact_type === typeToMatch);
+      const typeToMatch =
+        contactFilter === "groups"
+          ? "group"
+          : contactFilter === "clients"
+            ? "client"
+            : contactFilter === "leads"
+              ? "lead"
+              : contactFilter;
+      allContacts = allContacts.filter(
+        (contact) => contact.contact_type === typeToMatch,
+      );
     }
 
     // Apply today filter
     if (showTodayOnly) {
-      allContacts = allContacts.filter(contact => isTodayLocal(contact.last_message_at));
+      allContacts = allContacts.filter((contact) =>
+        isTodayLocal(contact.last_message_at),
+      );
     }
 
     // Apply unread only filter
     if (showUnreadOnly) {
-      allContacts = allContacts.filter(contact => contact.unread_count > 0);
+      allContacts = allContacts.filter((contact) => contact.unread_count > 0);
     }
 
     // Apply tag filter
     if (selectedTagFilter) {
-      allContacts = allContacts.filter(contact => {
+      allContacts = allContacts.filter((contact) => {
         const tagIds = getContactTagIds(contact);
         return tagIds.includes(selectedTagFilter);
       });
     }
 
     return allContacts;
-  }, [allContactsBeforeTypeFilter, contactFilter, chatFilter, chatConnections, showTodayOnly, showUnreadOnly, todayParts, selectedTagFilter, getContactTagIds, debouncedSearch]);
+  }, [
+    allContactsBeforeTypeFilter,
+    contactFilter,
+    chatFilter,
+    chatConnections,
+    showTodayOnly,
+    showUnreadOnly,
+    todayParts,
+    selectedTagFilter,
+    getContactTagIds,
+    debouncedSearch,
+  ]);
 
-  const clientsCount = allContactsBeforeTypeFilter.filter(c => c.contact_type === 'client').length;
-  const leadsCount = allContactsBeforeTypeFilter.filter(c => c.contact_type === 'lead').length;
-  const groupsCount = allContactsBeforeTypeFilter.filter(c => c.contact_type === 'group').length;
-  const unknownCount = allContactsBeforeTypeFilter.filter(c => c.contact_type === 'unknown').length;
-  const telegramCount = allContactsBeforeTypeFilter.filter(c => c.contact_type === 'telegram').length;
-
+  const clientsCount = allContactsBeforeTypeFilter.filter(
+    (c) => c.contact_type === "client",
+  ).length;
+  const leadsCount = allContactsBeforeTypeFilter.filter(
+    (c) => c.contact_type === "lead",
+  ).length;
+  const groupsCount = allContactsBeforeTypeFilter.filter(
+    (c) => c.contact_type === "group",
+  ).length;
+  const unknownCount = allContactsBeforeTypeFilter.filter(
+    (c) => c.contact_type === "unknown",
+  ).length;
+  const telegramCount = allContactsBeforeTypeFilter.filter(
+    (c) => c.contact_type === "telegram",
+  ).length;
 
   const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setSearchTerm(e.target.value);
   };
 
   const handleEditContact = async (contact: Contact) => {
-    if (contact.contact_type === 'client') {
+    if (contact.contact_type === "client") {
       const { data } = await supabase
-        .from('clients')
-        .select('*')
-        .eq('id', contact.id)
+        .from("clients")
+        .select("*")
+        .eq("id", contact.id)
         .single();
-      
+
       if (data) {
-        setEditingContact({ id: contact.id, type: 'client', data });
+        setEditingContact({ id: contact.id, type: "client", data });
       }
-    } else if (contact.contact_type === 'lead') {
+    } else if (contact.contact_type === "lead") {
       const { data } = await supabase
-        .from('leads')
-        .select('*')
-        .eq('id', contact.id)
+        .from("leads")
+        .select("*")
+        .eq("id", contact.id)
         .single();
-      
+
       if (data) {
-        setEditingContact({ id: contact.id, type: 'lead', data });
+        setEditingContact({ id: contact.id, type: "lead", data });
       }
     }
   };
 
   const handleClearHistory = async () => {
     try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user || !tenantId) throw new Error('No user found');
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      if (!user || !tenantId) throw new Error("No user found");
 
       // Delete messages permanently
       const { error } = await supabase
-        .from('chat_messages')
+        .from("chat_messages")
         .delete()
-        .eq('connection_user_id', user.id);
+        .eq("connection_user_id", user.id);
 
       if (error) throw error;
-      
-      toast.success('ההיסטוריה נמחקה לצמיתות');
-      queryClient.invalidateQueries({ queryKey: ['active-chats', tenantId] });
-      queryClient.invalidateQueries({ queryKey: ['unknown-contacts', tenantId] });
+
+      toast.success("ההיסטוריה נמחקה לצמיתות");
+      queryClient.invalidateQueries({ queryKey: ["active-chats", tenantId] });
+      queryClient.invalidateQueries({
+        queryKey: ["unknown-contacts", tenantId],
+      });
 
       setShowClearHistoryDialog(false);
       setSelectedContact(null);
     } catch (error) {
-      console.error('Error:', error);
-      toast.error('שגיאה בביצוע הפעולה');
+      console.error("Error:", error);
+      toast.error("שגיאה בביצוע הפעולה");
     }
   };
 
   // Multi-select handlers
-  const [lastSelectedIndex, setLastSelectedIndex] = useState<number | null>(null);
+  const [lastSelectedIndex, setLastSelectedIndex] = useState<number | null>(
+    null,
+  );
 
   const toggleChatSelection = (contactId: string, shiftKey?: boolean) => {
-    const currentIndex = filteredContacts.findIndex(c => c.id === contactId);
-    
+    const currentIndex = filteredContacts.findIndex((c) => c.id === contactId);
+
     if (shiftKey && lastSelectedIndex !== null && currentIndex !== -1) {
       // Shift+Click: select range
       const start = Math.min(lastSelectedIndex, currentIndex);
       const end = Math.max(lastSelectedIndex, currentIndex);
-      
-      setSelectedChatIds(prev => {
+
+      setSelectedChatIds((prev) => {
         const newSet = new Set(prev);
         for (let i = start; i <= end; i++) {
           newSet.add(filteredContacts[i].id);
@@ -521,7 +646,7 @@ export default function Chat() {
       });
     } else {
       // Normal click: toggle single
-      setSelectedChatIds(prev => {
+      setSelectedChatIds((prev) => {
         const newSet = new Set(prev);
         if (newSet.has(contactId)) {
           newSet.delete(contactId);
@@ -540,14 +665,13 @@ export default function Chat() {
       setSelectedChatIds(new Set());
     } else {
       // Select all
-      setSelectedChatIds(new Set(filteredContacts.map(c => c.id)));
+      setSelectedChatIds(new Set(filteredContacts.map((c) => c.id)));
     }
   };
 
   const getSelectedContacts = () => {
-    return filteredContacts.filter(c => selectedChatIds.has(c.id));
+    return filteredContacts.filter((c) => selectedChatIds.has(c.id));
   };
-
 
   if (chatFilter.kind === "platform" && chatFilter.platform === "agents") {
     return (
@@ -568,7 +692,9 @@ export default function Chat() {
   return (
     <div className="flex h-screen overflow-hidden gap-4" dir="rtl">
       {/* Contact List */}
-      <Card className={`${isMobile && selectedContact ? 'hidden' : 'flex'} flex-col w-full md:w-96 h-full overflow-hidden`}>
+      <Card
+        className={`${isMobile && selectedContact ? "hidden" : "flex"} flex-col w-full md:w-96 h-full overflow-hidden`}
+      >
         <div className="sticky top-0 z-10 bg-card p-4 border-b space-y-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
@@ -580,30 +706,36 @@ export default function Chat() {
               />
             </div>
             <div className="flex items-center gap-1">
-              <Button 
+              <Button
                 variant="ghost"
                 size="icon"
                 title="סמן הכל כנקרא"
                 onClick={async () => {
                   try {
                     if (!tenantId) return;
-                    
-                    const { error } = await supabase
-                      .rpc('mark_all_chats_read', { p_tenant_id: tenantId });
-                    
+
+                    const { error } = await supabase.rpc(
+                      "mark_all_chats_read",
+                      { p_tenant_id: tenantId },
+                    );
+
                     if (error) throw error;
-                    toast.success('כל ההודעות סומנו כנקראו');
-                    queryClient.invalidateQueries({ queryKey: ['active-chats', tenantId] });
-                    queryClient.invalidateQueries({ queryKey: ['unknown-contacts', tenantId] });
+                    toast.success("כל ההודעות סומנו כנקראו");
+                    queryClient.invalidateQueries({
+                      queryKey: ["active-chats", tenantId],
+                    });
+                    queryClient.invalidateQueries({
+                      queryKey: ["unknown-contacts", tenantId],
+                    });
                   } catch (err) {
-                    console.error('Error marking all as read:', err);
-                    toast.error('שגיאה בסימון הודעות כנקראו');
+                    console.error("Error marking all as read:", err);
+                    toast.error("שגיאה בסימון הודעות כנקראו");
                   }
                 }}
               >
                 <CheckCheck className="h-4 w-4" />
               </Button>
-              <Button 
+              <Button
                 variant={isMultiSelectMode ? "secondary" : "ghost"}
                 size="icon"
                 onClick={() => {
@@ -614,16 +746,16 @@ export default function Chat() {
               >
                 <SquareCheck className="h-4 w-4" />
               </Button>
-              <ChatTagsManager 
+              <ChatTagsManager
                 trigger={
                   <Button variant="ghost" size="icon" title="ניהול תגיות">
                     <Tags className="h-4 w-4" />
                   </Button>
                 }
               />
-              <Button 
-                variant="ghost" 
-                size="icon" 
+              <Button
+                variant="ghost"
+                size="icon"
                 title="מחק היסטוריה"
                 onClick={() => {
                   setShowClearHistoryDialog(true);
@@ -631,7 +763,7 @@ export default function Chat() {
               >
                 <Trash2 className="h-4 w-4" />
               </Button>
-              <Link to={buildPath('/chat-integrations')}>
+              <Link to={buildPath("/chat-integrations")}>
                 <Button variant="ghost" size="icon">
                   <Settings className="h-4 w-4" />
                 </Button>
@@ -662,32 +794,57 @@ export default function Chat() {
             </div>
             <Popover>
               <PopoverTrigger asChild>
-                <Button variant="outline" size="icon" className="shrink-0 relative">
+                <Button
+                  variant="outline"
+                  size="icon"
+                  className="shrink-0 relative"
+                >
                   <SlidersHorizontal className="h-4 w-4" />
-                  {(contactFilter !== "all" || selectedTagFilter || showTodayOnly || showUnreadOnly) && (
+                  {(contactFilter !== "all" ||
+                    selectedTagFilter ||
+                    showTodayOnly ||
+                    showUnreadOnly) && (
                     <span className="absolute -top-1 -left-1 h-2.5 w-2.5 rounded-full bg-primary" />
                   )}
                 </Button>
               </PopoverTrigger>
               <PopoverContent align="end" className="w-64 space-y-3">
-                <Select value={contactFilter || "all"} onValueChange={(value: any) => setContactFilter(value)}>
+                <Select
+                  value={contactFilter || "all"}
+                  onValueChange={(value: any) => setContactFilter(value)}
+                >
                   <SelectTrigger className="w-full">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent className="bg-background z-50">
-                    <SelectItem value="all">הכל ({filteredContacts.length})</SelectItem>
-                    <SelectItem value="clients">לקוחות ({clientsCount})</SelectItem>
+                    <SelectItem value="all">
+                      הכל ({filteredContacts.length})
+                    </SelectItem>
+                    <SelectItem value="clients">
+                      לקוחות ({clientsCount})
+                    </SelectItem>
                     <SelectItem value="leads">לידים ({leadsCount})</SelectItem>
-                    <SelectItem value="groups">קבוצות ({groupsCount})</SelectItem>
-                    <SelectItem value="unknown">לא משויכים ({unknownCount})</SelectItem>
+                    <SelectItem value="groups">
+                      קבוצות ({groupsCount})
+                    </SelectItem>
+                    <SelectItem value="unknown">
+                      לא משויכים ({unknownCount})
+                    </SelectItem>
                     {telegramCount > 0 && (
-                      <SelectItem value="telegram">טלגרם ({telegramCount})</SelectItem>
+                      <SelectItem value="telegram">
+                        טלגרם ({telegramCount})
+                      </SelectItem>
                     )}
                   </SelectContent>
                 </Select>
 
                 {allTags.length > 0 && (
-                  <Select value={selectedTagFilter || "all"} onValueChange={(value) => setSelectedTagFilter(value === "all" ? null : value)}>
+                  <Select
+                    value={selectedTagFilter || "all"}
+                    onValueChange={(value) =>
+                      setSelectedTagFilter(value === "all" ? null : value)
+                    }
+                  >
                     <SelectTrigger className="w-full">
                       <SelectValue placeholder="סינון לפי תג" />
                     </SelectTrigger>
@@ -696,7 +853,10 @@ export default function Chat() {
                       {allTags.map((tag: any) => (
                         <SelectItem key={tag.id} value={tag.id}>
                           <div className="flex items-center gap-2">
-                            <div className="w-3 h-3 rounded-full" style={{ backgroundColor: tag.color }} />
+                            <div
+                              className="w-3 h-3 rounded-full"
+                              style={{ backgroundColor: tag.color }}
+                            />
                             {tag.name}
                           </div>
                         </SelectItem>
@@ -712,7 +872,10 @@ export default function Chat() {
                       checked={showTodayOnly}
                       onCheckedChange={setShowTodayOnly}
                     />
-                    <Label htmlFor="today-filter" className="text-sm cursor-pointer">
+                    <Label
+                      htmlFor="today-filter"
+                      className="text-sm cursor-pointer"
+                    >
                       הצג רק שיחות מהיום
                     </Label>
                   </div>
@@ -722,7 +885,10 @@ export default function Chat() {
                       checked={showUnreadOnly}
                       onCheckedChange={setShowUnreadOnly}
                     />
-                    <Label htmlFor="unread-filter" className="text-sm cursor-pointer">
+                    <Label
+                      htmlFor="unread-filter"
+                      className="text-sm cursor-pointer"
+                    >
                       הצג רק שיחות לא נקראות
                     </Label>
                   </div>
@@ -750,7 +916,7 @@ export default function Chat() {
               ))
             ) : filteredContacts.length === 0 ? (
               <div className="text-center p-8 text-muted-foreground">
-                {debouncedSearch ? 'לא נמצאו תוצאות' : 'אין שיחות פעילות'}
+                {debouncedSearch ? "לא נמצאו תוצאות" : "אין שיחות פעילות"}
               </div>
             ) : (
               filteredContacts.map((contact) => {
@@ -792,27 +958,35 @@ export default function Chat() {
                       <div className="flex flex-row-reverse items-center gap-3 w-full min-w-0 overflow-hidden">
                         <Avatar className="h-10 w-10 flex-shrink-0">
                           {contact.whatsapp_avatar_url && (
-                            <AvatarImage 
-                              src={contact.whatsapp_avatar_url} 
+                            <AvatarImage
+                              src={contact.whatsapp_avatar_url}
                               alt={contact.name}
                             />
                           )}
                           <AvatarFallback>
-                            {(contact.contact_type === 'group' ? contact.name : (contact.contact_name || contact.name))?.charAt(0) || '?'}
+                            {(contact.contact_type === "group"
+                              ? contact.name
+                              : contact.contact_name || contact.name
+                            )?.charAt(0) || "?"}
                           </AvatarFallback>
                         </Avatar>
                         <div className="flex-1 min-w-0 text-right">
                           <div className="flex items-center justify-between gap-2 mb-1">
                             <div className="flex-1 min-w-0">
                               <div className="flex items-center gap-1">
-                                <span className="block text-sm font-medium leading-tight truncate" dir="auto">
-                                  {contact.contact_type === 'group' ? contact.name : (contact.contact_name || contact.name)}
+                                <span
+                                  className="block text-sm font-medium leading-tight truncate"
+                                  dir="auto"
+                                >
+                                  {contact.contact_type === "group"
+                                    ? contact.name
+                                    : contact.contact_name || contact.name}
                                 </span>
                               </div>
                             </div>
                             <div className="flex items-center gap-1 flex-shrink-0">
                               {/* Tag selector */}
-{!isMultiSelectMode && (
+                              {!isMultiSelectMode && (
                                 <ChatTagSelector
                                   contactId={contact.id}
                                   contactType={contact.contact_type}
@@ -821,15 +995,17 @@ export default function Chat() {
                                 />
                               )}
 
-                              
                               {contact.unread_count > 0 && (
-                                <Badge variant="destructive" className="h-5 min-w-5 flex items-center justify-center px-1">
+                                <Badge
+                                  variant="destructive"
+                                  className="h-5 min-w-5 flex items-center justify-center px-1"
+                                >
                                   {contact.unread_count}
                                 </Badge>
                               )}
                             </div>
                           </div>
-                          
+
                           {/* Tag badges */}
                           {contactTagIds.length > 0 && (
                             <ContactTagBadges
@@ -840,28 +1016,33 @@ export default function Chat() {
                               contactTagIds={contactTagIds}
                             />
                           )}
-                          
+
                           {contact.agency_name && (
                             <div className="min-w-0">
-                              <span className="text-xs text-muted-foreground truncate block" dir="auto">
+                              <span
+                                className="text-xs text-muted-foreground truncate block"
+                                dir="auto"
+                              >
                                 {contact.agency_name}
                               </span>
                             </div>
                           )}
-                          {!contact.phone && contact.contact_type !== 'group' && contact.contact_type !== 'unknown' && (
-                            <Button
-                              size="sm"
-                              variant="ghost"
-                              className="h-6 px-2 text-xs"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                handleEditContact(contact);
-                              }}
-                            >
-                              <Pencil className="h-3 w-3 ml-1" />
-                              עדכן פרטים
-                            </Button>
-                          )}
+                          {!contact.phone &&
+                            contact.contact_type !== "group" &&
+                            contact.contact_type !== "unknown" && (
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                className="h-6 px-2 text-xs"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleEditContact(contact);
+                                }}
+                              >
+                                <Pencil className="h-3 w-3 ml-1" />
+                                עדכן פרטים
+                              </Button>
+                            )}
                         </div>
                       </div>
                     </Button>
@@ -896,7 +1077,7 @@ export default function Chat() {
       </Card>
 
       {/* Edit Contact Dialogs */}
-      {editingContact?.type === 'client' && (
+      {editingContact?.type === "client" && (
         <EditClientDialog
           client={editingContact.data}
           open={true}
@@ -905,8 +1086,8 @@ export default function Chat() {
           }}
         />
       )}
-      
-      {editingContact?.type === 'lead' && (
+
+      {editingContact?.type === "lead" && (
         <EditLeadDialog
           lead={editingContact.data}
           open={true}
@@ -916,12 +1097,16 @@ export default function Chat() {
         />
       )}
 
-      <AlertDialog open={showClearHistoryDialog} onOpenChange={setShowClearHistoryDialog}>
+      <AlertDialog
+        open={showClearHistoryDialog}
+        onOpenChange={setShowClearHistoryDialog}
+      >
         <AlertDialogContent dir="rtl">
           <AlertDialogHeader>
             <AlertDialogTitle>מחק היסטוריה לצמיתות?</AlertDialogTitle>
             <AlertDialogDescription>
-              פעולה זו תמחק לצמיתות את כל היסטוריית הצ'אטים שלך. לא ניתן יהיה לשחזר את המידע לאחר המחיקה.
+              פעולה זו תמחק לצמיתות את כל היסטוריית הצ'אטים שלך. לא ניתן יהיה
+              לשחזר את המידע לאחר המחיקה.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

@@ -1,15 +1,44 @@
 import { useRef, useState, useMemo } from "react";
 import { Button } from "@/components/ui/button";
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
-import { Upload, FileSpreadsheet, ArrowRight, ArrowLeft, Check, X, Plus, Tag } from "lucide-react";
+import {
+  Upload,
+  FileSpreadsheet,
+  ArrowRight,
+  ArrowLeft,
+  Check,
+  X,
+  Plus,
+  Tag,
+} from "lucide-react";
 import { useQueryClient, useQuery } from "@tanstack/react-query";
 import { useCurrentTenant } from "@/hooks/useCurrentTenant";
 import Papa from "papaparse";
 import * as XLSX from "xlsx";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
@@ -32,18 +61,18 @@ interface FieldMapping {
 interface NewValueItem {
   value: string;
   color: string;
-  type: 'status' | 'tag';
+  type: "status" | "tag";
 }
 
 const DEFAULT_COLORS = [
-  '#3B82F6', // blue
-  '#10B981', // green
-  '#F59E0B', // amber
-  '#EF4444', // red
-  '#8B5CF6', // purple
-  '#EC4899', // pink
-  '#6B7280', // gray
-  '#14B8A6', // teal
+  "#3B82F6", // blue
+  "#10B981", // green
+  "#F59E0B", // amber
+  "#EF4444", // red
+  "#8B5CF6", // purple
+  "#EC4899", // pink
+  "#6B7280", // gray
+  "#14B8A6", // teal
 ];
 
 const BASE_SYSTEM_FIELDS = [
@@ -59,7 +88,7 @@ const BASE_SYSTEM_FIELDS = [
   { key: "products", label: "מוצרים" },
   { key: "campaign_name", label: "שם קמפיין" },
   { key: "industry", label: "תעשייה/תחום" },
-  { key: "monthly_budget", label: "תקציב חד\"פ" },
+  { key: "monthly_budget", label: 'תקציב חד"פ' },
   { key: "three_month_budget", label: "הצעה 3 חודשים" },
   { key: "estimated_deal_value", label: "שווי עסקה" },
   { key: "proposal_date", label: "תאריך הצעה" },
@@ -92,7 +121,11 @@ export function ImportLeadsWithMapping() {
   const [mappings, setMappings] = useState<FieldMapping[]>([]);
   const [defaultAgencyId, setDefaultAgencyId] = useState<string>("");
   const [defaultSalesPersonId, setDefaultSalesPersonId] = useState<string>("");
-  const [importResult, setImportResult] = useState<{ updates: number; inserts: number; leadUpdates?: number } | null>(null);
+  const [importResult, setImportResult] = useState<{
+    updates: number;
+    inserts: number;
+    leadUpdates?: number;
+  } | null>(null);
   const [newValues, setNewValues] = useState<NewValueItem[]>([]);
 
   const { toast } = useToast();
@@ -147,8 +180,8 @@ export function ImportLeadsWithMapping() {
 
   // Build dynamic system fields based on custom_fields
   const systemFields = useMemo(() => {
-    return BASE_SYSTEM_FIELDS.map(field => {
-      const customField = customFields.find(cf => cf.field_key === field.key);
+    return BASE_SYSTEM_FIELDS.map((field) => {
+      const customField = customFields.find((cf) => cf.field_key === field.key);
       return {
         ...field,
         // Use custom label if defined, otherwise fall back to base label
@@ -156,7 +189,7 @@ export function ImportLeadsWithMapping() {
         required: customField?.is_required ?? false,
         visible: customField?.is_visible ?? true,
       };
-    }).filter(f => f.visible);
+    }).filter((f) => f.visible);
   }, [customFields]);
 
   // Fetch agencies
@@ -210,26 +243,29 @@ export function ImportLeadsWithMapping() {
   };
 
   const parseFile = async (file: File): Promise<any[]> => {
-    const extension = file.name.split('.').pop()?.toLowerCase();
-    
-    if (extension === 'csv') {
+    const extension = file.name.split(".").pop()?.toLowerCase();
+
+    if (extension === "csv") {
       const text = await file.text();
-      const parsed = Papa.parse<any>(text, { header: true, skipEmptyLines: true });
+      const parsed = Papa.parse<any>(text, {
+        header: true,
+        skipEmptyLines: true,
+      });
       return parsed.data || [];
-    } else if (extension === 'xlsx' || extension === 'xls') {
+    } else if (extension === "xlsx" || extension === "xls") {
       const buffer = await file.arrayBuffer();
-      const workbook = XLSX.read(buffer, { 
-        type: 'array',
+      const workbook = XLSX.read(buffer, {
+        type: "array",
         cellFormula: true,
         cellNF: true,
         cellText: true,
       });
       const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
-      const data = XLSX.utils.sheet_to_json(firstSheet, { 
-        defval: '',
+      const data = XLSX.utils.sheet_to_json(firstSheet, {
+        defval: "",
         raw: true,
       });
-      
+
       // Normalize column names by trimming whitespace
       return data.map((row: any) => {
         const normalized: Record<string, any> = {};
@@ -239,16 +275,18 @@ export function ImportLeadsWithMapping() {
         return normalized;
       });
     }
-    
+
     throw new Error("פורמט קובץ לא נתמך. יש להעלות CSV או Excel");
   };
 
-  const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileUpload = async (
+    event: React.ChangeEvent<HTMLInputElement>,
+  ) => {
     const file = event.target.files?.[0];
     if (!file) return;
 
-    const extension = file.name.split('.').pop()?.toLowerCase();
-    if (!['csv', 'xlsx', 'xls'].includes(extension || '')) {
+    const extension = file.name.split(".").pop()?.toLowerCase();
+    if (!["csv", "xlsx", "xls"].includes(extension || "")) {
       toast({
         title: "שגיאה",
         description: "יש להעלות קובץ CSV או Excel בלבד",
@@ -260,23 +298,26 @@ export function ImportLeadsWithMapping() {
     setIsLoading(true);
     try {
       const data = await parseFile(file);
-      
+
       if (data.length === 0) {
         throw new Error("לא נמצאו נתונים בקובץ");
       }
 
       // Extract columns from first row
       const columns = Object.keys(data[0]);
-      
+
       // Auto-detect mappings
-      const autoMappings: FieldMapping[] = columns.map(col => {
+      const autoMappings: FieldMapping[] = columns.map((col) => {
         if (isUpdateColumn(col)) {
-          return { csvColumn: col, systemField: 'updates' };
+          return { csvColumn: col, systemField: "updates" };
         }
         const samples = data
           .slice(0, 40)
           .map((row: any) => row[col])
-          .filter((val: any) => val !== undefined && val !== null && String(val).trim() !== "")
+          .filter(
+            (val: any) =>
+              val !== undefined && val !== null && String(val).trim() !== "",
+          )
           .map((val: any) => String(val).trim());
         const detectedField = autoDetectLeadImportField(col, samples);
         return { csvColumn: col, systemField: detectedField };
@@ -299,34 +340,40 @@ export function ImportLeadsWithMapping() {
   };
 
   const updateMapping = (csvColumn: string, systemField: string | null) => {
-    setMappings(prev => 
-      prev.map(m => 
-        m.csvColumn === csvColumn 
+    setMappings((prev) =>
+      prev.map((m) =>
+        m.csvColumn === csvColumn
           ? { ...m, systemField: systemField === "skip" ? null : systemField }
-          : m
-      )
+          : m,
+      ),
     );
   };
 
   const missingRequiredFields = useMemo(() => {
-    const requiredFields = systemFields.filter(f => f.required);
-    return requiredFields.filter(rf => !mappings.some(m => m.systemField === rf.key));
+    const requiredFields = systemFields.filter((f) => f.required);
+    return requiredFields.filter(
+      (rf) => !mappings.some((m) => m.systemField === rf.key),
+    );
   }, [mappings, systemFields]);
 
   // Detect new statuses and tags that need to be created
   const detectNewValues = useMemo(() => {
     const newItems: NewValueItem[] = [];
-    
+
     // Check for response_status and mixed pipeline-status columns
     const statusMappings = mappings.filter(
       (m) => m.systemField === "response_status" || m.systemField === "status",
     );
     if (statusMappings.length > 0) {
-      const existingStatusLabels = existingStatuses.map(s => s.label.toLowerCase().trim());
-      const existingStatusKeys = existingStatuses.map(s => s.status_key.toLowerCase().trim());
+      const existingStatusLabels = existingStatuses.map((s) =>
+        s.label.toLowerCase().trim(),
+      );
+      const existingStatusKeys = existingStatuses.map((s) =>
+        s.status_key.toLowerCase().trim(),
+      );
       const uniqueValues = new Set<string>();
-      
-      rawData.forEach(row => {
+
+      rawData.forEach((row) => {
         statusMappings.forEach((statusMapping) => {
           const val = row[statusMapping.csvColumn];
           if (val && String(val).trim()) {
@@ -334,82 +381,106 @@ export function ImportLeadsWithMapping() {
           }
         });
       });
-      
+
       let statusColorIdx = 0;
       uniqueValues.forEach((val) => {
         if (looksLikePipelineStatusLabel(val)) return;
         if (resolveResponseStatusKey(val, existingStatuses)) return;
         const classified = classifyLeadImportStatus(val, existingStatuses);
-        if (classified.pipelineStatus && classified.pipelineStatus !== "new") return;
+        if (classified.pipelineStatus && classified.pipelineStatus !== "new")
+          return;
         const normalizedVal = val.toLowerCase().trim();
-        if (!existingStatusLabels.includes(normalizedVal) && !existingStatusKeys.includes(normalizedVal)) {
-          if (!newItems.some(item => item.value.toLowerCase() === normalizedVal && item.type === 'status')) {
+        if (
+          !existingStatusLabels.includes(normalizedVal) &&
+          !existingStatusKeys.includes(normalizedVal)
+        ) {
+          if (
+            !newItems.some(
+              (item) =>
+                item.value.toLowerCase() === normalizedVal &&
+                item.type === "status",
+            )
+          ) {
             newItems.push({
               value: val,
               color: DEFAULT_COLORS[statusColorIdx % DEFAULT_COLORS.length],
-              type: 'status'
+              type: "status",
             });
             statusColorIdx++;
           }
         }
       });
     }
-    
+
     // Check for ALL columns mapped to tags (support multiple columns)
-    const tagsMappings = mappings.filter(m => m.systemField === 'tags');
-    const campaignMappings = mappings.filter(m => m.systemField === 'campaign_name');
-    const sourceMappings = mappings.filter(m => m.systemField === 'source');
-    const existingTagNames = existingTags.map(t => t.name.toLowerCase().trim());
+    const tagsMappings = mappings.filter((m) => m.systemField === "tags");
+    const campaignMappings = mappings.filter(
+      (m) => m.systemField === "campaign_name",
+    );
+    const sourceMappings = mappings.filter((m) => m.systemField === "source");
+    const existingTagNames = existingTags.map((t) =>
+      t.name.toLowerCase().trim(),
+    );
     const uniqueTags = new Set<string>();
 
     if (tagsMappings.length > 0) {
-      rawData.forEach(row => {
+      rawData.forEach((row) => {
         // Loop through ALL columns mapped to tags
-        tagsMappings.forEach(tagsMapping => {
+        tagsMappings.forEach((tagsMapping) => {
           const val = row[tagsMapping.csvColumn];
           if (val && String(val).trim()) {
             // Split by comma in case multiple tags
-            const tags = String(val).split(',').map(t => t.trim()).filter(t => t);
-            tags.forEach(tag => uniqueTags.add(tag));
+            const tags = String(val)
+              .split(",")
+              .map((t) => t.trim())
+              .filter((t) => t);
+            tags.forEach((tag) => uniqueTags.add(tag));
           }
         });
       });
     }
 
     if (campaignMappings.length > 0 || sourceMappings.length > 0) {
-      rawData.forEach(row => {
-        let campaign = '';
+      rawData.forEach((row) => {
+        let campaign = "";
         campaignMappings.forEach((mapping) => {
           const val = row[mapping.csvColumn];
           if (val && String(val).trim()) campaign = String(val).trim();
         });
-        let sourceRaw = '';
+        let sourceRaw = "";
         sourceMappings.forEach((mapping) => {
           const val = row[mapping.csvColumn];
           if (val && String(val).trim()) sourceRaw = String(val).trim();
         });
-        const source = sourceRaw ? inferLeadSource(sourceRaw) : 'paid_ads';
-        leadOriginTagNames({ campaign_name: campaign || null, source }).forEach((tag) => {
-          uniqueTags.add(tag);
-        });
+        const source = sourceRaw ? inferLeadSource(sourceRaw) : "paid_ads";
+        leadOriginTagNames({ campaign_name: campaign || null, source }).forEach(
+          (tag) => {
+            uniqueTags.add(tag);
+          },
+        );
       });
     }
 
     let colorIdx = 0;
-    uniqueTags.forEach(tag => {
+    uniqueTags.forEach((tag) => {
       const normalizedTag = tag.toLowerCase().trim();
       if (!existingTagNames.includes(normalizedTag)) {
-        if (!newItems.some(item => item.value.toLowerCase() === normalizedTag && item.type === 'tag')) {
+        if (
+          !newItems.some(
+            (item) =>
+              item.value.toLowerCase() === normalizedTag && item.type === "tag",
+          )
+        ) {
           newItems.push({
             value: tag,
             color: DEFAULT_COLORS[colorIdx % DEFAULT_COLORS.length],
-            type: 'tag'
+            type: "tag",
           });
           colorIdx++;
         }
       }
     });
-    
+
     return newItems;
   }, [mappings, rawData, existingStatuses, existingTags]);
 
@@ -419,35 +490,38 @@ export function ImportLeadsWithMapping() {
     setStep("preview");
   };
 
-  const updateNewValueColor = (value: string, type: 'status' | 'tag', color: string) => {
-    setNewValues(prev => 
-      prev.map(item => 
-        item.value === value && item.type === type
-          ? { ...item, color }
-          : item
-      )
+  const updateNewValueColor = (
+    value: string,
+    type: "status" | "tag",
+    color: string,
+  ) => {
+    setNewValues((prev) =>
+      prev.map((item) =>
+        item.value === value && item.type === type ? { ...item, color } : item,
+      ),
     );
   };
 
   // Count update columns mapped
   const updateColumnsCount = useMemo(() => {
-    return mappings.filter(m => m.systemField === 'updates').length;
+    return mappings.filter((m) => m.systemField === "updates").length;
   }, [mappings]);
 
   // Get mapped fields (excluding 'updates' which is handled separately)
   const mappedFields = useMemo(() => {
-    return systemFields.filter(f => 
-      f.key !== 'updates' && mappings.some(m => m.systemField === f.key)
+    return systemFields.filter(
+      (f) =>
+        f.key !== "updates" && mappings.some((m) => m.systemField === f.key),
     );
   }, [systemFields, mappings]);
 
   const previewData = useMemo(() => {
     if (rawData.length === 0) return [];
-    
-    return rawData.slice(0, 5).map(row => {
+
+    return rawData.slice(0, 5).map((row) => {
       const mapped: Record<string, any> = {};
-      mappings.forEach(m => {
-        if (m.systemField && m.systemField !== 'updates') {
+      mappings.forEach((m) => {
+        if (m.systemField && m.systemField !== "updates") {
           mapped[m.systemField] = row[m.csvColumn];
         }
       });
@@ -457,71 +531,96 @@ export function ImportLeadsWithMapping() {
 
   const parseDate = (val: string) => {
     if (!val) return null;
-    
+
     const strVal = String(val).trim();
     if (!strVal) return null;
-    
+
     // Helper function to validate year is reasonable (1900-2100)
     const isValidYear = (year: number) => year >= 1900 && year <= 2100;
-    
+
     // Try DD/MM/YY or DD/MM/YYYY format
-    const slashParts = strVal.split('/');
+    const slashParts = strVal.split("/");
     if (slashParts.length === 3) {
       const day = parseInt(slashParts[0], 10);
       const month = parseInt(slashParts[1], 10);
       let year = parseInt(slashParts[2], 10);
-      
+
       // Convert 2-digit year
       if (year < 100) year = year > 50 ? 1900 + year : 2000 + year;
-      
-      if (isValidYear(year) && month >= 1 && month <= 12 && day >= 1 && day <= 31) {
+
+      if (
+        isValidYear(year) &&
+        month >= 1 &&
+        month <= 12 &&
+        day >= 1 &&
+        day <= 31
+      ) {
         const d = new Date(year, month - 1, day);
         if (!isNaN(d.getTime()) && d.getFullYear() === year) {
-          return d.toISOString().split('T')[0];
+          return d.toISOString().split("T")[0];
         }
       }
     }
-    
+
     // Try DD-MM-YYYY or DD.MM.YYYY format
-    const otherParts = strVal.split(/[-.]/).filter(p => p);
+    const otherParts = strVal.split(/[-.]/).filter((p) => p);
     if (otherParts.length === 3) {
       const day = parseInt(otherParts[0], 10);
       const month = parseInt(otherParts[1], 10);
       const year = parseInt(otherParts[2], 10);
-      
-      if (isValidYear(year) && month >= 1 && month <= 12 && day >= 1 && day <= 31) {
+
+      if (
+        isValidYear(year) &&
+        month >= 1 &&
+        month <= 12 &&
+        day >= 1 &&
+        day <= 31
+      ) {
         const d = new Date(year, month - 1, day);
         if (!isNaN(d.getTime()) && d.getFullYear() === year) {
-          return d.toISOString().split('T')[0];
+          return d.toISOString().split("T")[0];
         }
       }
     }
-    
+
     // Try ISO format (YYYY-MM-DD)
     const isoMatch = strVal.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
     if (isoMatch) {
       const year = parseInt(isoMatch[1], 10);
       const month = parseInt(isoMatch[2], 10);
       const day = parseInt(isoMatch[3], 10);
-      
-      if (isValidYear(year) && month >= 1 && month <= 12 && day >= 1 && day <= 31) {
+
+      if (
+        isValidYear(year) &&
+        month >= 1 &&
+        month <= 12 &&
+        day >= 1 &&
+        day <= 31
+      ) {
         const d = new Date(year, month - 1, day);
         if (!isNaN(d.getTime())) {
-          return d.toISOString().split('T')[0];
+          return d.toISOString().split("T")[0];
         }
       }
     }
-    
+
     // Don't use generic Date() parsing - it produces weird results
     return null;
   };
 
   const mapSource = (val: string) => inferLeadSource(val);
 
-  const applyImportedStatus = (lead: any, strValue: string, statusKeyMap: Record<string, string>) => {
+  const applyImportedStatus = (
+    lead: any,
+    strValue: string,
+    statusKeyMap: Record<string, string>,
+  ) => {
     const classified = classifyLeadImportStatus(strValue, [
       ...existingStatuses,
-      ...Object.entries(statusKeyMap).map(([label, status_key]) => ({ status_key, label })),
+      ...Object.entries(statusKeyMap).map(([label, status_key]) => ({
+        status_key,
+        label,
+      })),
     ]);
     if (classified.pipelineStatus) {
       lead.status = classified.pipelineStatus;
@@ -538,15 +637,19 @@ export function ImportLeadsWithMapping() {
 
   const handleImport = async () => {
     if (!tenantId) {
-      toast({ title: "שגיאה", description: "לא נמצא ארגון", variant: "destructive" });
+      toast({
+        title: "שגיאה",
+        description: "לא נמצא ארגון",
+        variant: "destructive",
+      });
       return;
     }
 
     if (missingRequiredFields.length > 0) {
-      toast({ 
-        title: "שגיאה", 
-        description: `חובה למפות את השדות: ${missingRequiredFields.map(f => f.label).join(', ')}`,
-        variant: "destructive" 
+      toast({
+        title: "שגיאה",
+        description: `חובה למפות את השדות: ${missingRequiredFields.map((f) => f.label).join(", ")}`,
+        variant: "destructive",
       });
       return;
     }
@@ -555,13 +658,15 @@ export function ImportLeadsWithMapping() {
     setIsLoading(true);
 
     try {
-      const { data: { user } } = await supabase.auth.getUser();
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
       if (!user) throw new Error("משתמש לא מחובר");
 
       // Create new statuses
-      const newStatuses = newValues.filter(v => v.type === 'status');
+      const newStatuses = newValues.filter((v) => v.type === "status");
       const statusKeyMap: Record<string, string> = {};
-      
+
       if (newStatuses.length > 0) {
         // Get max sort_order for statuses
         const { data: maxSortData } = await supabase
@@ -570,11 +675,16 @@ export function ImportLeadsWithMapping() {
           .eq("tenant_id", tenantId)
           .order("sort_order", { ascending: false })
           .limit(1);
-        
-        let nextSortOrder = (typeof maxSortData?.[0]?.sort_order === 'number' ? maxSortData[0].sort_order : 0) + 1;
-        
+
+        let nextSortOrder =
+          (typeof maxSortData?.[0]?.sort_order === "number"
+            ? maxSortData[0].sort_order
+            : 0) + 1;
+
         for (const status of newStatuses) {
-          const statusKey = status.value.toLowerCase().replace(/[^a-z0-9א-ת]/g, '_');
+          const statusKey = status.value
+            .toLowerCase()
+            .replace(/[^a-z0-9א-ת]/g, "_");
           const { data, error } = await supabase
             .from("lead_statuses")
             .insert({
@@ -583,11 +693,11 @@ export function ImportLeadsWithMapping() {
               label: status.value,
               color: status.color,
               sort_order: nextSortOrder++,
-              is_active: true
+              is_active: true,
             })
             .select("status_key")
             .single();
-          
+
           if (error) {
             console.error("Error creating status:", error);
           } else if (data) {
@@ -595,17 +705,17 @@ export function ImportLeadsWithMapping() {
           }
         }
       }
-      
+
       // Add existing statuses to the map
-      existingStatuses.forEach(s => {
+      existingStatuses.forEach((s) => {
         statusKeyMap[s.label.toLowerCase()] = s.status_key;
         statusKeyMap[s.status_key.toLowerCase()] = s.status_key;
       });
 
       // Create new tags
-      const newTagsList = newValues.filter(v => v.type === 'tag');
+      const newTagsList = newValues.filter((v) => v.type === "tag");
       const tagIdMap: Record<string, string> = {};
-      
+
       if (newTagsList.length > 0) {
         // Get max sort_order for tags
         const { data: maxTagSortData } = await supabase
@@ -614,9 +724,12 @@ export function ImportLeadsWithMapping() {
           .eq("tenant_id", tenantId)
           .order("sort_order", { ascending: false })
           .limit(1);
-        
-        let nextTagSortOrder = (typeof maxTagSortData?.[0]?.sort_order === 'number' ? maxTagSortData[0].sort_order : 0) + 1;
-        
+
+        let nextTagSortOrder =
+          (typeof maxTagSortData?.[0]?.sort_order === "number"
+            ? maxTagSortData[0].sort_order
+            : 0) + 1;
+
         for (const tag of newTagsList) {
           const { data, error } = await supabase
             .from("chat_tags")
@@ -624,11 +737,11 @@ export function ImportLeadsWithMapping() {
               tenant_id: tenantId,
               name: tag.value,
               color: tag.color,
-              sort_order: nextTagSortOrder++
+              sort_order: nextTagSortOrder++,
             })
             .select("id, name")
             .single();
-          
+
           if (error) {
             console.error("Error creating tag:", error);
           } else if (data) {
@@ -636,39 +749,43 @@ export function ImportLeadsWithMapping() {
           }
         }
       }
-      
+
       // Add existing tags to the map FIRST (before new tags, so new tags don't accidentally overwrite)
-      existingTags.forEach(t => {
+      existingTags.forEach((t) => {
         tagIdMap[t.name.toLowerCase()] = t.id;
       });
-      
 
       // Build field map
       const fieldMap: Record<string, string> = {};
-      mappings.forEach(m => {
+      mappings.forEach((m) => {
         if (m.systemField) {
           fieldMap[m.csvColumn] = m.systemField;
         }
       });
 
       // Find tags column for later processing
-      const tagsColumnName = Object.entries(fieldMap).find(([_, v]) => v === 'tags')?.[0];
+      const tagsColumnName = Object.entries(fieldMap).find(
+        ([_, v]) => v === "tags",
+      )?.[0];
 
       // Find update columns mapped to 'updates'
       const updateColumns = Object.entries(fieldMap)
-        .filter(([_, v]) => v === 'updates')
+        .filter(([_, v]) => v === "updates")
         .map(([k, _]) => k)
         .sort((a, b) => {
           // Sort by number in column name (עדכון 1, עדכון 2, etc.)
-          const numA = parseInt(a.match(/\d+/)?.[0] || '0');
-          const numB = parseInt(b.match(/\d+/)?.[0] || '0');
+          const numA = parseInt(a.match(/\d+/)?.[0] || "0");
+          const numB = parseInt(b.match(/\d+/)?.[0] || "0");
           return numA - numB;
         });
 
       const mapped = rawData.map((row, rowIdx) => {
         const lead: any = {
           tenant_id: tenantId,
-          agency_id: defaultAgencyId && defaultAgencyId !== "none" ? defaultAgencyId : null,
+          agency_id:
+            defaultAgencyId && defaultAgencyId !== "none"
+              ? defaultAgencyId
+              : null,
         };
 
         if (defaultSalesPersonId && defaultSalesPersonId !== "none") {
@@ -677,10 +794,10 @@ export function ImportLeadsWithMapping() {
 
         // Store tags for later processing (not a lead field)
         let rowTags: string[] = [];
-        
+
         // Collect updates from update columns
         const rowUpdates: string[] = [];
-        updateColumns.forEach(col => {
+        updateColumns.forEach((col) => {
           const val = row[col];
           if (val && String(val).trim()) {
             rowUpdates.push(String(val).trim());
@@ -690,79 +807,87 @@ export function ImportLeadsWithMapping() {
         // Map each field
         Object.entries(fieldMap).forEach(([csvCol, sysField]) => {
           const value = row[csvCol];
-          if (value === undefined || value === null || String(value).trim() === '') return;
+          if (
+            value === undefined ||
+            value === null ||
+            String(value).trim() === ""
+          )
+            return;
 
           const strValue = String(value).trim();
 
           switch (sysField) {
-            case 'company_name':
-            case 'contact_name':
-            case 'notes':
-            case 'products':
-            case 'industry':
-            case 'folder_link':
+            case "company_name":
+            case "contact_name":
+            case "notes":
+            case "products":
+            case "industry":
+            case "folder_link":
               lead[sysField] = strValue;
               break;
-            case 'campaign_name':
+            case "campaign_name":
               lead.campaign_name = strValue;
               break;
-            case 'email':
-              if (strValue.includes('@')) lead.email = strValue;
+            case "email":
+              if (strValue.includes("@")) lead.email = strValue;
               break;
-            case 'phone':
-              lead.phone = strValue.replace(/[^\d+\-\s]/g, '');
+            case "phone":
+              lead.phone = strValue.replace(/[^\d+\-\s]/g, "");
               break;
-            case 'source':
+            case "source":
               lead.source = mapSource(strValue);
               if (!lead.campaign_name) lead.campaign_name = strValue;
               break;
-            case 'status':
+            case "status":
               applyImportedStatus(lead, strValue, statusKeyMap);
               break;
-            case 'response_status': {
+            case "response_status": {
               applyImportedStatus(lead, strValue, statusKeyMap);
               break;
             }
-            case 'tags':
+            case "tags":
               // Parse tags and ACCUMULATE from multiple columns
-              const newTags = strValue.split(',').map(t => t.trim()).filter(t => t);
+              const newTags = strValue
+                .split(",")
+                .map((t) => t.trim())
+                .filter((t) => t);
               rowTags = [...rowTags, ...newTags];
               break;
-            case 'updates':
+            case "updates":
               // Already handled separately
               break;
-            case 'monthly_budget':
-            case 'three_month_budget':
-            case 'estimated_deal_value':
-              const num = parseFloat(strValue.replace(/[^\d.-]/g, ''));
+            case "monthly_budget":
+            case "three_month_budget":
+            case "estimated_deal_value":
+              const num = parseFloat(strValue.replace(/[^\d.-]/g, ""));
               if (!isNaN(num) && num > 0) lead[sysField] = num;
               break;
-            case 'created_at':
+            case "created_at":
               const createdDate = parseDate(strValue);
-              if (createdDate) lead.created_at = createdDate + 'T00:00:00Z';
+              if (createdDate) lead.created_at = createdDate + "T00:00:00Z";
               break;
-            case 'proposal_date':
+            case "proposal_date":
               const propDate = parseDate(strValue);
               if (propDate) {
                 lead.proposal_date = propDate;
                 lead.proposal_sent_date = propDate;
               }
               break;
-            case 'follow_up_date':
+            case "follow_up_date":
               const followUpDate = parseDate(strValue);
               if (followUpDate) lead.follow_up_date = followUpDate;
               break;
-            case 'meeting_date':
+            case "meeting_date":
               const meetingDate = parseDate(strValue);
               if (meetingDate) lead.meeting_date = meetingDate;
               break;
-            case 'won_date':
+            case "won_date":
               const wonDate = parseDate(strValue);
               if (wonDate) {
                 lead.won_date = wonDate;
                 lead.sale_date = wonDate;
                 lead.closing_date = wonDate;
-                lead.status = 'closed';
+                lead.status = "closed";
               }
               break;
           }
@@ -772,8 +897,8 @@ export function ImportLeadsWithMapping() {
         if (!lead.company_name && lead.contact_name) {
           lead.company_name = lead.contact_name;
         }
-        if (!lead.source) lead.source = 'paid_ads';
-        if (!lead.status) lead.status = 'new';
+        if (!lead.source) lead.source = "paid_ads";
+        if (!lead.status) lead.status = "new";
         if (!lead.created_at) lead.created_at = new Date().toISOString();
 
         const originTags = leadOriginTagNames({
@@ -794,33 +919,33 @@ export function ImportLeadsWithMapping() {
 
       // Filter valid leads - must have company_name (or can generate one)
       const validLeads = mapped.filter(({ lead }) => {
-        const name = (lead.company_name || '').trim();
-        const contact = (lead.contact_name || '').trim();
-        const email = (lead.email || '').trim();
-        const phone = (lead.phone || '').trim();
-        
+        const name = (lead.company_name || "").trim();
+        const contact = (lead.contact_name || "").trim();
+        const email = (lead.email || "").trim();
+        const phone = (lead.phone || "").trim();
+
         // If no company_name, try to generate one from available fields
         if (!name) {
           if (contact) {
             lead.company_name = contact;
           } else if (email) {
-            lead.company_name = email.split('@')[0];
+            lead.company_name = email.split("@")[0];
           } else if (phone) {
             lead.company_name = `ליד ${phone}`;
           } else {
             return false; // No valid identifier at all
           }
         }
-        
+
         return true;
       });
 
       if (validLeads.length === 0) {
         throw new Error("לא נמצאו לידים תקינים בקובץ");
       }
-      
+
       // Debug: How many leads have tags
-      const leadsWithTags = validLeads.filter(v => v.tags?.length > 0);
+      const leadsWithTags = validLeads.filter((v) => v.tags?.length > 0);
 
       // Save backup
       await supabase.from("import_history").insert({
@@ -853,14 +978,21 @@ export function ImportLeadsWithMapping() {
 
       // Build a set of normalized existing phones for fast duplicate detection
       const existingPhoneSet = new Set<string>();
-      existingLeads?.forEach(l => {
+      existingLeads?.forEach((l) => {
         const normalized = normalizePhone(l.phone);
         if (normalized) existingPhoneSet.add(normalized);
       });
 
-      const normalizeStr = (s: string | null | undefined) => (s || "").toString().trim().toLowerCase();
-      const leadUpdates: { lead: any; tags: string[]; updates: string[]; existingId: string }[] = [];
-      const leadInserts: { lead: any; tags: string[]; updates: string[] }[] = [];
+      const normalizeStr = (s: string | null | undefined) =>
+        (s || "").toString().trim().toLowerCase();
+      const leadUpdates: {
+        lead: any;
+        tags: string[];
+        updates: string[];
+        existingId: string;
+      }[] = [];
+      const leadInserts: { lead: any; tags: string[]; updates: string[] }[] =
+        [];
       let skippedDuplicates = 0;
 
       // Track phones we're adding in this import to prevent in-file duplicates
@@ -871,55 +1003,70 @@ export function ImportLeadsWithMapping() {
         const email = normalizeStr(lead.email);
         const rawPhone = (lead.phone || "").toString();
         const normalizedPhone = normalizePhone(rawPhone);
-        
+
         // Check for duplicate by phone (primary duplicate detection)
         if (normalizedPhone) {
           // Skip if phone exists in database
           if (existingPhoneSet.has(normalizedPhone)) {
             // Find existing lead to update instead of insert
-            const existingByPhone = existingLeads?.find(e => normalizePhone(e.phone) === normalizedPhone);
+            const existingByPhone = existingLeads?.find(
+              (e) => normalizePhone(e.phone) === normalizedPhone,
+            );
             if (existingByPhone) {
-              leadUpdates.push({ lead: { ...lead, id: existingByPhone.id }, tags, updates: rowUpdates, existingId: existingByPhone.id });
+              leadUpdates.push({
+                lead: { ...lead, id: existingByPhone.id },
+                tags,
+                updates: rowUpdates,
+                existingId: existingByPhone.id,
+              });
               continue;
             }
           }
-          
+
           // Skip if phone already added in this import batch
           if (importingPhones.has(normalizedPhone)) {
             skippedDuplicates++;
             continue;
           }
-          
+
           importingPhones.add(normalizedPhone);
         }
-        
+
         // Fallback: check by company_name + email for leads without phone
-        const existing = existingLeads?.find(e =>
-          normalizeStr(e.company_name) === name &&
-          email && normalizeStr(e.email) === email
+        const existing = existingLeads?.find(
+          (e) =>
+            normalizeStr(e.company_name) === name &&
+            email &&
+            normalizeStr(e.email) === email,
         );
 
         if (existing) {
-          leadUpdates.push({ lead: { ...lead, id: existing.id }, tags, updates: rowUpdates, existingId: existing.id });
+          leadUpdates.push({
+            lead: { ...lead, id: existing.id },
+            tags,
+            updates: rowUpdates,
+            existingId: existing.id,
+          });
         } else {
           leadInserts.push({ lead, tags, updates: rowUpdates });
         }
       }
-      
 
       // Remove duplicates from leadUpdates - keep only the last entry for each existingId
-      const uniqueUpdatesMap = new Map<string, typeof leadUpdates[0]>();
+      const uniqueUpdatesMap = new Map<string, (typeof leadUpdates)[0]>();
       for (const update of leadUpdates) {
         uniqueUpdatesMap.set(update.existingId, update);
       }
       const uniqueLeadUpdates = Array.from(uniqueUpdatesMap.values());
-      
+
       // Remove duplicates from leadInserts based on normalized company_name + email/phone
-      const uniqueInsertsMap = new Map<string, typeof leadInserts[0]>();
+      const uniqueInsertsMap = new Map<string, (typeof leadInserts)[0]>();
       for (const insert of leadInserts) {
         const name = normalizeStr(insert.lead.company_name);
         const email = normalizeStr(insert.lead.email);
-        const phone = (insert.lead.phone || "").toString().replace(/[\s-]/g, "");
+        const phone = (insert.lead.phone || "")
+          .toString()
+          .replace(/[\s-]/g, "");
         const key = `${name}|${email || phone}`;
         uniqueInsertsMap.set(key, insert);
       }
@@ -927,7 +1074,9 @@ export function ImportLeadsWithMapping() {
 
       // Execute updates (deduplicated)
       if (uniqueLeadUpdates.length > 0) {
-        const { error } = await supabase.from("leads").upsert(uniqueLeadUpdates.map(u => u.lead));
+        const { error } = await supabase
+          .from("leads")
+          .upsert(uniqueLeadUpdates.map((u) => u.lead));
         if (error) throw error;
       }
 
@@ -936,17 +1085,22 @@ export function ImportLeadsWithMapping() {
       if (uniqueLeadInserts.length > 0) {
         const { data: insertedData, error } = await supabase
           .from("leads")
-          .insert(uniqueLeadInserts.map(i => i.lead))
+          .insert(uniqueLeadInserts.map((i) => i.lead))
           .select("id");
         if (error) throw error;
         if (insertedData) {
-          insertedIds.push(...insertedData.map(d => d.id));
+          insertedIds.push(...insertedData.map((d) => d.id));
         }
       }
 
       // Create chat_contact_tags for tags
-      const tagRecords: { tag_id: string; lead_id: string; tenant_id: string; user_id: string }[] = [];
-      
+      const tagRecords: {
+        tag_id: string;
+        lead_id: string;
+        tenant_id: string;
+        user_id: string;
+      }[] = [];
+
       // For updates (use deduplicated list)
       for (const { tags, existingId } of uniqueLeadUpdates) {
         for (const tagName of tags) {
@@ -956,12 +1110,12 @@ export function ImportLeadsWithMapping() {
               tag_id: tagId,
               lead_id: existingId,
               tenant_id: tenantId,
-              user_id: user.id
+              user_id: user.id,
             });
           }
         }
       }
-      
+
       // For inserts (use deduplicated list)
       uniqueLeadInserts.forEach(({ tags }, idx) => {
         const leadId = insertedIds[idx];
@@ -973,7 +1127,7 @@ export function ImportLeadsWithMapping() {
                 tag_id: tagId,
                 lead_id: leadId,
                 tenant_id: tenantId,
-                user_id: user.id
+                user_id: user.id,
               });
             }
           }
@@ -982,37 +1136,50 @@ export function ImportLeadsWithMapping() {
 
       // Deduplicate tag records before inserting (use lead_id|tag_id as key)
       const uniqueTagRecords = Array.from(
-        new Map(tagRecords.map(r => [`${r.lead_id}|${r.tag_id}`, r])).values()
+        new Map(
+          tagRecords.map((r) => [`${r.lead_id}|${r.tag_id}`, r]),
+        ).values(),
       );
-      
-      
+
       // Insert tag records
       if (uniqueTagRecords.length > 0) {
         const { error: tagError, data: insertedTags } = await supabase
           .from("chat_contact_tags")
-          .upsert(uniqueTagRecords, { onConflict: 'tag_id,lead_id', ignoreDuplicates: true })
+          .upsert(uniqueTagRecords, {
+            onConflict: "tag_id,lead_id",
+            ignoreDuplicates: true,
+          })
           .select();
-        
+
         if (tagError) {
-          console.error("[Import Debug] Error inserting tags:", tagError.message, tagError.details, tagError.hint);
+          console.error(
+            "[Import Debug] Error inserting tags:",
+            tagError.message,
+            tagError.details,
+            tagError.hint,
+          );
         } else {
         }
       }
 
       // Create lead_updates records from update columns
-      const leadUpdateRecords: { lead_id: string; user_id: string; content: string }[] = [];
-      
+      const leadUpdateRecords: {
+        lead_id: string;
+        user_id: string;
+        content: string;
+      }[] = [];
+
       // For updated leads (use deduplicated list)
       for (const { updates: rowUpdates, existingId } of uniqueLeadUpdates) {
         for (const content of rowUpdates) {
           leadUpdateRecords.push({
             lead_id: existingId,
             user_id: user.id,
-            content
+            content,
           });
         }
       }
-      
+
       // For inserted leads (use deduplicated list)
       uniqueLeadInserts.forEach(({ updates: rowUpdates }, idx) => {
         const leadId = insertedIds[idx];
@@ -1021,7 +1188,7 @@ export function ImportLeadsWithMapping() {
             leadUpdateRecords.push({
               lead_id: leadId,
               user_id: user.id,
-              content
+              content,
             });
           }
         }
@@ -1037,20 +1204,25 @@ export function ImportLeadsWithMapping() {
         }
       }
 
-      setImportResult({ updates: uniqueLeadUpdates.length, inserts: uniqueLeadInserts.length, leadUpdates: leadUpdateRecords.length });
+      setImportResult({
+        updates: uniqueLeadUpdates.length,
+        inserts: uniqueLeadInserts.length,
+        leadUpdates: leadUpdateRecords.length,
+      });
       queryClient.invalidateQueries({ queryKey: ["leads-kanban", tenantId] });
       queryClient.invalidateQueries({ queryKey: ["leads-table", tenantId] });
       queryClient.invalidateQueries({ queryKey: ["leads-count", tenantId] });
       queryClient.invalidateQueries({ queryKey: ["lead-statuses", tenantId] });
       queryClient.invalidateQueries({ queryKey: ["chat-tags", tenantId] });
-      queryClient.invalidateQueries({ queryKey: ["leads-tags-bulk", tenantId] });
+      queryClient.invalidateQueries({
+        queryKey: ["leads-tags-bulk", tenantId],
+      });
       queryClient.invalidateQueries({ queryKey: ["lead-updates", tenantId] });
-      
+
       toast({
         title: "הצלחה!",
-        description: `${uniqueLeadUpdates.length} לידים עודכנו, ${uniqueLeadInserts.length} לידים חדשים נוספו${leadUpdateRecords.length > 0 ? `, ${leadUpdateRecords.length} עדכונים נוספו` : ''}`,
+        description: `${uniqueLeadUpdates.length} לידים עודכנו, ${uniqueLeadInserts.length} לידים חדשים נוספו${leadUpdateRecords.length > 0 ? `, ${leadUpdateRecords.length} עדכונים נוספו` : ""}`,
       });
-
     } catch (error: any) {
       console.error("Error importing leads:", error);
       toast({
@@ -1110,7 +1282,7 @@ export function ImportLeadsWithMapping() {
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="none">ללא סוכנות (תחת הארגון בלבד)</SelectItem>
-              {agencies.map(agency => (
+              {agencies.map((agency) => (
                 <SelectItem key={agency.id} value={agency.id}>
                   {agency.name}
                 </SelectItem>
@@ -1120,17 +1292,23 @@ export function ImportLeadsWithMapping() {
         </div>
         <div className="space-y-2">
           <Label>איש מכירות ברירת מחדל</Label>
-          <Select 
-            value={defaultSalesPersonId} 
+          <Select
+            value={defaultSalesPersonId}
             onValueChange={setDefaultSalesPersonId}
             disabled={!defaultAgencyId || defaultAgencyId === "none"}
           >
             <SelectTrigger>
-              <SelectValue placeholder={defaultAgencyId && defaultAgencyId !== "none" ? "בחר איש מכירות" : "בחר סוכנות קודם"} />
+              <SelectValue
+                placeholder={
+                  defaultAgencyId && defaultAgencyId !== "none"
+                    ? "בחר איש מכירות"
+                    : "בחר סוכנות קודם"
+                }
+              />
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="none">ללא</SelectItem>
-              {salesPeople.map(sp => (
+              {salesPeople.map((sp) => (
                 <SelectItem key={sp.id} value={sp.id}>
                   {sp.full_name}
                 </SelectItem>
@@ -1145,32 +1323,48 @@ export function ImportLeadsWithMapping() {
         <div className="space-y-2 pe-4">
           {mappings.map((mapping, idx) => {
             const sampleValue = rawData[0]?.[mapping.csvColumn];
-            const displaySample = sampleValue !== undefined && sampleValue !== null && sampleValue !== '' 
-              ? String(sampleValue) 
-              : "(ריק)";
+            const displaySample =
+              sampleValue !== undefined &&
+              sampleValue !== null &&
+              sampleValue !== ""
+                ? String(sampleValue)
+                : "(ריק)";
             return (
-              <div key={idx} className="flex items-center gap-3 p-2 bg-muted/50 rounded">
+              <div
+                key={idx}
+                className="flex items-center gap-3 p-2 bg-muted/50 rounded"
+              >
                 <div className="flex-1 min-w-0">
-                  <div className="font-mono text-sm truncate" title={mapping.csvColumn}>
+                  <div
+                    className="font-mono text-sm truncate"
+                    title={mapping.csvColumn}
+                  >
                     {mapping.csvColumn}
                   </div>
-                  <div className="text-xs text-muted-foreground truncate" title={displaySample}>
+                  <div
+                    className="text-xs text-muted-foreground truncate"
+                    title={displaySample}
+                  >
                     דוגמה: {displaySample}
                   </div>
                 </div>
                 <ArrowLeft className="h-4 w-4 text-muted-foreground shrink-0" />
                 <Select
                   value={mapping.systemField || "skip"}
-                  onValueChange={(value) => updateMapping(mapping.csvColumn, value)}
+                  onValueChange={(value) =>
+                    updateMapping(mapping.csvColumn, value)
+                  }
                 >
                   <SelectTrigger className="w-[180px] shrink-0">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="skip">
-                      <span className="text-muted-foreground">דלג על שדה זה</span>
+                      <span className="text-muted-foreground">
+                        דלג על שדה זה
+                      </span>
                     </SelectItem>
-                    {systemFields.map(field => (
+                    {systemFields.map((field) => (
                       <SelectItem key={field.key} value={field.key}>
                         {field.label} {field.required && "*"}
                       </SelectItem>
@@ -1184,7 +1378,9 @@ export function ImportLeadsWithMapping() {
       </div>
 
       {missingRequiredFields.length > 0 && (
-        <p className="text-sm text-destructive">* חובה למפות: {missingRequiredFields.map(f => f.label).join(', ')}</p>
+        <p className="text-sm text-destructive">
+          * חובה למפות: {missingRequiredFields.map((f) => f.label).join(", ")}
+        </p>
       )}
 
       <div className="flex justify-between pt-4 border-t mt-4 sticky bottom-0 bg-background pb-1">
@@ -1192,8 +1388,8 @@ export function ImportLeadsWithMapping() {
           <ArrowRight className="h-4 w-4 ml-2" />
           חזור
         </Button>
-        <Button 
-          onClick={handleProceedToPreview} 
+        <Button
+          onClick={handleProceedToPreview}
           disabled={missingRequiredFields.length > 0}
         >
           המשך לתצוגה מקדימה
@@ -1209,7 +1405,7 @@ export function ImportLeadsWithMapping() {
         <Badge variant="secondary">{rawData.length} שורות לייבוא</Badge>
         <Badge variant="outline">
           {defaultAgencyId && defaultAgencyId !== "none"
-            ? `סוכנות: ${agencies.find(a => a.id === defaultAgencyId)?.name}`
+            ? `סוכנות: ${agencies.find((a) => a.id === defaultAgencyId)?.name}`
             : "ללא סוכנות (תחת הארגון בלבד)"}
         </Badge>
         {updateColumnsCount > 0 && (
@@ -1223,8 +1419,8 @@ export function ImportLeadsWithMapping() {
       {updateColumnsCount > 0 && (
         <div className="border rounded-lg p-3 bg-blue-50 dark:bg-blue-950/30 text-sm">
           <p className="text-blue-700 dark:text-blue-300">
-            🔄 זוהו {updateColumnsCount} עמודות עדכונים (עדכון 1-{updateColumnsCount}). 
-            התוכן מכל עמודה יתווסף לעדכונים של הליד.
+            🔄 זוהו {updateColumnsCount} עמודות עדכונים (עדכון 1-
+            {updateColumnsCount}). התוכן מכל עמודה יתווסף לעדכונים של הליד.
           </p>
         </div>
       )}
@@ -1236,46 +1432,66 @@ export function ImportLeadsWithMapping() {
             <Plus className="h-4 w-4 text-green-600" />
             <span>ערכים חדשים שייווצרו:</span>
           </div>
-          
+
           {/* New Statuses */}
-          {newValues.filter(v => v.type === 'status').length > 0 && (
+          {newValues.filter((v) => v.type === "status").length > 0 && (
             <div className="space-y-2">
-              <div className="text-xs text-muted-foreground">סטטוסים חדשים:</div>
+              <div className="text-xs text-muted-foreground">
+                סטטוסים חדשים:
+              </div>
               <div className="flex flex-wrap gap-2">
-                {newValues.filter(v => v.type === 'status').map(status => (
-                  <div key={status.value} className="flex items-center gap-2 bg-background p-2 rounded border">
-                    <input
-                      type="color"
-                      value={status.color}
-                      onChange={(e) => updateNewValueColor(status.value, 'status', e.target.value)}
-                      className="w-6 h-6 rounded cursor-pointer border-0"
-                    />
-                    <span className="text-sm">{status.value}</span>
-                  </div>
-                ))}
+                {newValues
+                  .filter((v) => v.type === "status")
+                  .map((status) => (
+                    <div
+                      key={status.value}
+                      className="flex items-center gap-2 bg-background p-2 rounded border"
+                    >
+                      <input
+                        type="color"
+                        value={status.color}
+                        onChange={(e) =>
+                          updateNewValueColor(
+                            status.value,
+                            "status",
+                            e.target.value,
+                          )
+                        }
+                        className="w-6 h-6 rounded cursor-pointer border-0"
+                      />
+                      <span className="text-sm">{status.value}</span>
+                    </div>
+                  ))}
               </div>
             </div>
           )}
-          
+
           {/* New Tags */}
-          {newValues.filter(v => v.type === 'tag').length > 0 && (
+          {newValues.filter((v) => v.type === "tag").length > 0 && (
             <div className="space-y-2">
               <div className="text-xs text-muted-foreground flex items-center gap-1">
                 <Tag className="h-3 w-3" />
                 תגיות חדשות:
               </div>
               <div className="flex flex-wrap gap-2">
-                {newValues.filter(v => v.type === 'tag').map(tag => (
-                  <div key={tag.value} className="flex items-center gap-2 bg-background p-2 rounded border">
-                    <input
-                      type="color"
-                      value={tag.color}
-                      onChange={(e) => updateNewValueColor(tag.value, 'tag', e.target.value)}
-                      className="w-6 h-6 rounded cursor-pointer border-0"
-                    />
-                    <span className="text-sm">{tag.value}</span>
-                  </div>
-                ))}
+                {newValues
+                  .filter((v) => v.type === "tag")
+                  .map((tag) => (
+                    <div
+                      key={tag.value}
+                      className="flex items-center gap-2 bg-background p-2 rounded border"
+                    >
+                      <input
+                        type="color"
+                        value={tag.color}
+                        onChange={(e) =>
+                          updateNewValueColor(tag.value, "tag", e.target.value)
+                        }
+                        className="w-6 h-6 rounded cursor-pointer border-0"
+                      />
+                      <span className="text-sm">{tag.value}</span>
+                    </div>
+                  ))}
               </div>
             </div>
           )}
@@ -1287,7 +1503,7 @@ export function ImportLeadsWithMapping() {
         <Table>
           <TableHeader>
             <TableRow>
-              {mappedFields.map(field => (
+              {mappedFields.map((field) => (
                 <TableHead key={field.key} className="whitespace-nowrap">
                   {field.label}
                 </TableHead>
@@ -1297,7 +1513,7 @@ export function ImportLeadsWithMapping() {
           <TableBody>
             {previewData.map((row, idx) => (
               <TableRow key={idx}>
-                {mappedFields.map(field => (
+                {mappedFields.map((field) => (
                   <TableCell key={field.key} className="max-w-[150px] truncate">
                     {row[field.key] ?? "-"}
                   </TableCell>
@@ -1336,7 +1552,8 @@ export function ImportLeadsWithMapping() {
           <div>
             <p className="font-medium">הייבוא הושלם בהצלחה!</p>
             <p className="text-sm text-muted-foreground">
-              {importResult.updates} לידים עודכנו, {importResult.inserts} לידים חדשים נוספו
+              {importResult.updates} לידים עודכנו, {importResult.inserts} לידים
+              חדשים נוספו
             </p>
             {(importResult.leadUpdates ?? 0) > 0 && (
               <p className="text-sm text-blue-600 mt-1">
@@ -1345,7 +1562,9 @@ export function ImportLeadsWithMapping() {
             )}
             {newValues.length > 0 && (
               <p className="text-sm text-green-600 mt-1">
-                נוצרו {newValues.filter(v => v.type === 'status').length} סטטוסים ו-{newValues.filter(v => v.type === 'tag').length} תגיות חדשות
+                נוצרו {newValues.filter((v) => v.type === "status").length}{" "}
+                סטטוסים ו-{newValues.filter((v) => v.type === "tag").length}{" "}
+                תגיות חדשות
               </p>
             )}
           </div>
@@ -1356,17 +1575,23 @@ export function ImportLeadsWithMapping() {
   );
 
   return (
-    <Dialog open={open} onOpenChange={(isOpen) => {
-      if (!isOpen) handleClose();
-      else setOpen(true);
-    }}>
+    <Dialog
+      open={open}
+      onOpenChange={(isOpen) => {
+        if (!isOpen) handleClose();
+        else setOpen(true);
+      }}
+    >
       <DialogTrigger asChild>
         <Button variant="outline" className="gap-2">
           <Upload className="h-4 w-4" />
           ייבוא לידים
         </Button>
       </DialogTrigger>
-      <DialogContent dir="rtl" className="max-w-2xl w-[95vw] max-h-[90vh] flex flex-col overflow-hidden">
+      <DialogContent
+        dir="rtl"
+        className="max-w-2xl w-[95vw] max-h-[90vh] flex flex-col overflow-hidden"
+      >
         <DialogHeader className="flex-shrink-0">
           <DialogTitle>
             {step === "upload" && "ייבוא לידים מקובץ"}

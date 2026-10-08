@@ -14,7 +14,10 @@ interface CommandCenterSidecarProps {
 /**
  * Persistent sidecar panel: Carmen text chat with live screen context for system fixes.
  */
-export function CommandCenterSidecar({ onClose, className }: CommandCenterSidecarProps) {
+export function CommandCenterSidecar({
+  onClose,
+  className,
+}: CommandCenterSidecarProps) {
   const contextMetadata = useSystemFixContext();
   const tenantId = contextMetadata.tenant_id ?? null;
   const brain = useBrainChannel(tenantId);
@@ -36,8 +39,13 @@ export function CommandCenterSidecar({ onClose, className }: CommandCenterSideca
     >
       <header className="cc-sidecar-header flex shrink-0 items-center justify-between gap-2 border-b border-[var(--cc-line)] px-3 py-2">
         <div className="min-w-0">
-          <p className="truncate text-sm font-bold text-[var(--cc-accent)]">כרמן · תיקון מערכת</p>
-          <p className="truncate text-[10px] text-[var(--cc-text-dim)]" title={contextMetadata.path}>
+          <p className="truncate text-sm font-bold text-[var(--cc-accent)]">
+            כרמן · תיקון מערכת
+          </p>
+          <p
+            className="truncate text-[10px] text-[var(--cc-text-dim)]"
+            title={contextMetadata.path}
+          >
             {contextMetadata.path}
           </p>
         </div>
@@ -83,7 +91,11 @@ export function CommandCenterSidecar({ onClose, className }: CommandCenterSideca
 }
 
 /** Compact close control for mobile sheet header. */
-export function CommandCenterSidecarSheetHeader({ onClose }: { onClose: () => void }) {
+export function CommandCenterSidecarSheetHeader({
+  onClose,
+}: {
+  onClose: () => void;
+}) {
   return (
     <button
       type="button"

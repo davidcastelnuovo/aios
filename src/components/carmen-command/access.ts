@@ -6,7 +6,10 @@ import { supabase } from "@/integrations/supabase/client";
 // Mirrored server-side in the carmen voice edge functions.
 export const COMMAND_CENTER_ALLOWLIST = ["david.castelnuovo@gmail.com"];
 
-export function useCommandCenterAccess(): { allowed: boolean; loading: boolean } {
+export function useCommandCenterAccess(): {
+  allowed: boolean;
+  loading: boolean;
+} {
   const [state, setState] = useState({ allowed: false, loading: true });
   useEffect(() => {
     let mounted = true;
@@ -20,13 +23,18 @@ export function useCommandCenterAccess(): { allowed: boolean; loading: boolean }
         }
         // Any user with a personal key gets in (RLS: own row only)
         const { data: keyRow } = await (supabase as any)
-          .from("user_api_keys").select("user_id").limit(1).maybeSingle();
+          .from("user_api_keys")
+          .select("user_id")
+          .limit(1)
+          .maybeSingle();
         if (mounted) setState({ allowed: !!keyRow, loading: false });
       } catch {
         if (mounted) setState({ allowed: false, loading: false });
       }
     })();
-    return () => { mounted = false; };
+    return () => {
+      mounted = false;
+    };
   }, []);
   return state;
 }

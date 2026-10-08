@@ -1,6 +1,9 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { formatCopyConceptsForImagePrompt, type CopyConcept } from "./copyConcepts.ts";
+import {
+  formatCopyConceptsForImagePrompt,
+  type CopyConcept,
+} from "./copyConcepts.ts";
 import {
   findExistingCreativeSibling,
   overlayCopyHandoffPayload,
@@ -27,7 +30,9 @@ const concept = (overrides: Partial<CopyConcept> = {}): CopyConcept => ({
   approvedAt: overrides.approvedAt ?? "2026-08-24T00:00:00.000Z",
 });
 
-const item = (overrides: Partial<HandoffWorkItem> & { id: string }): HandoffWorkItem => ({
+const item = (
+  overrides: Partial<HandoffWorkItem> & { id: string },
+): HandoffWorkItem => ({
   title: "קמפיין קיץ",
   payload: {},
   client_id: "client-1",
@@ -46,7 +51,11 @@ test("findExistingCreativeSibling prefers the copy item pointer", () => {
       payload: { linked_copy_item_id: "copy-1" },
       updated_at: "2026-08-25T10:00:00.000Z",
     }),
-    item({ id: "creative-old", title: "שם אחר", payload: { intake_source: "copy_link" } }),
+    item({
+      id: "creative-old",
+      title: "שם אחר",
+      payload: { intake_source: "copy_link" },
+    }),
   ]);
   assert.equal(hit?.id, "creative-old");
 });
@@ -88,7 +97,10 @@ test("findExistingCreativeSibling matches same title + copy_link on the same cli
 test("findExistingCreativeSibling ignores a same-title manual creative", () => {
   const copy = item({ id: "copy-1" });
   const hit = findExistingCreativeSibling(copy, [
-    item({ id: "manual", payload: { department: "creative", intake_source: "manual" } }),
+    item({
+      id: "manual",
+      payload: { department: "creative", intake_source: "manual" },
+    }),
   ]);
   assert.equal(hit, null);
 });
@@ -115,11 +127,19 @@ test("overlayCopyHandoffPayload keeps existing variations and writes visual_prom
   assert.equal(payload.format, "4:5");
   assert.equal(payload.intake_source, "copy_link");
   assert.equal(payload.linked_copy_item_id, "copy-1");
-  assert.deepEqual(payload.variations, [{ id: "v1", imageUrl: "https://example.com/a.png" }]);
-  assert.match(String(payload.visual_prompt), /MUST FOLLOW THIS APPROVED VISUAL CONCEPT/);
+  assert.deepEqual(payload.variations, [
+    { id: "v1", imageUrl: "https://example.com/a.png" },
+  ]);
+  assert.match(
+    String(payload.visual_prompt),
+    /MUST FOLLOW THIS APPROVED VISUAL CONCEPT/,
+  );
   assert.match(String(payload.visual_prompt), /ארנק פעור/);
   assert.match(String(payload.visual_prompt), /PHOTOGRAPH THIS SCENE/);
-  assert.equal((payload.approved_concepts as CopyConcept[])[0]?.name, "הכיס הריק");
+  assert.equal(
+    (payload.approved_concepts as CopyConcept[])[0]?.name,
+    "הכיס הריק",
+  );
 });
 
 test("stampCopyPayloadAfterHandoff keeps the item in copy", () => {
@@ -134,8 +154,14 @@ test("stampCopyPayloadAfterHandoff keeps the item in copy", () => {
 });
 
 test("formatCopyConceptsForImagePrompt leads with the approved concept", () => {
-  const prompt = formatCopyConceptsForImagePrompt([concept(), concept({ id: "c2", name: "וריאציה שנייה", bigIdea: "זווית אחרת" })]);
-  assert.equal(prompt.startsWith("MUST FOLLOW THIS APPROVED VISUAL CONCEPT"), true);
+  const prompt = formatCopyConceptsForImagePrompt([
+    concept(),
+    concept({ id: "c2", name: "וריאציה שנייה", bigIdea: "זווית אחרת" }),
+  ]);
+  assert.equal(
+    prompt.startsWith("MUST FOLLOW THIS APPROVED VISUAL CONCEPT"),
+    true,
+  );
   assert.match(prompt, /Concept name: הכיס הריק/);
   assert.match(prompt, /PHOTOGRAPH THIS SCENE/);
   assert.match(prompt, /2\. וריאציה שנייה/);
@@ -144,13 +170,31 @@ test("formatCopyConceptsForImagePrompt leads with the approved concept", () => {
 test("listOpenCreativeProjects returns every open creative for the client", () => {
   const copy = item({ id: "copy-1" });
   const open = listOpenCreativeProjects(copy, [
-    item({ id: "linked", payload: { linked_copy_item_id: "copy-1", department: "creative" } }),
-    item({ id: "manual", title: "באנר קיץ", payload: { department: "creative", intake_source: "manual" } }),
-    item({ id: "archived", payload: { department: "creative" }, status: "archived" }),
-    item({ id: "other-client", client_id: "client-2", payload: { department: "creative" } }),
+    item({
+      id: "linked",
+      payload: { linked_copy_item_id: "copy-1", department: "creative" },
+    }),
+    item({
+      id: "manual",
+      title: "באנר קיץ",
+      payload: { department: "creative", intake_source: "manual" },
+    }),
+    item({
+      id: "archived",
+      payload: { department: "creative" },
+      status: "archived",
+    }),
+    item({
+      id: "other-client",
+      client_id: "client-2",
+      payload: { department: "creative" },
+    }),
     item({ id: "copy-self", payload: { department: "copy" } }),
   ]);
-  assert.deepEqual(open.map((row) => row.id), ["linked", "manual"]);
+  assert.deepEqual(
+    open.map((row) => row.id),
+    ["linked", "manual"],
+  );
 });
 
 test("overlayCopyHandoffPayload keeps existing concepts when the copy has none", () => {
@@ -194,16 +238,30 @@ test("overlayCopyHandoffPayload keeps an existing visual_prompt when nothing is 
 test("copyPullSummary marks items with copy or concepts as pullable", () => {
   assert.equal(copyPullSummary({ copy_text: "כותרת" }).pullable, true);
   assert.equal(copyPullSummary({ copy_concepts: [concept()] }).pullable, true);
-  assert.equal(copyPullSummary({ copy_concepts: [concept()] }).approvedCount, 1);
+  assert.equal(
+    copyPullSummary({ copy_concepts: [concept()] }).approvedCount,
+    1,
+  );
   assert.equal(copyPullSummary({ brief_text: "בריף בלבד" }).pullable, true);
   assert.equal(copyPullSummary({}).pullable, false);
 });
 
 test("suggestedCreativeTarget prefers the linked sibling among open projects", () => {
-  const copy = item({ id: "copy-1", payload: { handoff_to_creative_item_id: "pointed" } });
+  const copy = item({
+    id: "copy-1",
+    payload: { handoff_to_creative_item_id: "pointed" },
+  });
   const open = [
-    item({ id: "newer-manual", payload: { department: "creative" }, updated_at: "2026-08-25T12:00:00.000Z" }),
-    item({ id: "pointed", payload: { department: "creative" }, updated_at: "2026-08-24T10:00:00.000Z" }),
+    item({
+      id: "newer-manual",
+      payload: { department: "creative" },
+      updated_at: "2026-08-25T12:00:00.000Z",
+    }),
+    item({
+      id: "pointed",
+      payload: { department: "creative" },
+      updated_at: "2026-08-24T10:00:00.000Z",
+    }),
   ];
   assert.equal(suggestedCreativeTarget(copy, open)?.id, "pointed");
 });
@@ -215,8 +273,20 @@ test("overlayCopyHandoffPayload writes approved copies only and pairs concept co
     copyPayload: {
       copy_text: "וריאציה 1\nכותרת:\nאלפא\n\nוריאציה 2\nכותרת:\nבטא",
       copy_variations: [
-        { id: "a", key: "1", label: "וריאציה 1", text: "וריאציה 1\nכותרת:\nאלפא", approved: false },
-        { id: "b", key: "2", label: "וריאציה 2", text: "וריאציה 2\nכותרת:\nבטא", approved: true },
+        {
+          id: "a",
+          key: "1",
+          label: "וריאציה 1",
+          text: "וריאציה 1\nכותרת:\nאלפא",
+          approved: false,
+        },
+        {
+          id: "b",
+          key: "2",
+          label: "וריאציה 2",
+          text: "וריאציה 2\nכותרת:\nבטא",
+          approved: true,
+        },
       ],
     },
     copyItem: { id: "copy-1", title: "seo / geo" },
@@ -226,7 +296,10 @@ test("overlayCopyHandoffPayload writes approved copies only and pairs concept co
   });
   assert.match(String(payload.copy_text), /בטא/);
   assert.doesNotMatch(String(payload.copy_text), /אלפא/);
-  const variations = payload.copy_variations as Array<{ key: string; approved: boolean }>;
+  const variations = payload.copy_variations as Array<{
+    key: string;
+    approved: boolean;
+  }>;
   assert.equal(variations.length, 2);
   assert.equal(variations.filter((row) => row.approved).length, 1);
   assert.equal((payload.approved_concepts as CopyConcept[])[0]?.copyKey, "2");

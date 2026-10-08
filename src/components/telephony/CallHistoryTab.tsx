@@ -1,7 +1,14 @@
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useCurrentTenant } from "@/hooks/useCurrentTenant";
-import { Phone, PhoneIncoming, PhoneOutgoing, PhoneMissed, Clock, FileText } from "lucide-react";
+import {
+  Phone,
+  PhoneIncoming,
+  PhoneOutgoing,
+  PhoneMissed,
+  Clock,
+  FileText,
+} from "lucide-react";
 import { format } from "date-fns";
 import { he } from "date-fns/locale";
 import { Badge } from "@/components/ui/badge";
@@ -13,15 +20,26 @@ interface CallHistoryTabProps {
   clientId?: string;
 }
 
-const STATUS_CONFIG: Record<string, { label: string; icon: typeof Phone; color: string }> = {
+const STATUS_CONFIG: Record<
+  string,
+  { label: string; icon: typeof Phone; color: string }
+> = {
   completed: { label: "הושלם", icon: PhoneOutgoing, color: "text-green-500" },
   "in-progress": { label: "בשיחה", icon: Phone, color: "text-blue-500" },
   initiated: { label: "יזום", icon: PhoneOutgoing, color: "text-yellow-500" },
   ringing: { label: "מצלצל", icon: PhoneOutgoing, color: "text-blue-400" },
   failed: { label: "נכשל", icon: PhoneMissed, color: "text-destructive" },
-  "no-answer": { label: "אין מענה", icon: PhoneMissed, color: "text-orange-500" },
+  "no-answer": {
+    label: "אין מענה",
+    icon: PhoneMissed,
+    color: "text-orange-500",
+  },
   busy: { label: "תפוס", icon: PhoneMissed, color: "text-orange-500" },
-  cancelled: { label: "בוטל", icon: PhoneMissed, color: "text-muted-foreground" },
+  cancelled: {
+    label: "בוטל",
+    icon: PhoneMissed,
+    color: "text-muted-foreground",
+  },
 };
 
 function formatDuration(seconds: number | null) {
@@ -80,7 +98,10 @@ export function CallHistoryTab({ leadId, clientId }: CallHistoryTabProps) {
           const StatusIcon = config.icon;
 
           return (
-            <div key={log.id} className="border rounded-lg p-3 space-y-2 text-right">
+            <div
+              key={log.id}
+              className="border rounded-lg p-3 space-y-2 text-right"
+            >
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
                   <Badge variant="outline" className="text-xs gap-1">
@@ -94,12 +115,16 @@ export function CallHistoryTab({ leadId, clientId }: CallHistoryTabProps) {
                   )}
                 </div>
                 <span className="text-xs text-muted-foreground">
-                  {format(new Date(log.created_at), "dd/MM/yyyy HH:mm", { locale: he })}
+                  {format(new Date(log.created_at), "dd/MM/yyyy HH:mm", {
+                    locale: he,
+                  })}
                 </span>
               </div>
 
               <div className="flex items-center justify-end gap-2 text-sm">
-                <span className="font-mono text-muted-foreground" dir="ltr">{log.to_number}</span>
+                <span className="font-mono text-muted-foreground" dir="ltr">
+                  {log.to_number}
+                </span>
                 <Phone className="h-3.5 w-3.5 text-muted-foreground" />
               </div>
 

@@ -14,10 +14,30 @@ import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from "@/components/ui/command";
 import { toast } from "sonner";
-import { Send, Mail, MessageCircle, Loader2, Check, ChevronsUpDown, X, Paperclip } from "lucide-react";
+import {
+  Send,
+  Mail,
+  MessageCircle,
+  Loader2,
+  Check,
+  ChevronsUpDown,
+  X,
+  Paperclip,
+} from "lucide-react";
 import { cn } from "@/lib/utils";
 import { markdownToEmailHtml, markdownToWhatsApp } from "./summaryFormat";
 
@@ -46,7 +66,12 @@ async function blobToBase64(blob: Blob): Promise<string> {
   });
 }
 
-export function ShareSummaryDialog({ open, onOpenChange, recording, tenantId }: ShareSummaryDialogProps) {
+export function ShareSummaryDialog({
+  open,
+  onOpenChange,
+  recording,
+  tenantId,
+}: ShareSummaryDialogProps) {
   const [sendWhatsApp, setSendWhatsApp] = useState(true);
   const [sendEmail, setSendEmail] = useState(false);
   const [attachDocx, setAttachDocx] = useState(true);
@@ -93,7 +118,9 @@ export function ShareSummaryDialog({ open, onOpenChange, recording, tenantId }: 
   const { data: gmailToken } = useQuery({
     queryKey: ["gmail-token-check"],
     queryFn: async () => {
-      const { data: { user } } = await supabase.auth.getUser();
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
       if (!user) return null;
       const { data } = await supabase
         .from("gmail_tokens")
@@ -109,7 +136,8 @@ export function ShareSummaryDialog({ open, onOpenChange, recording, tenantId }: 
     if (client) {
       if (client.phone) setDirectPhone(client.phone);
       if (client.email) setEmailAddress(client.email);
-      if (client.whatsapp_group_id) setSelectedGroupId(client.whatsapp_group_id);
+      if (client.whatsapp_group_id)
+        setSelectedGroupId(client.whatsapp_group_id);
     }
   }, [client]);
 
@@ -121,7 +149,9 @@ export function ShareSummaryDialog({ open, onOpenChange, recording, tenantId }: 
   const logClientUpdate = async () => {
     if (!recording.client_id) return;
     try {
-      const { data: { user } } = await supabase.auth.getUser();
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
       await supabase.from("client_updates").insert({
         tenant_id: tenantId,
         client_id: recording.client_id,
@@ -146,7 +176,9 @@ export function ShareSummaryDialog({ open, onOpenChange, recording, tenantId }: 
 
     setIsSending(true);
     try {
-      const { data: { session } } = await supabase.auth.getSession();
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
       if (!session) throw new Error("Not authenticated");
 
       const header = `*סיכום פגישה: ${meetingName}*${meetingDate ? `\n📅 ${meetingDate}` : ""}`;
@@ -163,7 +195,9 @@ export function ShareSummaryDialog({ open, onOpenChange, recording, tenantId }: 
           header,
           messageText.trim() ? `\n${messageText.trim()}` : "",
           "\n" + markdownToWhatsApp(recording.summary_md),
-        ].join("\n").trim();
+        ]
+          .join("\n")
+          .trim();
 
         const msgResponse = await fetch(
           `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/send-green-api-message`,
@@ -176,30 +210,45 @@ export function ShareSummaryDialog({ open, onOpenChange, recording, tenantId }: 
             body: JSON.stringify({
               tenantId,
               message: waText,
-              ...(hasGroup ? { groupId: selectedGroupId } : { phoneNumber: directPhone }),
+              ...(hasGroup
+                ? { groupId: selectedGroupId }
+                : { phoneNumber: directPhone }),
               ...(recording.client_id ? { clientId: recording.client_id } : {}),
             }),
-          }
+          },
         );
         const msgResult = await msgResponse.json();
-        if (!msgResponse.ok) throw new Error(msgResult.error || "שגיאה בשליחה בוואטסאפ");
+        if (!msgResponse.ok)
+          throw new Error(msgResult.error || "שגיאה בשליחה בוואטסאפ");
 
         // Optional: the DOCX as an attached document
         if (attachDocx && recording.summary_file_url) {
           try {
-            const docxBlob = await (await fetch(recording.summary_file_url)).blob();
+            const docxBlob = await (
+              await fetch(recording.summary_file_url)
+            ).blob();
             const formData = new FormData();
-            formData.append("file", docxBlob, `סיכום פגישה - ${meetingName}.docx`);
+            formData.append(
+              "file",
+              docxBlob,
+              `סיכום פגישה - ${meetingName}.docx`,
+            );
             formData.append("tenantId", tenantId);
             formData.append("fileType", "document");
             if (hasGroup) formData.append("groupId", selectedGroupId);
             else formData.append("phoneNumber", directPhone);
-            if (recording.client_id) formData.append("clientId", recording.client_id);
+            if (recording.client_id)
+              formData.append("clientId", recording.client_id);
             const fileResponse = await fetch(
               `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/send-green-api-file`,
-              { method: "POST", headers: { Authorization: `Bearer ${session.access_token}` }, body: formData }
+              {
+                method: "POST",
+                headers: { Authorization: `Bearer ${session.access_token}` },
+                body: formData,
+              },
             );
-            if (!fileResponse.ok) console.error("DOCX attach failed:", await fileResponse.text());
+            if (!fileResponse.ok)
+              console.error("DOCX attach failed:", await fileResponse.text());
           } catch (docxErr) {
             console.error("DOCX attach failed:", docxErr);
           }
@@ -245,20 +294,31 @@ export function ShareSummaryDialog({ open, onOpenChange, recording, tenantId }: 
         let attachments: { filename: string; base64: string }[] = [];
         if (attachDocx && recording.summary_file_url) {
           try {
-            const docxBlob = await (await fetch(recording.summary_file_url)).blob();
-            attachments = [{ filename: `סיכום פגישה - ${meetingName}.docx`, base64: await blobToBase64(docxBlob) }];
+            const docxBlob = await (
+              await fetch(recording.summary_file_url)
+            ).blob();
+            attachments = [
+              {
+                filename: `סיכום פגישה - ${meetingName}.docx`,
+                base64: await blobToBase64(docxBlob),
+              },
+            ];
           } catch (docxErr) {
             console.error("DOCX fetch for email failed:", docxErr);
           }
         }
-        const docxMime = "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
+        const docxMime =
+          "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
 
         if (emailSender === "gmail" && gmailToken?.google_email) {
           const response = await fetch(
             `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/gmail-api`,
             {
               method: "POST",
-              headers: { Authorization: `Bearer ${session.access_token}`, "Content-Type": "application/json" },
+              headers: {
+                Authorization: `Bearer ${session.access_token}`,
+                "Content-Type": "application/json",
+              },
               body: JSON.stringify({
                 action: "send",
                 to: emailAddress,
@@ -270,17 +330,21 @@ export function ShareSummaryDialog({ open, onOpenChange, recording, tenantId }: 
                   data: a.base64,
                 })),
               }),
-            }
+            },
           );
           const result = await response.json();
-          if (!response.ok) throw new Error(result.error || "שגיאה בשליחה ב-Gmail");
+          if (!response.ok)
+            throw new Error(result.error || "שגיאה בשליחה ב-Gmail");
           toast.success(`הסיכום נשלח מ-${gmailToken.google_email}`);
         } else {
           const response = await fetch(
             `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/send-resend-email`,
             {
               method: "POST",
-              headers: { Authorization: `Bearer ${session.access_token}`, "Content-Type": "application/json" },
+              headers: {
+                Authorization: `Bearer ${session.access_token}`,
+                "Content-Type": "application/json",
+              },
               body: JSON.stringify({
                 to: emailAddress,
                 subject,
@@ -291,10 +355,11 @@ export function ShareSummaryDialog({ open, onOpenChange, recording, tenantId }: 
                   contentType: docxMime,
                 })),
               }),
-            }
+            },
           );
           const result = await response.json();
-          if (!response.ok) throw new Error(result.error || "שגיאה בשליחת אימייל");
+          if (!response.ok)
+            throw new Error(result.error || "שגיאה בשליחת אימייל");
           toast.success("הסיכום נשלח באימייל בהצלחה");
         }
       }
@@ -303,7 +368,9 @@ export function ShareSummaryDialog({ open, onOpenChange, recording, tenantId }: 
       onOpenChange(false);
     } catch (error) {
       console.error("Error sending summary:", error);
-      toast.error("שגיאה בשליחת הסיכום: " + (error instanceof Error ? error.message : ""));
+      toast.error(
+        "שגיאה בשליחת הסיכום: " + (error instanceof Error ? error.message : ""),
+      );
     } finally {
       setIsSending(false);
     }
@@ -315,7 +382,9 @@ export function ShareSummaryDialog({ open, onOpenChange, recording, tenantId }: 
         <DialogHeader>
           <DialogTitle>שתף סיכום פגישה</DialogTitle>
           <DialogDescription>
-            {meetingName}{meetingDate ? ` · ${meetingDate}` : ""}{client?.name ? ` · ${client.name}` : ""}
+            {meetingName}
+            {meetingDate ? ` · ${meetingDate}` : ""}
+            {client?.name ? ` · ${client.name}` : ""}
           </DialogDescription>
         </DialogHeader>
 
@@ -324,12 +393,18 @@ export function ShareSummaryDialog({ open, onOpenChange, recording, tenantId }: 
             <Label className="text-sm font-medium">אמצעי שליחה</Label>
             <div className="flex gap-4">
               <label className="flex items-center gap-2 cursor-pointer">
-                <Checkbox checked={sendWhatsApp} onCheckedChange={(checked) => setSendWhatsApp(!!checked)} />
+                <Checkbox
+                  checked={sendWhatsApp}
+                  onCheckedChange={(checked) => setSendWhatsApp(!!checked)}
+                />
                 <MessageCircle className="h-4 w-4 text-green-600" />
                 <span className="text-sm">וואטסאפ</span>
               </label>
               <label className="flex items-center gap-2 cursor-pointer">
-                <Checkbox checked={sendEmail} onCheckedChange={(checked) => setSendEmail(!!checked)} />
+                <Checkbox
+                  checked={sendEmail}
+                  onCheckedChange={(checked) => setSendEmail(!!checked)}
+                />
                 <Mail className="h-4 w-4 text-blue-600" />
                 <span className="text-sm">אימייל</span>
               </label>
@@ -340,10 +415,16 @@ export function ShareSummaryDialog({ open, onOpenChange, recording, tenantId }: 
             <div className="space-y-3 p-3 border rounded-lg bg-muted/30">
               <div>
                 <Label className="text-sm">קבוצת וואטסאפ (חיפוש לפי שם)</Label>
-                <GroupCombobox groups={groups || []} value={selectedGroupId} onChange={setSelectedGroupId} />
+                <GroupCombobox
+                  groups={groups || []}
+                  value={selectedGroupId}
+                  onChange={setSelectedGroupId}
+                />
               </div>
               <div>
-                <Label htmlFor="summary-direct-phone" className="text-sm">או מספר טלפון ישיר</Label>
+                <Label htmlFor="summary-direct-phone" className="text-sm">
+                  או מספר טלפון ישיר
+                </Label>
                 <Input
                   id="summary-direct-phone"
                   value={directPhone}
@@ -361,7 +442,9 @@ export function ShareSummaryDialog({ open, onOpenChange, recording, tenantId }: 
           {sendEmail && (
             <div className="space-y-3 p-3 border rounded-lg bg-muted/30">
               <div>
-                <Label htmlFor="summary-email" className="text-sm">כתובת אימייל של הנמען</Label>
+                <Label htmlFor="summary-email" className="text-sm">
+                  כתובת אימייל של הנמען
+                </Label>
                 <Input
                   id="summary-email"
                   type="email"
@@ -373,21 +456,44 @@ export function ShareSummaryDialog({ open, onOpenChange, recording, tenantId }: 
               </div>
               <div>
                 <Label className="text-sm mb-2 block">שלח מ-</Label>
-                <RadioGroup value={emailSender} onValueChange={(v) => setEmailSender(v as "aios" | "gmail")} className="space-y-1">
+                <RadioGroup
+                  value={emailSender}
+                  onValueChange={(v) => setEmailSender(v as "aios" | "gmail")}
+                  className="space-y-1"
+                >
                   <label className="flex items-center gap-2 cursor-pointer text-sm">
                     <RadioGroupItem value="aios" id="summary-sender-aios" />
-                    <span>AIOS <span className="text-muted-foreground text-xs">(noreply@aios.co.il)</span></span>
+                    <span>
+                      AIOS{" "}
+                      <span className="text-muted-foreground text-xs">
+                        (noreply@aios.co.il)
+                      </span>
+                    </span>
                   </label>
-                  <label className={cn(
-                    "flex items-center gap-2 text-sm",
-                    gmailToken?.google_email ? "cursor-pointer" : "cursor-not-allowed opacity-50"
-                  )}>
-                    <RadioGroupItem value="gmail" id="summary-sender-gmail" disabled={!gmailToken?.google_email} />
+                  <label
+                    className={cn(
+                      "flex items-center gap-2 text-sm",
+                      gmailToken?.google_email
+                        ? "cursor-pointer"
+                        : "cursor-not-allowed opacity-50",
+                    )}
+                  >
+                    <RadioGroupItem
+                      value="gmail"
+                      id="summary-sender-gmail"
+                      disabled={!gmailToken?.google_email}
+                    />
                     <span>
                       Gmail שלי{" "}
-                      {gmailToken?.google_email
-                        ? <span className="text-muted-foreground text-xs">({gmailToken.google_email})</span>
-                        : <span className="text-muted-foreground text-xs">(לא מחובר)</span>}
+                      {gmailToken?.google_email ? (
+                        <span className="text-muted-foreground text-xs">
+                          ({gmailToken.google_email})
+                        </span>
+                      ) : (
+                        <span className="text-muted-foreground text-xs">
+                          (לא מחובר)
+                        </span>
+                      )}
                     </span>
                   </label>
                 </RadioGroup>
@@ -397,14 +503,19 @@ export function ShareSummaryDialog({ open, onOpenChange, recording, tenantId }: 
 
           {recording.summary_file_url && (
             <label className="flex items-center gap-2 cursor-pointer text-sm">
-              <Checkbox checked={attachDocx} onCheckedChange={(checked) => setAttachDocx(!!checked)} />
+              <Checkbox
+                checked={attachDocx}
+                onCheckedChange={(checked) => setAttachDocx(!!checked)}
+              />
               <Paperclip className="h-4 w-4 text-muted-foreground" />
               <span>צרף גם את קובץ ה-Word של הסיכום</span>
             </label>
           )}
 
           <div>
-            <Label htmlFor="summary-message-text" className="text-sm">טקסט מלווה (אופציונלי)</Label>
+            <Label htmlFor="summary-message-text" className="text-sm">
+              טקסט מלווה (אופציונלי)
+            </Label>
             <Textarea
               id="summary-message-text"
               value={messageText}
@@ -414,11 +525,21 @@ export function ShareSummaryDialog({ open, onOpenChange, recording, tenantId }: 
             />
           </div>
 
-          <Button onClick={handleSend} disabled={isSending || !recording.summary_md} className="w-full">
+          <Button
+            onClick={handleSend}
+            disabled={isSending || !recording.summary_md}
+            className="w-full"
+          >
             {isSending ? (
-              <><Loader2 className="ml-2 h-4 w-4 animate-spin" />שולח...</>
+              <>
+                <Loader2 className="ml-2 h-4 w-4 animate-spin" />
+                שולח...
+              </>
             ) : (
-              <><Send className="ml-2 h-4 w-4" />שלח סיכום</>
+              <>
+                <Send className="ml-2 h-4 w-4" />
+                שלח סיכום
+              </>
             )}
           </Button>
         </div>
@@ -448,14 +569,24 @@ function GroupCombobox({
     <div className="flex items-center gap-2">
       <Popover open={open} onOpenChange={setOpen}>
         <PopoverTrigger asChild>
-          <Button variant="outline" role="combobox" aria-expanded={open} className="flex-1 justify-between font-normal">
-            <span className={cn("truncate", !selected && "text-muted-foreground")}>
+          <Button
+            variant="outline"
+            role="combobox"
+            aria-expanded={open}
+            className="flex-1 justify-between font-normal"
+          >
+            <span
+              className={cn("truncate", !selected && "text-muted-foreground")}
+            >
               {selected ? selected.group_name : "חפש קבוצה לפי שם..."}
             </span>
             <ChevronsUpDown className="h-4 w-4 opacity-50 shrink-0" />
           </Button>
         </PopoverTrigger>
-        <PopoverContent className="w-[--radix-popover-trigger-width] p-0" align="start">
+        <PopoverContent
+          className="w-[--radix-popover-trigger-width] p-0"
+          align="start"
+        >
           <Command>
             <CommandInput placeholder="חפש שם קבוצה..." />
             <CommandList>
@@ -470,7 +601,12 @@ function GroupCombobox({
                       setOpen(false);
                     }}
                   >
-                    <Check className={cn("ml-2 h-4 w-4", value === group.id ? "opacity-100" : "opacity-0")} />
+                    <Check
+                      className={cn(
+                        "ml-2 h-4 w-4",
+                        value === group.id ? "opacity-100" : "opacity-0",
+                      )}
+                    />
                     {group.group_name}
                   </CommandItem>
                 ))}
@@ -480,7 +616,13 @@ function GroupCombobox({
         </PopoverContent>
       </Popover>
       {selected && (
-        <Button type="button" variant="ghost" size="icon" onClick={() => onChange("")} title="נקה בחירה">
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon"
+          onClick={() => onChange("")}
+          title="נקה בחירה"
+        >
           <X className="h-4 w-4" />
         </Button>
       )}

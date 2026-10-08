@@ -23,7 +23,7 @@ webhook משרת את כל הארגונים ומנותב בבטחה למספר �
 
 ## 2. יצירת Embedded Signup Configuration
 
-> **תנאי מקדים.** הבחירה ב־login variation מסוג *WhatsApp Embedded Signup*
+> **תנאי מקדים.** הבחירה ב־login variation מסוג _WhatsApp Embedded Signup_
 > מופיעה רק לאפליקציות שקיבלו גישת Tech Provider / Solution Partner. באפליקציה
 > ללא הגישה הזו ניתן לשמור Configuration רגיל של Facebook Login for Business,
 > אבל הוא לא יפעיל את מסכי ה־WhatsApp. במקרה כזה יש להשתמש ב"חיבור ידני עם

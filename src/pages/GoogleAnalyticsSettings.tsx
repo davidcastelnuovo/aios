@@ -1,5 +1,11 @@
 import { useState } from "react";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import {
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+  CardDescription,
+} from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription } from "@/components/ui/alert";
@@ -10,7 +16,19 @@ import { useTenant } from "@/contexts/TenantContext";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
 import { useUserIntegrations } from "@/hooks/useUserIntegrations";
 import { toast } from "sonner";
-import { ArrowLeft, BarChart3, RefreshCw, Loader2, ExternalLink, CheckCircle2, AlertCircle, Zap, Copy, Check, Share2 } from "lucide-react";
+import {
+  ArrowLeft,
+  BarChart3,
+  RefreshCw,
+  Loader2,
+  ExternalLink,
+  CheckCircle2,
+  AlertCircle,
+  Zap,
+  Copy,
+  Check,
+  Share2,
+} from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { useTenantPath } from "@/hooks/useTenantPath";
 import { ManageIntegrationPermissionsDialog } from "@/components/forms/ManageIntegrationPermissionsDialog";
@@ -24,7 +42,9 @@ export default function GoogleAnalyticsSettings() {
   const [isConnecting, setIsConnecting] = useState(false);
   const [activeTab, setActiveTab] = useState("direct");
   const [webhookCopied, setWebhookCopied] = useState(false);
-  const [sharingIntegrationId, setSharingIntegrationId] = useState<string | null>(null);
+  const [sharingIntegrationId, setSharingIntegrationId] = useState<
+    string | null
+  >(null);
   const [sharingIntegrationName, setSharingIntegrationName] = useState("");
   const [sharingOwnerId, setSharingOwnerId] = useState<string | null>(null);
 
@@ -32,30 +52,37 @@ export default function GoogleAnalyticsSettings() {
   const webhookUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/webhook-google-analytics-sync`;
 
   // Get user's own + shared direct API integrations
-  const { data: integrations = [], isLoading } = useUserIntegrations(currentTenantId, 'google_analytics');
+  const { data: integrations = [], isLoading } = useUserIntegrations(
+    currentTenantId,
+    "google_analytics",
+  );
 
   const hasAnyDirectConnection = integrations.length > 0;
 
   // Get Make.com integration status
   const { data: makeIntegration, isLoading: makeLoading } = useQuery({
-    queryKey: ['make-integration', currentTenantId],
+    queryKey: ["make-integration", currentTenantId],
     queryFn: async () => {
       if (!currentTenantId) return null;
       const { data } = await supabase
-        .from('tenant_integrations')
-        .select('*')
-        .eq('tenant_id', currentTenantId)
-        .eq('integration_type', 'make_api')
-        .eq('is_active', true)
+        .from("tenant_integrations")
+        .select("*")
+        .eq("tenant_id", currentTenantId)
+        .eq("integration_type", "make_api")
+        .eq("is_active", true)
         .maybeSingle();
       return data;
     },
     enabled: !!currentTenantId,
   });
 
-  const makeSettings = makeIntegration?.settings as Record<string, unknown> | null;
-  const hasMakeConnection = !!makeIntegration?.is_active && !!makeSettings?.api_token;
-  const hasGaTemplate = !!(makeSettings?.google_analytics_template_scenario_id);
+  const makeSettings = makeIntegration?.settings as Record<
+    string,
+    unknown
+  > | null;
+  const hasMakeConnection =
+    !!makeIntegration?.is_active && !!makeSettings?.api_token;
+  const hasGaTemplate = !!makeSettings?.google_analytics_template_scenario_id;
 
   // Connect to Google Analytics (direct API).
   // loginHint (a Google email) preselects that account — used by "חבר מחדש"
@@ -73,18 +100,27 @@ export default function GoogleAnalyticsSettings() {
         throw new Error("No session found");
       }
 
-      const response = await supabase.functions.invoke('google-analytics-auth?action=authorize', {
-        body: { tenantId: currentTenantId, userId, addNew, origin: window.location.origin, loginHint: loginHint || undefined },
-        headers: { Authorization: `Bearer ${session.session.access_token}` },
-        method: 'POST',
-      });
+      const response = await supabase.functions.invoke(
+        "google-analytics-auth?action=authorize",
+        {
+          body: {
+            tenantId: currentTenantId,
+            userId,
+            addNew,
+            origin: window.location.origin,
+            loginHint: loginHint || undefined,
+          },
+          headers: { Authorization: `Bearer ${session.session.access_token}` },
+          method: "POST",
+        },
+      );
 
       if (response.error) throw response.error;
       if (response.data?.authUrl) {
         window.location.href = response.data.authUrl;
       }
     } catch (error: unknown) {
-      console.error('Error connecting to Google Analytics:', error);
+      console.error("Error connecting to Google Analytics:", error);
       toast.error("שגיאה בהתחברות ל-Google Analytics");
     } finally {
       setIsConnecting(false);
@@ -95,20 +131,22 @@ export default function GoogleAnalyticsSettings() {
   const disconnectMutation = useMutation({
     mutationFn: async (integrationId: string) => {
       if (!integrationId) throw new Error("No integration to disconnect");
-      
+
       const { error } = await supabase
-        .from('tenant_integrations')
+        .from("tenant_integrations")
         .update({ is_active: false })
-        .eq('id', integrationId);
-      
+        .eq("id", integrationId);
+
       if (error) throw error;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['google-analytics-integrations', currentTenantId] });
+      queryClient.invalidateQueries({
+        queryKey: ["google-analytics-integrations", currentTenantId],
+      });
       toast.success("החיבור ל-Google Analytics נותק");
     },
     onError: (error) => {
-      console.error('Error disconnecting:', error);
+      console.error("Error disconnecting:", error);
       toast.error("שגיאה בניתוק החיבור");
     },
   });
@@ -120,11 +158,14 @@ export default function GoogleAnalyticsSettings() {
     setTimeout(() => setWebhookCopied(false), 2000);
   };
 
-
   return (
     <div className="container mx-auto p-6 space-y-6">
       <div className="flex items-center gap-4">
-        <Button variant="ghost" size="icon" onClick={() => navigate(buildPath('integrations'))}>
+        <Button
+          variant="ghost"
+          size="icon"
+          onClick={() => navigate(buildPath("integrations"))}
+        >
           <ArrowLeft className="h-5 w-5" />
         </Button>
         <div>
@@ -144,7 +185,9 @@ export default function GoogleAnalyticsSettings() {
           <TabsTrigger value="direct" className="flex items-center gap-2">
             <BarChart3 className="h-4 w-4" />
             API ישיר
-            <Badge variant="secondary" className="text-xs">מומלץ</Badge>
+            <Badge variant="secondary" className="text-xs">
+              מומלץ
+            </Badge>
           </TabsTrigger>
           <TabsTrigger value="make" className="flex items-center gap-2">
             <Zap className="h-4 w-4" />
@@ -166,7 +209,10 @@ export default function GoogleAnalyticsSettings() {
                     פשוט יותר - Make.com מטפל ב-OAuth עבורך
                   </CardDescription>
                 </div>
-                <Badge variant={hasMakeConnection ? "default" : "secondary"} className={hasMakeConnection ? "bg-green-500" : ""}>
+                <Badge
+                  variant={hasMakeConnection ? "default" : "secondary"}
+                  className={hasMakeConnection ? "bg-green-500" : ""}
+                >
                   {hasMakeConnection ? "Make.com מחובר" : "לא מחובר"}
                 </Badge>
               </div>
@@ -181,7 +227,11 @@ export default function GoogleAnalyticsSettings() {
                   <AlertCircle className="h-4 w-4" />
                   <AlertDescription>
                     נא לחבר קודם את Make.com בהגדרות האינטגרציות
-                    <Button variant="link" className="p-0 h-auto mr-2" onClick={() => navigate(buildPath('make-settings'))}>
+                    <Button
+                      variant="link"
+                      className="p-0 h-auto mr-2"
+                      onClick={() => navigate(buildPath("make-settings"))}
+                    >
                       עבור להגדרות Make.com
                     </Button>
                   </AlertDescription>
@@ -191,19 +241,30 @@ export default function GoogleAnalyticsSettings() {
                   <Alert className="bg-green-50 border-green-200">
                     <CheckCircle2 className="h-4 w-4 text-green-600" />
                     <AlertDescription className="text-green-800">
-                      Make.com מחובר! עכשיו צור Scenario לסנכרון נתוני Google Analytics
+                      Make.com מחובר! עכשיו צור Scenario לסנכרון נתוני Google
+                      Analytics
                     </AlertDescription>
                   </Alert>
 
                   {/* Webhook URL */}
                   <div className="space-y-2">
-                    <label className="text-sm font-medium">Webhook URL לשליחת נתונים</label>
+                    <label className="text-sm font-medium">
+                      Webhook URL לשליחת נתונים
+                    </label>
                     <div className="flex gap-2">
                       <code className="flex-1 p-3 bg-muted rounded-md text-xs overflow-x-auto font-mono">
                         {webhookUrl}
                       </code>
-                      <Button variant="outline" size="icon" onClick={handleCopyWebhook}>
-                        {webhookCopied ? <Check className="h-4 w-4 text-green-500" /> : <Copy className="h-4 w-4" />}
+                      <Button
+                        variant="outline"
+                        size="icon"
+                        onClick={handleCopyWebhook}
+                      >
+                        {webhookCopied ? (
+                          <Check className="h-4 w-4 text-green-500" />
+                        ) : (
+                          <Copy className="h-4 w-4" />
+                        )}
                       </Button>
                     </div>
                   </div>
@@ -213,7 +274,8 @@ export default function GoogleAnalyticsSettings() {
                     <Alert className="bg-purple-50 border-purple-200">
                       <CheckCircle2 className="h-4 w-4 text-purple-600" />
                       <AlertDescription className="text-purple-800">
-                        Template Scenario מוגדר! המערכת תשכפל אותו אוטומטית לכל טבלת GA חדשה.
+                        Template Scenario מוגדר! המערכת תשכפל אותו אוטומטית לכל
+                        טבלת GA חדשה.
                       </AlertDescription>
                     </Alert>
                   ) : (
@@ -221,7 +283,11 @@ export default function GoogleAnalyticsSettings() {
                       <AlertCircle className="h-4 w-4" />
                       <AlertDescription>
                         הגדר Template Scenario בהגדרות Make.com לשכפול אוטומטי
-                        <Button variant="link" className="p-0 h-auto mr-2" onClick={() => navigate(buildPath('make-settings'))}>
+                        <Button
+                          variant="link"
+                          className="p-0 h-auto mr-2"
+                          onClick={() => navigate(buildPath("make-settings"))}
+                        >
                           הגדר Template
                         </Button>
                       </AlertDescription>
@@ -242,48 +308,67 @@ export default function GoogleAnalyticsSettings() {
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="flex items-start gap-3">
-                <div className="w-8 h-8 rounded-full bg-purple-100 flex items-center justify-center text-purple-600 font-medium shrink-0">1</div>
+                <div className="w-8 h-8 rounded-full bg-purple-100 flex items-center justify-center text-purple-600 font-medium shrink-0">
+                  1
+                </div>
                 <div>
                   <p className="font-medium">צור Scenario חדש ב-Make.com</p>
-                  <p className="text-sm text-muted-foreground">לך ל-Scenarios ולחץ על "Create a new scenario"</p>
-                </div>
-              </div>
-              <div className="flex items-start gap-3">
-                <div className="w-8 h-8 rounded-full bg-purple-100 flex items-center justify-center text-purple-600 font-medium shrink-0">2</div>
-                <div>
-                  <p className="font-medium">הוסף מודול Google Analytics</p>
-                  <p className="text-sm text-muted-foreground">בחר "Google Analytics Data API" → "Run Report". התחבר לחשבון Google שלך (פעם אחת בלבד)</p>
-                </div>
-              </div>
-              <div className="flex items-start gap-3">
-                <div className="w-8 h-8 rounded-full bg-purple-100 flex items-center justify-center text-purple-600 font-medium shrink-0">3</div>
-                <div>
-                  <p className="font-medium">הגדר את הדוח</p>
                   <p className="text-sm text-muted-foreground">
-                    בחר Property, הוסף Dimensions: date, sessionSource, sessionMedium.
-                    הוסף Metrics: sessions, totalUsers, newUsers, screenPageViews, bounceRate, averageSessionDuration
+                    לך ל-Scenarios ולחץ על "Create a new scenario"
                   </p>
                 </div>
               </div>
               <div className="flex items-start gap-3">
-                <div className="w-8 h-8 rounded-full bg-purple-100 flex items-center justify-center text-purple-600 font-medium shrink-0">4</div>
+                <div className="w-8 h-8 rounded-full bg-purple-100 flex items-center justify-center text-purple-600 font-medium shrink-0">
+                  2
+                </div>
+                <div>
+                  <p className="font-medium">הוסף מודול Google Analytics</p>
+                  <p className="text-sm text-muted-foreground">
+                    בחר "Google Analytics Data API" → "Run Report". התחבר לחשבון
+                    Google שלך (פעם אחת בלבד)
+                  </p>
+                </div>
+              </div>
+              <div className="flex items-start gap-3">
+                <div className="w-8 h-8 rounded-full bg-purple-100 flex items-center justify-center text-purple-600 font-medium shrink-0">
+                  3
+                </div>
+                <div>
+                  <p className="font-medium">הגדר את הדוח</p>
+                  <p className="text-sm text-muted-foreground">
+                    בחר Property, הוסף Dimensions: date, sessionSource,
+                    sessionMedium. הוסף Metrics: sessions, totalUsers, newUsers,
+                    screenPageViews, bounceRate, averageSessionDuration
+                  </p>
+                </div>
+              </div>
+              <div className="flex items-start gap-3">
+                <div className="w-8 h-8 rounded-full bg-purple-100 flex items-center justify-center text-purple-600 font-medium shrink-0">
+                  4
+                </div>
                 <div>
                   <p className="font-medium">הוסף מודול HTTP</p>
                   <p className="text-sm text-muted-foreground">
-                    בחר "HTTP" → "Make a request".<br />
-                    Method: POST<br />
-                    URL: הדבק את ה-Webhook URL מלמעלה<br />
+                    בחר "HTTP" → "Make a request".
+                    <br />
+                    Method: POST
+                    <br />
+                    URL: הדבק את ה-Webhook URL מלמעלה
+                    <br />
                     Body type: JSON
                   </p>
                 </div>
               </div>
               <div className="flex items-start gap-3">
-                <div className="w-8 h-8 rounded-full bg-purple-100 flex items-center justify-center text-purple-600 font-medium shrink-0">5</div>
+                <div className="w-8 h-8 rounded-full bg-purple-100 flex items-center justify-center text-purple-600 font-medium shrink-0">
+                  5
+                </div>
                 <div>
                   <p className="font-medium">הגדר את ה-JSON Body</p>
                   <div className="mt-2 p-3 bg-muted rounded-md">
                     <pre className="text-xs overflow-x-auto">
-{`{
+                      {`{
   "table_id": "{{TABLE_ID}}",
   "records": [
     {{#each rows}}
@@ -303,15 +388,20 @@ export default function GoogleAnalyticsSettings() {
                     </pre>
                   </div>
                   <p className="text-xs text-muted-foreground mt-2">
-                    החלף את TABLE_ID במזהה הטבלה שלך (תקבל אותו כשתיצור טבלה דינמית)
+                    החלף את TABLE_ID במזהה הטבלה שלך (תקבל אותו כשתיצור טבלה
+                    דינמית)
                   </p>
                 </div>
               </div>
               <div className="flex items-start gap-3">
-                <div className="w-8 h-8 rounded-full bg-purple-100 flex items-center justify-center text-purple-600 font-medium shrink-0">6</div>
+                <div className="w-8 h-8 rounded-full bg-purple-100 flex items-center justify-center text-purple-600 font-medium shrink-0">
+                  6
+                </div>
                 <div>
                   <p className="font-medium">הפעל את ה-Scenario</p>
-                  <p className="text-sm text-muted-foreground">שמור ולחץ "Run once" לבדיקה, או הגדר תזמון (יומי/שבועי)</p>
+                  <p className="text-sm text-muted-foreground">
+                    שמור ולחץ "Run once" לבדיקה, או הגדר תזמון (יומי/שבועי)
+                  </p>
                 </div>
               </div>
             </CardContent>
@@ -329,101 +419,135 @@ export default function GoogleAnalyticsSettings() {
                     חיבור דרך OAuth - דורש הגדרה ב-Google Cloud Console
                   </CardDescription>
                 </div>
-                <Badge variant={hasAnyDirectConnection ? "default" : "secondary"} className={hasAnyDirectConnection ? "bg-green-500" : ""}>
-                  {hasAnyDirectConnection ? `${integrations.length} חשבונות מחוברים` : "לא מחובר"}
+                <Badge
+                  variant={hasAnyDirectConnection ? "default" : "secondary"}
+                  className={hasAnyDirectConnection ? "bg-green-500" : ""}
+                >
+                  {hasAnyDirectConnection
+                    ? `${integrations.length} חשבונות מחוברים`
+                    : "לא מחובר"}
                 </Badge>
               </div>
             </CardHeader>
             <CardContent className="space-y-4">
-            {isLoading ? (
+              {isLoading ? (
                 <div className="flex items-center justify-center py-8">
                   <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
                 </div>
               ) : hasAnyDirectConnection ? (
                 <div className="space-y-4">
                   {/* List connected accounts */}
-                    {integrations.map((integ) => {
-                     const s = integ.settings as Record<string, unknown> | null;
-                     const email = (s?.google_email as string) || 'חשבון לא ידוע';
-                     const isOwn = (integ as any)._isOwn;
-                     const sharedByName = (integ as any)._sharedByName;
-                     const needsReauth = Boolean(s?.needs_reauth);
-                     return (
-                       <div key={integ.id} className={`flex items-center justify-between p-3 border rounded-lg ${needsReauth ? 'bg-destructive/10 border-destructive/40' : 'bg-muted/30'}`}>
-                         <div className="flex items-center gap-3">
-                           {needsReauth ? (
-                             <AlertCircle className="h-5 w-5 text-destructive shrink-0" />
-                           ) : (
-                             <CheckCircle2 className="h-5 w-5 text-green-600 shrink-0" />
-                           )}
-                           <div>
-                             <div className="flex items-center gap-2">
-                               <p className="font-medium text-sm">{email}</p>
-                               {!isOwn && (
-                                 <Badge variant="secondary" className="text-xs">
-                                   שותף {sharedByName ? `ע"י ${sharedByName}` : ''}
-                                 </Badge>
-                               )}
-                               {needsReauth && (
-                                 <Badge variant="destructive" className="text-xs">נדרש חיבור מחדש</Badge>
-                               )}
-                             </div>
-                             {s?.connected_at && (
-                               <p className="text-xs text-muted-foreground">
-                                 חובר: {new Date(s.connected_at as string).toLocaleDateString('he-IL')}
-                               </p>
-                             )}
-                             {needsReauth && (
-                               <p className="text-xs text-destructive mt-1">
-                                 החיבור לגוגל בוטל או פג תוקף. לחץ על "חבר מחדש" כדי לחדש את הגישה.
-                               </p>
-                             )}
-                           </div>
-                         </div>
-                         <div className="flex gap-2">
-                           {isOwn && (
-                             <Button
-                               variant={needsReauth ? "destructive" : "outline"}
-                               size="sm"
-                               onClick={() => handleConnect(false, (s?.google_email as string) || undefined)}
-                               disabled={isConnecting}
-                               title="חידוש ההרשאה מול Google לחשבון הזה"
-                             >
-                               {isConnecting ? <Loader2 className="h-4 w-4 ml-1 animate-spin" /> : <RefreshCw className="h-4 w-4 ml-1" />}
-                               חבר מחדש
-                             </Button>
-                           )}
-                           <Button
-                             variant="outline"
-                             size="sm"
-                             onClick={() => {
-                               setSharingIntegrationId(integ.id);
-                               setSharingIntegrationName(email);
-                               setSharingOwnerId(integ.user_id);
-                             }}
-                             title={isOwn ? "שתף עם חברי צוות" : "צפה בשיתופים (חיבור משותף בארגון)"}
-                           >
-                             <Share2 className="h-4 w-4 ml-1" />
-                             {isOwn ? "שתף" : "שיתופים"}
-                           </Button>
-                           {isOwn && (
-                             <Button
-                               variant="outline"
-                               size="sm"
-                               onClick={() => disconnectMutation.mutate(integ.id)}
-                               disabled={disconnectMutation.isPending}
-                             >
-                               נתק
-                             </Button>
-                           )}
-                         </div>
-                       </div>
-                     );
-                   })}
+                  {integrations.map((integ) => {
+                    const s = integ.settings as Record<string, unknown> | null;
+                    const email =
+                      (s?.google_email as string) || "חשבון לא ידוע";
+                    const isOwn = (integ as any)._isOwn;
+                    const sharedByName = (integ as any)._sharedByName;
+                    const needsReauth = Boolean(s?.needs_reauth);
+                    return (
+                      <div
+                        key={integ.id}
+                        className={`flex items-center justify-between p-3 border rounded-lg ${needsReauth ? "bg-destructive/10 border-destructive/40" : "bg-muted/30"}`}
+                      >
+                        <div className="flex items-center gap-3">
+                          {needsReauth ? (
+                            <AlertCircle className="h-5 w-5 text-destructive shrink-0" />
+                          ) : (
+                            <CheckCircle2 className="h-5 w-5 text-green-600 shrink-0" />
+                          )}
+                          <div>
+                            <div className="flex items-center gap-2">
+                              <p className="font-medium text-sm">{email}</p>
+                              {!isOwn && (
+                                <Badge variant="secondary" className="text-xs">
+                                  שותף{" "}
+                                  {sharedByName ? `ע"י ${sharedByName}` : ""}
+                                </Badge>
+                              )}
+                              {needsReauth && (
+                                <Badge
+                                  variant="destructive"
+                                  className="text-xs"
+                                >
+                                  נדרש חיבור מחדש
+                                </Badge>
+                              )}
+                            </div>
+                            {s?.connected_at && (
+                              <p className="text-xs text-muted-foreground">
+                                חובר:{" "}
+                                {new Date(
+                                  s.connected_at as string,
+                                ).toLocaleDateString("he-IL")}
+                              </p>
+                            )}
+                            {needsReauth && (
+                              <p className="text-xs text-destructive mt-1">
+                                החיבור לגוגל בוטל או פג תוקף. לחץ על "חבר מחדש"
+                                כדי לחדש את הגישה.
+                              </p>
+                            )}
+                          </div>
+                        </div>
+                        <div className="flex gap-2">
+                          {isOwn && (
+                            <Button
+                              variant={needsReauth ? "destructive" : "outline"}
+                              size="sm"
+                              onClick={() =>
+                                handleConnect(
+                                  false,
+                                  (s?.google_email as string) || undefined,
+                                )
+                              }
+                              disabled={isConnecting}
+                              title="חידוש ההרשאה מול Google לחשבון הזה"
+                            >
+                              {isConnecting ? (
+                                <Loader2 className="h-4 w-4 ml-1 animate-spin" />
+                              ) : (
+                                <RefreshCw className="h-4 w-4 ml-1" />
+                              )}
+                              חבר מחדש
+                            </Button>
+                          )}
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => {
+                              setSharingIntegrationId(integ.id);
+                              setSharingIntegrationName(email);
+                              setSharingOwnerId(integ.user_id);
+                            }}
+                            title={
+                              isOwn
+                                ? "שתף עם חברי צוות"
+                                : "צפה בשיתופים (חיבור משותף בארגון)"
+                            }
+                          >
+                            <Share2 className="h-4 w-4 ml-1" />
+                            {isOwn ? "שתף" : "שיתופים"}
+                          </Button>
+                          {isOwn && (
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() =>
+                                disconnectMutation.mutate(integ.id)
+                              }
+                              disabled={disconnectMutation.isPending}
+                            >
+                              נתק
+                            </Button>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
 
                   {/* Add another account */}
-                  <Button 
-                    variant="outline" 
+                  <Button
+                    variant="outline"
                     onClick={() => handleConnect(true)}
                     disabled={isConnecting}
                     className="w-full border-dashed"
@@ -441,12 +565,13 @@ export default function GoogleAnalyticsSettings() {
                   <Alert>
                     <AlertCircle className="h-4 w-4" />
                     <AlertDescription>
-                      חיבור ישיר ל-Google Analytics דרך OAuth. אם נתקלת בבעיות הגדרה, ניתן להשתמש ב-Make.com כחלופה.
+                      חיבור ישיר ל-Google Analytics דרך OAuth. אם נתקלת בבעיות
+                      הגדרה, ניתן להשתמש ב-Make.com כחלופה.
                     </AlertDescription>
                   </Alert>
 
-                  <Button 
-                    onClick={() => handleConnect(false)} 
+                  <Button
+                    onClick={() => handleConnect(false)}
                     disabled={isConnecting}
                     className="bg-orange-500 hover:bg-orange-600"
                   >
@@ -465,44 +590,63 @@ export default function GoogleAnalyticsSettings() {
           <Card>
             <CardHeader>
               <CardTitle>הגדרות נדרשות ב-Google Cloud Console</CardTitle>
-              <CardDescription>
-                וודא שהגדרות אלו מוגדרות כראוי
-              </CardDescription>
+              <CardDescription>וודא שהגדרות אלו מוגדרות כראוי</CardDescription>
             </CardHeader>
             <CardContent className="space-y-3">
               <div className="flex items-start gap-3">
-                <div className="w-8 h-8 rounded-full bg-orange-100 flex items-center justify-center text-orange-600 font-medium">1</div>
+                <div className="w-8 h-8 rounded-full bg-orange-100 flex items-center justify-center text-orange-600 font-medium">
+                  1
+                </div>
                 <div>
                   <p className="font-medium">הפעל את ה-APIs</p>
                   <p className="text-sm text-muted-foreground">
-                    <a href="https://console.cloud.google.com/apis/library/analyticsdata.googleapis.com" target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">
-                      Google Analytics Data API <ExternalLink className="h-3 w-3 inline" />
+                    <a
+                      href="https://console.cloud.google.com/apis/library/analyticsdata.googleapis.com"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-primary hover:underline"
+                    >
+                      Google Analytics Data API{" "}
+                      <ExternalLink className="h-3 w-3 inline" />
                     </a>
                     {" ו-"}
-                    <a href="https://console.cloud.google.com/apis/library/analyticsadmin.googleapis.com" target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">
-                      Google Analytics Admin API <ExternalLink className="h-3 w-3 inline" />
+                    <a
+                      href="https://console.cloud.google.com/apis/library/analyticsadmin.googleapis.com"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-primary hover:underline"
+                    >
+                      Google Analytics Admin API{" "}
+                      <ExternalLink className="h-3 w-3 inline" />
                     </a>
                   </p>
                 </div>
               </div>
               <div className="flex items-start gap-3">
-                <div className="w-8 h-8 rounded-full bg-orange-100 flex items-center justify-center text-orange-600 font-medium">2</div>
+                <div className="w-8 h-8 rounded-full bg-orange-100 flex items-center justify-center text-orange-600 font-medium">
+                  2
+                </div>
                 <div>
                   <p className="font-medium">הוסף Scopes</p>
                   <p className="text-sm text-muted-foreground">
                     ב-OAuth consent screen → Scopes, הוסף:
-                    <code className="block mt-1 text-xs bg-muted p-1 rounded">https://www.googleapis.com/auth/analytics.readonly</code>
+                    <code className="block mt-1 text-xs bg-muted p-1 rounded">
+                      https://www.googleapis.com/auth/analytics.readonly
+                    </code>
                   </p>
                 </div>
               </div>
               <div className="flex items-start gap-3">
-                <div className="w-8 h-8 rounded-full bg-orange-100 flex items-center justify-center text-orange-600 font-medium">3</div>
+                <div className="w-8 h-8 rounded-full bg-orange-100 flex items-center justify-center text-orange-600 font-medium">
+                  3
+                </div>
                 <div>
                   <p className="font-medium">הגדר Redirect URI</p>
                   <p className="text-sm text-muted-foreground">
                     ב-OAuth 2.0 Client ID, הוסף:
                     <code className="block mt-1 text-xs bg-muted p-1 rounded overflow-x-auto">
-                      {import.meta.env.VITE_SUPABASE_URL}/functions/v1/google-analytics-auth?action=oauth_callback
+                      {import.meta.env.VITE_SUPABASE_URL}
+                      /functions/v1/google-analytics-auth?action=oauth_callback
                     </code>
                   </p>
                 </div>
@@ -516,7 +660,9 @@ export default function GoogleAnalyticsSettings() {
       <Card>
         <CardHeader>
           <CardTitle>נתונים זמינים</CardTitle>
-          <CardDescription>הנתונים שיסונכרנו מ-Google Analytics</CardDescription>
+          <CardDescription>
+            הנתונים שיסונכרנו מ-Google Analytics
+          </CardDescription>
         </CardHeader>
         <CardContent>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
@@ -542,8 +688,10 @@ export default function GoogleAnalyticsSettings() {
       {/* Share Integration Dialog */}
       <ManageIntegrationPermissionsDialog
         open={!!sharingIntegrationId}
-        onOpenChange={(open) => { if (!open) setSharingIntegrationId(null); }}
-        integrationId={sharingIntegrationId || ''}
+        onOpenChange={(open) => {
+          if (!open) setSharingIntegrationId(null);
+        }}
+        integrationId={sharingIntegrationId || ""}
         integrationName={`Google Analytics - ${sharingIntegrationName}`}
         integrationOwnerId={sharingOwnerId}
       />

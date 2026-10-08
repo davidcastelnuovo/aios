@@ -25,11 +25,20 @@ function normalizePhoneSuffix(phone: string | null | undefined): string | null {
 }
 
 function matches(
-  identity: { userId?: string | null; campaignerId?: string | null; phone?: string | null },
+  identity: {
+    userId?: string | null;
+    campaignerId?: string | null;
+    phone?: string | null;
+  },
   allowlist: typeof FULL,
 ): boolean {
-  if (identity.userId && allowlist.user_ids.includes(identity.userId as never)) return true;
-  if (identity.campaignerId && allowlist.campaigner_ids.includes(identity.campaignerId as never)) return true;
+  if (identity.userId && allowlist.user_ids.includes(identity.userId as never))
+    return true;
+  if (
+    identity.campaignerId &&
+    allowlist.campaigner_ids.includes(identity.campaignerId as never)
+  )
+    return true;
   const suffix = normalizePhoneSuffix(identity.phone);
   if (suffix && allowlist.phone_suffixes.includes(suffix as never)) return true;
   return false;

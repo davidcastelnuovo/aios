@@ -2,9 +2,22 @@ import { useElementorSubmissions } from "@/hooks/useElementorSubmissions";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 import { useQueryClient } from "@tanstack/react-query";
-import { Loader2, RefreshCw, FileText, ArrowLeft, AlertCircle } from "lucide-react";
+import {
+  Loader2,
+  RefreshCw,
+  FileText,
+  ArrowLeft,
+  AlertCircle,
+} from "lucide-react";
 import { Link, useParams } from "react-router-dom";
 
 interface Props {
@@ -27,7 +40,8 @@ export function SubmissionsSummaryCard({ siteId, siteName }: Props) {
   const qc = useQueryClient();
   const { data, isLoading, isFetching } = useElementorSubmissions(siteId);
 
-  const refresh = () => qc.invalidateQueries({ queryKey: ["elementor-submissions", siteId] });
+  const refresh = () =>
+    qc.invalidateQueries({ queryKey: ["elementor-submissions", siteId] });
 
   if (isLoading) {
     return (
@@ -47,8 +61,17 @@ export function SubmissionsSummaryCard({ siteId, siteName }: Props) {
             <FileText className="h-4 w-4" />
             Submissions בעמודי נחיתה
           </CardTitle>
-          <Button size="sm" variant="outline" onClick={refresh} disabled={isFetching}>
-            {isFetching ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />}
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={refresh}
+            disabled={isFetching}
+          >
+            {isFetching ? (
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+            ) : (
+              <RefreshCw className="h-3.5 w-3.5" />
+            )}
           </Button>
         </CardHeader>
         <CardContent className="py-6 text-center space-y-2">
@@ -72,7 +95,12 @@ export function SubmissionsSummaryCard({ siteId, siteName }: Props) {
           Submissions בעמודי נחיתה
         </CardTitle>
         <div className="flex items-center gap-2">
-          <Button size="sm" variant="outline" onClick={refresh} disabled={isFetching}>
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={refresh}
+            disabled={isFetching}
+          >
             {isFetching ? (
               <Loader2 className="h-3.5 w-3.5 animate-spin me-1" />
             ) : (
@@ -81,7 +109,9 @@ export function SubmissionsSummaryCard({ siteId, siteName }: Props) {
             רענן
           </Button>
           <Button size="sm" variant="ghost" asChild>
-            <Link to={`/t/${tenantSlug}/landing-page-submissions?site=${siteId}`}>
+            <Link
+              to={`/t/${tenantSlug}/landing-page-submissions?site=${siteId}`}
+            >
               דף מלא
               <ArrowLeft className="h-3.5 w-3.5 ms-1" />
             </Link>
@@ -98,7 +128,9 @@ export function SubmissionsSummaryCard({ siteId, siteName }: Props) {
 
         {/* Forms table */}
         {perForm.length === 0 ? (
-          <p className="text-sm text-muted-foreground text-center py-4">אין Submissions עדיין</p>
+          <p className="text-sm text-muted-foreground text-center py-4">
+            אין Submissions עדיין
+          </p>
         ) : (
           <Table>
             <TableHeader>
@@ -116,13 +148,20 @@ export function SubmissionsSummaryCard({ siteId, siteName }: Props) {
                   .find(([, n]) => n > 0);
                 return (
                   <TableRow key={f.form_id || f.form_name}>
-                    <TableCell className="font-medium text-sm">{f.form_name}</TableCell>
-                    <TableCell className="text-center">{f.last_7_days}</TableCell>
-                    <TableCell className="text-center">{f.last_30_days}</TableCell>
+                    <TableCell className="font-medium text-sm">
+                      {f.form_name}
+                    </TableCell>
+                    <TableCell className="text-center">
+                      {f.last_7_days}
+                    </TableCell>
+                    <TableCell className="text-center">
+                      {f.last_30_days}
+                    </TableCell>
                     <TableCell>
                       {topSource ? (
                         <Badge variant="secondary" className="text-xs">
-                          {SOURCE_LABELS[topSource[0]] || topSource[0]} ({topSource[1]})
+                          {SOURCE_LABELS[topSource[0]] || topSource[0]} (
+                          {topSource[1]})
                         </Badge>
                       ) : (
                         <span className="text-xs text-muted-foreground">—</span>
@@ -144,13 +183,21 @@ export function SubmissionsSummaryCard({ siteId, siteName }: Props) {
   );
 }
 
-function Kpi({ label, value, tone }: { label: string; value: number; tone: "primary" | "success" | "muted" }) {
+function Kpi({
+  label,
+  value,
+  tone,
+}: {
+  label: string;
+  value: number;
+  tone: "primary" | "success" | "muted";
+}) {
   const colorClass =
     tone === "primary"
       ? "text-primary"
       : tone === "success"
-      ? "text-green-600 dark:text-green-400"
-      : "text-muted-foreground";
+        ? "text-green-600 dark:text-green-400"
+        : "text-muted-foreground";
   return (
     <div className="rounded-lg border bg-card p-3 text-center">
       <p className="text-xs text-muted-foreground mb-1">{label}</p>

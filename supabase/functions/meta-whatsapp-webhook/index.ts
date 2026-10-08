@@ -1,4 +1,7 @@
-import { createClient, type SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2.75.0";
+import {
+  createClient,
+  type SupabaseClient,
+} from "https://esm.sh/@supabase/supabase-js@2.75.0";
 import { handleCarmenMessage } from "../_shared/carmen.ts";
 import {
   collectWebhookMessages,
@@ -13,7 +16,11 @@ import {
 
 const jsonHeaders = { "Content-Type": "application/json" };
 
-async function validSignature(rawBody: string, signature: string, appSecret: string) {
+async function validSignature(
+  rawBody: string,
+  signature: string,
+  appSecret: string,
+) {
   const encoder = new TextEncoder();
   const key = await crypto.subtle.importKey(
     "raw",
@@ -38,7 +45,8 @@ async function validSignature(rawBody: string, signature: string, appSecret: str
 
 const timestampIso = (value: unknown) => {
   const seconds = Number(value);
-  if (!Number.isFinite(seconds) || seconds <= 0) return new Date().toISOString();
+  if (!Number.isFinite(seconds) || seconds <= 0)
+    return new Date().toISOString();
   return new Date(seconds * 1000).toISOString();
 };
 
@@ -55,7 +63,9 @@ async function resolvePinnedCarmenTarget(
 
   const candidateTenantIds = [
     ownerTenantId,
-    ...(grants ?? []).map((grant: { accessing_tenant_id: string }) => grant.accessing_tenant_id),
+    ...(grants ?? []).map(
+      (grant: { accessing_tenant_id: string }) => grant.accessing_tenant_id,
+    ),
   ];
 
   // Once a connection is shared, only an exact automation pin can claim it.
@@ -71,7 +81,9 @@ async function resolvePinnedCarmenTarget(
       .filter("configuration->>carmen_integration_id", "eq", integrationId);
     if (stepsError) throw stepsError;
 
-    const automationIds = (steps ?? []).map((step: { automation_id: string }) => step.automation_id);
+    const automationIds = (steps ?? []).map(
+      (step: { automation_id: string }) => step.automation_id,
+    );
     if (automationIds.length === 0) return null;
     const { data: active, error: activeError } = await admin
       .from("automations")
@@ -80,12 +92,21 @@ async function resolvePinnedCarmenTarget(
       .eq("active", true);
     if (activeError) throw activeError;
 
-    const tenantIds = [...new Set((active ?? []).map((automation: { tenant_id: string }) => automation.tenant_id))];
+    const tenantIds = [
+      ...new Set(
+        (active ?? []).map(
+          (automation: { tenant_id: string }) => automation.tenant_id,
+        ),
+      ),
+    ];
     if (tenantIds.length !== 1) {
-      console.error("Shared Meta integration must have exactly one active pinned Carmen tenant", {
-        integrationId,
-        tenantIds,
-      });
+      console.error(
+        "Shared Meta integration must have exactly one active pinned Carmen tenant",
+        {
+          integrationId,
+          tenantIds,
+        },
+      );
       return null;
     }
     candidateTenantIds.splice(0, candidateTenantIds.length, tenantIds[0]);
@@ -109,7 +130,10 @@ async function resolvePinnedCarmenTarget(
 Deno.serve(async (request) => {
   const supabaseUrl = Deno.env.get("SUPABASE_URL") ?? "";
   const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
-  const appSecret = Deno.env.get("META_APP_SECRET") ?? Deno.env.get("FACEBOOK_APP_SECRET") ?? "";
+  const appSecret =
+    Deno.env.get("META_APP_SECRET") ??
+    Deno.env.get("FACEBOOK_APP_SECRET") ??
+    "";
   const verifyToken = Deno.env.get("META_WHATSAPP_WEBHOOK_VERIFY_TOKEN") ?? "";
 
   if (request.method === "GET") {
@@ -117,12 +141,21 @@ Deno.serve(async (request) => {
     const mode = url.searchParams.get("hub.mode");
     const token = url.searchParams.get("hub.verify_token");
     const challenge = url.searchParams.get("hub.challenge");
-    if (verifyToken && mode === "subscribe" && token === verifyToken && challenge) {
-      return new Response(challenge, { status: 200, headers: { "Content-Type": "text/plain" } });
+    if (
+      verifyToken &&
+      mode === "subscribe" &&
+      token === verifyToken &&
+      challenge
+    ) {
+      return new Response(challenge, {
+        status: 200,
+        headers: { "Content-Type": "text/plain" },
+      });
     }
     return new Response("Forbidden", { status: 403 });
   }
-  if (request.method !== "POST") return new Response("Method Not Allowed", { status: 405 });
+  if (request.method !== "POST")
+    return new Response("Method Not Allowed", { status: 405 });
   if (!supabaseUrl || !serviceKey || !appSecret || !verifyToken) {
     console.error("Meta WhatsApp webhook secrets are not configured");
     return new Response("Webhook not configured", { status: 503 });
@@ -137,7 +170,9 @@ Deno.serve(async (request) => {
   try {
     const payload = JSON.parse(rawBody);
     if (payload.object !== "whatsapp_business_account") {
-      return new Response(JSON.stringify({ received: true, ignored: true }), { headers: jsonHeaders });
+      return new Response(JSON.stringify({ received: true, ignored: true }), {
+        headers: jsonHeaders,
+      });
     }
     const admin = createClient(supabaseUrl, serviceKey, {
       auth: { persistSession: false, autoRefreshToken: false },
@@ -150,7 +185,10 @@ Deno.serve(async (request) => {
         const field = String(change.field ?? "");
 
         if (field === "account_update") {
-          const disconnected = ["PARTNER_REMOVED", "ACCOUNT_OFFBOARDED"].includes(String(value.event ?? ""));
+          const disconnected = [
+            "PARTNER_REMOVED",
+            "ACCOUNT_OFFBOARDED",
+          ].includes(String(value.event ?? ""));
           const { data: wabaIntegrations, error: wabaError } = await admin
             .from("tenant_integrations")
             .select("id,settings")
@@ -160,7 +198,11 @@ Deno.serve(async (request) => {
           const eventPhone = digitsOnly(value.phone_number);
           const affectedIntegrations = eventPhone
             ? (wabaIntegrations ?? []).filter(
-                (row) => digitsOnly((row.settings as Record<string, any> | null)?.display_phone_number) === eventPhone,
+                (row) =>
+                  digitsOnly(
+                    (row.settings as Record<string, any> | null)
+                      ?.display_phone_number,
+                  ) === eventPhone,
               )
             : (wabaIntegrations ?? []);
           for (const row of affectedIntegrations) {
@@ -199,7 +241,10 @@ Deno.serve(async (request) => {
           .maybeSingle();
         if (integrationError) throw integrationError;
         if (!integration) {
-          console.warn("No active Meta WhatsApp integration for phone_number_id", phoneNumberId);
+          console.warn(
+            "No active Meta WhatsApp integration for phone_number_id",
+            phoneNumberId,
+          );
           continue;
         }
         const settings = (integration.settings ?? {}) as Record<string, any>;
@@ -211,7 +256,9 @@ Deno.serve(async (request) => {
               settings: {
                 ...settings,
                 contacts_sync_last_event_at: new Date().toISOString(),
-                contacts_sync_last_count: Array.isArray(value.state_sync) ? value.state_sync.length : 0,
+                contacts_sync_last_count: Array.isArray(value.state_sync)
+                  ? value.state_sync.length
+                  : 0,
               },
             })
             .eq("id", integration.id);
@@ -231,9 +278,18 @@ Deno.serve(async (request) => {
             .maybeSingle();
           if (sentMessageError) throw sentMessageError;
           if (!sentMessage) continue;
-          const rawProviderData = (sentMessage.raw_provider_data ?? {}) as Record<string, unknown>;
-          if (!shouldApplyDeliveryStatus(rawProviderData.delivery_status, status.status)) continue;
-          const failure = Array.isArray(status.errors) ? status.errors[0] ?? null : null;
+          const rawProviderData = (sentMessage.raw_provider_data ??
+            {}) as Record<string, unknown>;
+          if (
+            !shouldApplyDeliveryStatus(
+              rawProviderData.delivery_status,
+              status.status,
+            )
+          )
+            continue;
+          const failure = Array.isArray(status.errors)
+            ? (status.errors[0] ?? null)
+            : null;
           const { error: statusUpdateError } = await admin
             .from("chat_messages")
             .update({
@@ -248,22 +304,35 @@ Deno.serve(async (request) => {
             .eq("id", sentMessage.id);
           if (statusUpdateError) throw statusUpdateError;
           if (failure) {
-            console.error("Meta WhatsApp delivery failed", { wamid, error: failure });
+            console.error("Meta WhatsApp delivery failed", {
+              wamid,
+              error: failure,
+            });
             // Meta answers the send call with an id before it decides whether the
             // message can go out, so the automation run was already logged green.
-            const { error: logMarkError } = await admin.rpc("mark_automation_log_delivery_failure", {
-              p_provider_message_id: wamid,
-              p_error: failure,
-            });
+            const { error: logMarkError } = await admin.rpc(
+              "mark_automation_log_delivery_failure",
+              {
+                p_provider_message_id: wamid,
+                p_error: failure,
+              },
+            );
             if (logMarkError) {
-              console.error("Failed to mark automation log as undelivered", { wamid, error: logMarkError });
+              console.error("Failed to mark automation log as undelivered", {
+                wamid,
+                error: logMarkError,
+              });
             }
           }
         }
 
         const contactNames = new Map<string, string>();
         for (const contact of value.contacts ?? []) {
-          if (contact.wa_id) contactNames.set(String(contact.wa_id), String(contact.profile?.name ?? ""));
+          if (contact.wa_id)
+            contactNames.set(
+              String(contact.wa_id),
+              String(contact.profile?.name ?? ""),
+            );
         }
 
         for (const item of collectWebhookMessages(value, field)) {
@@ -278,7 +347,10 @@ Deno.serve(async (request) => {
           if (duplicate) continue;
 
           const candidates = normalizedPhoneCandidates(item.peerPhone);
-          const suffix = candidates.find((candidate) => candidate.length === 9) ?? candidates[0] ?? "";
+          const suffix =
+            candidates.find((candidate) => candidate.length === 9) ??
+            candidates[0] ??
+            "";
           let clientId: string | null = null;
           let leadId: string | null = null;
           if (suffix) {
@@ -312,7 +384,9 @@ Deno.serve(async (request) => {
           if (clientId) blockQuery.eq("client_id", clientId);
           else if (leadId) blockQuery.eq("lead_id", leadId);
           else blockQuery.eq("sender_phone", item.peerPhone);
-          const { data: blocked, error: blockedError } = await blockQuery.limit(1).maybeSingle();
+          const { data: blocked, error: blockedError } = await blockQuery
+            .limit(1)
+            .maybeSingle();
           if (blockedError) throw blockedError;
           if (blocked) continue;
 
@@ -324,22 +398,24 @@ Deno.serve(async (request) => {
             phone_number_id: phoneNumberId,
             waba_id: entry.id,
           };
-          const { error: insertError } = await admin.from("chat_messages").insert({
-            client_id: clientId,
-            lead_id: leadId,
-            tenant_id: integration.tenant_id,
-            connection_user_id: integration.user_id,
-            integration_id: integration.id,
-            message_text: messageText(item.message),
-            direction: item.direction,
-            channel: "whatsapp",
-            provider: "meta_whatsapp",
-            sender_phone: item.peerPhone,
-            sender_name: contactNames.get(item.peerPhone) || null,
-            is_blocked: false,
-            created_at: timestampIso(item.message.timestamp),
-            raw_provider_data: rawProviderData,
-          });
+          const { error: insertError } = await admin
+            .from("chat_messages")
+            .insert({
+              client_id: clientId,
+              lead_id: leadId,
+              tenant_id: integration.tenant_id,
+              connection_user_id: integration.user_id,
+              integration_id: integration.id,
+              message_text: messageText(item.message),
+              direction: item.direction,
+              channel: "whatsapp",
+              provider: "meta_whatsapp",
+              sender_phone: item.peerPhone,
+              sender_name: contactNames.get(item.peerPhone) || null,
+              is_blocked: false,
+              created_at: timestampIso(item.message.timestamp),
+              raw_provider_data: rawProviderData,
+            });
           if (insertError) {
             console.error("Failed to store Meta WhatsApp message", insertError);
             throw insertError;
@@ -362,23 +438,28 @@ Deno.serve(async (request) => {
                 /מאשר.*ליד|מאשר\/ת קבלת לידים/i.test(messageText(item.message));
 
               if (warmEnabled || isOptIn) {
-                const thanksText = String(
-                  settings.warm_auto_reply_text ?? DEFAULT_LEAD_THANKS_TEXT,
-                ).trim() || DEFAULT_LEAD_THANKS_TEXT;
+                const thanksText =
+                  String(
+                    settings.warm_auto_reply_text ?? DEFAULT_LEAD_THANKS_TEXT,
+                  ).trim() || DEFAULT_LEAD_THANKS_TEXT;
                 const phone = digitsOnly(item.peerPhone);
 
                 if (isOptIn && phone) {
-                  await admin.from("wa_warm_opt_ins").upsert({
-                    tenant_id: integration.tenant_id,
-                    integration_id: integration.id,
-                    phone,
-                    contact_name: contactNames.get(item.peerPhone) || null,
-                    source: "button",
-                    opted_in_at: new Date().toISOString(),
-                    updated_at: new Date().toISOString(),
-                  }, { onConflict: "tenant_id,integration_id,phone" });
+                  await admin.from("wa_warm_opt_ins").upsert(
+                    {
+                      tenant_id: integration.tenant_id,
+                      integration_id: integration.id,
+                      phone,
+                      contact_name: contactNames.get(item.peerPhone) || null,
+                      source: "button",
+                      opted_in_at: new Date().toISOString(),
+                      updated_at: new Date().toISOString(),
+                    },
+                    { onConflict: "tenant_id,integration_id,phone" },
+                  );
 
-                  await admin.from("wa_warm_recipients")
+                  await admin
+                    .from("wa_warm_recipients")
                     .update({
                       status: "opted_in",
                       replied_at: new Date().toISOString(),
@@ -392,35 +473,41 @@ Deno.serve(async (request) => {
                 // Dedup auto-reply: at most once per 20 hours per phone.
                 let shouldThanks = warmEnabled || isOptIn;
                 if (shouldThanks && phone) {
-                  const { data: prior } = await admin.from("wa_warm_opt_ins")
+                  const { data: prior } = await admin
+                    .from("wa_warm_opt_ins")
                     .select("last_auto_reply_at")
                     .eq("tenant_id", integration.tenant_id)
                     .eq("integration_id", integration.id)
                     .eq("phone", phone)
                     .maybeSingle();
                   if (prior?.last_auto_reply_at) {
-                    const age = Date.now() - new Date(prior.last_auto_reply_at).getTime();
-                    if (age < 20 * 3600 * 1000 && !isOptIn) shouldThanks = false;
+                    const age =
+                      Date.now() - new Date(prior.last_auto_reply_at).getTime();
+                    if (age < 20 * 3600 * 1000 && !isOptIn)
+                      shouldThanks = false;
                   }
                 }
 
                 if (shouldThanks) {
                   const senderUserId = integration.user_id;
                   if (senderUserId) {
-                    const thanksRes = await fetch(`${supabaseUrl}/functions/v1/send-meta-whatsapp-message`, {
-                      method: "POST",
-                      headers: {
-                        "Content-Type": "application/json",
-                        Authorization: `Bearer ${serviceKey}`,
+                    const thanksRes = await fetch(
+                      `${supabaseUrl}/functions/v1/send-meta-whatsapp-message`,
+                      {
+                        method: "POST",
+                        headers: {
+                          "Content-Type": "application/json",
+                          Authorization: `Bearer ${serviceKey}`,
+                        },
+                        body: JSON.stringify({
+                          tenantId: integration.tenant_id,
+                          integrationId: integration.id,
+                          senderUserId,
+                          phoneNumber: item.peerPhone,
+                          message: thanksText,
+                        }),
                       },
-                      body: JSON.stringify({
-                        tenantId: integration.tenant_id,
-                        integrationId: integration.id,
-                        senderUserId,
-                        phoneNumber: item.peerPhone,
-                        message: thanksText,
-                      }),
-                    });
+                    );
                     if (thanksRes.ok && phone) {
                       const optInRow: Record<string, unknown> = {
                         tenant_id: integration.tenant_id,
@@ -431,12 +518,16 @@ Deno.serve(async (request) => {
                         last_auto_reply_at: new Date().toISOString(),
                         updated_at: new Date().toISOString(),
                       };
-                      if (isOptIn) optInRow.opted_in_at = new Date().toISOString();
+                      if (isOptIn)
+                        optInRow.opted_in_at = new Date().toISOString();
                       await admin.from("wa_warm_opt_ins").upsert(optInRow, {
                         onConflict: "tenant_id,integration_id,phone",
                       });
                     } else if (!thanksRes.ok) {
-                      console.error("Warm thanks reply failed", await thanksRes.text().catch(() => ""));
+                      console.error(
+                        "Warm thanks reply failed",
+                        await thanksRes.text().catch(() => ""),
+                      );
                     }
                   }
                 }
@@ -495,27 +586,29 @@ Deno.serve(async (request) => {
                   .maybeSingle();
                 if (targetBlocked) continue;
 
-                const { error: copyError } = await admin.from("chat_messages").insert({
-                  client_id: targetClientId,
-                  lead_id: targetLeadId,
-                  tenant_id: target.tenantId,
-                  connection_user_id: target.userId,
-                  integration_id: integration.id,
-                  message_text: messageText(item.message),
-                  direction: "inbound",
-                  channel: "whatsapp",
-                  provider: "meta_whatsapp",
-                  sender_phone: item.peerPhone,
-                  sender_name: contactNames.get(item.peerPhone) || null,
-                  is_blocked: false,
-                  created_at: timestampIso(item.message.timestamp),
-                  raw_provider_data: {
-                    ...rawProviderData,
-                    idMessage: `${messageId}:tenant:${target.tenantId}`,
-                    source_provider_message_id: messageId,
-                    shared_integration_owner_tenant_id: integration.tenant_id,
-                  },
-                });
+                const { error: copyError } = await admin
+                  .from("chat_messages")
+                  .insert({
+                    client_id: targetClientId,
+                    lead_id: targetLeadId,
+                    tenant_id: target.tenantId,
+                    connection_user_id: target.userId,
+                    integration_id: integration.id,
+                    message_text: messageText(item.message),
+                    direction: "inbound",
+                    channel: "whatsapp",
+                    provider: "meta_whatsapp",
+                    sender_phone: item.peerPhone,
+                    sender_name: contactNames.get(item.peerPhone) || null,
+                    is_blocked: false,
+                    created_at: timestampIso(item.message.timestamp),
+                    raw_provider_data: {
+                      ...rawProviderData,
+                      idMessage: `${messageId}:tenant:${target.tenantId}`,
+                      source_provider_message_id: messageId,
+                      shared_integration_owner_tenant_id: integration.tenant_id,
+                    },
+                  });
                 if (copyError) throw copyError;
               }
 
@@ -533,25 +626,31 @@ Deno.serve(async (request) => {
                 isGroup: false,
                 sourceChannel: "own_instance",
                 sendMessage: async (_chatId: string, message: string) => {
-                  const response = await fetch(`${supabaseUrl}/functions/v1/send-meta-whatsapp-message`, {
-                    method: "POST",
-                    headers: {
-                      "Content-Type": "application/json",
-                      Authorization: `Bearer ${serviceKey}`,
+                  const response = await fetch(
+                    `${supabaseUrl}/functions/v1/send-meta-whatsapp-message`,
+                    {
+                      method: "POST",
+                      headers: {
+                        "Content-Type": "application/json",
+                        Authorization: `Bearer ${serviceKey}`,
+                      },
+                      body: JSON.stringify({
+                        tenantId: target.tenantId,
+                        integrationId: integration.id,
+                        senderUserId: target.userId,
+                        phoneNumber: item.peerPhone,
+                        message,
+                      }),
                     },
-                    body: JSON.stringify({
-                      tenantId: target.tenantId,
-                      integrationId: integration.id,
-                      senderUserId: target.userId,
-                      phoneNumber: item.peerPhone,
-                      message,
-                    }),
-                  });
+                  );
                   return response.ok;
                 },
               });
             } catch (carmenError) {
-              console.error("Carmen handling failed for Meta WhatsApp message", carmenError);
+              console.error(
+                "Carmen handling failed for Meta WhatsApp message",
+                carmenError,
+              );
             }
           }
         }
@@ -565,7 +664,10 @@ Deno.serve(async (request) => {
               settings: {
                 ...settings,
                 history_sync_last_event_at: new Date().toISOString(),
-                history_sync_progress: lastChunk?.metadata?.progress ?? settings.history_sync_progress ?? null,
+                history_sync_progress:
+                  lastChunk?.metadata?.progress ??
+                  settings.history_sync_progress ??
+                  null,
                 history_sync_error: lastChunk?.errors?.[0]?.message ?? null,
               },
             })
@@ -575,12 +677,17 @@ Deno.serve(async (request) => {
       }
     }
 
-    return new Response(JSON.stringify({ received: true, processed }), { headers: jsonHeaders });
-  } catch (error) {
-    console.error("meta-whatsapp-webhook error", error);
-    return new Response(JSON.stringify({ received: true, error: "processing_failed" }), {
-      status: 500,
+    return new Response(JSON.stringify({ received: true, processed }), {
       headers: jsonHeaders,
     });
+  } catch (error) {
+    console.error("meta-whatsapp-webhook error", error);
+    return new Response(
+      JSON.stringify({ received: true, error: "processing_failed" }),
+      {
+        status: 500,
+        headers: jsonHeaders,
+      },
+    );
   }
 });

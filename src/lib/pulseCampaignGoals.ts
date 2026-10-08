@@ -14,13 +14,16 @@ import {
   tableReportGoal as reportTableGoal,
 } from "../../supabase/functions/_shared/pulse-campaign-goals.mjs";
 
-export const campaignDeliveryStatusLabel = deliveryStatusLabel as (status: string) => string;
+export const campaignDeliveryStatusLabel = deliveryStatusLabel as (
+  status: string,
+) => string;
 export const resolveCampaignDeliveryStatus = resolveDeliveryStatus as (
   data?: Record<string, unknown>,
   integrationSettings?: Record<string, unknown>,
 ) => "active" | "paused" | "removed" | "other" | "unknown";
 
-export type PulseCampaignGoal = "leads" | "engagement" | "ecommerce" | "unknown";
+export type PulseCampaignGoal =
+  "leads" | "engagement" | "ecommerce" | "unknown";
 
 export type PulseCampaignGoalRow = {
   campaign_key: string;
@@ -31,14 +34,16 @@ export type PulseCampaignGoalRow = {
   platform: "meta" | "google";
   goal: PulseCampaignGoal;
   delivery_status?: "active" | "paused" | "removed" | "other" | "unknown";
-  classification_source: "explicit_mapping" | "platform_goal" | "table_report_type" | "unclassified";
+  classification_source:
+    "explicit_mapping" | "platform_goal" | "table_report_type" | "unclassified";
   campaign_objective?: string | null;
   optimization_goal?: string | null;
   campaign_type_hint?: string | null;
   result_kind?: string | null;
   outcome_kind: string | null;
   status: "healthy" | "warning" | "critical" | "no_data";
-  status_tier: "normal" | "watch" | "exception" | "missing_data" | "needs_classification";
+  status_tier:
+    "normal" | "watch" | "exception" | "missing_data" | "needs_classification";
   status_reason: string;
   alert_eligible: boolean;
   target_value: number | null;
@@ -87,7 +92,10 @@ export const buildPulseCampaignRows = buildRows as (input: {
 export const classifyPulseCampaignGoal = classifyGoal as (
   data?: Record<string, unknown>,
   integrationSettings?: Record<string, unknown>,
-) => { goal: PulseCampaignGoal; source: PulseCampaignGoalRow["classification_source"] };
+) => {
+  goal: PulseCampaignGoal;
+  source: PulseCampaignGoalRow["classification_source"];
+};
 
 export const pulseCampaignOutcome = campaignOutcome;
 export const pulseTrendWindows = trendWindows;

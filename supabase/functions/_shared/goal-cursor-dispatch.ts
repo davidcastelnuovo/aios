@@ -11,7 +11,10 @@ export type GoalCursorFireResult = {
   parallel?: boolean;
 };
 
-function cursorAuthHeaders(apiKey: string, basic = false): Record<string, string> {
+function cursorAuthHeaders(
+  apiKey: string,
+  basic = false,
+): Record<string, string> {
   return {
     Authorization: basic ? `Basic ${btoa(`${apiKey}:`)}` : `Bearer ${apiKey}`,
     "Content-Type": "application/json",
@@ -20,18 +23,32 @@ function cursorAuthHeaders(apiKey: string, basic = false): Record<string, string
   };
 }
 
-async function cursorFetch(apiKey: string, url: string, init: RequestInit): Promise<Response> {
-  const headers = { ...cursorAuthHeaders(apiKey, false), ...(init.headers || {}) };
+async function cursorFetch(
+  apiKey: string,
+  url: string,
+  init: RequestInit,
+): Promise<Response> {
+  const headers = {
+    ...cursorAuthHeaders(apiKey, false),
+    ...(init.headers || {}),
+  };
   let resp = await fetch(url, { ...init, headers });
   if (resp.status === 401 || resp.status === 403) {
-    resp = await fetch(url, { ...init, headers: { ...cursorAuthHeaders(apiKey, true), ...(init.headers || {}) } });
+    resp = await fetch(url, {
+      ...init,
+      headers: { ...cursorAuthHeaders(apiKey, true), ...(init.headers || {}) },
+    });
   }
   return resp;
 }
 
 function parseAgentResponse(raw: string): { url: string; id: string } {
   let data: Record<string, unknown> = {};
-  try { data = JSON.parse(raw); } catch { /* ignore */ }
+  try {
+    data = JSON.parse(raw);
+  } catch {
+    /* ignore */
+  }
   const agent = (data?.agent || data) as Record<string, unknown>;
   const id = String(agent?.id || data?.id || "");
   const url = String(
@@ -44,7 +61,8 @@ export async function getPlanStepCursorAgent(
   supabase: { from: (t: string) => any },
   planStepId: string,
 ): Promise<{ cursorAgentId: string; sessionUrl: string } | null> {
-  const { data } = await supabase.from("goal_plan_steps")
+  const { data } = await supabase
+    .from("goal_plan_steps")
     .select("cursor_agent_id, cursor_session_url")
     .eq("id", planStepId)
     .maybeSingle();
@@ -52,7 +70,9 @@ export async function getPlanStepCursorAgent(
   if (!id.startsWith("bc-")) return null;
   return {
     cursorAgentId: id,
-    sessionUrl: String(data?.cursor_session_url || `https://cursor.com/agents/${id}`),
+    sessionUrl: String(
+      data?.cursor_session_url || `https://cursor.com/agents/${id}`,
+    ),
   };
 }
 
@@ -63,18 +83,23 @@ export async function savePlanStepCursorAgent(
   sessionUrl: string,
 ): Promise<void> {
   if (!cursorAgentId.startsWith("bc-")) return;
-  await supabase.from("goal_plan_steps").update({
-    cursor_agent_id: cursorAgentId,
-    cursor_session_url: sessionUrl || `https://cursor.com/agents/${cursorAgentId}`,
-    updated_at: new Date().toISOString(),
-  }).eq("id", planStepId);
+  await supabase
+    .from("goal_plan_steps")
+    .update({
+      cursor_agent_id: cursorAgentId,
+      cursor_session_url:
+        sessionUrl || `https://cursor.com/agents/${cursorAgentId}`,
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", planStepId);
 }
 
 export async function getGoalCursorAgent(
   supabase: { from: (t: string) => any },
   goalId: string,
 ): Promise<{ cursorAgentId: string; sessionUrl: string } | null> {
-  const { data } = await supabase.from("goals")
+  const { data } = await supabase
+    .from("goals")
     .select("cursor_agent_id, cursor_session_url")
     .eq("id", goalId)
     .maybeSingle();
@@ -82,7 +107,9 @@ export async function getGoalCursorAgent(
   if (!id.startsWith("bc-")) return null;
   return {
     cursorAgentId: id,
-    sessionUrl: String(data?.cursor_session_url || `https://cursor.com/agents/${id}`),
+    sessionUrl: String(
+      data?.cursor_session_url || `https://cursor.com/agents/${id}`,
+    ),
   };
 }
 
@@ -93,11 +120,15 @@ export async function saveGoalCursorAgent(
   sessionUrl: string,
 ): Promise<void> {
   if (!cursorAgentId.startsWith("bc-")) return;
-  await supabase.from("goals").update({
-    cursor_agent_id: cursorAgentId,
-    cursor_session_url: sessionUrl || `https://cursor.com/agents/${cursorAgentId}`,
-    updated_at: new Date().toISOString(),
-  }).eq("id", goalId);
+  await supabase
+    .from("goals")
+    .update({
+      cursor_agent_id: cursorAgentId,
+      cursor_session_url:
+        sessionUrl || `https://cursor.com/agents/${cursorAgentId}`,
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", goalId);
 }
 
 async function followUpCursorAgent(
@@ -126,7 +157,8 @@ async function followUpCursorAgent(
       if (attempt === 1) await new Promise((r) => setTimeout(r, 1500));
       continue;
     }
-    if (resp.status === 404 || resp.status === 410 || resp.status === 400) return null;
+    if (resp.status === 404 || resp.status === 410 || resp.status === 400)
+      return null;
     throw new Error(`Cursor follow-up ${resp.status}: ${raw.slice(0, 400)}`);
   }
   return { cursorAgentId: agentId, sessionUrl, reused: true, delivered: false };
@@ -137,12 +169,16 @@ async function createGoalCursorAgent(
   promptText: string,
   opts?: { name?: string; startingRef?: string },
 ): Promise<GoalCursorFireResult> {
-  const repoUrl = Deno.env.get("CURSOR_REPO_URL") || "https://github.com/davidcastelnuovo/aios";
+  const repoUrl =
+    Deno.env.get("CURSOR_REPO_URL") ||
+    "https://github.com/davidcastelnuovo/aios";
   const startingRef = opts?.startingRef || "develop";
   const envName = Deno.env.get("CURSOR_CLOUD_ENV_NAME") || "";
-  const { cursorModelBody, resolveCodingCursorModel } = await import("./cursorCreativeModel.ts");
+  const { cursorModelBody, resolveCodingCursorModel } =
+    await import("./cursorCreativeModel.ts");
   const modelId = Deno.env.get("CURSOR_MODEL_ID") || "";
-  const autoCreatePR = (Deno.env.get("CURSOR_AUTO_CREATE_PR") || "true").toLowerCase() !== "false";
+  const autoCreatePR =
+    (Deno.env.get("CURSOR_AUTO_CREATE_PR") || "true").toLowerCase() !== "false";
 
   const body: Record<string, unknown> = {
     prompt: { text: promptText },
@@ -161,13 +197,18 @@ async function createGoalCursorAgent(
     body: JSON.stringify(body),
   });
   const raw = await resp.text();
-  if (!resp.ok) throw new Error(`Cursor create ${resp.status}: ${raw.slice(0, 400)}`);
+  if (!resp.ok)
+    throw new Error(`Cursor create ${resp.status}: ${raw.slice(0, 400)}`);
   const parsed = parseAgentResponse(raw);
-  const id = parsed.id.startsWith("bc-") ? parsed.id : parsed.url.match(/bc-[a-z0-9-]+/i)?.[0] || "";
+  const id = parsed.id.startsWith("bc-")
+    ? parsed.id
+    : parsed.url.match(/bc-[a-z0-9-]+/i)?.[0] || "";
   if (!id.startsWith("bc-")) throw new Error("Cursor create: missing agent id");
   return {
     cursorAgentId: id,
-    sessionUrl: parsed.url.includes("/agents/") ? parsed.url : `https://cursor.com/agents/${id}`,
+    sessionUrl: parsed.url.includes("/agents/")
+      ? parsed.url
+      : `https://cursor.com/agents/${id}`,
     reused: false,
     delivered: true,
   };
@@ -189,19 +230,26 @@ export function buildGoalTechnicalPrompt(args: {
     `goal_id: ${args.goalId}`,
     `Goal: ${args.goalTitle}`,
     args.objective ? `Objective: ${args.objective}` : "",
-    args.subProjectLabel ? `Sub-project / department: ${args.subProjectLabel} (${args.subProjectKey || ""})` : "",
+    args.subProjectLabel
+      ? `Sub-project / department: ${args.subProjectLabel} (${args.subProjectKey || ""})`
+      : "",
     "",
     `Task:\n${args.stepTitle}`,
     args.stepDescription ? `\nDetails:\n${args.stepDescription}` : "",
-    args.acceptanceCriteria ? `\nAcceptance criteria:\n${args.acceptanceCriteria}` : "",
+    args.acceptanceCriteria
+      ? `\nAcceptance criteria:\n${args.acceptanceCriteria}`
+      : "",
     args.constraints && Object.keys(args.constraints).length
-      ? `\nConstraints:\n${JSON.stringify(args.constraints, null, 2)}` : "",
+      ? `\nConstraints:\n${JSON.stringify(args.constraints, null, 2)}`
+      : "",
     "",
     "Work on branch develop / Staging first.",
     args.subProjectKey
       ? "This sub-project has its OWN dedicated Cursor agent — stay scoped to this department only."
       : "This is a follow-up on the SAME goal session — do not restart from scratch unless necessary.",
-  ].filter(Boolean).join("\n");
+  ]
+    .filter(Boolean)
+    .join("\n");
 }
 
 /** Dispatch technical work to the goal's sticky Cursor agent (create or follow-up). */
@@ -226,7 +274,8 @@ export async function dispatchToGoalCursor(
   const apiKey = Deno.env.get("CURSOR_API_KEY") || "";
   if (!apiKey) throw new Error("CURSOR_API_KEY not configured");
 
-  const useStepSticky = args.useStepSticky ?? !!(args.planStepId && args.subProjectKey);
+  const useStepSticky =
+    args.useStepSticky ?? !!(args.planStepId && args.subProjectKey);
 
   const prompt = buildGoalTechnicalPrompt({
     goalId: args.goalId,
@@ -240,13 +289,18 @@ export async function dispatchToGoalCursor(
     subProjectLabel: args.subProjectLabel,
   });
 
-  const existing = useStepSticky && args.planStepId
-    ? await getPlanStepCursorAgent(supabase, args.planStepId)
-    : await getGoalCursorAgent(supabase, args.goalId);
+  const existing =
+    useStepSticky && args.planStepId
+      ? await getPlanStepCursorAgent(supabase, args.planStepId)
+      : await getGoalCursorAgent(supabase, args.goalId);
   let result: GoalCursorFireResult;
 
   if (existing) {
-    const followed = await followUpCursorAgent(apiKey, existing.cursorAgentId, prompt);
+    const followed = await followUpCursorAgent(
+      apiKey,
+      existing.cursorAgentId,
+      prompt,
+    );
     if (followed?.delivered) {
       result = followed;
     } else if (followed && !followed.delivered) {
@@ -269,16 +323,28 @@ export async function dispatchToGoalCursor(
   }
 
   if (useStepSticky && args.planStepId) {
-    await savePlanStepCursorAgent(supabase, args.planStepId, result.cursorAgentId, result.sessionUrl);
+    await savePlanStepCursorAgent(
+      supabase,
+      args.planStepId,
+      result.cursorAgentId,
+      result.sessionUrl,
+    );
   } else {
-    await saveGoalCursorAgent(supabase, args.goalId, result.cursorAgentId, result.sessionUrl);
+    await saveGoalCursorAgent(
+      supabase,
+      args.goalId,
+      result.cursorAgentId,
+      result.sessionUrl,
+    );
   }
 
   try {
     await supabase.from("goal_events").insert({
       tenant_id: args.tenantId,
       goal_id: args.goalId,
-      event_type: result.reused ? "cursor_goal_followup" : "cursor_goal_agent_created",
+      event_type: result.reused
+        ? "cursor_goal_followup"
+        : "cursor_goal_agent_created",
       actor: "autonomous_goal_engine",
       detail: {
         cursor_agent_id: result.cursorAgentId,
@@ -288,7 +354,9 @@ export async function dispatchToGoalCursor(
         step: args.stepTitle,
       },
     });
-  } catch { /* audit must not break dispatch */ }
+  } catch {
+    /* audit must not break dispatch */
+  }
 
   return result;
 }

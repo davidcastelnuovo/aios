@@ -49,7 +49,8 @@ export function checkOutbound(input: {
 
   const integration = (input.integration || "").toLowerCase();
   const destination = input.destination || "";
-  const isGroup = destination.startsWith("group:") || destination.includes("@g.us");
+  const isGroup =
+    destination.startsWith("group:") || destination.includes("@g.us");
 
   if (integration === "whatsapp" || integration === "email") {
     if (isGroup) {
@@ -62,21 +63,34 @@ export function checkOutbound(input: {
     const allowlist = parseAllowlist(input.allowlistRaw);
     const destDigits = digits(destination);
     const allowed = allowlist.some(
-      (item) => destDigits === item || destDigits.endsWith(item.slice(-9)) || item.endsWith(destDigits.slice(-9)),
+      (item) =>
+        destDigits === item ||
+        destDigits.endsWith(item.slice(-9)) ||
+        item.endsWith(destDigits.slice(-9)),
     );
     if (allowed) {
       return { decision: "ALLOW", reason: "allowlist_match", environment };
     }
     return {
       decision: "BLOCK",
-      reason: allowlist.length ? "destination_not_allowlisted" : "empty_allowlist",
+      reason: allowlist.length
+        ? "destination_not_allowlisted"
+        : "empty_allowlist",
       environment,
     };
   }
 
   if (integration === "automation" || integration === "cron") {
-    return { decision: "DRY_RUN", reason: "staging_default_dry_run", environment };
+    return {
+      decision: "DRY_RUN",
+      reason: "staging_default_dry_run",
+      environment,
+    };
   }
 
-  return { decision: "BLOCK", reason: "staging_safe_mode_default_block", environment };
+  return {
+    decision: "BLOCK",
+    reason: "staging_safe_mode_default_block",
+    environment,
+  };
 }

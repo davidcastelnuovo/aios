@@ -27,13 +27,15 @@ test("optional columns follow org visibility, defaulting to shown", () => {
 });
 
 test("parseLeadTableColumnWidths keeps known CRM columns inside bounds", () => {
-  const widths = parseLeadTableColumnWidths(JSON.stringify({
-    name: 240.4,
-    phone: 10,
-    tags: 9000,
-    unknown: 300,
-    status: "nope",
-  }));
+  const widths = parseLeadTableColumnWidths(
+    JSON.stringify({
+      name: 240.4,
+      phone: 10,
+      tags: 9000,
+      unknown: 300,
+      status: "nope",
+    }),
+  );
   assert.deepEqual(widths, { name: 240, phone: 80, tags: 800 });
 });
 
@@ -51,18 +53,32 @@ test("column widths round-trip through storage", () => {
   assert.deepEqual(readLeadTableColumnWidths(null), { company: 220 });
   assert.deepEqual(
     applyLeadTableColumnWidths(
-      [{ id: "company", width: 170 }, { id: "phone", width: 130 }],
+      [
+        { id: "company", width: 170 },
+        { id: "phone", width: 130 },
+      ],
       readLeadTableColumnWidths(storage),
     ),
-    [{ id: "company", width: 220 }, { id: "phone", width: 130 }],
+    [
+      { id: "company", width: 220 },
+      { id: "phone", width: 130 },
+    ],
   );
 });
 
 test("toggleable catalog excludes required columns", () => {
-  assert.ok(LEAD_TABLE_TOGGLEABLE_COLUMNS.some((field) => field.key === "tags"));
-  assert.ok(!LEAD_TABLE_TOGGLEABLE_COLUMNS.some((field) => field.key === "contact_name"));
+  assert.ok(
+    LEAD_TABLE_TOGGLEABLE_COLUMNS.some((field) => field.key === "tags"),
+  );
+  assert.ok(
+    !LEAD_TABLE_TOGGLEABLE_COLUMNS.some(
+      (field) => field.key === "contact_name",
+    ),
+  );
   assert.equal(
-    LEAD_TABLE_COLUMN_FIELDS.filter((field) => field.required).map((field) => field.key).join(","),
+    LEAD_TABLE_COLUMN_FIELDS.filter((field) => field.required)
+      .map((field) => field.key)
+      .join(","),
     "contact_name,actions",
   );
 });

@@ -8,7 +8,10 @@ export const META_TEMPLATE_MEDIA_LIMITS_BYTES: Record<string, number> = {
   "application/pdf": 16 * 1024 * 1024,
 };
 
-export const META_TEMPLATE_HEADER_FORMAT_BY_MIME: Record<string, "IMAGE" | "VIDEO" | "DOCUMENT"> = {
+export const META_TEMPLATE_HEADER_FORMAT_BY_MIME: Record<
+  string,
+  "IMAGE" | "VIDEO" | "DOCUMENT"
+> = {
   "image/jpeg": "IMAGE",
   "image/png": "IMAGE",
   "video/mp4": "VIDEO",
@@ -29,10 +32,14 @@ export async function uploadMetaTemplateMediaHandle(
     throw new Error(`unsupported_template_media_type:${fileType}`);
   }
   if (fileBytes.byteLength <= 0 || fileBytes.byteLength > limit) {
-    throw new Error(`template_media_file_size_out_of_range:${fileBytes.byteLength}`);
+    throw new Error(
+      `template_media_file_size_out_of_range:${fileBytes.byteLength}`,
+    );
   }
 
-  const sessionUrl = new URL(`https://graph.facebook.com/${graphVersion}/${appId}/uploads`);
+  const sessionUrl = new URL(
+    `https://graph.facebook.com/${graphVersion}/${appId}/uploads`,
+  );
   const sessionResponse = await fetch(sessionUrl, {
     method: "POST",
     headers: {
@@ -47,7 +54,8 @@ export async function uploadMetaTemplateMediaHandle(
   });
   const sessionPayload = await sessionResponse.json().catch(() => ({}));
   if (!sessionResponse.ok || sessionPayload?.error) {
-    const message = sessionPayload?.error?.error_user_msg ||
+    const message =
+      sessionPayload?.error?.error_user_msg ||
       sessionPayload?.error?.message ||
       "Meta upload session failed";
     throw new Error(message);
@@ -56,7 +64,9 @@ export async function uploadMetaTemplateMediaHandle(
   const sessionId = String(sessionPayload.id ?? "").replace(/^upload:/, "");
   if (!sessionId) throw new Error("Meta upload session id missing");
 
-  const uploadUrl = new URL(`https://graph.facebook.com/${graphVersion}/upload:${sessionId}`);
+  const uploadUrl = new URL(
+    `https://graph.facebook.com/${graphVersion}/upload:${sessionId}`,
+  );
   const uploadResponse = await fetch(uploadUrl, {
     method: "POST",
     headers: {
@@ -68,7 +78,8 @@ export async function uploadMetaTemplateMediaHandle(
   });
   const uploadPayload = await uploadResponse.json().catch(() => ({}));
   if (!uploadResponse.ok || uploadPayload?.error) {
-    const message = uploadPayload?.error?.error_user_msg ||
+    const message =
+      uploadPayload?.error?.error_user_msg ||
       uploadPayload?.error?.message ||
       "Meta media upload failed";
     throw new Error(message);
@@ -109,7 +120,9 @@ export function normalizedPhoneCandidates(value: unknown): string[] {
 }
 
 /** Payload/id from a quick-reply / interactive button tap (for opt-in matching). */
-export function inboundButtonPayload(message: MetaWhatsAppMessage): string | null {
+export function inboundButtonPayload(
+  message: MetaWhatsAppMessage,
+): string | null {
   const type = String(message.type ?? "");
   if (type === "button") {
     const payload = String(message.button?.payload ?? "").trim();
@@ -161,7 +174,10 @@ export function messageText(message: MetaWhatsAppMessage): string {
   return labels[type] ?? `[הודעת WhatsApp מסוג ${type}]`;
 }
 
-export function collectWebhookMessages(value: Record<string, any>, field: string) {
+export function collectWebhookMessages(
+  value: Record<string, any>,
+  field: string,
+) {
   const businessPhone = digitsOnly(value.metadata?.display_phone_number);
   const messages: Array<{
     message: MetaWhatsAppMessage;
@@ -172,7 +188,8 @@ export function collectWebhookMessages(value: Record<string, any>, field: string
 
   for (const message of value.messages ?? []) {
     const from = digitsOnly(message.from);
-    const historyOutbound = field === "history" && Boolean(businessPhone && from === businessPhone);
+    const historyOutbound =
+      field === "history" && Boolean(businessPhone && from === businessPhone);
     messages.push({
       message,
       direction: historyOutbound ? "outbound" : "inbound",
@@ -198,7 +215,9 @@ export function collectWebhookMessages(value: Record<string, any>, field: string
         messages.push({
           message,
           direction: outbound ? "outbound" : "inbound",
-          peerPhone: outbound ? digitsOnly(message.to ?? thread.id) : from || digitsOnly(thread.id),
+          peerPhone: outbound
+            ? digitsOnly(message.to ?? thread.id)
+            : from || digitsOnly(thread.id),
           source: "history",
         });
       }
@@ -219,7 +238,10 @@ const PLACEHOLDER_PATTERN = /\{\{[^}]+\}\}/g;
  * lead that arrives without, say, a company name yields no line at all rather than a
  * dangling "חברה:" label or a literal {{lead_company}} in the delivered message.
  */
-export function dropUnresolvedTemplateLines(raw: string, resolve: (line: string) => string): string {
+export function dropUnresolvedTemplateLines(
+  raw: string,
+  resolve: (line: string) => string,
+): string {
   return String(raw ?? "")
     .split(/\r?\n/)
     .filter((line) => {
@@ -271,24 +293,41 @@ export async function renderTemplateText(
 ): Promise<string | null> {
   if (!wabaId || !templateName) return null;
   try {
-    const url = new URL(`https://graph.facebook.com/${graphVersion}/${wabaId}/message_templates`);
+    const url = new URL(
+      `https://graph.facebook.com/${graphVersion}/${wabaId}/message_templates`,
+    );
     url.searchParams.set("name", templateName);
     url.searchParams.set("fields", "name,language,components");
     url.searchParams.set("limit", "20");
-    const response = await fetch(url, { headers: { Authorization: `Bearer ${accessToken}` } });
+    const response = await fetch(url, {
+      headers: { Authorization: `Bearer ${accessToken}` },
+    });
     if (!response.ok) return null;
     const payload = await response.json();
-    const templates: MetaWhatsAppMessage[] = Array.isArray(payload?.data) ? payload.data : [];
+    const templates: MetaWhatsAppMessage[] = Array.isArray(payload?.data)
+      ? payload.data
+      : [];
     const template =
-      templates.find((item) => item.name === templateName && item.language === language) ??
-      templates.find((item) => item.name === templateName);
-    const components: MetaWhatsAppMessage[] = Array.isArray(template?.components) ? template.components : [];
+      templates.find(
+        (item) => item.name === templateName && item.language === language,
+      ) ?? templates.find((item) => item.name === templateName);
+    const components: MetaWhatsAppMessage[] = Array.isArray(
+      template?.components,
+    )
+      ? template.components
+      : [];
     const text = components
-      .filter((component) => ["HEADER", "BODY", "FOOTER"].includes(String(component.type ?? "")))
+      .filter((component) =>
+        ["HEADER", "BODY", "FOOTER"].includes(String(component.type ?? "")),
+      )
       .map((component) => String(component.text ?? ""))
       .filter(Boolean)
       .join("\n\n")
-      .replace(/\{\{(\d+)\}\}/g, (placeholder, position) => parameters[Number(position) - 1] ?? placeholder)
+      .replace(
+        /\{\{(\d+)\}\}/g,
+        (placeholder, position) =>
+          parameters[Number(position) - 1] ?? placeholder,
+      )
       .trim();
     return text || null;
   } catch {
@@ -310,7 +349,10 @@ const DELIVERY_STATUS_RANK: Record<string, number> = {
  * Meta can deliver status webhooks out of order, so only move a message forward
  * along sent → delivered → read. `failed` always wins.
  */
-export function shouldApplyDeliveryStatus(previous: unknown, next: unknown): boolean {
+export function shouldApplyDeliveryStatus(
+  previous: unknown,
+  next: unknown,
+): boolean {
   const nextRank = DELIVERY_STATUS_RANK[String(next ?? "")] ?? 0;
   if (!nextRank) return false;
   return nextRank > (DELIVERY_STATUS_RANK[String(previous ?? "")] ?? 0);
@@ -337,9 +379,8 @@ export function explainMetaWhatsAppError(
   code: unknown,
   fallbackDetail?: string | null,
 ): MetaWhatsAppErrorExplanation {
-  const codeStr = code === null || code === undefined || code === ""
-    ? null
-    : String(code);
+  const codeStr =
+    code === null || code === undefined || code === "" ? null : String(code);
   const detail = String(fallbackDetail ?? "").trim();
 
   const table: Record<string, Omit<MetaWhatsAppErrorExplanation, "code">> = {
@@ -369,19 +410,22 @@ export function explainMetaWhatsAppError(
     "131047": {
       labelHe: "חלון 24 שעות",
       messageHe: "חלון השירות של 24 שעות נסגר. יש לשלוח תבנית WhatsApp מאושרת.",
-      opsHintHe: "העבירו את שלב האוטומציה ל-send_mode=template עם תבנית מאושרת.",
+      opsHintHe:
+        "העבירו את שלב האוטומציה ל-send_mode=template עם תבנית מאושרת.",
       retryable: true,
     },
     "131009": {
       labelHe: "פרמטר לא תקין",
       messageHe: "Meta דחתה פרמטר לא תקין בהודעה (קוד 131009).",
-      opsHintHe: "בדקו את מספר הטלפון ומשתני התבנית ב-Make/Webhook (אין ערכי placeholder).",
+      opsHintHe:
+        "בדקו את מספר הטלפון ומשתני התבנית ב-Make/Webhook (אין ערכי placeholder).",
       retryable: false,
     },
     "131008": {
       labelHe: "חסר פרמטר בתבנית",
       messageHe: "חסר פרמטר חובה בתבנית WhatsApp (קוד 131008).",
-      opsHintHe: "ודאו שכל משתני התבנית מגיעים מ-Make (שם לקוח, טלפון ליד וכו').",
+      opsHintHe:
+        "ודאו שכל משתני התבנית מגיעים מ-Make (שם לקוח, טלפון ליד וכו').",
       retryable: true,
     },
     "200": {
@@ -402,15 +446,22 @@ export function explainMetaWhatsAppError(
     code: codeStr,
     labelHe: codeStr ? `שגיאת Meta ${codeStr}` : "שגיאת Meta",
     messageHe: detail
-      ? (codeStr ? `Meta שגיאה (קוד ${codeStr}): ${detail}` : `Meta שגיאה: ${detail}`)
-      : (codeStr ? `Meta שגיאה (קוד ${codeStr})` : "Meta WhatsApp send failed"),
-    opsHintHe: "בדקו את היסטוריית הריצות ואת סטטוס המספר ב-Meta Business Manager.",
+      ? codeStr
+        ? `Meta שגיאה (קוד ${codeStr}): ${detail}`
+        : `Meta שגיאה: ${detail}`
+      : codeStr
+        ? `Meta שגיאה (קוד ${codeStr})`
+        : "Meta WhatsApp send failed",
+    opsHintHe:
+      "בדקו את היסטוריית הריצות ואת סטטוס המספר ב-Meta Business Manager.",
     retryable: false,
   };
 }
 
 /** Extract a Meta error code from an automation_logs.error_message string. */
-export function extractMetaErrorCodeFromMessage(message: unknown): string | null {
+export function extractMetaErrorCodeFromMessage(
+  message: unknown,
+): string | null {
   const text = String(message ?? "");
   const match =
     text.match(/\(קוד\s*(\d+)\)/) ||

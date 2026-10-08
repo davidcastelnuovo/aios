@@ -66,11 +66,17 @@ export function useGraphifyCommunity(groupKey: string | null) {
   const { tenantId } = useCurrentTenant();
   return useQuery({
     queryKey: ["graphify-community", groupKey, tenantId],
-    queryFn: async (): Promise<{ nodes: GraphifyNode[]; edges: GraphifyEdge[] }> => {
-      const { data, error } = await supabase.rpc("graphify_group_subgraph" as any, {
-        p_group: groupKey,
-        p_limit: 400,
-      });
+    queryFn: async (): Promise<{
+      nodes: GraphifyNode[];
+      edges: GraphifyEdge[];
+    }> => {
+      const { data, error } = await supabase.rpc(
+        "graphify_group_subgraph" as any,
+        {
+          p_group: groupKey,
+          p_limit: 400,
+        },
+      );
       if (error) throw error;
       const parsed = (data ?? {}) as any;
       return {

@@ -1,6 +1,13 @@
 import { buildDesignedCopyLayers, ensureLogoLayer } from "./designedLayers.ts";
-import { pickVariationComposition, type CompositionId } from "./compositions.ts";
-import type { CreativeFormat, CreativeLayer, CreativeVisualStyleId } from "./types.ts";
+import {
+  pickVariationComposition,
+  type CompositionId,
+} from "./compositions.ts";
+import type {
+  CreativeFormat,
+  CreativeLayer,
+  CreativeVisualStyleId,
+} from "./types.ts";
 
 export interface CompleteVariationMeta {
   copyText?: string;
@@ -26,13 +33,18 @@ export const buildLayersForComplete = ({
   liveTextLayers = false,
   compositionSeed = "",
   usedCompositionIds = [],
-}: CompleteVariationMeta): { layers: CreativeLayer[]; compositionId?: CompositionId } => {
+}: CompleteVariationMeta): {
+  layers: CreativeLayer[];
+  compositionId?: CompositionId;
+} => {
   if (!liveTextLayers) return { layers: [] };
-  const resolvedComposition = compositionId ?? pickVariationComposition({
-    seed: compositionSeed,
-    used: usedCompositionIds,
-    lockedId: compositionId,
-  });
+  const resolvedComposition =
+    compositionId ??
+    pickVariationComposition({
+      seed: compositionSeed,
+      used: usedCompositionIds,
+      lockedId: compositionId,
+    });
   const layers = buildDesignedCopyLayers({
     copyText,
     format,

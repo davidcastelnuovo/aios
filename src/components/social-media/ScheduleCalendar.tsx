@@ -2,7 +2,14 @@ import { useMemo } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { useSocialMediaPosts } from "@/hooks/useSocialMedia";
-import { format, startOfMonth, endOfMonth, eachDayOfInterval, isSameDay, isToday } from "date-fns";
+import {
+  format,
+  startOfMonth,
+  endOfMonth,
+  eachDayOfInterval,
+  isSameDay,
+  isToday,
+} from "date-fns";
 import { he } from "date-fns/locale";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
@@ -14,7 +21,7 @@ export function ScheduleCalendar() {
 
   const scheduledPosts = useMemo(
     () => posts.filter((p) => p.scheduled_at || p.published_at),
-    [posts]
+    [posts],
   );
 
   const monthStart = startOfMonth(currentMonth);
@@ -28,10 +35,14 @@ export function ScheduleCalendar() {
     });
 
   const prevMonth = () => {
-    setCurrentMonth((prev) => new Date(prev.getFullYear(), prev.getMonth() - 1, 1));
+    setCurrentMonth(
+      (prev) => new Date(prev.getFullYear(), prev.getMonth() - 1, 1),
+    );
   };
   const nextMonth = () => {
-    setCurrentMonth((prev) => new Date(prev.getFullYear(), prev.getMonth() + 1, 1));
+    setCurrentMonth(
+      (prev) => new Date(prev.getFullYear(), prev.getMonth() + 1, 1),
+    );
   };
 
   // Day of week headers (Sunday first for Hebrew)
@@ -59,7 +70,10 @@ export function ScheduleCalendar() {
       <CardContent>
         <div className="grid grid-cols-7 gap-1">
           {dayHeaders.map((d) => (
-            <div key={d} className="text-center text-xs font-medium text-muted-foreground p-2">
+            <div
+              key={d}
+              className="text-center text-xs font-medium text-muted-foreground p-2"
+            >
               {d}
             </div>
           ))}
@@ -76,7 +90,9 @@ export function ScheduleCalendar() {
                   today ? "border-primary bg-primary/5" : "border-transparent"
                 }`}
               >
-                <div className={`font-medium mb-1 ${today ? "text-primary" : ""}`}>
+                <div
+                  className={`font-medium mb-1 ${today ? "text-primary" : ""}`}
+                >
                   {format(day, "d")}
                 </div>
                 {dayPosts.slice(0, 2).map((post) => (
@@ -88,10 +104,10 @@ export function ScheduleCalendar() {
                         post.status === "published"
                           ? "rgb(34 197 94 / 0.2)"
                           : post.status === "scheduled"
-                          ? "rgb(59 130 246 / 0.2)"
-                          : post.status === "failed"
-                          ? "rgb(239 68 68 / 0.2)"
-                          : "rgb(156 163 175 / 0.2)",
+                            ? "rgb(59 130 246 / 0.2)"
+                            : post.status === "failed"
+                              ? "rgb(239 68 68 / 0.2)"
+                              : "rgb(156 163 175 / 0.2)",
                     }}
                   >
                     {post.title || post.content.slice(0, 20)}

@@ -7,12 +7,15 @@ export async function invokeErrorMessage(
 ): Promise<string> {
   if (data?.error) return data.error;
 
-  const res = response
-    ?? (error && typeof error === "object" ? (error as { context?: Response }).context : undefined);
+  const res =
+    response ??
+    (error && typeof error === "object"
+      ? (error as { context?: Response }).context
+      : undefined);
 
   if (res) {
     try {
-      const body = await res.clone().json() as { error?: string };
+      const body = (await res.clone().json()) as { error?: string };
       if (body?.error) return body.error;
     } catch {
       /* not JSON */

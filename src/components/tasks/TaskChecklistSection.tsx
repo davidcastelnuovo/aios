@@ -21,7 +21,11 @@ type ChecklistItem = {
   sort_order: number;
 };
 
-export function TaskChecklistSection({ taskId, tenantId, className }: TaskChecklistSectionProps) {
+export function TaskChecklistSection({
+  taskId,
+  tenantId,
+  className,
+}: TaskChecklistSectionProps) {
   const queryClient = useQueryClient();
   const [draft, setDraft] = useState("");
 
@@ -71,9 +75,16 @@ export function TaskChecklistSection({ taskId, tenantId, className }: TaskCheckl
     },
     onMutate: async ({ id, isDone }) => {
       await queryClient.cancelQueries({ queryKey: ["task-checklist", taskId] });
-      const previous = queryClient.getQueryData<ChecklistItem[]>(["task-checklist", taskId]);
-      queryClient.setQueryData<ChecklistItem[]>(["task-checklist", taskId], (old = []) =>
-        old.map((item) => (item.id === id ? { ...item, is_done: isDone } : item)),
+      const previous = queryClient.getQueryData<ChecklistItem[]>([
+        "task-checklist",
+        taskId,
+      ]);
+      queryClient.setQueryData<ChecklistItem[]>(
+        ["task-checklist", taskId],
+        (old = []) =>
+          old.map((item) =>
+            item.id === id ? { ...item, is_done: isDone } : item,
+          ),
       );
       return { previous };
     },
@@ -88,7 +99,10 @@ export function TaskChecklistSection({ taskId, tenantId, className }: TaskCheckl
 
   const removeItem = useMutation({
     mutationFn: async (id: string) => {
-      const { error } = await supabase.from("task_checklist_items").delete().eq("id", id);
+      const { error } = await supabase
+        .from("task_checklist_items")
+        .delete()
+        .eq("id", id);
       if (error) throw error;
     },
     onSuccess: invalidate,
@@ -98,7 +112,12 @@ export function TaskChecklistSection({ taskId, tenantId, className }: TaskCheckl
   const doneCount = items.filter((item) => item.is_done).length;
 
   return (
-    <section className={cn("rounded-xl border border-border/60 bg-card shadow-sm p-3 space-y-2 text-right", className)}>
+    <section
+      className={cn(
+        "rounded-xl border border-border/60 bg-card shadow-sm p-3 space-y-2 text-right",
+        className,
+      )}
+    >
       <div className="flex items-center justify-between gap-2">
         <div className="flex items-center gap-1.5 text-sm font-medium">
           <CheckSquare className="h-4 w-4 text-muted-foreground" />
@@ -116,7 +135,10 @@ export function TaskChecklistSection({ taskId, tenantId, className }: TaskCheckl
           <p className="text-xs text-muted-foreground py-1">טוען...</p>
         )}
         {items.map((item) => (
-          <div key={item.id} className="flex items-center gap-2 rounded-md px-1 py-1 hover:bg-muted/40">
+          <div
+            key={item.id}
+            className="flex items-center gap-2 rounded-md px-1 py-1 hover:bg-muted/40"
+          >
             <Checkbox
               checked={item.is_done}
               onCheckedChange={(checked) =>

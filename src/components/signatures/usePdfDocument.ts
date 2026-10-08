@@ -8,7 +8,10 @@ pdfjs.GlobalWorkerOptions.workerSrc = new URL(
 ).toString();
 
 /** PDF.js needs CMaps + standard fonts for Hebrew / embedded Identity-H fonts. */
-export function pdfDocumentInit(source: { url: string; withCredentials?: boolean }) {
+export function pdfDocumentInit(source: {
+  url: string;
+  withCredentials?: boolean;
+}) {
   const base = (
     import.meta.env.DEV
       ? `https://cdn.jsdelivr.net/npm/pdfjs-dist@${pdfjs.version}`
@@ -25,7 +28,10 @@ export function pdfDocumentInit(source: { url: string; withCredentials?: boolean
   };
 }
 
-export function usePdfDocument(fileUrl: string | null | undefined, enabled = true) {
+export function usePdfDocument(
+  fileUrl: string | null | undefined,
+  enabled = true,
+) {
   const [pdf, setPdf] = useState<PDFDocumentProxy | null>(null);
   const [numPages, setNumPages] = useState(1);
   const [loading, setLoading] = useState(false);
@@ -49,7 +55,9 @@ export function usePdfDocument(fileUrl: string | null | undefined, enabled = tru
 
     (async () => {
       try {
-        const doc = await pdfjs.getDocument(pdfDocumentInit({ url: fileUrl, withCredentials: false })).promise;
+        const doc = await pdfjs.getDocument(
+          pdfDocumentInit({ url: fileUrl, withCredentials: false }),
+        ).promise;
         if (cancelled || requestId !== requestIdRef.current) {
           doc.destroy().catch(() => undefined);
           return;

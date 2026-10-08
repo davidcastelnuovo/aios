@@ -4,72 +4,72 @@ on:
   workflow_dispatch:
     inputs:
       sql_file:
-        description: 'Path to SQL file under the repo'
+        description: "Path to SQL file under the repo"
         required: true
-        default: 'supabase/ops/apply_seo_monthly_shares.sql'
+        default: "supabase/ops/apply_seo_monthly_shares.sql"
       migration_name:
-        description: 'Migration name recorded in Supabase'
+        description: "Migration name recorded in Supabase"
         required: true
-        default: 'apply_seo_monthly_shares'
+        default: "apply_seo_monthly_shares"
   push:
     branches: [main]
     paths:
-      - '.github/workflows/apply-sql-migration.yml'
-      - 'supabase/ops/apply_lead_archive_and_home_agency.sql'
-      - 'supabase/ops/apply_seo_monthly_shares.sql'
-      - 'supabase/ops/fix_cross_tenant_client_task_updates.sql'
-      - 'supabase/ops/fix_seo_monthly_updates_cross_tenant.sql'
-      - 'supabase/ops/fix_clients_seo_keyword_relevance.sql'
-      - 'supabase/ops/fix_crm_dashboards_shared_agency_writes.sql'
-      - 'supabase/ops/create_cursor_dispatches.sql'
-      - 'supabase/ops/create_cursor_sticky_agents.sql'
-      - 'supabase/ops/create_agent_tool_embeddings.sql'
-      - 'supabase/ops/fix_woocommerce_client_scoped_select.sql'
-      - 'supabase/ops/fix_4_4_woocommerce_revenue_sync.sql'
-      - 'supabase/ops/fix_crm_tables_ecommerce_category.sql'
-      - 'supabase/ops/fix_owners_view_shared_agencies.sql'
-      - 'supabase/ops/create_meeting_bot_sessions.sql'
-      - 'supabase/ops/create_lead_alert_failure_notifications.sql'
-      - 'supabase/ops/fix_seo_call_snapshots_cross_tenant.sql'
-      - 'supabase/ops/fix_table_shares_cross_tenant.sql'
-      - 'supabase/ops/fix_task_agency_and_assignment_notifications.sql'
-      - 'supabase/ops/create_campaign_pulse_overrides.sql'
-      - 'supabase/ops/apply_pulse_twice_daily_cadence.sql'
-      - 'supabase/ops/apply_pulse_weekly_sunday_cadence.sql'
-      - 'supabase/ops/apply_pulse_refresh_and_instant_alerts.sql'
-      - 'supabase/ops/apply_client_retention_daily_production.sql'
-      - 'supabase/ops/notify_felix_calendar_fix_ready.sql'
-      - 'supabase/ops/apply_pulse_campaigner_delivery.sql'
-      - 'supabase/ops/apply_pulse_production_reconcile.sql'
-      - 'supabase/ops/apply_pulse_sunday_0730_david_campaigners.sql'
-      - 'supabase/ops/apply_pulse_sunday_0900_dmm_delivery.sql'
-      - 'supabase/ops/apply_pulse_dmm_felix_mc_david.sql'
-      - 'supabase/ops/apply_pulse_goal_metrics.sql'
-      - 'supabase/ops/apply_campaign_pulse_client_call_freshness.sql'
-      - 'supabase/ops/apply_copywriter_inspiration_library.sql'
-      - 'supabase/ops/fix_client_contacts_insert_rls.sql'
-      - 'supabase/ops/fix_client_contacts_select_rls.sql'
-      - 'supabase/ops/fix_client_credentials_select_rls.sql'
-      - 'supabase/ops/fix_campaigner_client_delete_rls.sql'
-      - 'supabase/ops/fix_team_member_report_dashboard_access.sql'
-      - 'supabase/ops/apply_client_dashboard_entity_route_skin.sql'
-      - 'supabase/ops/fix_owner_campaigner_rls.sql'
-      - 'supabase/ops/fix_campaign_pulse_snapshots_owner_read.sql'
-      - 'supabase/ops/fix_user_can_access_client_tenant_users_fallback.sql'
-      - 'supabase/ops/apply_connect_client_meta_ad_account_skin.sql'
-      - 'supabase/ops/apply_cursor_human_task_queue.sql'
-      - 'supabase/ops/apply_optimize_clients_tasks_rls_scope.sql'
-      - 'supabase/ops/apply_carmen_autonomous_goal_engine_production.sql'
-      - 'supabase/ops/apply_goal_execution_and_autonomous_engine_production.sql'
-      - 'supabase/ops/apply_pulse_campaign_breakdown_production.sql'
-      - 'supabase/ops/apply_recurring_human_tasks_production.sql'
-      - 'supabase/ops/apply_fix_duplicate_task_reminder_notifications_production.sql'
-      - 'supabase/ops/merge_duplicate_user_campaigners_production.sql'
-      - 'supabase/ops/merge_same_email_campaigners_production.sql'
-      - 'supabase/ops/merge_assigned_campaigner_production.sql'
-      - 'supabase/ops/apply_morning_report_sync_production.sql'
-      - 'supabase/ops/apply_lead_status_updates_production.sql'
-      - 'supabase/ops/recover_promo_eyal_lead_updates_production.sql'
+      - ".github/workflows/apply-sql-migration.yml"
+      - "supabase/ops/apply_lead_archive_and_home_agency.sql"
+      - "supabase/ops/apply_seo_monthly_shares.sql"
+      - "supabase/ops/fix_cross_tenant_client_task_updates.sql"
+      - "supabase/ops/fix_seo_monthly_updates_cross_tenant.sql"
+      - "supabase/ops/fix_clients_seo_keyword_relevance.sql"
+      - "supabase/ops/fix_crm_dashboards_shared_agency_writes.sql"
+      - "supabase/ops/create_cursor_dispatches.sql"
+      - "supabase/ops/create_cursor_sticky_agents.sql"
+      - "supabase/ops/create_agent_tool_embeddings.sql"
+      - "supabase/ops/fix_woocommerce_client_scoped_select.sql"
+      - "supabase/ops/fix_4_4_woocommerce_revenue_sync.sql"
+      - "supabase/ops/fix_crm_tables_ecommerce_category.sql"
+      - "supabase/ops/fix_owners_view_shared_agencies.sql"
+      - "supabase/ops/create_meeting_bot_sessions.sql"
+      - "supabase/ops/create_lead_alert_failure_notifications.sql"
+      - "supabase/ops/fix_seo_call_snapshots_cross_tenant.sql"
+      - "supabase/ops/fix_table_shares_cross_tenant.sql"
+      - "supabase/ops/fix_task_agency_and_assignment_notifications.sql"
+      - "supabase/ops/create_campaign_pulse_overrides.sql"
+      - "supabase/ops/apply_pulse_twice_daily_cadence.sql"
+      - "supabase/ops/apply_pulse_weekly_sunday_cadence.sql"
+      - "supabase/ops/apply_pulse_refresh_and_instant_alerts.sql"
+      - "supabase/ops/apply_client_retention_daily_production.sql"
+      - "supabase/ops/notify_felix_calendar_fix_ready.sql"
+      - "supabase/ops/apply_pulse_campaigner_delivery.sql"
+      - "supabase/ops/apply_pulse_production_reconcile.sql"
+      - "supabase/ops/apply_pulse_sunday_0730_david_campaigners.sql"
+      - "supabase/ops/apply_pulse_sunday_0900_dmm_delivery.sql"
+      - "supabase/ops/apply_pulse_dmm_felix_mc_david.sql"
+      - "supabase/ops/apply_pulse_goal_metrics.sql"
+      - "supabase/ops/apply_campaign_pulse_client_call_freshness.sql"
+      - "supabase/ops/apply_copywriter_inspiration_library.sql"
+      - "supabase/ops/fix_client_contacts_insert_rls.sql"
+      - "supabase/ops/fix_client_contacts_select_rls.sql"
+      - "supabase/ops/fix_client_credentials_select_rls.sql"
+      - "supabase/ops/fix_campaigner_client_delete_rls.sql"
+      - "supabase/ops/fix_team_member_report_dashboard_access.sql"
+      - "supabase/ops/apply_client_dashboard_entity_route_skin.sql"
+      - "supabase/ops/fix_owner_campaigner_rls.sql"
+      - "supabase/ops/fix_campaign_pulse_snapshots_owner_read.sql"
+      - "supabase/ops/fix_user_can_access_client_tenant_users_fallback.sql"
+      - "supabase/ops/apply_connect_client_meta_ad_account_skin.sql"
+      - "supabase/ops/apply_cursor_human_task_queue.sql"
+      - "supabase/ops/apply_optimize_clients_tasks_rls_scope.sql"
+      - "supabase/ops/apply_carmen_autonomous_goal_engine_production.sql"
+      - "supabase/ops/apply_goal_execution_and_autonomous_engine_production.sql"
+      - "supabase/ops/apply_pulse_campaign_breakdown_production.sql"
+      - "supabase/ops/apply_recurring_human_tasks_production.sql"
+      - "supabase/ops/apply_fix_duplicate_task_reminder_notifications_production.sql"
+      - "supabase/ops/merge_duplicate_user_campaigners_production.sql"
+      - "supabase/ops/merge_same_email_campaigners_production.sql"
+      - "supabase/ops/merge_assigned_campaigner_production.sql"
+      - "supabase/ops/apply_morning_report_sync_production.sql"
+      - "supabase/ops/apply_lead_status_updates_production.sql"
+      - "supabase/ops/recover_promo_eyal_lead_updates_production.sql"
 
 jobs:
   apply:

@@ -41,7 +41,13 @@ export function useResolvedGscIntegration(params: {
   expectedDomain?: string;
   enabled?: boolean;
 }): ResolvedGscIntegration {
-  const { clientId, tenantIds, savedSiteUrl, expectedDomain, enabled = true } = params;
+  const {
+    clientId,
+    tenantIds,
+    savedSiteUrl,
+    expectedDomain,
+    enabled = true,
+  } = params;
 
   const tenantsKey = (tenantIds || []).slice().sort().join(",");
   const expectedSiteUrl = savedSiteUrl || expectedDomain || "";
@@ -56,10 +62,15 @@ export function useResolvedGscIntegration(params: {
     return personalIntegrations.some((i: any) => {
       const settings = i?.settings || {};
       const mapped: string | null = settings?.client_sites?.[clientId] || null;
-      const availableSites: any[] = Array.isArray(settings?.available_sites) ? settings.available_sites : [];
+      const availableSites: any[] = Array.isArray(settings?.available_sites)
+        ? settings.available_sites
+        : [];
 
-      const meta = mapped ? availableSites.find((s: any) => s?.siteUrl === mapped) : null;
-      const mappedIsUsable = !!mapped && (!meta || meta.permissionLevel !== "siteUnverifiedUser");
+      const meta = mapped
+        ? availableSites.find((s: any) => s?.siteUrl === mapped)
+        : null;
+      const mappedIsUsable =
+        !!mapped && (!meta || meta.permissionLevel !== "siteUnverifiedUser");
 
       if (!mappedIsUsable) return false;
       // If we have an expected site, require the mapped site to match it.
@@ -70,7 +81,11 @@ export function useResolvedGscIntegration(params: {
 
   // Step 2 — fallback when no personal/shared *usable* integration exists.
   const fallbackEnabled =
-    enabled && !personalIsUsable && !isLoadingPersonal && !!clientId && !!tenantsKey;
+    enabled &&
+    !personalIsUsable &&
+    !isLoadingPersonal &&
+    !!clientId &&
+    !!tenantsKey;
 
   const { data: fallback, isLoading: isLoadingFallback } = useQuery({
     queryKey: [
@@ -83,23 +98,36 @@ export function useResolvedGscIntegration(params: {
     enabled: fallbackEnabled,
     staleTime: 5 * 60 * 1000,
     queryFn: async () => {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session) return { integrationId: null, siteUrl: null, ownerEmail: null };
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+      if (!session)
+        return { integrationId: null, siteUrl: null, ownerEmail: null };
 
-      const response = await supabase.functions.invoke("resolve-seo-gsc-integration", {
-        body: {
-          clientId,
-          tenantIds,
-          expectedSiteUrl: expectedSiteUrl || undefined,
+      const response = await supabase.functions.invoke(
+        "resolve-seo-gsc-integration",
+        {
+          body: {
+            clientId,
+            tenantIds,
+            expectedSiteUrl: expectedSiteUrl || undefined,
+          },
+          headers: { Authorization: `Bearer ${session.access_token}` },
         },
-        headers: { Authorization: `Bearer ${session.access_token}` },
-      });
+      );
 
       if (response.error) {
-        console.warn("[useResolvedGscIntegration] resolve failed:", response.error);
+        console.warn(
+          "[useResolvedGscIntegration] resolve failed:",
+          response.error,
+        );
         return { integrationId: null, siteUrl: null, ownerEmail: null };
       }
-      return (response.data || { integrationId: null, siteUrl: null, ownerEmail: null }) as {
+      return (response.data || {
+        integrationId: null,
+        siteUrl: null,
+        ownerEmail: null,
+      }) as {
         integrationId: string | null;
         siteUrl: string | null;
         ownerEmail: string | null;

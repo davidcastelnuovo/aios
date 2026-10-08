@@ -20,7 +20,12 @@ interface Props {
   onConfirm: () => void | Promise<void>;
 }
 
-export function PermanentDeleteLeadDialog({ open, count, onOpenChange, onConfirm }: Props) {
+export function PermanentDeleteLeadDialog({
+  open,
+  count,
+  onOpenChange,
+  onConfirm,
+}: Props) {
   const [phrase, setPhrase] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const canDelete = phrase.trim() === PERMANENT_DELETE_PHRASE;
@@ -44,7 +49,8 @@ export function PermanentDeleteLeadDialog({ open, count, onOpenChange, onConfirm
         </AlertDialogHeader>
         <div className="space-y-2">
           <Label htmlFor="permanent-delete-phrase">
-            הקלד <span className="font-bold">{PERMANENT_DELETE_PHRASE}</span> כדי לאשר
+            הקלד <span className="font-bold">{PERMANENT_DELETE_PHRASE}</span>{" "}
+            כדי לאשר
           </Label>
           <Input
             id="permanent-delete-phrase"

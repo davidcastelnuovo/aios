@@ -50,9 +50,13 @@ export function EditUserNameDialog({
       await syncProfileToTeamMember(userId);
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["users-with-roles", tenantId] });
+      queryClient.invalidateQueries({
+        queryKey: ["users-with-roles", tenantId],
+      });
       queryClient.invalidateQueries({ queryKey: ["campaigners", tenantId] });
-      queryClient.invalidateQueries({ queryKey: ["sales-people-all", tenantId] });
+      queryClient.invalidateQueries({
+        queryKey: ["sales-people-all", tenantId],
+      });
       toast.success("השם עודכן בהצלחה");
       onClose();
     },

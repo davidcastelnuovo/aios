@@ -37,7 +37,10 @@ test("leadSourceDisplay shows the channel, not the campaign name", () => {
     leadSourceDisplay({ campaign_name: "שיווק", source: "paid_ads" }),
     "FB",
   );
-  assert.equal(leadSourceDisplay({ campaign_name: "Promo Q3", source: "website" }), "אתר");
+  assert.equal(
+    leadSourceDisplay({ campaign_name: "Promo Q3", source: "website" }),
+    "אתר",
+  );
   assert.equal(leadSourceDisplay({ source: "other" }), "אחר");
   assert.equal(leadSourceDisplay({ source: "facebook" }), "FB");
 });
@@ -61,7 +64,10 @@ test("repeat inbound keeps the first created_at and first source", () => {
     leadArrivalSourceChanged({ source: "whatsapp", first_source: "paid_ads" }),
     true,
   );
-  assert.equal(leadArrivalSourceChanged({ source: "paid_ads", first_source: "paid_ads" }), false);
+  assert.equal(
+    leadArrivalSourceChanged({ source: "paid_ads", first_source: "paid_ads" }),
+    false,
+  );
   assert.equal(
     leadSourceFieldLabel({ source: "whatsapp", first_source: "paid_ads" }),
     "מקור הגעה מעודכן",
@@ -70,40 +76,85 @@ test("repeat inbound keeps the first created_at and first source", () => {
 });
 
 test("leadOriginTagNames creates campaign and source tags without duplicating אחר", () => {
-  assert.deepEqual(leadOriginTagNames({ campaign_name: "שיווק", source: "paid_ads" }), [
-    "שיווק",
-    "FB",
-  ]);
-  assert.deepEqual(leadOriginTagNames({ campaign_name: "  מכירות  ", source: "website" }), [
-    "מכירות",
-    "אתר",
-  ]);
-  assert.deepEqual(leadOriginTagNames({ campaign_name: "FB", source: "paid_ads" }), ["FB"]);
-  assert.deepEqual(leadOriginTagNames({ campaign_name: "סושיאל", source: "other" }), ["סושיאל"]);
-  assert.deepEqual(leadOriginTagNames({ campaign_name: "   ", source: "other" }), []);
+  assert.deepEqual(
+    leadOriginTagNames({ campaign_name: "שיווק", source: "paid_ads" }),
+    ["שיווק", "FB"],
+  );
+  assert.deepEqual(
+    leadOriginTagNames({ campaign_name: "  מכירות  ", source: "website" }),
+    ["מכירות", "אתר"],
+  );
+  assert.deepEqual(
+    leadOriginTagNames({ campaign_name: "FB", source: "paid_ads" }),
+    ["FB"],
+  );
+  assert.deepEqual(
+    leadOriginTagNames({ campaign_name: "סושיאל", source: "other" }),
+    ["סושיאל"],
+  );
+  assert.deepEqual(
+    leadOriginTagNames({ campaign_name: "   ", source: "other" }),
+    [],
+  );
   assert.deepEqual(leadOriginTagNames({ source: "referral" }), ["הפניה"]);
   assert.deepEqual(leadOriginTagNames(null), []);
 });
 
 test("ללא מענה and אין מענה resolve to no_answer_1", () => {
-  assert.equal(resolveResponseStatusKey("ללא מענה", defaultStatuses), "no_answer_1");
-  assert.equal(resolveResponseStatusKey("לא ענה", defaultStatuses), "no_answer_1");
-  assert.equal(resolveResponseStatusKey("אין מענה", defaultStatuses), "no_answer_1");
-  assert.equal(resolveResponseStatusKey("אין עמנה", defaultStatuses), "no_answer_1");
-  assert.equal(resolveResponseStatusKey("אין מענה 2", defaultStatuses), "no_answer_2");
-  assert.equal(resolveResponseStatusKey("no_answer_1", defaultStatuses), "no_answer_1");
-  assert.equal(resolveResponseStatusKey("אין מענה 1", defaultStatuses), "no_answer_1");
+  assert.equal(
+    resolveResponseStatusKey("ללא מענה", defaultStatuses),
+    "no_answer_1",
+  );
+  assert.equal(
+    resolveResponseStatusKey("לא ענה", defaultStatuses),
+    "no_answer_1",
+  );
+  assert.equal(
+    resolveResponseStatusKey("אין מענה", defaultStatuses),
+    "no_answer_1",
+  );
+  assert.equal(
+    resolveResponseStatusKey("אין עמנה", defaultStatuses),
+    "no_answer_1",
+  );
+  assert.equal(
+    resolveResponseStatusKey("אין מענה 2", defaultStatuses),
+    "no_answer_2",
+  );
+  assert.equal(
+    resolveResponseStatusKey("no_answer_1", defaultStatuses),
+    "no_answer_1",
+  );
+  assert.equal(
+    resolveResponseStatusKey("אין מענה 1", defaultStatuses),
+    "no_answer_1",
+  );
 });
 
 test("typos of לא רלוונטי resolve to not_relevant", () => {
-  assert.equal(resolveResponseStatusKey("לא רלוונטי", defaultStatuses), "not_relevant");
-  assert.equal(resolveResponseStatusKey("לא לרוונטי", defaultStatuses), "not_relevant");
-  assert.equal(resolveResponseStatusKey("לא רלווטני", defaultStatuses), "not_relevant");
+  assert.equal(
+    resolveResponseStatusKey("לא רלוונטי", defaultStatuses),
+    "not_relevant",
+  );
+  assert.equal(
+    resolveResponseStatusKey("לא לרוונטי", defaultStatuses),
+    "not_relevant",
+  );
+  assert.equal(
+    resolveResponseStatusKey("לא רלווטני", defaultStatuses),
+    "not_relevant",
+  );
 });
 
 test("response status select keeps unmatched raw values visible", () => {
-  assert.equal(responseStatusSelectValue("ללא מענה", defaultStatuses), "no_answer_1");
-  assert.equal(responseStatusSelectValue("custom_hot", defaultStatuses), "custom_hot");
+  assert.equal(
+    responseStatusSelectValue("ללא מענה", defaultStatuses),
+    "no_answer_1",
+  );
+  assert.equal(
+    responseStatusSelectValue("custom_hot", defaultStatuses),
+    "custom_hot",
+  );
   assert.equal(responseStatusSelectValue(null, defaultStatuses), "none");
 });
 
@@ -120,7 +171,11 @@ test("status column named סטטוס remaps to response_status only when purely 
     "status",
   );
   assert.equal(
-    autoDetectLeadImportField("סטטוס", ["אין מענה", "נקבעה פגישה", "הצעת מחיר"]),
+    autoDetectLeadImportField("סטטוס", [
+      "אין מענה",
+      "נקבעה פגישה",
+      "הצעת מחיר",
+    ]),
     "status",
   );
 });
@@ -158,5 +213,8 @@ test("classifyLeadImportStatus splits pipeline stages from secondary statuses", 
 
 test("unmatchedResponseStatusValue only returns values that are not in the status list", () => {
   assert.equal(unmatchedResponseStatusValue("ללא מענה", defaultStatuses), null);
-  assert.equal(unmatchedResponseStatusValue("custom_hot", defaultStatuses), "custom_hot");
+  assert.equal(
+    unmatchedResponseStatusValue("custom_hot", defaultStatuses),
+    "custom_hot",
+  );
 });

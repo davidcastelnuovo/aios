@@ -23,8 +23,17 @@ import {
 } from "./meeting-summary-prompts.ts";
 
 export type SummaryDispatch =
-  | { ok: true; conversation_id: string; session_id: string; external_url: string | null }
-  | { ok: false; reason: "not_configured" | "no_route" | "no_user" | "busy" | "error"; detail?: string };
+  | {
+      ok: true;
+      conversation_id: string;
+      session_id: string;
+      external_url: string | null;
+    }
+  | {
+      ok: false;
+      reason: "not_configured" | "no_route" | "no_user" | "busy" | "error";
+      detail?: string;
+    };
 
 export async function dispatchMeetingSummaryToCursor(
   // deno-lint-ignore no-explicit-any
@@ -49,12 +58,19 @@ export async function dispatchMeetingSummaryToCursor(
   if (!cursorApiKey()) return { ok: false, reason: "not_configured" };
 
   const route = await loadRoute(admin, args.tenantId, { slug: "cursor" });
-  if (!route || route.provider !== "cursor") return { ok: false, reason: "no_route" };
+  if (!route || route.provider !== "cursor")
+    return { ok: false, reason: "no_route" };
 
-  const userId = await resolveSummaryUserId(admin, args.tenantId, args.userId || args.createdBy);
+  const userId = await resolveSummaryUserId(
+    admin,
+    args.tenantId,
+    args.userId || args.createdBy,
+  );
   if (!userId) return { ok: false, reason: "no_user" };
 
-  const carmen = route.agent_id ? { id: route.agent_id } : await resolveCarmenAgent(admin, args.tenantId);
+  const carmen = route.agent_id
+    ? { id: route.agent_id }
+    : await resolveCarmenAgent(admin, args.tenantId);
   const title = `סיכום פגישה · ${args.targetName}`.slice(0, 60);
   const conversation = await ensureConversation(admin, {
     tenantId: args.tenantId,
@@ -71,11 +87,15 @@ export async function dispatchMeetingSummaryToCursor(
     target_name: args.targetName,
     tenant_id: args.tenantId,
     created_by: args.createdBy ?? userId,
-    client_id: args.clientId ?? (args.targetType === "client" ? args.targetId : null),
+    client_id:
+      args.clientId ?? (args.targetType === "client" ? args.targetId : null),
     brief_source: args.briefSource || "zoom_meeting",
   };
 
-  const claimKey = meetingSummaryIdempotencyKey(args.recordingId, !!args.manual);
+  const claimKey = meetingSummaryIdempotencyKey(
+    args.recordingId,
+    !!args.manual,
+  );
   const claimed = await claimSummarySend(admin, {
     tenantId: args.tenantId,
     conversationId: conversation.id,
@@ -84,7 +104,10 @@ export async function dispatchMeetingSummaryToCursor(
     manual: !!args.manual,
   });
   if (!claimed) {
-    console.log("[meeting-summary] skipped duplicate cursor dispatch", args.recordingId);
+    console.log(
+      "[meeting-summary] skipped duplicate cursor dispatch",
+      args.recordingId,
+    );
     return {
       ok: true,
       conversation_id: conversation.id,
@@ -107,7 +130,11 @@ export async function dispatchMeetingSummaryToCursor(
         history: [],
       },
       "cursor",
-      buildMeetingSummaryCursorTask(args.transcript, args.recordingInfo, args.focusPrompt || ""),
+      buildMeetingSummaryCursorTask(
+        args.transcript,
+        args.recordingInfo,
+        args.focusPrompt || "",
+      ),
       undefined,
       {
         callbackIntent: "meeting_summary",
@@ -149,7 +176,11 @@ async function claimSummarySend(
   },
 ): Promise<boolean> {
   if (args.manual) {
-    const existing = await findMessageByIdempotency(admin, args.tenantId, args.claimKey);
+    const existing = await findMessageByIdempotency(
+      admin,
+      args.tenantId,
+      args.claimKey,
+    );
     if (existing) {
       const age = Date.now() - new Date(existing.created_at).getTime();
       if (age < MANUAL_RESEND_WINDOW_MS) return false;
@@ -167,7 +198,10 @@ async function claimSummarySend(
     content: "סיכום פגישה נשלח לקרסר ישיר",
     event_type: "system",
     idempotency_key: args.claimKey,
-    metadata: { purpose: "meeting_summary_claim", recording_id: args.recordingId },
+    metadata: {
+      purpose: "meeting_summary_claim",
+      recording_id: args.recordingId,
+    },
   });
   return !duplicate;
 }

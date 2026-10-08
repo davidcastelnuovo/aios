@@ -6,31 +6,51 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
-import { Settings2, TrendingUp, Search, Share2, BarChart3, Check, CalendarDays } from "lucide-react";
+import {
+  Settings2,
+  TrendingUp,
+  Search,
+  Share2,
+  BarChart3,
+  Check,
+  CalendarDays,
+} from "lucide-react";
 import { toast } from "sonner";
 import { SeoUpdateModal } from "@/components/clients/SeoUpdateModal";
 
 // ── Constants ──────────────────────────────────────────────────────────────────
 const TIER_OPTIONS = [
-  { value: "A", label: "A — עדיפות גבוהה", color: "bg-red-100 text-red-700 border-red-300" },
-  { value: "B", label: "B — עדיפות בינונית", color: "bg-yellow-100 text-yellow-700 border-yellow-300" },
-  { value: "C", label: "C — עדיפות רגילה",  color: "bg-green-100 text-green-700 border-green-300" },
+  {
+    value: "A",
+    label: "A — עדיפות גבוהה",
+    color: "bg-red-100 text-red-700 border-red-300",
+  },
+  {
+    value: "B",
+    label: "B — עדיפות בינונית",
+    color: "bg-yellow-100 text-yellow-700 border-yellow-300",
+  },
+  {
+    value: "C",
+    label: "C — עדיפות רגילה",
+    color: "bg-green-100 text-green-700 border-green-300",
+  },
 ];
 
 const SERVICE_OPTIONS = [
-  { value: "ppc_google",  label: "PPC Google",  icon: BarChart3 },
-  { value: "ppc_meta",    label: "PPC Meta",    icon: BarChart3 },
-  { value: "seo",         label: "SEO",         icon: Search },
-  { value: "social",      label: "Social",      icon: Share2 },
+  { value: "ppc_google", label: "PPC Google", icon: BarChart3 },
+  { value: "ppc_meta", label: "PPC Meta", icon: BarChart3 },
+  { value: "seo", label: "SEO", icon: Search },
+  { value: "social", label: "Social", icon: Share2 },
   { value: "full_social", label: "Full Social", icon: Share2 },
   { value: "social_meta", label: "Social Meta", icon: Share2 },
-  { value: "automation",  label: "Automation",  icon: Settings2 },
+  { value: "automation", label: "Automation", icon: Settings2 },
 ];
 
 const SEO_STATUS_OPTIONS = [
-  { value: "up",     label: "עלייה",   color: "text-green-700" },
-  { value: "stable", label: "יציב",   color: "text-blue-700" },
-  { value: "down",   label: "ירידה",  color: "text-red-700" },
+  { value: "up", label: "עלייה", color: "text-green-700" },
+  { value: "stable", label: "יציב", color: "text-blue-700" },
+  { value: "down", label: "ירידה", color: "text-red-700" },
 ];
 
 // ── Main component ─────────────────────────────────────────────────────────────
@@ -39,7 +59,10 @@ interface CRMSettingsSectionProps {
   onUpdate?: () => void;
 }
 
-export function CRMSettingsSection({ client, onUpdate }: CRMSettingsSectionProps) {
+export function CRMSettingsSection({
+  client,
+  onUpdate,
+}: CRMSettingsSectionProps) {
   const { tenantId } = useCurrentTenant();
   const queryClient = useQueryClient();
 
@@ -51,7 +74,11 @@ export function CRMSettingsSection({ client, onUpdate }: CRMSettingsSectionProps
     const raw = (client as any).services;
     if (!raw) return [];
     if (Array.isArray(raw)) return raw;
-    try { return JSON.parse(raw); } catch { return []; }
+    try {
+      return JSON.parse(raw);
+    } catch {
+      return [];
+    }
   })();
   const hasSeo = currentServices.includes("seo");
 
@@ -68,7 +95,9 @@ export function CRMSettingsSection({ client, onUpdate }: CRMSettingsSectionProps
           .limit(3);
         if (error) return [];
         return data ?? [];
-      } catch { return []; }
+      } catch {
+        return [];
+      }
     },
     enabled: !!client.id && hasSeo,
   });
@@ -78,11 +107,15 @@ export function CRMSettingsSection({ client, onUpdate }: CRMSettingsSectionProps
   const patchClientInCache = (patch: Record<string, any>) => {
     const snapshot = queryClient.getQueriesData({ queryKey: ["clients"] });
     queryClient.setQueriesData({ queryKey: ["clients"] }, (old: any) =>
-      Array.isArray(old) ? old.map((c: any) => (c.id === client.id ? { ...c, ...patch } : c)) : old
+      Array.isArray(old)
+        ? old.map((c: any) => (c.id === client.id ? { ...c, ...patch } : c))
+        : old,
     );
     return snapshot;
   };
-  const restoreClientsCache = (snapshot: [readonly unknown[], unknown][] | undefined) => {
+  const restoreClientsCache = (
+    snapshot: [readonly unknown[], unknown][] | undefined,
+  ) => {
     snapshot?.forEach(([key, data]) => queryClient.setQueryData(key, data));
   };
 
@@ -126,7 +159,7 @@ export function CRMSettingsSection({ client, onUpdate }: CRMSettingsSectionProps
 
   function toggleService(val: string) {
     const next = currentServices.includes(val)
-      ? currentServices.filter(s => s !== val)
+      ? currentServices.filter((s) => s !== val)
       : [...currentServices, val];
     updateServicesMutation.mutate(next);
   }
@@ -134,7 +167,10 @@ export function CRMSettingsSection({ client, onUpdate }: CRMSettingsSectionProps
   // ── Render ──────────────────────────────────────────────────────────────────
   return (
     <>
-      <div className="bg-card border border-border/60 rounded-xl p-4 space-y-4 text-right shadow-sm" dir="rtl">
+      <div
+        className="bg-card border border-border/60 rounded-xl p-4 space-y-4 text-right shadow-sm"
+        dir="rtl"
+      >
         <h3 className="font-semibold text-sm flex items-center gap-2 justify-end">
           הגדרות CRM
           <Settings2 className="h-4 w-4 text-primary" />
@@ -142,9 +178,11 @@ export function CRMSettingsSection({ client, onUpdate }: CRMSettingsSectionProps
 
         {/* Tier */}
         <div className="space-y-1">
-          <Label className="text-xs text-muted-foreground">דרגת חשיבות (Tier)</Label>
+          <Label className="text-xs text-muted-foreground">
+            דרגת חשיבות (Tier)
+          </Label>
           <div className="flex gap-2 flex-wrap justify-end">
-            {TIER_OPTIONS.map(opt => (
+            {TIER_OPTIONS.map((opt) => (
               <button
                 key={opt.value}
                 onClick={() => updateTierMutation.mutate(opt.value)}
@@ -159,7 +197,7 @@ export function CRMSettingsSection({ client, onUpdate }: CRMSettingsSectionProps
             ))}
             {currentTier && (
               <span className="text-xs text-muted-foreground self-center">
-                {TIER_OPTIONS.find(o => o.value === currentTier)?.label}
+                {TIER_OPTIONS.find((o) => o.value === currentTier)?.label}
               </span>
             )}
           </div>
@@ -169,9 +207,11 @@ export function CRMSettingsSection({ client, onUpdate }: CRMSettingsSectionProps
 
         {/* Services */}
         <div className="space-y-1">
-          <Label className="text-xs text-muted-foreground">שירותים פעילים</Label>
+          <Label className="text-xs text-muted-foreground">
+            שירותים פעילים
+          </Label>
           <div className="flex gap-2 flex-wrap justify-end">
-            {SERVICE_OPTIONS.map(opt => {
+            {SERVICE_OPTIONS.map((opt) => {
               const Icon = opt.icon;
               const active = currentServices.includes(opt.value);
               return (
@@ -217,18 +257,29 @@ export function CRMSettingsSection({ client, onUpdate }: CRMSettingsSectionProps
               {seoHistory.length > 0 ? (
                 <div className="flex gap-2 flex-wrap justify-end">
                   {seoHistory.map((entry: any) => {
-                    const opt = SEO_STATUS_OPTIONS.find(o => o.value === entry.status);
+                    const opt = SEO_STATUS_OPTIONS.find(
+                      (o) => o.value === entry.status,
+                    );
                     return (
-                      <div key={entry.month} className="flex items-center gap-1 text-xs border rounded-md px-2 py-1 bg-muted/30">
+                      <div
+                        key={entry.month}
+                        className="flex items-center gap-1 text-xs border rounded-md px-2 py-1 bg-muted/30"
+                      >
                         <CalendarDays className="h-3 w-3 text-muted-foreground" />
-                        <span className="text-muted-foreground">{entry.month}</span>
-                        <span className={opt?.color ?? ""}>{opt?.label ?? entry.status}</span>
+                        <span className="text-muted-foreground">
+                          {entry.month}
+                        </span>
+                        <span className={opt?.color ?? ""}>
+                          {opt?.label ?? entry.status}
+                        </span>
                       </div>
                     );
                   })}
                 </div>
               ) : (
-                <p className="text-xs text-muted-foreground">אין עדכוני SEO עדיין</p>
+                <p className="text-xs text-muted-foreground">
+                  אין עדכוני SEO עדיין
+                </p>
               )}
             </div>
           </>

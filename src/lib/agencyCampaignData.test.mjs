@@ -57,8 +57,14 @@ test("buildClientCampaignTableData respects platform filter", () => {
       { id: "t2", client_id: "c1", integration_type: "google_ads" },
     ],
     records: [
-      { table_id: "t1", data: { date: "2026-09-10", campaign_name: "FB", spend: 10, leads: 1 } },
-      { table_id: "t2", data: { date: "2026-09-10", campaign_name: "GA", spend: 20, leads: 2 } },
+      {
+        table_id: "t1",
+        data: { date: "2026-09-10", campaign_name: "FB", spend: 10, leads: 1 },
+      },
+      {
+        table_id: "t2",
+        data: { date: "2026-09-10", campaign_name: "GA", spend: 20, leads: 2 },
+      },
     ],
     startDate: "2026-09-01",
     endDate: "2026-09-15",

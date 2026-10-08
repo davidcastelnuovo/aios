@@ -67,7 +67,10 @@ export function getDefaultFieldSize(type: SignatureFieldType) {
 }
 
 /** Font size in px scaled to field box height (% of document). */
-export function getFieldFontSizePx(position: SignaturePosition, containerHeightPx?: number): number {
+export function getFieldFontSizePx(
+  position: SignaturePosition,
+  containerHeightPx?: number,
+): number {
   const boxHeightPx = containerHeightPx
     ? (position.height / 100) * containerHeightPx
     : position.height * 8;
@@ -86,12 +89,19 @@ export function createDocumentField(
     label: type === "text" ? "" : getFieldLabel(type),
     position,
     required: type === "text" ? false : true,
-    autofill: type === "company_name" ? "company_name" : type === "full_name" || type === "first_name" || type === "last_name" ? "full_name" : "none",
+    autofill:
+      type === "company_name"
+        ? "company_name"
+        : type === "full_name" || type === "first_name" || type === "last_name"
+          ? "full_name"
+          : "none",
     recipient_index: recipientIndex,
   };
 }
 
 export function parseDocumentFields(raw: unknown): DocumentField[] {
   if (!Array.isArray(raw)) return [];
-  return raw.filter((f) => f && typeof f === "object" && f.type && f.position) as DocumentField[];
+  return raw.filter(
+    (f) => f && typeof f === "object" && f.type && f.position,
+  ) as DocumentField[];
 }

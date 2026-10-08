@@ -1,9 +1,19 @@
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { ChevronsUpDown, ChevronLeft, Search, Building2, User } from "lucide-react";
+import {
+  ChevronsUpDown,
+  ChevronLeft,
+  Search,
+  Building2,
+  User,
+} from "lucide-react";
 import { cn } from "@/lib/utils";
 import { ALL_CLIENTS_FILTER } from "@/components/marketing/clientFilter";
 
@@ -58,7 +68,11 @@ export function ClientSelector({
         .eq("tenant_id", tenantId)
         .eq("status", "active")
         .order("name"),
-      supabase.from("agencies").select("id, name").eq("tenant_id", tenantId).order("name"),
+      supabase
+        .from("agencies")
+        .select("id, name")
+        .eq("tenant_id", tenantId)
+        .order("name"),
     ]).then(([clientsRes, agenciesRes]) => {
       if (cancel) return;
       setClients((clientsRes.data ?? []) as Client[]);
@@ -70,9 +84,10 @@ export function ClientSelector({
   }, [tenantId]);
 
   const current = clients.find((c) => c.id === value);
-  const displayLabel = value === ALL_CLIENTS_FILTER
-    ? allClientsLabel
-    : current?.name ?? (allowGeneral ? generalLabel : "בחר לקוח");
+  const displayLabel =
+    value === ALL_CLIENTS_FILTER
+      ? allClientsLabel
+      : (current?.name ?? (allowGeneral ? generalLabel : "בחר לקוח"));
 
   const clientCountByAgency = useMemo(() => {
     const m = new Map<string, number>();
@@ -110,7 +125,13 @@ export function ClientSelector({
   return (
     <Popover open={open} onOpenChange={handleOpenChange}>
       <PopoverTrigger asChild>
-        <Button variant="outline" size="sm" className="min-w-[220px] justify-between" dir="rtl" disabled={disabled}>
+        <Button
+          variant="outline"
+          size="sm"
+          className="min-w-[220px] justify-between"
+          dir="rtl"
+          disabled={disabled}
+        >
           <span className="truncate">{displayLabel}</span>
           <ChevronsUpDown className="h-4 w-4 opacity-50" />
         </Button>
@@ -118,14 +139,23 @@ export function ClientSelector({
       <PopoverContent className="w-[300px] p-0" align="start" dir="rtl">
         {selectedAgency === null ? (
           <div>
-            <div className="border-b p-2 text-xs font-medium text-muted-foreground">בחר סוכנות</div>
+            <div className="border-b p-2 text-xs font-medium text-muted-foreground">
+              בחר סוכנות
+            </div>
             <div className="max-h-[320px] overflow-y-auto">
               {allowGeneral && (
                 <button
-                  className={cn("flex w-full items-center gap-2 px-3 py-2 text-sm hover:bg-muted/60", value === null && "bg-muted")}
-                  onClick={() => { onChange(null); setOpen(false); }}
+                  className={cn(
+                    "flex w-full items-center gap-2 px-3 py-2 text-sm hover:bg-muted/60",
+                    value === null && "bg-muted",
+                  )}
+                  onClick={() => {
+                    onChange(null);
+                    setOpen(false);
+                  }}
                 >
-                  <User className="h-4 w-4 text-muted-foreground" /> {generalLabel}
+                  <User className="h-4 w-4 text-muted-foreground" />{" "}
+                  {generalLabel}
                 </button>
               )}
               {allowAllClients && (
@@ -134,12 +164,17 @@ export function ClientSelector({
                     "flex w-full items-center justify-between px-3 py-2 text-sm hover:bg-muted/60",
                     value === ALL_CLIENTS_FILTER && "bg-muted",
                   )}
-                  onClick={() => { onChange(ALL_CLIENTS_FILTER); setOpen(false); }}
+                  onClick={() => {
+                    onChange(ALL_CLIENTS_FILTER);
+                    setOpen(false);
+                  }}
                 >
                   <span className="flex items-center gap-2">
                     <Building2 className="h-4 w-4" /> {allClientsLabel}
                   </span>
-                  <span className="text-xs text-muted-foreground">{clients.length}</span>
+                  <span className="text-xs text-muted-foreground">
+                    {clients.length}
+                  </span>
                 </button>
               )}
               <button
@@ -147,9 +182,12 @@ export function ClientSelector({
                 onClick={() => setSelectedAgency(ALL_AGENCY)}
               >
                 <span className="flex items-center gap-2">
-                  <Building2 className="h-4 w-4 text-muted-foreground" /> לפי סוכנות
+                  <Building2 className="h-4 w-4 text-muted-foreground" /> לפי
+                  סוכנות
                 </span>
-                <span className="text-xs text-muted-foreground">{clients.length}</span>
+                <span className="text-xs text-muted-foreground">
+                  {clients.length}
+                </span>
               </button>
               {agencies.map((a) => {
                 const count = clientCountByAgency.get(a.id) ?? 0;
@@ -164,7 +202,9 @@ export function ClientSelector({
                       <Building2 className="h-4 w-4 text-muted-foreground" />
                       {a.name}
                     </span>
-                    <span className="text-xs text-muted-foreground">{count}</span>
+                    <span className="text-xs text-muted-foreground">
+                      {count}
+                    </span>
                   </button>
                 );
               })}
@@ -174,7 +214,8 @@ export function ClientSelector({
                   onClick={() => setSelectedAgency(NO_AGENCY)}
                 >
                   <span className="flex items-center gap-2">
-                    <User className="h-4 w-4 text-muted-foreground" /> ללא סוכנות
+                    <User className="h-4 w-4 text-muted-foreground" /> ללא
+                    סוכנות
                   </span>
                   <span className="text-xs text-muted-foreground">
                     {clientCountByAgency.get(NO_AGENCY)}
@@ -186,15 +227,20 @@ export function ClientSelector({
         ) : (
           <div>
             <div className="flex items-center gap-1 border-b p-1.5">
-              <Button variant="ghost" size="sm" className="h-7 px-2" onClick={() => setSelectedAgency(null)}>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-7 px-2"
+                onClick={() => setSelectedAgency(null)}
+              >
                 <ChevronLeft className="h-4 w-4" />
               </Button>
               <span className="text-sm font-medium truncate">
                 {selectedAgency === ALL_AGENCY
                   ? "כל הלקוחות"
                   : selectedAgency === NO_AGENCY
-                  ? "ללא סוכנות"
-                  : agencies.find((a) => a.id === selectedAgency)?.name || ""}
+                    ? "ללא סוכנות"
+                    : agencies.find((a) => a.id === selectedAgency)?.name || ""}
               </span>
             </div>
             <div className="border-b p-2">
@@ -211,14 +257,16 @@ export function ClientSelector({
             </div>
             <div className="max-h-[300px] overflow-y-auto">
               {visibleClients.length === 0 ? (
-                <div className="p-4 text-sm text-muted-foreground text-center">לא נמצאו לקוחות</div>
+                <div className="p-4 text-sm text-muted-foreground text-center">
+                  לא נמצאו לקוחות
+                </div>
               ) : (
                 visibleClients.map((c) => (
                   <button
                     key={c.id}
                     className={cn(
                       "flex w-full items-center justify-between px-3 py-2 text-sm hover:bg-muted/60",
-                      value === c.id && "bg-muted"
+                      value === c.id && "bg-muted",
                     )}
                     onClick={() => {
                       onChange(c.id);

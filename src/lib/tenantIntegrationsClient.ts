@@ -10,25 +10,24 @@
  */
 
 export const GOOGLE_INTEGRATION_TYPES = new Set([
-  'google_analytics',
-  'google_search_console',
-  'google_ads',
+  "google_analytics",
+  "google_search_console",
+  "google_ads",
 ]);
 
 const SENSITIVE_SETTINGS_KEYS = [
-  'refresh_token',
-  'access_token',
-  'api_token',
-  'api_key',
-  'token',
+  "refresh_token",
+  "access_token",
+  "api_token",
+  "api_key",
+  "token",
 ] as const;
 
 /** Columns safe to fetch for Google integrations (no api_key). */
 export const CLIENT_INTEGRATION_COLUMNS =
-  'id, tenant_id, user_id, integration_type, is_active, settings, display_name, connection_visibility, shared_from_integration_id, auto_sync_enabled, last_sync_at, created_at, updated_at, instance_id, company_id, api_token_last_4';
+  "id, tenant_id, user_id, integration_type, is_active, settings, display_name, connection_visibility, shared_from_integration_id, auto_sync_enabled, last_sync_at, created_at, updated_at, instance_id, company_id, api_token_last_4";
 
-export const CLIENT_INTEGRATION_COLUMNS_WITH_API_KEY =
-  `${CLIENT_INTEGRATION_COLUMNS}, api_key`;
+export const CLIENT_INTEGRATION_COLUMNS_WITH_API_KEY = `${CLIENT_INTEGRATION_COLUMNS}, api_key`;
 
 export type TenantIntegrationRow = {
   id: string;
@@ -51,7 +50,7 @@ export type TenantIntegrationRow = {
   [key: string]: unknown;
 };
 
-export type ClientIntegration = Omit<TenantIntegrationRow, 'api_key'> & {
+export type ClientIntegration = Omit<TenantIntegrationRow, "api_key"> & {
   has_credential: boolean;
   api_key?: undefined;
   _isOwn?: boolean;
@@ -66,7 +65,7 @@ export function getClientIntegrationSelect(integrationType: string): string {
 
 export function integrationHasCredential(row: TenantIntegrationRow): boolean {
   const settings =
-    row.settings && typeof row.settings === 'object' ? row.settings : null;
+    row.settings && typeof row.settings === "object" ? row.settings : null;
 
   if (GOOGLE_INTEGRATION_TYPES.has(row.integration_type)) {
     return !!(
@@ -84,7 +83,7 @@ export function sanitizeIntegrationSettings(
   settings: Record<string, unknown> | null | undefined,
   integrationType: string,
 ): Record<string, unknown> | null {
-  if (!settings || typeof settings !== 'object') return settings ?? null;
+  if (!settings || typeof settings !== "object") return settings ?? null;
   if (!GOOGLE_INTEGRATION_TYPES.has(integrationType)) return settings;
 
   const sanitized = { ...settings };
@@ -120,7 +119,8 @@ export function toClientIntegration<T extends TenantIntegrationRow>(
 }
 
 export function isGoogleIntegrationConnected(
-  integration: { is_active?: boolean | null; has_credential?: boolean } | null | undefined,
+  integration:
+    { is_active?: boolean | null; has_credential?: boolean } | null | undefined,
 ): boolean {
   return !!(integration?.is_active && integration?.has_credential);
 }

@@ -15,25 +15,34 @@ export async function kickNextBatch(
   functionName: string,
   body: Record<string, unknown>,
 ): Promise<void> {
-  const { error } = await supabase.rpc('kick_internal_function', {
+  const { error } = await supabase.rpc("kick_internal_function", {
     p_function: functionName,
     p_body: body,
   });
   if (!error) return;
 
-  console.error(`[kick] ${functionName} rpc failed, falling back to fetch:`, error.message);
-  const supabaseUrl = Deno.env.get('SUPABASE_URL') ?? '';
-  const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '';
+  console.error(
+    `[kick] ${functionName} rpc failed, falling back to fetch:`,
+    error.message,
+  );
+  const supabaseUrl = Deno.env.get("SUPABASE_URL") ?? "";
+  const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
   const task = fetch(`${supabaseUrl}/functions/v1/${functionName}`, {
-    method: 'POST',
+    method: "POST",
     headers: {
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${serviceKey}`,
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${serviceKey}`,
     },
     body: JSON.stringify(body),
   }).catch((err) => console.error(`[kick] ${functionName} fetch failed:`, err));
 
-  const runtime = (globalThis as { EdgeRuntime?: { waitUntil: (p: Promise<unknown>) => void } }).EdgeRuntime;
+  const runtime = (
+    globalThis as { EdgeRuntime?: { waitUntil: (p: Promise<unknown>) => void } }
+  ).EdgeRuntime;
   if (runtime?.waitUntil) runtime.waitUntil(task);
-  else await Promise.race([task, new Promise((resolve) => setTimeout(resolve, 2000))]);
+  else
+    await Promise.race([
+      task,
+      new Promise((resolve) => setTimeout(resolve, 2000)),
+    ]);
 }

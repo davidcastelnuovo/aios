@@ -15,13 +15,17 @@ interface FolderLinksFieldProps {
   readOnly?: boolean;
 }
 
-export function FolderLinksField({ links, onChange, readOnly = false }: FolderLinksFieldProps) {
+export function FolderLinksField({
+  links,
+  onChange,
+  readOnly = false,
+}: FolderLinksFieldProps) {
   const [newName, setNewName] = useState("");
   const [newUrl, setNewUrl] = useState("");
 
   const handleAdd = () => {
     if (!newName.trim() || !newUrl.trim()) return;
-    
+
     // Validate URL
     try {
       new URL(newUrl);
@@ -48,13 +52,13 @@ export function FolderLinksField({ links, onChange, readOnly = false }: FolderLi
   return (
     <div className="space-y-3">
       <Label className="text-sm font-medium">קישורים</Label>
-      
+
       {/* Existing links */}
       {links.length > 0 && (
         <div className="space-y-2">
           {links.map((link, index) => (
-            <div 
-              key={index} 
+            <div
+              key={index}
               className="flex items-center gap-2 p-2 rounded-lg border bg-muted/30"
             >
               <Link className="h-4 w-4 text-muted-foreground shrink-0" />
@@ -82,7 +86,7 @@ export function FolderLinksField({ links, onChange, readOnly = false }: FolderLi
           ))}
         </div>
       )}
-      
+
       {/* Add new link form */}
       {!readOnly && (
         <div className="flex gap-2">
@@ -113,7 +117,7 @@ export function FolderLinksField({ links, onChange, readOnly = false }: FolderLi
           </Button>
         </div>
       )}
-      
+
       {links.length === 0 && readOnly && (
         <p className="text-sm text-muted-foreground">אין קישורים</p>
       )}

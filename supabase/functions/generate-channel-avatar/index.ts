@@ -22,41 +22,53 @@ serve(async (req) => {
 
     const { prompt, channelId, tenantId } = await req.json();
     if (!prompt || !channelId) {
-      return new Response(JSON.stringify({ error: "Missing prompt or channelId" }), {
-        status: 400,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+      return new Response(
+        JSON.stringify({ error: "Missing prompt or channelId" }),
+        {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        },
+      );
     }
 
     // Generate image using OpenAI Images
-    const aiResponse = await fetch("https://api.openai.com/v1/images/generations", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${OPENAI_API_KEY}`,
-        "Content-Type": "application/json",
+    const aiResponse = await fetch(
+      "https://api.openai.com/v1/images/generations",
+      {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${OPENAI_API_KEY}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          model: "gpt-image-1",
+          prompt: `A clean, modern square avatar/icon for a chat channel that works well as a small icon, on a solid white background. ${prompt}`,
+          n: 1,
+          size: "1024x1024",
+        }),
       },
-      body: JSON.stringify({
-        model: "gpt-image-1",
-        prompt: `A clean, modern square avatar/icon for a chat channel that works well as a small icon, on a solid white background. ${prompt}`,
-        n: 1,
-        size: "1024x1024",
-      }),
-    });
+    );
 
     if (!aiResponse.ok) {
       const errorText = await aiResponse.text();
       console.error("AI gateway error:", aiResponse.status, errorText);
       if (aiResponse.status === 429) {
-        return new Response(JSON.stringify({ error: "יותר מדי בקשות, נסה שוב בעוד דקה" }), {
-          status: 429,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        });
+        return new Response(
+          JSON.stringify({ error: "יותר מדי בקשות, נסה שוב בעוד דקה" }),
+          {
+            status: 429,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          },
+        );
       }
       if (aiResponse.status === 402) {
-        return new Response(JSON.stringify({ error: "נגמרו הקרדיטים, אנא הוסף קרדיטים" }), {
-          status: 402,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        });
+        return new Response(
+          JSON.stringify({ error: "נגמרו הקרדיטים, אנא הוסף קרדיטים" }),
+          {
+            status: 402,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          },
+        );
       }
       throw new Error(`AI gateway error: ${aiResponse.status}`);
     }
@@ -70,7 +82,9 @@ serve(async (req) => {
     }
 
     // Extract base64 data
-    const base64Match = imageUrl.match(/^data:image\/(png|jpeg|jpg|webp);base64,(.+)$/);
+    const base64Match = imageUrl.match(
+      /^data:image\/(png|jpeg|jpg|webp);base64,(.+)$/,
+    );
     if (!base64Match) {
       throw new Error("Invalid image format from AI");
     }
@@ -114,20 +128,19 @@ serve(async (req) => {
       throw new Error("Failed to update channel avatar");
     }
 
-    return new Response(
-      JSON.stringify({ avatar_url: urlData.publicUrl }),
-      {
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      }
-    );
+    return new Response(JSON.stringify({ avatar_url: urlData.publicUrl }), {
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
   } catch (e) {
     console.error("generate-channel-avatar error:", e);
     return new Response(
-      JSON.stringify({ error: e instanceof Error ? e.message : "Unknown error" }),
+      JSON.stringify({
+        error: e instanceof Error ? e.message : "Unknown error",
+      }),
       {
         status: 500,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
-      }
+      },
     );
   }
 });

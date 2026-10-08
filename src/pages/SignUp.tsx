@@ -4,7 +4,13 @@ import { z } from "zod";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { supabase } from "@/integrations/supabase/client";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -14,17 +20,38 @@ import { Building2, Loader2, ShieldCheck } from "lucide-react";
 import logo from "@/assets/logo.png";
 import { resolveAppHomePath } from "@/lib/appHomePath";
 
-const signUpSchema = z.object({
-  fullName: z.string().trim().min(2, "שם חייב להכיל לפחות 2 תווים").max(100, "שם ארוך מדי"),
-  phone: z.string().trim().min(9, "מספר טלפון לא תקין").max(15, "מספר טלפון לא תקין"),
-  email: z.string().trim().email("כתובת אימייל לא תקינה").max(255, "כתובת אימייל ארוכה מדי"),
-  organizationName: z.string().trim().min(2, "שם ארגון חייב להכיל לפחות 2 תווים").max(100, "שם ארגון ארוך מדי"),
-  password: z.string().min(6, "סיסמה חייבת להכיל לפחות 6 תווים").max(100, "סיסמה ארוכה מדי"),
-  confirmPassword: z.string().min(6, "סיסמה חייבת להכיל לפחות 6 תווים"),
-}).refine((data) => data.password === data.confirmPassword, {
-  message: "הסיסמאות אינן תואמות",
-  path: ["confirmPassword"],
-});
+const signUpSchema = z
+  .object({
+    fullName: z
+      .string()
+      .trim()
+      .min(2, "שם חייב להכיל לפחות 2 תווים")
+      .max(100, "שם ארוך מדי"),
+    phone: z
+      .string()
+      .trim()
+      .min(9, "מספר טלפון לא תקין")
+      .max(15, "מספר טלפון לא תקין"),
+    email: z
+      .string()
+      .trim()
+      .email("כתובת אימייל לא תקינה")
+      .max(255, "כתובת אימייל ארוכה מדי"),
+    organizationName: z
+      .string()
+      .trim()
+      .min(2, "שם ארגון חייב להכיל לפחות 2 תווים")
+      .max(100, "שם ארגון ארוך מדי"),
+    password: z
+      .string()
+      .min(6, "סיסמה חייבת להכיל לפחות 6 תווים")
+      .max(100, "סיסמה ארוכה מדי"),
+    confirmPassword: z.string().min(6, "סיסמה חייבת להכיל לפחות 6 תווים"),
+  })
+  .refine((data) => data.password === data.confirmPassword, {
+    message: "הסיסמאות אינן תואמות",
+    path: ["confirmPassword"],
+  });
 
 type SignUpFormData = z.infer<typeof signUpSchema>;
 
@@ -77,7 +104,9 @@ export default function SignUp() {
         navigate("/auth", { replace: true });
       };
 
-      const { data: { session } } = await supabase.auth.getSession();
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
       if (session?.user) {
         await goToHome(session.user.id);
         return;
@@ -92,7 +121,9 @@ export default function SignUp() {
         throw new Error("נוצר חשבון אך התחברות נכשלה. נסה להתחבר מחדש.");
       }
 
-      const { data: { session: signedInSession } } = await supabase.auth.getSession();
+      const {
+        data: { session: signedInSession },
+      } = await supabase.auth.getSession();
       if (signedInSession?.user) {
         await goToHome(signedInSession.user.id);
       } else {
@@ -139,7 +170,9 @@ export default function SignUp() {
                 disabled={isLoading}
               />
               {errors.fullName && (
-                <p className="text-sm text-destructive">{errors.fullName.message}</p>
+                <p className="text-sm text-destructive">
+                  {errors.fullName.message}
+                </p>
               )}
             </div>
 
@@ -154,7 +187,9 @@ export default function SignUp() {
                 disabled={isLoading}
               />
               {errors.phone && (
-                <p className="text-sm text-destructive">{errors.phone.message}</p>
+                <p className="text-sm text-destructive">
+                  {errors.phone.message}
+                </p>
               )}
             </div>
 
@@ -169,7 +204,9 @@ export default function SignUp() {
                 disabled={isLoading}
               />
               {errors.email && (
-                <p className="text-sm text-destructive">{errors.email.message}</p>
+                <p className="text-sm text-destructive">
+                  {errors.email.message}
+                </p>
               )}
             </div>
 
@@ -183,7 +220,9 @@ export default function SignUp() {
                 disabled={isLoading}
               />
               {errors.organizationName && (
-                <p className="text-sm text-destructive">{errors.organizationName.message}</p>
+                <p className="text-sm text-destructive">
+                  {errors.organizationName.message}
+                </p>
               )}
             </div>
 
@@ -197,7 +236,9 @@ export default function SignUp() {
                 disabled={isLoading}
               />
               {errors.password && (
-                <p className="text-sm text-destructive">{errors.password.message}</p>
+                <p className="text-sm text-destructive">
+                  {errors.password.message}
+                </p>
               )}
             </div>
 
@@ -211,7 +252,9 @@ export default function SignUp() {
                 disabled={isLoading}
               />
               {errors.confirmPassword && (
-                <p className="text-sm text-destructive">{errors.confirmPassword.message}</p>
+                <p className="text-sm text-destructive">
+                  {errors.confirmPassword.message}
+                </p>
               )}
             </div>
 
@@ -220,7 +263,10 @@ export default function SignUp() {
                 <div className="flex items-start gap-2 flex-1">
                   <ShieldCheck className="h-5 w-5 text-primary mt-0.5" />
                   <div className="space-y-1">
-                    <Label htmlFor="allow_super_admin_access" className="text-sm font-semibold cursor-pointer">
+                    <Label
+                      htmlFor="allow_super_admin_access"
+                      className="text-sm font-semibold cursor-pointer"
+                    >
                       אפשר גישת Super Admin
                     </Label>
                     <p className="text-xs text-muted-foreground">
@@ -237,11 +283,7 @@ export default function SignUp() {
               </div>
             </div>
 
-            <Button
-              type="submit"
-              className="w-full"
-              disabled={isLoading}
-            >
+            <Button type="submit" className="w-full" disabled={isLoading}>
               {isLoading ? (
                 <>
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />

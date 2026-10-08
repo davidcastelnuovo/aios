@@ -50,17 +50,28 @@ function FilePreview({
       <div className="flex items-center justify-between gap-2">
         <p className="text-sm font-medium">{label}</p>
         {resolvedUrl && (
-          <a href={resolvedUrl} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-sm text-primary hover:underline">
+          <a
+            href={resolvedUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-1 text-sm text-primary hover:underline"
+          >
             <Download className="h-4 w-4" />
             פתח
           </a>
         )}
       </div>
-      {loading && <p className="text-sm text-muted-foreground">טוען את הקובץ...</p>}
+      {loading && (
+        <p className="text-sm text-muted-foreground">טוען את הקובץ...</p>
+      )}
       {error && <p className="text-sm text-destructive">{error}</p>}
       {resolvedUrl && kind !== "other" && (
         <>
-          <SignaturePageNavigation page={page} count={pages} onChange={setPage} />
+          <SignaturePageNavigation
+            page={page}
+            count={pages}
+            onChange={setPage}
+          />
           <SignatureDocumentViewer
             fileUrl={resolvedUrl}
             mediaKind={kind}
@@ -72,7 +83,12 @@ function FilePreview({
         </>
       )}
       {resolvedUrl && kind === "other" && (
-        <a href={resolvedUrl} target="_blank" rel="noopener noreferrer" className="text-sm text-primary underline">
+        <a
+          href={resolvedUrl}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="text-sm text-primary underline"
+        >
           {label}
         </a>
       )}
@@ -95,12 +111,20 @@ function AssociateSignature({
     queryKey: ["signature-linked-name", doc.lead_id, doc.client_id],
     queryFn: async () => {
       if (doc.lead_id) {
-        const { data, error } = await supabase.from("leads").select("contact_name, company_name").eq("id", doc.lead_id).maybeSingle();
+        const { data, error } = await supabase
+          .from("leads")
+          .select("contact_name, company_name")
+          .eq("id", doc.lead_id)
+          .maybeSingle();
         if (error) throw error;
         return data?.contact_name || data?.company_name || "ליד";
       }
       if (doc.client_id) {
-        const { data, error } = await supabase.from("clients").select("name").eq("id", doc.client_id).maybeSingle();
+        const { data, error } = await supabase
+          .from("clients")
+          .select("name")
+          .eq("id", doc.client_id)
+          .maybeSingle();
         if (error) throw error;
         return data?.name || "לקוח";
       }
@@ -116,8 +140,19 @@ function AssociateSignature({
       if (!tenantId) return [];
       const safe = term.replace(/[%_,]/g, "");
       const [leads, clients] = await Promise.all([
-        supabase.from("leads").select("id, contact_name, company_name").eq("tenant_id", tenantId).is("archived_at", null).or(`contact_name.ilike.%${safe}%,company_name.ilike.%${safe}%`).limit(6),
-        supabase.from("clients").select("id, name").eq("tenant_id", tenantId).ilike("name", `%${safe}%`).limit(6),
+        supabase
+          .from("leads")
+          .select("id, contact_name, company_name")
+          .eq("tenant_id", tenantId)
+          .is("archived_at", null)
+          .or(`contact_name.ilike.%${safe}%,company_name.ilike.%${safe}%`)
+          .limit(6),
+        supabase
+          .from("clients")
+          .select("id, name")
+          .eq("tenant_id", tenantId)
+          .ilike("name", `%${safe}%`)
+          .limit(6),
       ]);
       if (leads.error) throw leads.error;
       if (clients.error) throw clients.error;
@@ -139,16 +174,24 @@ function AssociateSignature({
 
   const link = useMutation({
     mutationFn: async (target: { kind: "lead" | "client"; id: string }) => {
-      const patch = target.kind === "lead"
-        ? { lead_id: target.id, client_id: null }
-        : { client_id: target.id, lead_id: null };
-      const { error } = await supabase.from("signature_documents").update(patch).eq("id", doc.id);
+      const patch =
+        target.kind === "lead"
+          ? { lead_id: target.id, client_id: null }
+          : { client_id: target.id, lead_id: null };
+      const { error } = await supabase
+        .from("signature_documents")
+        .update(patch)
+        .eq("id", doc.id);
       if (error) throw error;
     },
     onSuccess: () => {
       toast.success("המסמך שויך");
-      queryClient.invalidateQueries({ queryKey: ["signature-documents", tenantId] });
-      queryClient.invalidateQueries({ queryKey: ["signature-document", doc.id] });
+      queryClient.invalidateQueries({
+        queryKey: ["signature-documents", tenantId],
+      });
+      queryClient.invalidateQueries({
+        queryKey: ["signature-document", doc.id],
+      });
       setQuery("");
     },
     onError: (err: Error) => toast.error(err.message),
@@ -161,7 +204,11 @@ function AssociateSignature({
   return (
     <div className="space-y-2">
       <p className="text-sm text-muted-foreground">המסמך לא משויך</p>
-      <Input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="חפש ליד או לקוח לשיוך" />
+      <Input
+        value={query}
+        onChange={(event) => setQuery(event.target.value)}
+        placeholder="חפש ליד או לקוח לשיוך"
+      />
       {isFetching && <p className="text-xs text-muted-foreground">מחפש...</p>}
       <div className="space-y-1">
         {matches.map((match) => (
@@ -174,7 +221,9 @@ function AssociateSignature({
             onClick={() => link.mutate(match)}
           >
             <span>{match.label}</span>
-            <Badge variant="secondary">{match.kind === "lead" ? "ליד" : "לקוח"}</Badge>
+            <Badge variant="secondary">
+              {match.kind === "lead" ? "ליד" : "לקוח"}
+            </Badge>
           </Button>
         ))}
       </div>
@@ -200,16 +249,33 @@ export function SignedSignatureReview({
         ) : (
           <div className="space-y-2">
             {signers.map((signer) => (
-              <div key={signer.id} className="flex items-center justify-between gap-3 rounded-lg border p-3">
+              <div
+                key={signer.id}
+                className="flex items-center justify-between gap-3 rounded-lg border p-3"
+              >
                 <div>
                   <p className="text-sm font-medium">{signer.name}</p>
-                  <p className="text-xs text-muted-foreground">{signer.email}</p>
+                  <p className="text-xs text-muted-foreground">
+                    {signer.email}
+                  </p>
                   {signer.signed_at && (
-                    <p className="text-xs text-muted-foreground">{format(new Date(signer.signed_at), "dd/MM/yyyy HH:mm")}</p>
+                    <p className="text-xs text-muted-foreground">
+                      {format(new Date(signer.signed_at), "dd/MM/yyyy HH:mm")}
+                    </p>
                   )}
                 </div>
-                <Badge className={signer.status === "signed" ? "bg-green-100 text-green-800" : "bg-yellow-100 text-yellow-800"}>
-                  {signer.status === "signed" ? "חתם" : signer.status === "declined" ? "סירב" : "ממתין"}
+                <Badge
+                  className={
+                    signer.status === "signed"
+                      ? "bg-green-100 text-green-800"
+                      : "bg-yellow-100 text-yellow-800"
+                  }
+                >
+                  {signer.status === "signed"
+                    ? "חתם"
+                    : signer.status === "declined"
+                      ? "סירב"
+                      : "ממתין"}
                 </Badge>
               </div>
             ))}
@@ -224,7 +290,9 @@ export function SignedSignatureReview({
         {doc.signed_file_url ? (
           <FilePreview label="מסמך חתום" path={doc.signed_file_url} forcePdf />
         ) : (
-          <p className="text-sm text-muted-foreground">הקובץ החתום עדיין נוצר. הרשימה תתעדכן בעוד רגע.</p>
+          <p className="text-sm text-muted-foreground">
+            הקובץ החתום עדיין נוצר. הרשימה תתעדכן בעוד רגע.
+          </p>
         )}
       </div>
 
@@ -233,7 +301,9 @@ export function SignedSignatureReview({
         {doc.file_url ? (
           <FilePreview label="מסמך מקורי" path={doc.file_url} />
         ) : doc.content ? (
-          <div className="whitespace-pre-wrap text-sm bg-muted/50 p-4 rounded-lg max-h-60 overflow-y-auto">{doc.content}</div>
+          <div className="whitespace-pre-wrap text-sm bg-muted/50 p-4 rounded-lg max-h-60 overflow-y-auto">
+            {doc.content}
+          </div>
         ) : (
           <p className="text-sm text-muted-foreground">אין מסמך מקורי</p>
         )}

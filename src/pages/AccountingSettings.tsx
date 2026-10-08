@@ -5,10 +5,22 @@ import { useCurrentTenant } from "@/hooks/useCurrentTenant";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 import { Switch } from "@/components/ui/switch";
 import { toast } from "sonner";
-import { Loader2, Link as LinkIcon, CheckCircle2, XCircle, ArrowRight } from "lucide-react";
+import {
+  Loader2,
+  Link as LinkIcon,
+  CheckCircle2,
+  XCircle,
+  ArrowRight,
+} from "lucide-react";
 import { useTenantPath } from "@/hooks/useTenantPath";
 import { useNavigate } from "react-router-dom";
 
@@ -26,7 +38,7 @@ export default function AccountingSettings() {
     queryKey: ["tenant-integration", tenantId, "sumit"],
     queryFn: async () => {
       if (!tenantId) return null;
-      
+
       const { data, error } = await supabase
         .from("tenant_integrations")
         .select("*")
@@ -61,19 +73,19 @@ export default function AccountingSettings() {
 
         if (error) throw error;
       } else {
-        const { error } = await supabase
-          .from("tenant_integrations")
-          .insert({
-            tenant_id: tenantId,
-            integration_type: "sumit",
-            ...data,
-          });
+        const { error } = await supabase.from("tenant_integrations").insert({
+          tenant_id: tenantId,
+          integration_type: "sumit",
+          ...data,
+        });
 
         if (error) throw error;
       }
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["tenant-integration", tenantId] });
+      queryClient.invalidateQueries({
+        queryKey: ["tenant-integration", tenantId],
+      });
       toast.success("הגדרות האינטגרציה עודכנו בהצלחה");
     },
     onError: (error) => {
@@ -92,8 +104,8 @@ export default function AccountingSettings() {
     try {
       // TODO: Implement actual Sumit API test
       // For now, just simulate a test
-      await new Promise(resolve => setTimeout(resolve, 1500));
-      
+      await new Promise((resolve) => setTimeout(resolve, 1500));
+
       toast.success("החיבור ל-Sumit הצליח!");
       await updateIntegration.mutateAsync({
         api_key: apiKey,
@@ -146,7 +158,10 @@ export default function AccountingSettings() {
             חבר את המערכת לתוכנת הנהלת החשבונות שלך
           </p>
         </div>
-        <Button variant="outline" onClick={() => navigate(buildPath("integrations"))}>
+        <Button
+          variant="outline"
+          onClick={() => navigate(buildPath("integrations"))}
+        >
           <ArrowRight className="h-4 w-4 ml-2" />
           חזרה לאינטגרציות
         </Button>
@@ -210,14 +225,18 @@ export default function AccountingSettings() {
                 disabled={isTestingConnection || !apiKey || !companyId}
                 variant="outline"
               >
-                {isTestingConnection && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                {isTestingConnection && (
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                )}
                 בדוק חיבור
               </Button>
               <Button
                 onClick={handleSaveSettings}
                 disabled={updateIntegration.isPending}
               >
-                {updateIntegration.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                {updateIntegration.isPending && (
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                )}
                 שמור הגדרות
               </Button>
             </div>
@@ -241,7 +260,8 @@ export default function AccountingSettings() {
 
               {integration.last_sync_at && (
                 <p className="text-sm text-muted-foreground">
-                  סנכרון אחרון: {new Date(integration.last_sync_at).toLocaleString("he-IL")}
+                  סנכרון אחרון:{" "}
+                  {new Date(integration.last_sync_at).toLocaleString("he-IL")}
                 </p>
               )}
             </div>

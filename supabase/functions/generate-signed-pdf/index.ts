@@ -1,20 +1,23 @@
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.75.0';
-import { PDFDocument, rgb, StandardFonts } from 'https://esm.sh/pdf-lib@1.17.1';
-import fontkit from 'https://esm.sh/@pdf-lib/fontkit@1.0.0';
-import { signatureStoragePath } from '../_shared/signature-storage.ts';
-import { formatSignatureDateValue } from '../_shared/signature-field-text.ts';
-import { corsHeaders } from '../_shared/cors.ts';
-import { emailSignedDocumentCopies, saveSignedPdfToEntity } from '../_shared/signature-automation.ts';
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2.75.0";
+import { PDFDocument, rgb, StandardFonts } from "https://esm.sh/pdf-lib@1.17.1";
+import fontkit from "https://esm.sh/@pdf-lib/fontkit@1.0.0";
+import { signatureStoragePath } from "../_shared/signature-storage.ts";
+import { formatSignatureDateValue } from "../_shared/signature-field-text.ts";
+import { corsHeaders } from "../_shared/cors.ts";
+import {
+  emailSignedDocumentCopies,
+  saveSignedPdfToEntity,
+} from "../_shared/signature-automation.ts";
 import {
   buildCertificateId,
   renderAiosStampPng,
   renderBusinessStampPng,
   renderCertificateCardPng,
   renderSignatureFieldPng,
-} from '../_shared/aios-stamp.ts';
+} from "../_shared/aios-stamp.ts";
 
 const UI_FONT_URL =
-  'https://cdn.jsdelivr.net/npm/dejavu-fonts-ttf@2.37.3/ttf/DejaVuSans.ttf';
+  "https://cdn.jsdelivr.net/npm/dejavu-fonts-ttf@2.37.3/ttf/DejaVuSans.ttf";
 
 interface SignaturePosition {
   x: number;
@@ -46,7 +49,7 @@ interface RecipientRow {
 }
 
 function decodeBase64Png(dataUrl: string): Uint8Array {
-  const base64 = dataUrl.includes(',') ? dataUrl.split(',')[1] : dataUrl;
+  const base64 = dataUrl.includes(",") ? dataUrl.split(",")[1] : dataUrl;
   const binary = atob(base64);
   const bytes = new Uint8Array(binary.length);
   for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
@@ -65,12 +68,17 @@ async function fetchDocumentBytes(
   tenantId: string,
 ): Promise<Uint8Array> {
   const storagePath = signatureStoragePath(fileUrl, tenantId);
-  if (!storagePath && (fileUrl.startsWith('http://') || fileUrl.startsWith('https://'))) {
+  if (
+    !storagePath &&
+    (fileUrl.startsWith("http://") || fileUrl.startsWith("https://"))
+  ) {
     return fetchFileBytes(fileUrl);
   }
 
-  const { data, error } = await supabase.storage.from('signature-documents').download(storagePath!);
-  if (error || !data) throw error || new Error('failed_to_download_document');
+  const { data, error } = await supabase.storage
+    .from("signature-documents")
+    .download(storagePath!);
+  if (error || !data) throw error || new Error("failed_to_download_document");
   return new Uint8Array(await data.arrayBuffer());
 }
 
@@ -128,7 +136,10 @@ async function drawSignatureOnPage(
     try {
       const stamp = await pdfDoc.embedPng(businessStampPng);
       const stampW = sigWidth * 0.92;
-      const stampH = Math.min(sigHeight * 0.85, (stamp.height / stamp.width) * stampW);
+      const stampH = Math.min(
+        sigHeight * 0.85,
+        (stamp.height / stamp.width) * stampW,
+      );
       page.drawImage(stamp, {
         x: x + (sigWidth - stampW) / 2,
         y: y + (sigHeight - stampH) / 2,
@@ -137,7 +148,7 @@ async function drawSignatureOnPage(
         opacity: 0.9,
       });
     } catch (err) {
-      console.warn('[generate-signed-pdf] business stamp embed failed', err);
+      console.warn("[generate-signed-pdf] business stamp embed failed", err);
     }
   }
 
@@ -162,18 +173,40 @@ async function drawTextOnPage(
   const prepared = text;
   const preferredSize = Math.min(12, Math.max(3, boxHeight * 0.55));
   const textWidth = font.widthOfTextAtSize(prepared, preferredSize);
-  const fontSize = textWidth > boxWidth ? preferredSize * boxWidth / textWidth : preferredSize;
+  const fontSize =
+    textWidth > boxWidth
+      ? (preferredSize * boxWidth) / textWidth
+      : preferredSize;
   if (/[\u0590-\u05FF]/.test(text)) {
-    const image = await pdfDoc.embedPng(await renderSignatureFieldPng(text, boxWidth, boxHeight, fontSize, "right"));
-    page.drawImage(image, { x, y: pageHeight - (position.y / 100) * pageHeight - boxHeight, width: boxWidth, height: boxHeight });
+    const image = await pdfDoc.embedPng(
+      await renderSignatureFieldPng(
+        text,
+        boxWidth,
+        boxHeight,
+        fontSize,
+        "right",
+      ),
+    );
+    page.drawImage(image, {
+      x,
+      y: pageHeight - (position.y / 100) * pageHeight - boxHeight,
+      width: boxWidth,
+      height: boxHeight,
+    });
     return;
   }
   const drawnWidth = font.widthOfTextAtSize(prepared, fontSize);
   const textX = x + Math.max(0, boxWidth - drawnWidth);
   try {
-    page.drawText(prepared, { x: textX, y, size: fontSize, font, color: rgb(0, 0, 0) });
+    page.drawText(prepared, {
+      x: textX,
+      y,
+      size: fontSize,
+      font,
+      color: rgb(0, 0, 0),
+    });
   } catch {
-    page.drawText(prepared.replace(/[^\x20-\x7E]/g, '?') || '?', {
+    page.drawText(prepared.replace(/[^\x20-\x7E]/g, "?") || "?", {
       x: textX,
       y,
       size: fontSize,
@@ -183,35 +216,47 @@ async function drawTextOnPage(
   }
 }
 
-async function buildSignedPdf(doc: {
-  id: string;
-  title: string;
-  content: string | null;
-  file_url: string | null;
-  document_type: string;
-  document_fields?: DocumentField[] | null;
-  client_id?: string | null;
-  lead_id?: string | null;
-  business_stamp_name?: string | null;
-  business_stamp_company_id?: string | null;
-  tenant_id?: string;
-}, recipients: RecipientRow[], supabase: ReturnType<typeof createClient>): Promise<Uint8Array> {
-  const signedRecipients = recipients.filter((r) => r.status === 'signed');
+async function buildSignedPdf(
+  doc: {
+    id: string;
+    title: string;
+    content: string | null;
+    file_url: string | null;
+    document_type: string;
+    document_fields?: DocumentField[] | null;
+    client_id?: string | null;
+    lead_id?: string | null;
+    business_stamp_name?: string | null;
+    business_stamp_company_id?: string | null;
+    tenant_id?: string;
+  },
+  recipients: RecipientRow[],
+  supabase: ReturnType<typeof createClient>,
+): Promise<Uint8Array> {
+  const signedRecipients = recipients.filter((r) => r.status === "signed");
   let pdfDoc: PDFDocument;
 
   if (doc.file_url && isPdfFile(doc.file_url)) {
-    const pdfBytes = await fetchDocumentBytes(supabase, doc.file_url, doc.tenant_id!);
+    const pdfBytes = await fetchDocumentBytes(
+      supabase,
+      doc.file_url,
+      doc.tenant_id!,
+    );
     pdfDoc = await PDFDocument.load(pdfBytes);
   } else if (doc.file_url && isImageFile(doc.file_url)) {
-    const imageBytes = await fetchDocumentBytes(supabase, doc.file_url, doc.tenant_id!);
+    const imageBytes = await fetchDocumentBytes(
+      supabase,
+      doc.file_url,
+      doc.tenant_id!,
+    );
     pdfDoc = await PDFDocument.create();
     const page = pdfDoc.addPage([595, 842]);
     const { width, height } = page.getSize();
     const lower = doc.file_url.toLowerCase();
     let embedded;
-    if (lower.includes('.png')) {
+    if (lower.includes(".png")) {
       embedded = await pdfDoc.embedPng(imageBytes);
-    } else if (lower.includes('.jpg') || lower.includes('.jpeg')) {
+    } else if (lower.includes(".jpg") || lower.includes(".jpeg")) {
       embedded = await pdfDoc.embedJpg(imageBytes);
     } else {
       try {
@@ -234,37 +279,50 @@ async function buildSignedPdf(doc: {
     const page = pdfDoc.addPage([595, 842]);
     const font = await embedFieldFont(pdfDoc);
     const { height } = page.getSize();
-    const title = doc.title || 'Document';
+    const title = doc.title || "Document";
     if (/[\u0590-\u05FF]/.test(title)) {
-      const size = Math.min(18, 18 * 495 / font.widthOfTextAtSize(title, 18));
-      const image = await pdfDoc.embedPng(await renderSignatureFieldPng(title, 495, 30, size));
+      const size = Math.min(18, (18 * 495) / font.widthOfTextAtSize(title, 18));
+      const image = await pdfDoc.embedPng(
+        await renderSignatureFieldPng(title, 495, 30, size),
+      );
       page.drawImage(image, { x: 50, y: height - 70, width: 495, height: 30 });
-    } else page.drawText(title, {
-      x: 50,
-      y: height - 60,
-      size: 18,
-      font,
-      color: rgb(0, 0, 0),
-    });
+    } else
+      page.drawText(title, {
+        x: 50,
+        y: height - 60,
+        size: 18,
+        font,
+        color: rgb(0, 0, 0),
+      });
   }
 
   let fallbackIndex = 0;
-  const docFields = Array.isArray(doc.document_fields) ? doc.document_fields : [];
+  const docFields = Array.isArray(doc.document_fields)
+    ? doc.document_fields
+    : [];
   const textFont = await embedFieldFont(pdfDoc);
 
-  let fallbackBusinessName = (doc.business_stamp_name || '').trim();
-  let companyId = (doc.business_stamp_company_id || '').trim();
+  let fallbackBusinessName = (doc.business_stamp_name || "").trim();
+  let companyId = (doc.business_stamp_company_id || "").trim();
   if (!fallbackBusinessName && doc.client_id) {
-    const { data: client } = await supabase.from('clients').select('name').eq('id', doc.client_id).maybeSingle();
-    fallbackBusinessName = (client?.name || '').trim();
+    const { data: client } = await supabase
+      .from("clients")
+      .select("name")
+      .eq("id", doc.client_id)
+      .maybeSingle();
+    fallbackBusinessName = (client?.name || "").trim();
   }
   if (!fallbackBusinessName && doc.lead_id) {
     const { data: lead } = await supabase
-      .from('leads')
-      .select('company_name, contact_name')
-      .eq('id', doc.lead_id)
+      .from("leads")
+      .select("company_name, contact_name")
+      .eq("id", doc.lead_id)
       .maybeSingle();
-    fallbackBusinessName = (lead?.company_name || lead?.contact_name || '').trim();
+    fallbackBusinessName = (
+      lead?.company_name ||
+      lead?.contact_name ||
+      ""
+    ).trim();
   }
 
   for (const recipient of signedRecipients) {
@@ -272,16 +330,20 @@ async function buildSignedPdf(doc: {
     const values = recipient.field_values ?? {};
 
     let recipientCompanyId = values.__stamp_company_id || companyId;
-    let recipientCompanyName = values.__stamp_name || '';
+    let recipientCompanyName = values.__stamp_name || "";
     for (const field of docFields) {
       if ((field.recipient_index ?? 0) !== recipientIndex) continue;
       const filled = values[field.id]?.trim();
       if (!filled) continue;
-      if (field.type === 'id_number') recipientCompanyId = filled;
-      if (field.type === 'company_name') recipientCompanyName = filled;
+      if (field.type === "id_number") recipientCompanyId = filled;
+      if (field.type === "company_name") recipientCompanyName = filled;
     }
 
-    const stampName = (recipientCompanyName || fallbackBusinessName || '').trim();
+    const stampName = (
+      recipientCompanyName ||
+      fallbackBusinessName ||
+      ""
+    ).trim();
 
     if (docFields.length > 0) {
       for (const field of docFields) {
@@ -290,14 +352,14 @@ async function buildSignedPdf(doc: {
         if (!value) continue;
         const pageIndex = Math.max(0, (field.position?.page ?? 1) - 1);
 
-        if (field.type === 'signature' || field.type === 'signature_stamp') {
+        if (field.type === "signature" || field.type === "signature_stamp") {
           const pngBytes = decodeBase64Png(value);
-          const withStamp = field.type === 'signature_stamp' && !!stampName;
+          const withStamp = field.type === "signature_stamp" && !!stampName;
           const businessStampPng = withStamp
             ? await renderBusinessStampPng({
-              businessName: stampName,
-              companyId: recipientCompanyId || null,
-            })
+                businessName: stampName,
+                companyId: recipientCompanyId || null,
+              })
             : null;
           await drawSignatureOnPage(
             pdfDoc,
@@ -308,15 +370,32 @@ async function buildSignedPdf(doc: {
             businessStampPng,
           );
         } else {
-          const printed = field.type === 'date' ? formatSignatureDateValue(value) : value;
-          await drawTextOnPage(pdfDoc, pageIndex, printed, field.position, textFont);
+          const printed =
+            field.type === "date" ? formatSignatureDateValue(value) : value;
+          await drawTextOnPage(
+            pdfDoc,
+            pageIndex,
+            printed,
+            field.position,
+            textFont,
+          );
         }
       }
     }
-    if (!docFields.some((field) => (field.recipient_index ?? 0) === recipientIndex && (field.type === 'signature' || field.type === 'signature_stamp')) && recipient.signature_data) {
+    if (
+      !docFields.some(
+        (field) =>
+          (field.recipient_index ?? 0) === recipientIndex &&
+          (field.type === "signature" || field.type === "signature_stamp"),
+      ) &&
+      recipient.signature_data
+    ) {
       // Legacy single-signature docs: no company stamp (use signature_stamp field for that).
       const pngBytes = decodeBase64Png(recipient.signature_data);
-      const pageIndex = Math.max(0, (recipient.signature_position?.page ?? 1) - 1);
+      const pageIndex = Math.max(
+        0,
+        (recipient.signature_position?.page ?? 1) - 1,
+      );
       await drawSignatureOnPage(
         pdfDoc,
         pageIndex,
@@ -400,74 +479,113 @@ async function buildSignedPdf(doc: {
   return await pdfDoc.save();
 }
 
-const responseHeaders = { ...corsHeaders, 'Content-Type': 'application/json', 'Cache-Control': 'no-store' };
+const responseHeaders = {
+  ...corsHeaders,
+  "Content-Type": "application/json",
+  "Cache-Control": "no-store",
+};
 
 Deno.serve(async (req) => {
-  if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
+  if (req.method === "OPTIONS")
+    return new Response("ok", { headers: corsHeaders });
 
   try {
-    const authHeader = req.headers.get('Authorization') ?? '';
-    const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '';
-    const bearer = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : authHeader;
+    const authHeader = req.headers.get("Authorization") ?? "";
+    const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
+    const bearer = authHeader.startsWith("Bearer ")
+      ? authHeader.slice(7)
+      : authHeader;
     if (!serviceKey || bearer !== serviceKey) {
-      return new Response(JSON.stringify({ error: 'unauthorized' }), { status: 401, headers: responseHeaders });
+      return new Response(JSON.stringify({ error: "unauthorized" }), {
+        status: 401,
+        headers: responseHeaders,
+      });
     }
 
     const { documentId } = await req.json();
     if (!documentId) {
-      return new Response(JSON.stringify({ error: 'missing_document_id' }), { status: 400, headers: responseHeaders });
+      return new Response(JSON.stringify({ error: "missing_document_id" }), {
+        status: 400,
+        headers: responseHeaders,
+      });
     }
 
     const supabase = createClient(
-      Deno.env.get('SUPABASE_URL') ?? '',
+      Deno.env.get("SUPABASE_URL") ?? "",
       serviceKey,
     );
 
     const { data: doc, error: docError } = await supabase
-      .from('signature_documents')
-      .select('id, title, content, file_url, document_type, tenant_id, status, document_fields, lead_id, client_id, saved_to_entity_at, business_stamp_name, business_stamp_company_id, created_by')
-      .eq('id', documentId)
+      .from("signature_documents")
+      .select(
+        "id, title, content, file_url, document_type, tenant_id, status, document_fields, lead_id, client_id, saved_to_entity_at, business_stamp_name, business_stamp_company_id, created_by",
+      )
+      .eq("id", documentId)
       .maybeSingle();
 
     if (docError || !doc) {
-      return new Response(JSON.stringify({ error: 'document_not_found' }), { status: 404, headers: responseHeaders });
+      return new Response(JSON.stringify({ error: "document_not_found" }), {
+        status: 404,
+        headers: responseHeaders,
+      });
     }
 
-    if (doc.status !== 'completed') {
-      return new Response(JSON.stringify({ error: 'document_not_completed' }), { status: 400, headers: responseHeaders });
+    if (doc.status !== "completed") {
+      return new Response(JSON.stringify({ error: "document_not_completed" }), {
+        status: 400,
+        headers: responseHeaders,
+      });
     }
 
     const { data: recipients, error: recError } = await supabase
-      .from('signature_recipients')
-      .select('id, name, email, signature_data, signature_position, signed_at, status, sign_order, field_values')
-      .eq('document_id', documentId)
-      .order('sign_order');
+      .from("signature_recipients")
+      .select(
+        "id, name, email, signature_data, signature_position, signed_at, status, sign_order, field_values",
+      )
+      .eq("document_id", documentId)
+      .order("sign_order");
 
     if (recError) throw recError;
-    if (!recipients?.length || recipients.some((recipient) => recipient.status !== 'signed')) {
-      return new Response(JSON.stringify({ error: 'document_not_fully_signed' }), { status: 400, headers: responseHeaders });
+    if (
+      !recipients?.length ||
+      recipients.some((recipient) => recipient.status !== "signed")
+    ) {
+      return new Response(
+        JSON.stringify({ error: "document_not_fully_signed" }),
+        { status: 400, headers: responseHeaders },
+      );
     }
 
-    const pdfBytes = await buildSignedPdf(doc, recipients as RecipientRow[], supabase);
+    const pdfBytes = await buildSignedPdf(
+      doc,
+      recipients as RecipientRow[],
+      supabase,
+    );
     const storagePath = `${doc.tenant_id}/signed/${documentId}.pdf`;
 
     const { error: uploadError } = await supabase.storage
-      .from('signature-documents')
-      .upload(storagePath, pdfBytes, { contentType: 'application/pdf', upsert: true });
+      .from("signature-documents")
+      .upload(storagePath, pdfBytes, {
+        contentType: "application/pdf",
+        upsert: true,
+      });
 
     if (uploadError) throw uploadError;
 
     const { error: updateError } = await supabase
-      .from('signature_documents')
-      .update({ signed_file_url: storagePath, updated_at: new Date().toISOString() })
-      .eq('id', documentId);
+      .from("signature_documents")
+      .update({
+        signed_file_url: storagePath,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", documentId);
 
     if (updateError) throw updateError;
 
-    await supabase.rpc('log_signature_event', {
+    await supabase.rpc("log_signature_event", {
       _document_id: documentId,
       _recipient_id: null,
-      _event_type: 'pdf_generated',
+      _event_type: "pdf_generated",
       _ip: null,
       _metadata: { path: storagePath },
     });
@@ -478,10 +596,13 @@ Deno.serve(async (req) => {
         title: doc.title,
         createdBy: doc.created_by,
         pdfBytes,
-        recipients: recipients.map((recipient) => ({ name: recipient.name, email: recipient.email })),
+        recipients: recipients.map((recipient) => ({
+          name: recipient.name,
+          email: recipient.email,
+        })),
       });
     } catch (mailErr) {
-      console.error('[generate-signed-pdf] signed copy email failed', mailErr);
+      console.error("[generate-signed-pdf] signed copy email failed", mailErr);
     }
 
     if (!doc.saved_to_entity_at && (doc.lead_id || doc.client_id)) {
@@ -495,17 +616,20 @@ Deno.serve(async (req) => {
           clientId: doc.client_id,
         });
       } catch (saveErr) {
-        console.error('[generate-signed-pdf] entity save failed', saveErr);
+        console.error("[generate-signed-pdf] entity save failed", saveErr);
       }
     }
 
-    return new Response(
-      JSON.stringify({ success: true, path: storagePath }),
-      { status: 200, headers: responseHeaders },
-    );
+    return new Response(JSON.stringify({ success: true, path: storagePath }), {
+      status: 200,
+      headers: responseHeaders,
+    });
   } catch (e: unknown) {
-    console.error('[generate-signed-pdf]', e);
+    console.error("[generate-signed-pdf]", e);
     const message = e instanceof Error ? e.message : String(e);
-    return new Response(JSON.stringify({ error: message }), { status: 500, headers: responseHeaders });
+    return new Response(JSON.stringify({ error: message }), {
+      status: 500,
+      headers: responseHeaders,
+    });
   }
 });

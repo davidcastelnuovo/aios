@@ -7,21 +7,21 @@ import { Badge } from "@/components/ui/badge";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { 
-  CheckCircle2, 
-  Circle, 
-  Calendar, 
-  User, 
-  Plus, 
-  Clock, 
-  CheckCheck, 
+import {
+  CheckCircle2,
+  Circle,
+  Calendar,
+  User,
+  Plus,
+  Clock,
+  CheckCheck,
   MessageSquare,
   Send,
   Loader2,
   Pencil,
   Trash2,
   X,
-  Check
+  Check,
 } from "lucide-react";
 import { format } from "date-fns";
 import { he } from "date-fns/locale";
@@ -55,14 +55,16 @@ export function LeadUpdatesTab({ leadId, leadName }: LeadUpdatesTabProps) {
     queryFn: async () => {
       let query = supabase
         .from("tasks")
-        .select(`
+        .select(
+          `
           *,
           campaigners (full_name),
           agencies (name),
           clients (name),
           leads (company_name),
           sales_people:sales_person_id (full_name)
-        `)
+        `,
+        )
         .eq("lead_id", leadId)
         .order("due_date", { ascending: false });
 
@@ -89,10 +91,12 @@ export function LeadUpdatesTab({ leadId, leadName }: LeadUpdatesTabProps) {
     queryFn: async () => {
       let query = supabase
         .from("lead_updates")
-        .select(`
+        .select(
+          `
           *,
           profiles:user_id (full_name, email)
-        `)
+        `,
+        )
         .eq("lead_id", leadId)
         .order("created_at", { ascending: false });
 
@@ -129,13 +133,11 @@ export function LeadUpdatesTab({ leadId, leadName }: LeadUpdatesTabProps) {
       if (leadRow) {
         await ensureLeadHomeAgency(leadRow);
       }
-      const { error } = await supabase
-        .from("lead_updates")
-        .insert({
-          lead_id: leadId,
-          user_id: user.id,
-          content,
-        });
+      const { error } = await supabase.from("lead_updates").insert({
+        lead_id: leadId,
+        user_id: user.id,
+        content,
+      });
       if (error) throw error;
     },
     onSuccess: () => {
@@ -187,7 +189,13 @@ export function LeadUpdatesTab({ leadId, leadName }: LeadUpdatesTabProps) {
   });
 
   const updateStatusMutation = useMutation({
-    mutationFn: async ({ taskId, status }: { taskId: string; status: "open" | "in_progress" | "done" }) => {
+    mutationFn: async ({
+      taskId,
+      status,
+    }: {
+      taskId: string;
+      status: "open" | "in_progress" | "done";
+    }) => {
       const { error } = await supabase
         .from("tasks")
         .update({ status })
@@ -209,13 +217,17 @@ export function LeadUpdatesTab({ leadId, leadName }: LeadUpdatesTabProps) {
     addUpdateMutation.mutate(newUpdate.trim());
   };
 
-  const inProgressTasks = tasks?.filter(t => t.status === "open" || t.status === "in_progress") || [];
-  const completedTasks = tasks?.filter(t => t.status === "done") || [];
+  const inProgressTasks =
+    tasks?.filter((t) => t.status === "open" || t.status === "in_progress") ||
+    [];
+  const completedTasks = tasks?.filter((t) => t.status === "done") || [];
 
   const isLoading = tasksLoading || updatesLoading;
 
   if (isLoading) {
-    return <div className="text-center py-8 text-muted-foreground">טוען...</div>;
+    return (
+      <div className="text-center py-8 text-muted-foreground">טוען...</div>
+    );
   }
 
   return (
@@ -232,7 +244,7 @@ export function LeadUpdatesTab({ leadId, leadName }: LeadUpdatesTabProps) {
             />
             <Button
               type="button"
-              onClick={handleAddUpdate} 
+              onClick={handleAddUpdate}
               disabled={!newUpdate.trim() || addUpdateMutation.isPending}
               className="self-end shrink-0"
             >
@@ -251,29 +263,49 @@ export function LeadUpdatesTab({ leadId, leadName }: LeadUpdatesTabProps) {
         <AddTaskForm
           leadId={leadId}
           triggerButton={
-            <Button type="button" size="sm" variant="outline" className="w-full sm:w-auto">
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              className="w-full sm:w-auto"
+            >
               <Plus className="h-4 w-4 mr-2" />
               הוסף משימה
             </Button>
           }
         />
 
-        <RadioGroup 
-          value={dateFilter} 
-          onValueChange={(value) => setDateFilter(value as DateFilter)} 
+        <RadioGroup
+          value={dateFilter}
+          onValueChange={(value) => setDateFilter(value as DateFilter)}
           className="flex gap-3 flex-wrap"
         >
           <div className="flex items-center space-x-2 space-x-reverse">
             <RadioGroupItem value="week" id={`lead-week-${leadId}`} />
-            <Label htmlFor={`lead-week-${leadId}`} className="cursor-pointer text-sm">שבוע</Label>
+            <Label
+              htmlFor={`lead-week-${leadId}`}
+              className="cursor-pointer text-sm"
+            >
+              שבוע
+            </Label>
           </div>
           <div className="flex items-center space-x-2 space-x-reverse">
             <RadioGroupItem value="month" id={`lead-month-${leadId}`} />
-            <Label htmlFor={`lead-month-${leadId}`} className="cursor-pointer text-sm">חודש</Label>
+            <Label
+              htmlFor={`lead-month-${leadId}`}
+              className="cursor-pointer text-sm"
+            >
+              חודש
+            </Label>
           </div>
           <div className="flex items-center space-x-2 space-x-reverse">
             <RadioGroupItem value="all" id={`lead-all-${leadId}`} />
-            <Label htmlFor={`lead-all-${leadId}`} className="cursor-pointer text-sm">הכל</Label>
+            <Label
+              htmlFor={`lead-all-${leadId}`}
+              className="cursor-pointer text-sm"
+            >
+              הכל
+            </Label>
           </div>
         </RadioGroup>
       </div>
@@ -289,7 +321,7 @@ export function LeadUpdatesTab({ leadId, leadName }: LeadUpdatesTabProps) {
             {updates.map((update: any) => {
               const isEditing = editingUpdateId === update.id;
               const isOwner = user?.id === update.user_id;
-              
+
               return (
                 <Card key={update.id}>
                   <CardContent className="p-3">
@@ -297,7 +329,9 @@ export function LeadUpdatesTab({ leadId, leadName }: LeadUpdatesTabProps) {
                       <div className="space-y-2">
                         <Textarea
                           value={editingUpdateContent}
-                          onChange={(e) => setEditingUpdateContent(e.target.value)}
+                          onChange={(e) =>
+                            setEditingUpdateContent(e.target.value)
+                          }
                           className="min-h-[60px] resize-none text-sm"
                         />
                         <div className="flex gap-2 justify-end">
@@ -315,8 +349,16 @@ export function LeadUpdatesTab({ leadId, leadName }: LeadUpdatesTabProps) {
                           <Button
                             type="button"
                             size="sm"
-                            onClick={() => editUpdateMutation.mutate({ id: update.id, content: editingUpdateContent })}
-                            disabled={!editingUpdateContent.trim() || editUpdateMutation.isPending}
+                            onClick={() =>
+                              editUpdateMutation.mutate({
+                                id: update.id,
+                                content: editingUpdateContent,
+                              })
+                            }
+                            disabled={
+                              !editingUpdateContent.trim() ||
+                              editUpdateMutation.isPending
+                            }
                           >
                             {editUpdateMutation.isPending ? (
                               <Loader2 className="h-4 w-4 animate-spin" />
@@ -328,14 +370,26 @@ export function LeadUpdatesTab({ leadId, leadName }: LeadUpdatesTabProps) {
                       </div>
                     ) : (
                       <>
-                        <p className="text-sm whitespace-pre-wrap">{update.content}</p>
+                        <p className="text-sm whitespace-pre-wrap">
+                          {update.content}
+                        </p>
                         <div className="flex items-center justify-between mt-2">
                           <div className="flex items-center gap-2 text-xs text-muted-foreground flex-wrap">
                             <User className="h-3 w-3 shrink-0" />
-                            <span>{update.profiles?.full_name || update.profiles?.email || "משתמש"}</span>
+                            <span>
+                              {update.profiles?.full_name ||
+                                update.profiles?.email ||
+                                "משתמש"}
+                            </span>
                             <span>•</span>
                             <Calendar className="h-3 w-3 shrink-0" />
-                            <span>{format(new Date(update.created_at), "d/M/yy HH:mm", { locale: he })}</span>
+                            <span>
+                              {format(
+                                new Date(update.created_at),
+                                "d/M/yy HH:mm",
+                                { locale: he },
+                              )}
+                            </span>
                           </div>
                           {isOwner && (
                             <div className="flex gap-1 shrink-0">
@@ -356,7 +410,9 @@ export function LeadUpdatesTab({ leadId, leadName }: LeadUpdatesTabProps) {
                                 size="icon"
                                 variant="ghost"
                                 className="h-6 w-6 text-destructive hover:text-destructive"
-                                onClick={() => deleteUpdateMutation.mutate(update.id)}
+                                onClick={() =>
+                                  deleteUpdateMutation.mutate(update.id)
+                                }
                                 disabled={deleteUpdateMutation.isPending}
                               >
                                 {deleteUpdateMutation.isPending ? (
@@ -391,10 +447,10 @@ export function LeadUpdatesTab({ leadId, leadName }: LeadUpdatesTabProps) {
               </Badge>
             </h3>
           </div>
-          
+
           <div className="space-y-2">
             {inProgressTasks.length > 0 ? (
-              inProgressTasks.map(task => (
+              inProgressTasks.map((task) => (
                 <EntityTaskCard
                   key={task.id}
                   task={task}
@@ -402,7 +458,12 @@ export function LeadUpdatesTab({ leadId, leadName }: LeadUpdatesTabProps) {
                   compact
                   tintByPriority
                   onEdit={() => setEditingTask(task)}
-                  onToggleComplete={() => updateStatusMutation.mutate({ taskId: task.id, status: "done" })}
+                  onToggleComplete={() =>
+                    updateStatusMutation.mutate({
+                      taskId: task.id,
+                      status: "done",
+                    })
+                  }
                 />
               ))
             ) : (
@@ -427,10 +488,10 @@ export function LeadUpdatesTab({ leadId, leadName }: LeadUpdatesTabProps) {
               </Badge>
             </h3>
           </div>
-          
+
           <div className="space-y-2">
             {completedTasks.length > 0 ? (
-              completedTasks.map(task => (
+              completedTasks.map((task) => (
                 <EntityTaskCard
                   key={task.id}
                   task={task}
@@ -438,7 +499,12 @@ export function LeadUpdatesTab({ leadId, leadName }: LeadUpdatesTabProps) {
                   compact
                   tintByPriority
                   onEdit={() => setEditingTask(task)}
-                  onToggleComplete={() => updateStatusMutation.mutate({ taskId: task.id, status: "open" })}
+                  onToggleComplete={() =>
+                    updateStatusMutation.mutate({
+                      taskId: task.id,
+                      status: "open",
+                    })
+                  }
                 />
               ))
             ) : (

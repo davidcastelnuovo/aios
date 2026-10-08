@@ -6,7 +6,8 @@
  * fell back to transcribe-voice.
  */
 
-export type CarmenInputMode = "typed" | "realtime_voice" | "transcribe_only" | "external_channel_callback";
+export type CarmenInputMode =
+  "typed" | "realtime_voice" | "transcribe_only" | "external_channel_callback";
 export type CarmenDeliveryMode = "text" | "realtime";
 
 export type ChatTurnTag = {
@@ -14,7 +15,9 @@ export type ChatTurnTag = {
   delivery_mode: CarmenDeliveryMode;
 };
 
-export function deliveryForInputMode(mode: CarmenInputMode): CarmenDeliveryMode {
+export function deliveryForInputMode(
+  mode: CarmenInputMode,
+): CarmenDeliveryMode {
   return mode === "realtime_voice" ? "realtime" : "text";
 }
 
@@ -43,7 +46,8 @@ export function onRealtimeUnavailable(): {
   return {
     fallbackToLegacyListen: false,
     title: "שיחה חיה לא זמינה",
-    description: "לא הצלחתי לפתוח שיחת OpenAI Realtime. אפשר לכתוב לכרמן במקלדת — בלי תמלול ובלי הקראה אוטומטית.",
+    description:
+      "לא הצלחתי לפתוח שיחת OpenAI Realtime. אפשר לכתוב לכרמן במקלדת — בלי תמלול ובלי הקראה אוטומטית.",
   };
 }
 

@@ -9,7 +9,10 @@ const NotFound = () => {
   const { buildPath, isReady } = useTenantPath();
 
   useEffect(() => {
-    console.error("404 Error: User attempted to access non-existent route:", location.pathname);
+    console.error(
+      "404 Error: User attempted to access non-existent route:",
+      location.pathname,
+    );
   }, [location.pathname]);
 
   // Always send the user back to the Home (modules) page, not the dashboard.
@@ -21,13 +24,16 @@ const NotFound = () => {
   };
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-background" dir="rtl">
+    <div
+      className="flex min-h-screen items-center justify-center bg-background"
+      dir="rtl"
+    >
       <div className="text-center space-y-6 max-w-md px-4">
         <h1 className="text-6xl font-bold text-primary">404</h1>
-        <h2 className="text-2xl font-semibold text-foreground">העמוד לא נמצא</h2>
-        <p className="text-muted-foreground">
-          הדף שחיפשת אינו קיים או שהוסר
-        </p>
+        <h2 className="text-2xl font-semibold text-foreground">
+          העמוד לא נמצא
+        </h2>
+        <p className="text-muted-foreground">הדף שחיפשת אינו קיים או שהוסר</p>
         <div className="pt-4">
           <Button asChild size="lg">
             <a href={getHomePath()}>

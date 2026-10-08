@@ -1,4 +1,10 @@
-import { createContext, useContext, useState, useEffect, ReactNode } from "react";
+import {
+  createContext,
+  useContext,
+  useState,
+  useEffect,
+  ReactNode,
+} from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -40,10 +46,10 @@ export function UIModeProvider({ children }: { children: ReactNode }) {
   const toggleMode = async () => {
     if (!userId) return;
     const newMode: UIMode = mode === "classic" ? "aios" : "classic";
-    
+
     // Optimistic update
     queryClient.setQueryData(["ui-mode", userId], newMode);
-    
+
     await (supabase as any)
       .from("profiles")
       .update({ ui_mode: newMode })

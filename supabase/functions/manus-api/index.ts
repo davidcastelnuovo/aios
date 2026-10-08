@@ -2,21 +2,22 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Headers":
+    "authorization, x-client-info, apikey, content-type",
 };
 
-const MANUS_API_URL = 'https://api.manus.ai/v1';
+const MANUS_API_URL = "https://api.manus.ai/v1";
 
 serve(async (req) => {
-  if (req.method === 'OPTIONS') {
+  if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
   }
 
   try {
-    const authHeader = req.headers.get('Authorization') || '';
-    const bearer = authHeader.replace(/^Bearer\s+/i, '');
-    const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+    const authHeader = req.headers.get("Authorization") || "";
+    const bearer = authHeader.replace(/^Bearer\s+/i, "");
+    const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const isInternalCall = bearer && bearer === serviceRoleKey;
 
     // For internal calls (e.g. from run-ai-agent's delegate_to_manus),
@@ -24,18 +25,22 @@ serve(async (req) => {
     // carried via the tenantId in the request body.
     // For external calls (from the UI), we authenticate the user normally.
     const supabaseClient = isInternalCall
-      ? createClient(Deno.env.get('SUPABASE_URL')!, serviceRoleKey)
+      ? createClient(Deno.env.get("SUPABASE_URL")!, serviceRoleKey)
       : createClient(
-          Deno.env.get('SUPABASE_URL')!,
-          Deno.env.get('SUPABASE_ANON_KEY')!,
-          { global: { headers: { Authorization: authHeader } } }
+          Deno.env.get("SUPABASE_URL")!,
+          Deno.env.get("SUPABASE_ANON_KEY")!,
+          { global: { headers: { Authorization: authHeader } } },
         );
 
     if (!isInternalCall) {
-      const { data: { user }, error: authError } = await supabaseClient.auth.getUser();
+      const {
+        data: { user },
+        error: authError,
+      } = await supabaseClient.auth.getUser();
       if (authError || !user) {
-        return new Response(JSON.stringify({ error: 'Unauthorized' }), {
-          status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        return new Response(JSON.stringify({ error: "Unauthorized" }), {
+          status: 401,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
     }
@@ -44,247 +49,294 @@ serve(async (req) => {
     const { action, tenantId, ...params } = body;
 
     if (!tenantId) {
-      return new Response(JSON.stringify({ error: 'tenantId is required' }), {
-        status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      return new Response(JSON.stringify({ error: "tenantId is required" }), {
+        status: 400,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
     // Get Manus API key from tenant_integrations
     const { data: integration, error: intError } = await supabaseClient
-      .from('tenant_integrations')
-      .select('settings')
-      .eq('tenant_id', tenantId)
-      .eq('integration_type', 'manus')
-      .eq('is_active', true)
+      .from("tenant_integrations")
+      .select("settings")
+      .eq("tenant_id", tenantId)
+      .eq("integration_type", "manus")
+      .eq("is_active", true)
       .maybeSingle();
 
     if (intError || !integration) {
-      return new Response(JSON.stringify({ error: 'Manus integration not configured', detail: intError?.message }), {
-        status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      });
+      return new Response(
+        JSON.stringify({
+          error: "Manus integration not configured",
+          detail: intError?.message,
+        }),
+        {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        },
+      );
     }
-
 
     const apiKey = (integration.settings as any)?.api_key;
     if (!apiKey) {
-      return new Response(JSON.stringify({ error: 'Manus API key not found' }), {
-        status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      });
+      return new Response(
+        JSON.stringify({ error: "Manus API key not found" }),
+        {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        },
+      );
     }
 
     const manusHeaders = {
-      'API_KEY': apiKey,
-      'Content-Type': 'application/json',
-      'accept': 'application/json',
+      API_KEY: apiKey,
+      "Content-Type": "application/json",
+      accept: "application/json",
     };
 
     let result: any;
 
     switch (action) {
-      case 'create_task': {
-        const { prompt, agentProfile, taskMode, connectors, attachments } = params;
+      case "create_task": {
+        const { prompt, agentProfile, taskMode, connectors, attachments } =
+          params;
         if (!prompt) {
-          return new Response(JSON.stringify({ error: 'prompt is required' }), {
-            status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          return new Response(JSON.stringify({ error: "prompt is required" }), {
+            status: 400,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
           });
         }
 
         const taskBody: any = {
           prompt,
-          agentProfile: agentProfile || 'manus-1.6',
+          agentProfile: agentProfile || "manus-1.6",
         };
         if (taskMode) taskBody.taskMode = taskMode;
         if (connectors) taskBody.connectors = connectors;
         if (attachments) taskBody.attachments = attachments;
 
         const res = await fetch(`${MANUS_API_URL}/tasks`, {
-          method: 'POST',
+          method: "POST",
           headers: manusHeaders,
           body: JSON.stringify(taskBody),
         });
 
         const data = await res.json();
         if (!res.ok) {
-          throw new Error(`Manus API error [${res.status}]: ${JSON.stringify(data)}`);
+          throw new Error(
+            `Manus API error [${res.status}]: ${JSON.stringify(data)}`,
+          );
         }
 
         // Save task to our DB
         const { error: insertError } = await supabaseClient
-          .from('manus_tasks')
+          .from("manus_tasks")
           .insert({
             tenant_id: tenantId,
             task_id: data.task_id,
             title: data.task_title || prompt.substring(0, 100),
             prompt,
-            status: 'pending',
+            status: "pending",
             task_url: data.task_url,
             share_url: data.share_url,
             created_by: user.id,
           });
 
         if (insertError) {
-          console.error('Failed to save manus task:', insertError);
+          console.error("Failed to save manus task:", insertError);
         }
 
         result = data;
         break;
       }
 
-      case 'list_tasks': {
+      case "list_tasks": {
         const { status: taskStatus, limit, after } = params;
         const queryParams = new URLSearchParams();
-        if (taskStatus) queryParams.set('status', taskStatus);
-        if (limit) queryParams.set('limit', String(limit));
-        if (after) queryParams.set('after', after);
+        if (taskStatus) queryParams.set("status", taskStatus);
+        if (limit) queryParams.set("limit", String(limit));
+        if (after) queryParams.set("after", after);
 
         const res = await fetch(`${MANUS_API_URL}/tasks?${queryParams}`, {
-          method: 'GET',
+          method: "GET",
           headers: manusHeaders,
         });
 
         const data = await res.json();
         if (!res.ok) {
-          throw new Error(`Manus API error [${res.status}]: ${JSON.stringify(data)}`);
+          throw new Error(
+            `Manus API error [${res.status}]: ${JSON.stringify(data)}`,
+          );
         }
 
         result = data;
         break;
       }
 
-      case 'get_task': {
+      case "get_task": {
         const { taskId } = params;
         if (!taskId) {
-          return new Response(JSON.stringify({ error: 'taskId is required' }), {
-            status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          return new Response(JSON.stringify({ error: "taskId is required" }), {
+            status: 400,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
           });
         }
 
-        const res = await fetch(`${MANUS_API_URL}/tasks?query=${encodeURIComponent(taskId)}`, {
-          method: 'GET',
-          headers: manusHeaders,
-        });
+        const res = await fetch(
+          `${MANUS_API_URL}/tasks?query=${encodeURIComponent(taskId)}`,
+          {
+            method: "GET",
+            headers: manusHeaders,
+          },
+        );
 
         const data = await res.json();
         if (!res.ok) {
-          throw new Error(`Manus API error [${res.status}]: ${JSON.stringify(data)}`);
+          throw new Error(
+            `Manus API error [${res.status}]: ${JSON.stringify(data)}`,
+          );
         }
 
         // Update local DB if we have results
         if (data?.data?.length > 0) {
           const task = data.data[0];
           await supabaseClient
-            .from('manus_tasks')
+            .from("manus_tasks")
             .update({
               status: task.status,
               output: task.output,
               credit_usage: task.credit_usage,
             })
-            .eq('task_id', taskId)
-            .eq('tenant_id', tenantId);
+            .eq("task_id", taskId)
+            .eq("tenant_id", tenantId);
         }
 
         result = data;
         break;
       }
 
-      case 'register_webhook': {
-        const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
+      case "register_webhook": {
+        const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
         const webhookUrl = `${supabaseUrl}/functions/v1/manus-webhook`;
 
         const res = await fetch(`${MANUS_API_URL}/webhooks`, {
-          method: 'POST',
+          method: "POST",
           headers: manusHeaders,
           body: JSON.stringify({ webhook: { url: webhookUrl } }),
         });
 
         const data = await res.json();
         if (!res.ok) {
-          throw new Error(`Manus API error [${res.status}]: ${JSON.stringify(data)}`);
+          throw new Error(
+            `Manus API error [${res.status}]: ${JSON.stringify(data)}`,
+          );
         }
 
         // Save webhook_id in integration settings
         const currentSettings = (integration.settings as any) || {};
         await supabaseClient
-          .from('tenant_integrations')
+          .from("tenant_integrations")
           .update({
-            settings: { ...currentSettings, webhook_id: data.webhook_id, webhook_url: webhookUrl },
+            settings: {
+              ...currentSettings,
+              webhook_id: data.webhook_id,
+              webhook_url: webhookUrl,
+            },
           })
-          .eq('tenant_id', tenantId)
-          .eq('integration_type', 'manus');
+          .eq("tenant_id", tenantId)
+          .eq("integration_type", "manus");
 
         result = { ...data, webhook_url: webhookUrl };
         break;
       }
 
-      case 'test_connection': {
+      case "test_connection": {
         const res = await fetch(`${MANUS_API_URL}/tasks?limit=1`, {
-          method: 'GET',
+          method: "GET",
           headers: manusHeaders,
         });
 
         if (!res.ok) {
           const errorData = await res.json().catch(() => ({}));
-          throw new Error(`Connection test failed [${res.status}]: ${JSON.stringify(errorData)}`);
+          throw new Error(
+            `Connection test failed [${res.status}]: ${JSON.stringify(errorData)}`,
+          );
         }
 
-        result = { success: true, message: 'Connection successful' };
+        result = { success: true, message: "Connection successful" };
         break;
       }
 
-      case 'send_message': {
+      case "send_message": {
         // Send a message to an existing task or to the default Manus agent.
         // task_id defaults to 'agent-default-main_task' for direct communication.
         const { taskId, message, agentProfile, connectors } = params;
-        const targetTaskId = taskId || 'agent-default-main_task';
+        const targetTaskId = taskId || "agent-default-main_task";
         const msgBody: any = { message };
         if (agentProfile) msgBody.agentProfile = agentProfile;
         if (connectors) msgBody.connectors = connectors;
-        const res = await fetch(`${MANUS_API_URL}/tasks/${encodeURIComponent(targetTaskId)}/messages`, {
-          method: 'POST',
-          headers: manusHeaders,
-          body: JSON.stringify(msgBody),
-        });
+        const res = await fetch(
+          `${MANUS_API_URL}/tasks/${encodeURIComponent(targetTaskId)}/messages`,
+          {
+            method: "POST",
+            headers: manusHeaders,
+            body: JSON.stringify(msgBody),
+          },
+        );
         const data = await res.json();
         if (!res.ok) {
-          throw new Error(`Manus API error [${res.status}]: ${JSON.stringify(data)}`);
+          throw new Error(
+            `Manus API error [${res.status}]: ${JSON.stringify(data)}`,
+          );
         }
         result = data;
         break;
       }
 
-      case 'list_messages': {
+      case "list_messages": {
         // Poll messages for a task (for checking Manus response).
         const { taskId: listTaskId, after: afterCursor } = params;
-        const targetId = listTaskId || 'agent-default-main_task';
+        const targetId = listTaskId || "agent-default-main_task";
         const qp = new URLSearchParams();
-        if (afterCursor) qp.set('after', afterCursor);
-        const res = await fetch(`${MANUS_API_URL}/tasks/${encodeURIComponent(targetId)}/messages?${qp}`, {
-          method: 'GET',
-          headers: manusHeaders,
-        });
+        if (afterCursor) qp.set("after", afterCursor);
+        const res = await fetch(
+          `${MANUS_API_URL}/tasks/${encodeURIComponent(targetId)}/messages?${qp}`,
+          {
+            method: "GET",
+            headers: manusHeaders,
+          },
+        );
         const data = await res.json();
         if (!res.ok) {
-          throw new Error(`Manus API error [${res.status}]: ${JSON.stringify(data)}`);
+          throw new Error(
+            `Manus API error [${res.status}]: ${JSON.stringify(data)}`,
+          );
         }
         result = data;
         break;
       }
 
       default:
-        return new Response(JSON.stringify({ error: `Unknown action: ${action}` }), {
-          status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        });
+        return new Response(
+          JSON.stringify({ error: `Unknown action: ${action}` }),
+          {
+            status: 400,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          },
+        );
     }
 
     return new Response(JSON.stringify(result), {
-      status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      status: 200,
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
-
   } catch (error: unknown) {
-    console.error('Manus API error:', error);
-    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    console.error("Manus API error:", error);
+    const errorMessage =
+      error instanceof Error ? error.message : "Unknown error";
     return new Response(JSON.stringify({ error: errorMessage }), {
-      status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      status: 500,
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   }
 });

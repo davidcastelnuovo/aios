@@ -94,7 +94,9 @@ export function LeadFilterPresetTabs({
       return presetId;
     },
     onSuccess: (deletedPresetId) => {
-      queryClient.invalidateQueries({ queryKey: ["lead-filter-presets", tenantId] });
+      queryClient.invalidateQueries({
+        queryKey: ["lead-filter-presets", tenantId],
+      });
       toast({ title: "פריסט נמחק בהצלחה" });
       if (activePresetId === deletedPresetId) {
         onPresetSelect(null);
@@ -125,14 +127,12 @@ export function LeadFilterPresetTabs({
   const activeStage =
     activeStageId === "all"
       ? null
-      : pipelineStages.find((s) => s.id === activeStageId) ?? null;
+      : (pipelineStages.find((s) => s.id === activeStageId) ?? null);
 
   const pipelineTriggerLabel =
-    activeStageId === "all" ? "הכל" : activeStage?.label ?? "פייפליין";
+    activeStageId === "all" ? "הכל" : (activeStage?.label ?? "פייפליין");
   const pipelineTriggerCount =
-    activeStageId === "all"
-      ? stageCounts?.all
-      : stageCounts?.[activeStageId];
+    activeStageId === "all" ? stageCounts?.all : stageCounts?.[activeStageId];
 
   return (
     <div className="flex min-w-0 flex-1 flex-nowrap items-center gap-1.5 overflow-x-auto overflow-y-hidden">
@@ -163,7 +163,9 @@ export function LeadFilterPresetTabs({
                 className="justify-between gap-2"
               >
                 <span>{preset.name}</span>
-                {activePresetId === preset.id && <Check className="h-4 w-4 shrink-0" />}
+                {activePresetId === preset.id && (
+                  <Check className="h-4 w-4 shrink-0" />
+                )}
               </DropdownMenuItem>
             ))
           )}
@@ -236,7 +238,8 @@ export function LeadFilterPresetTabs({
                   variant="secondary"
                   className={cn(
                     "h-5 px-1.5 text-[10px]",
-                    activeStage?.hexColor && "bg-white/20 text-inherit hover:bg-white/20",
+                    activeStage?.hexColor &&
+                      "bg-white/20 text-inherit hover:bg-white/20",
                   )}
                 >
                   {pipelineTriggerCount.toLocaleString()}
@@ -268,7 +271,9 @@ export function LeadFilterPresetTabs({
                     {stageCounts.all.toLocaleString()}
                   </Badge>
                 )}
-                {activeStageId === "all" && <Check className="h-4 w-4 shrink-0" />}
+                {activeStageId === "all" && (
+                  <Check className="h-4 w-4 shrink-0" />
+                )}
               </span>
             </DropdownMenuItem>
             <DropdownMenuSeparator className="my-1" />
@@ -296,7 +301,8 @@ export function LeadFilterPresetTabs({
                         variant="secondary"
                         className={cn(
                           "h-5 px-1.5 text-[10px]",
-                          stage.hexColor && "bg-white/20 text-inherit hover:bg-white/20",
+                          stage.hexColor &&
+                            "bg-white/20 text-inherit hover:bg-white/20",
                         )}
                       >
                         {count.toLocaleString()}

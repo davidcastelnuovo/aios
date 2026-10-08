@@ -5,18 +5,41 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
-import { useSocialMediaChannels, useCreatePost, useWordPressSites, SocialMediaChannel, SocialMediaPost } from "@/hooks/useSocialMedia";
-import { Facebook, Instagram, Linkedin, Youtube, Send, Clock, Save, Loader2, Globe } from "lucide-react";
+import {
+  useSocialMediaChannels,
+  useCreatePost,
+  useWordPressSites,
+  SocialMediaChannel,
+  SocialMediaPost,
+} from "@/hooks/useSocialMedia";
+import {
+  Facebook,
+  Instagram,
+  Linkedin,
+  Youtube,
+  Send,
+  Clock,
+  Save,
+  Loader2,
+  Globe,
+} from "lucide-react";
 import { toast } from "sonner";
 
-const platformIcons: Record<SocialMediaChannel["platform"], React.ElementType> = {
-  facebook: Facebook,
-  instagram: Instagram,
-  linkedin: Linkedin,
-  youtube: Youtube,
-};
+const platformIcons: Record<SocialMediaChannel["platform"], React.ElementType> =
+  {
+    facebook: Facebook,
+    instagram: Instagram,
+    linkedin: Linkedin,
+    youtube: Youtube,
+  };
 
 const postTypes: { value: SocialMediaPost["post_type"]; label: string }[] = [
   { value: "text", label: "טקסט" },
@@ -38,7 +61,8 @@ export function PostComposer({ onPostCreated }: PostComposerProps) {
 
   const [title, setTitle] = useState("");
   const [content, setContent] = useState("");
-  const [postType, setPostType] = useState<SocialMediaPost["post_type"]>("text");
+  const [postType, setPostType] =
+    useState<SocialMediaPost["post_type"]>("text");
   const [selectedChannels, setSelectedChannels] = useState<string[]>([]);
   const [scheduledAt, setScheduledAt] = useState("");
   const [publishToWp, setPublishToWp] = useState(false);
@@ -46,7 +70,9 @@ export function PostComposer({ onPostCreated }: PostComposerProps) {
 
   const toggleChannel = (channelId: string) => {
     setSelectedChannels((prev) =>
-      prev.includes(channelId) ? prev.filter((id) => id !== channelId) : [...prev, channelId]
+      prev.includes(channelId)
+        ? prev.filter((id) => id !== channelId)
+        : [...prev, channelId],
     );
   };
 
@@ -111,13 +137,20 @@ export function PostComposer({ onPostCreated }: PostComposerProps) {
             placeholder="כתוב את תוכן הפוסט כאן..."
             rows={5}
           />
-          <p className="text-xs text-muted-foreground mt-1">{content.length} תווים</p>
+          <p className="text-xs text-muted-foreground mt-1">
+            {content.length} תווים
+          </p>
         </div>
 
         {/* Post Type */}
         <div>
           <Label>סוג פוסט</Label>
-          <Select value={postType} onValueChange={(v) => setPostType(v as SocialMediaPost["post_type"])}>
+          <Select
+            value={postType}
+            onValueChange={(v) =>
+              setPostType(v as SocialMediaPost["post_type"])
+            }
+          >
             <SelectTrigger>
               <SelectValue />
             </SelectTrigger>
@@ -149,7 +182,9 @@ export function PostComposer({ onPostCreated }: PostComposerProps) {
                     <div
                       key={channel.id}
                       className={`flex items-center gap-3 p-3 rounded-lg border cursor-pointer transition-colors ${
-                        isSelected ? "border-primary bg-primary/5" : "hover:bg-muted/50"
+                        isSelected
+                          ? "border-primary bg-primary/5"
+                          : "hover:bg-muted/50"
                       }`}
                       onClick={() => toggleChannel(channel.id)}
                     >
@@ -206,7 +241,11 @@ export function PostComposer({ onPostCreated }: PostComposerProps) {
             onClick={() => handleSubmit("draft")}
             disabled={createPost.isPending}
           >
-            {createPost.isPending ? <Loader2 className="h-4 w-4 animate-spin me-2" /> : <Save className="h-4 w-4 me-2" />}
+            {createPost.isPending ? (
+              <Loader2 className="h-4 w-4 animate-spin me-2" />
+            ) : (
+              <Save className="h-4 w-4 me-2" />
+            )}
             שמור כטיוטה
           </Button>
           <Button

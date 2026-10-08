@@ -4,7 +4,7 @@ on:
   # GitHub schedules run from the default branch. This starts after the reviewed
   # infrastructure release reaches main; deployment verification also runs a sync.
   schedule:
-    - cron: '*/5 * * * *'
+    - cron: "*/5 * * * *"
 permissions:
   contents: read
 concurrency:
@@ -24,7 +24,7 @@ jobs:
           ref: develop
       - uses: actions/setup-python@v5
         with:
-          python-version: '3.12'
+          python-version: "3.12"
       - name: Mirror regression tests
         run: python3 -m unittest discover -s scripts -p 'test_staging_mirror.py'
       - name: Reconcile changed customer and report rows

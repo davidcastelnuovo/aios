@@ -18,7 +18,10 @@ import { CarmenLoadingScreen } from "@/components/shared/CarmenLoadingScreen";
 import { tenantRoutes } from "@/routes/tenantRoutes";
 import { StagingBanner } from "@/components/StagingBanner";
 import { setupReportQueryCachePersistence } from "@/lib/reportQueryCache";
-import { REPORT_QUERY_GC_MS, REPORT_QUERY_STALE_MS } from "@/lib/reportQueryOptions";
+import {
+  REPORT_QUERY_GC_MS,
+  REPORT_QUERY_STALE_MS,
+} from "@/lib/reportQueryOptions";
 
 const Landing = lazy(() => import("./pages/Landing"));
 const Auth = lazy(() => import("./pages/Auth"));
@@ -70,7 +73,9 @@ function TenantAppProviders({ children }: { children: React.ReactNode }) {
         <UIModeProvider>
           <AIOSProvider>
             <AgencyProvider>
-              <CommandCenterSidecarProvider>{children}</CommandCenterSidecarProvider>
+              <CommandCenterSidecarProvider>
+                {children}
+              </CommandCenterSidecarProvider>
             </AgencyProvider>
           </AIOSProvider>
         </UIModeProvider>
@@ -122,7 +127,10 @@ const App = () => (
                   path="/shared/dashboard/:shareToken"
                   element={<SharedDashboard />}
                 />
-                <Route path="/shared/table/:shareToken" element={<SharedTable />} />
+                <Route
+                  path="/shared/table/:shareToken"
+                  element={<SharedTable />}
+                />
                 <Route
                   path="/shared/seo-monthly/:shareToken"
                   element={<SharedSeoMonthly />}

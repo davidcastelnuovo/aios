@@ -6,8 +6,20 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { Bot, Loader2 } from "lucide-react";
 import { invokeErrorMessage } from "@/components/marketing/lib/invokeErrorMessage";
 
@@ -49,33 +61,41 @@ export function JoinMeetingBotDialog({
   const { toast } = useToast();
   const [meetingUrl, setMeetingUrl] = useState("");
   const [meetingTopic, setMeetingTopic] = useState("");
-  const [targetType, setTargetType] = useState<"auto" | "client" | "campaigner" | "agency">(
-    defaultClientId ? "client" : "agency",
-  );
+  const [targetType, setTargetType] = useState<
+    "auto" | "client" | "campaigner" | "agency"
+  >(defaultClientId ? "client" : "agency");
   const [targetId, setTargetId] = useState(defaultClientId || "");
 
   useEffect(() => {
     if (targetType === "agency" && !targetId && agencies.length > 0) {
-      setTargetId(agencies.find((agency) => agency.is_default)?.id || agencies[0].id);
+      setTargetId(
+        agencies.find((agency) => agency.is_default)?.id || agencies[0].id,
+      );
     }
   }, [agencies, targetId, targetType]);
 
   const dispatchMutation = useMutation({
     mutationFn: async () => {
       if (!tenantId) throw new Error("לא נבחר ארגון");
-      const { data, error } = await supabase.functions.invoke("dispatch-meeting-bot", {
-        body: {
-          tenant_id: tenantId,
-          meeting_url: meetingUrl.trim(),
-          summary_scope: targetType,
-          client_id: targetType === "client" ? targetId || null : null,
-          campaigner_ids: targetType === "campaigner" && targetId ? [targetId] : [],
-          agency_id: targetType === "agency" ? targetId || null : null,
-          meeting_topic: meetingTopic.trim() || null,
+      const { data, error } = await supabase.functions.invoke(
+        "dispatch-meeting-bot",
+        {
+          body: {
+            tenant_id: tenantId,
+            meeting_url: meetingUrl.trim(),
+            summary_scope: targetType,
+            client_id: targetType === "client" ? targetId || null : null,
+            campaigner_ids:
+              targetType === "campaigner" && targetId ? [targetId] : [],
+            agency_id: targetType === "agency" ? targetId || null : null,
+            meeting_topic: meetingTopic.trim() || null,
+          },
         },
-      });
+      );
       if (error || data?.error) {
-        throw new Error(await invokeErrorMessage(error, data, "שליחת כרמן לפגישה נכשלה"));
+        throw new Error(
+          await invokeErrorMessage(error, data, "שליחת כרמן לפגישה נכשלה"),
+        );
       }
       return data;
     },
@@ -91,7 +111,11 @@ export function JoinMeetingBotDialog({
       onOpenChange(false);
     },
     onError: (err: Error) => {
-      toast({ title: "שגיאה", description: err.message, variant: "destructive" });
+      toast({
+        title: "שגיאה",
+        description: err.message,
+        variant: "destructive",
+      });
     },
   });
 
@@ -104,9 +128,9 @@ export function JoinMeetingBotDialog({
             שלחי את כרמן לפגישה
           </DialogTitle>
           <DialogDescription>
-            הדביקו קישור לפגישת Zoom, Google Meet או Microsoft Teams — גם בלי זימון ביומן.
-            כרמן תופיעה כמשתתפת גלויה, תקליט, תתמלל את כל הדוברים ותייצר סיכום ללקוח,
-            לאיש צוות או לסוכנות.
+            הדביקו קישור לפגישת Zoom, Google Meet או Microsoft Teams — גם בלי
+            זימון ביומן. כרמן תופיעה כמשתתפת גלויה, תקליט, תתמלל את כל הדוברים
+            ותייצר סיכום ללקוח, לאיש צוות או לסוכנות.
           </DialogDescription>
         </DialogHeader>
 
@@ -136,10 +160,16 @@ export function JoinMeetingBotDialog({
             <Label>סוג הפגישה והשיוך</Label>
             <Select
               value={targetType}
-              onValueChange={(value: "auto" | "client" | "campaigner" | "agency") => {
+              onValueChange={(
+                value: "auto" | "client" | "campaigner" | "agency",
+              ) => {
                 setTargetType(value);
                 if (value === "agency") {
-                  setTargetId(agencies.find((agency) => agency.is_default)?.id || agencies[0]?.id || "");
+                  setTargetId(
+                    agencies.find((agency) => agency.is_default)?.id ||
+                      agencies[0]?.id ||
+                      "",
+                  );
                 } else {
                   setTargetId("");
                 }
@@ -150,36 +180,53 @@ export function JoinMeetingBotDialog({
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="client">פגישת לקוח</SelectItem>
-                <SelectItem value="campaigner">פגישה פנימית — איש צוות / קמפיינר</SelectItem>
+                <SelectItem value="campaigner">
+                  פגישה פנימית — איש צוות / קמפיינר
+                </SelectItem>
                 <SelectItem value="agency">פגישה כללית של הסוכנות</SelectItem>
-                <SelectItem value="auto">זיהוי אוטומטי (לקוח / פנימי / סוכנות)</SelectItem>
+                <SelectItem value="auto">
+                  זיהוי אוטומטי (לקוח / פנימי / סוכנות)
+                </SelectItem>
               </SelectContent>
             </Select>
 
             {targetType !== "auto" && (
-              <Select value={targetId || "none"} onValueChange={(value) => setTargetId(value === "none" ? "" : value)}>
+              <Select
+                value={targetId || "none"}
+                onValueChange={(value) =>
+                  setTargetId(value === "none" ? "" : value)
+                }
+              >
                 <SelectTrigger>
                   <SelectValue
-                    placeholder={targetType === "client"
-                      ? "בחר לקוח..."
-                      : targetType === "campaigner"
-                      ? "בחר איש צוות..."
-                      : "בחר סוכנות..."}
+                    placeholder={
+                      targetType === "client"
+                        ? "בחר לקוח..."
+                        : targetType === "campaigner"
+                          ? "בחר איש צוות..."
+                          : "בחר סוכנות..."
+                    }
                   />
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="none">בחר...</SelectItem>
                   {targetType === "client" &&
                     clients.map((client) => (
-                      <SelectItem key={client.id} value={client.id}>{client.name}</SelectItem>
+                      <SelectItem key={client.id} value={client.id}>
+                        {client.name}
+                      </SelectItem>
                     ))}
                   {targetType === "campaigner" &&
                     campaigners.map((campaigner) => (
-                      <SelectItem key={campaigner.id} value={campaigner.id}>{campaigner.full_name}</SelectItem>
+                      <SelectItem key={campaigner.id} value={campaigner.id}>
+                        {campaigner.full_name}
+                      </SelectItem>
                     ))}
                   {targetType === "agency" &&
                     agencies.map((agency) => (
-                      <SelectItem key={agency.id} value={agency.id}>{agency.name}</SelectItem>
+                      <SelectItem key={agency.id} value={agency.id}>
+                        {agency.name}
+                      </SelectItem>
                     ))}
                 </SelectContent>
               </Select>

@@ -54,9 +54,12 @@ export function EmailWebhookMappingPanel({
     return (
       <div className="space-y-2 rounded-lg border border-dashed p-3">
         <p className="text-right text-xs text-muted-foreground">
-          הוסף {'{{שדות}}'} לנושא / גוף / נמען — או השתמש בשדות הזמינים מהטריגר:
+          הוסף {"{{שדות}}"} לנושא / גוף / נמען — או השתמש בשדות הזמינים מהטריגר:
         </p>
-        <pre dir="ltr" className="max-h-40 overflow-auto rounded-md border bg-background p-2 text-left text-[10px]">
+        <pre
+          dir="ltr"
+          className="max-h-40 overflow-auto rounded-md border bg-background p-2 text-left text-[10px]"
+        >
           {allFieldsJson}
         </pre>
         <Button
@@ -77,11 +80,14 @@ export function EmailWebhookMappingPanel({
     <div className="space-y-3 rounded-lg border border-violet-500/30 bg-violet-500/10 p-3">
       <div className="flex items-center gap-2">
         <Braces className="h-4 w-4 text-violet-700" />
-        <p className="text-xs font-semibold text-violet-800">מיפוי JSON ל-webhook</p>
+        <p className="text-xs font-semibold text-violet-800">
+          מיפוי JSON ל-webhook
+        </p>
       </div>
       <p className="text-right text-[11px] text-muted-foreground">
-        כל מפתח ב-JSON שתשלח ב-webhook זמין כ-<span dir="ltr">{'{{field_name}}'}</span> בנושא, בגוף ובנמענים.
-        שם המפתח חייב להיות זהה.
+        כל מפתח ב-JSON שתשלח ב-webhook זמין כ-
+        <span dir="ltr">{"{{field_name}}"}</span> בנושא, בגוף ובנמענים. שם המפתח
+        חייב להיות זהה.
       </p>
 
       <div className="overflow-hidden rounded-md border bg-background/80">
@@ -90,15 +96,21 @@ export function EmailWebhookMappingPanel({
             <tr>
               <th className="px-2 py-1 font-medium">שימוש בפלו</th>
               <th className="px-2 py-1 font-medium">בפלו</th>
-              <th className="px-2 py-1 font-medium" dir="ltr">JSON key</th>
+              <th className="px-2 py-1 font-medium" dir="ltr">
+                JSON key
+              </th>
             </tr>
           </thead>
           <tbody>
             {mappedFields.map((field) => (
               <tr key={field.key} className="border-t">
-                <td className="px-2 py-1 text-muted-foreground">{usageLabel(field.usedIn)}</td>
+                <td className="px-2 py-1 text-muted-foreground">
+                  {usageLabel(field.usedIn)}
+                </td>
                 <td className="px-2 py-1">{field.label}</td>
-                <td className="px-2 py-1 font-mono" dir="ltr">{field.key}</td>
+                <td className="px-2 py-1 font-mono" dir="ltr">
+                  {field.key}
+                </td>
               </tr>
             ))}
           </tbody>
@@ -119,16 +131,24 @@ export function EmailWebhookMappingPanel({
             העתק JSON
           </Button>
         </div>
-        <pre dir="ltr" className="max-h-48 overflow-auto rounded-md border bg-background p-2 text-left text-[10px]">
+        <pre
+          dir="ltr"
+          className="max-h-48 overflow-auto rounded-md border bg-background p-2 text-left text-[10px]"
+        >
           {sampleJson}
         </pre>
       </div>
 
       {webhookUrl && (
         <details className="rounded-md border bg-background/70 p-2">
-          <summary className="cursor-pointer text-right text-xs font-medium">דוגמת curl</summary>
-          <pre dir="ltr" className="mt-2 overflow-x-auto whitespace-pre-wrap text-left text-[10px]">
-{`curl -X POST '${webhookUrl}' \\
+          <summary className="cursor-pointer text-right text-xs font-medium">
+            דוגמת curl
+          </summary>
+          <pre
+            dir="ltr"
+            className="mt-2 overflow-x-auto whitespace-pre-wrap text-left text-[10px]"
+          >
+            {`curl -X POST '${webhookUrl}' \\
   -H 'Content-Type: application/json' \\
   -H 'x-webhook-secret: YOUR_SECRET' \\
   --data-binary @payload.json`}

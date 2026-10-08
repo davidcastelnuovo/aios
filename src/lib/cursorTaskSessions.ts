@@ -17,7 +17,9 @@ export type CursorTaskSession = {
   last_seen_at: string;
 };
 
-export async function fetchActiveCursorSessions(tenantId: string): Promise<CursorTaskSession[]> {
+export async function fetchActiveCursorSessions(
+  tenantId: string,
+): Promise<CursorTaskSession[]> {
   const { data, error } = await supabase
     .from("cursor_task_sessions")
     .select("*")

@@ -1,4 +1,12 @@
-import { format, startOfMonth, endOfMonth, eachDayOfInterval, isSameDay, isToday, isSameMonth } from "date-fns";
+import {
+  format,
+  startOfMonth,
+  endOfMonth,
+  eachDayOfInterval,
+  isSameDay,
+  isToday,
+  isSameMonth,
+} from "date-fns";
 import { he } from "date-fns/locale";
 import { useDroppable } from "@dnd-kit/core";
 import { Badge } from "@/components/ui/badge";
@@ -50,7 +58,7 @@ function DayCell({
   });
 
   const dayTasks = tasks.filter(
-    (task) => task.due_date && isSameDay(new Date(task.due_date), date)
+    (task) => task.due_date && isSameDay(new Date(task.due_date), date),
   );
 
   const isCurrentMonth = isSameMonth(date, currentMonth);
@@ -66,14 +74,14 @@ function DayCell({
         "min-h-[100px] p-2 border-b border-l cursor-pointer transition-colors hover:bg-accent/30",
         !isCurrentMonth && "bg-muted/50 text-muted-foreground",
         today && "bg-primary/10 ring-2 ring-primary/50",
-        isOver && "bg-accent/50"
+        isOver && "bg-accent/50",
       )}
     >
       <div className="flex items-center justify-between mb-1">
         <span
           className={cn(
             "text-sm font-medium",
-            today && "text-primary font-bold"
+            today && "text-primary font-bold",
           )}
         >
           {format(date, "d")}
@@ -86,7 +94,10 @@ function DayCell({
               </Badge>
             )}
             {completedCount > 0 && (
-              <Badge variant="outline" className="text-xs h-5 px-1.5 text-muted-foreground">
+              <Badge
+                variant="outline"
+                className="text-xs h-5 px-1.5 text-muted-foreground"
+              >
                 ✓{completedCount}
               </Badge>
             )}
@@ -106,7 +117,7 @@ function DayCell({
                 "text-xs p-1 rounded truncate cursor-pointer hover:bg-accent",
                 task.status === "done"
                   ? "bg-muted text-muted-foreground line-through"
-                  : "bg-primary/10"
+                  : "bg-primary/10",
               )}
             >
               {task.due_time && (
@@ -190,7 +201,7 @@ export function MonthlyView({
                 key={`empty-${index}`}
                 className="min-h-[100px] p-2 border-b border-l bg-muted/30"
               />
-            )
+            ),
           )}
         </div>
       </ScrollArea>

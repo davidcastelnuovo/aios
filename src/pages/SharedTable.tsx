@@ -4,7 +4,14 @@ import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -12,23 +19,47 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { format } from "date-fns";
 import { he } from "date-fns/locale";
 import { cn } from "@/lib/utils";
-import { FileSpreadsheet, Facebook, TrendingUp, TrendingDown, Minus, Globe, Search, BarChart3, CalendarIcon, ChevronDown, ChevronLeft, Phone, FileText } from "lucide-react";
+import {
+  FileSpreadsheet,
+  Facebook,
+  TrendingUp,
+  TrendingDown,
+  Minus,
+  Globe,
+  Search,
+  BarChart3,
+  CalendarIcon,
+  ChevronDown,
+  ChevronLeft,
+  Phone,
+  FileText,
+} from "lucide-react";
 import { PublicSeoView } from "@/components/dynamic-tables/PublicSeoView";
 import { PublicMaskyooCallsCard } from "@/components/dynamic-tables/PublicMaskyooCallsCard";
 import { PublicGscView } from "@/components/dynamic-tables/PublicGscView";
 import { PublicSeoMonthlyWorkView } from "@/components/dynamic-tables/PublicSeoMonthlyWorkView";
 import { GoogleAnalyticsDashboard } from "@/components/dynamic-tables/GoogleAnalyticsDashboard";
 import { Tabs, TabsContent } from "@/components/ui/tabs";
-import { ResponsiveTabsList, type ResponsiveTabItem } from "@/components/ui/responsive-tabs-list";
+import {
+  ResponsiveTabsList,
+  type ResponsiveTabItem,
+} from "@/components/ui/responsive-tabs-list";
 import { computeGaOrganicByMonth } from "@/components/dynamic-tables/seo/computeGaOrganicByMonth";
-import { parseSharedReportTabs, type SharedReportTabVisibility } from "@/lib/sharedReportTabs";
+import {
+  parseSharedReportTabs,
+  type SharedReportTabVisibility,
+} from "@/lib/sharedReportTabs";
 import { aggregateGscQueryRows } from "@/lib/gscPosition";
 import {
   getAddToCartFromData,
@@ -56,47 +87,70 @@ import {
 // Date filter options — shared with DynamicTableView week windows via dashboardDateFilters.
 const DATE_FILTERS = SHARED_TABLE_DATE_FILTERS;
 
-const isAnalyticsPlatform = (s: string) => s === 'google_analytics';
-const isAdsPlatform = (s: string) => ['facebook_insights', 'facebook_ecommerce', 'google_ads'].includes(s);
-const isFacebookPlatform = (s: string) => ['facebook_insights', 'facebook_ecommerce'].includes(s);
+const isAnalyticsPlatform = (s: string) => s === "google_analytics";
+const isAdsPlatform = (s: string) =>
+  ["facebook_insights", "facebook_ecommerce", "google_ads"].includes(s);
+const isFacebookPlatform = (s: string) =>
+  ["facebook_insights", "facebook_ecommerce"].includes(s);
 
 const isEcommerceRecord = (d: any) =>
-  String(d?.campaign_type || '').toLowerCase() === 'ecommerce' ||
+  String(d?.campaign_type || "").toLowerCase() === "ecommerce" ||
   Number(d?.purchases) > 0 ||
   Number(d?.purchase_value) > 0 ||
   Number(d?.add_to_cart) > 0;
 
-const CURRENCY_CODE_MAP: Record<string, string> = { ILS: 'ILS', USD: 'USD', EUR: 'EUR' };
+const CURRENCY_CODE_MAP: Record<string, string> = {
+  ILS: "ILS",
+  USD: "USD",
+  EUR: "EUR",
+};
 const makeFormatCurrency = (currencyCode?: string | null) => {
-  const code = CURRENCY_CODE_MAP[(currencyCode || 'ILS').toUpperCase()] || 'ILS';
+  const code =
+    CURRENCY_CODE_MAP[(currencyCode || "ILS").toUpperCase()] || "ILS";
   return (num: number) =>
-    new Intl.NumberFormat('he-IL', { style: 'currency', currency: code, maximumFractionDigits: 0 }).format(num);
+    new Intl.NumberFormat("he-IL", {
+      style: "currency",
+      currency: code,
+      maximumFractionDigits: 0,
+    }).format(num);
 };
 const formatNumber = (num: number) => {
-  if (num >= 1000000) return (num / 1000000).toFixed(1) + 'M';
-  if (num >= 1000) return (num / 1000).toFixed(1) + 'K';
+  if (num >= 1000000) return (num / 1000000).toFixed(1) + "M";
+  if (num >= 1000) return (num / 1000).toFixed(1) + "K";
   return num.toFixed(num % 1 === 0 ? 0 : 2);
 };
 
 const getIntegrationIcon = (type: string | null) => {
   switch (type) {
-    case 'facebook_insights':
-    case 'facebook_ecommerce':
+    case "facebook_insights":
+    case "facebook_ecommerce":
       return <Facebook className="h-5 w-5 text-blue-600" />;
-    case 'google_ads':
+    case "google_ads":
       return (
         <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none">
-          <path d="M3.654 14.916l6.26-10.857c.68-1.18 2.184-1.59 3.361-.916l.004.003c1.178.68 1.586 2.184.909 3.361l-6.26 10.857c-.68 1.18-2.184 1.59-3.361.916l-.004-.003c-1.178-.68-1.586-2.184-.909-3.361z" fill="#FBBC04"/>
-          <path d="M14.088 14.916l6.26-10.857c.68-1.18.27-2.684-.909-3.361l-.004-.003c-1.177-.674-2.681-.264-3.361.916l-6.26 10.857c-.68 1.18-.27 2.684.909 3.361l.004.003c1.177.674 2.681.264 3.361-.916z" fill="#4285F4"/>
-          <circle cx="6" cy="18" r="3.5" fill="#34A853"/>
+          <path
+            d="M3.654 14.916l6.26-10.857c.68-1.18 2.184-1.59 3.361-.916l.004.003c1.178.68 1.586 2.184.909 3.361l-6.26 10.857c-.68 1.18-2.184 1.59-3.361.916l-.004-.003c-1.178-.68-1.586-2.184-.909-3.361z"
+            fill="#FBBC04"
+          />
+          <path
+            d="M14.088 14.916l6.26-10.857c.68-1.18.27-2.684-.909-3.361l-.004-.003c-1.177-.674-2.681-.264-3.361.916l-6.26 10.857c-.68 1.18-.27 2.684.909 3.361l.004.003c1.177.674 2.681.264 3.361-.916z"
+            fill="#4285F4"
+          />
+          <circle cx="6" cy="18" r="3.5" fill="#34A853" />
         </svg>
       );
-    case 'google_analytics':
+    case "google_analytics":
       return (
         <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none">
-          <path d="M20.5 18.5v-13c0-1.1-.9-2-2-2h-1c-1.1 0-2 .9-2 2v13c0 1.1.9 2 2 2h1c1.1 0 2-.9 2-2z" fill="#F9AB00"/>
-          <path d="M13.5 18.5v-7c0-1.1-.9-2-2-2h-1c-1.1 0-2 .9-2 2v7c0 1.1.9 2 2 2h1c1.1 0 2-.9 2-2z" fill="#E37400"/>
-          <circle cx="5" cy="18.5" r="2.5" fill="#E37400"/>
+          <path
+            d="M20.5 18.5v-13c0-1.1-.9-2-2-2h-1c-1.1 0-2 .9-2 2v13c0 1.1.9 2 2 2h1c1.1 0 2-.9 2-2z"
+            fill="#F9AB00"
+          />
+          <path
+            d="M13.5 18.5v-7c0-1.1-.9-2-2-2h-1c-1.1 0-2 .9-2 2v7c0 1.1.9 2 2 2h1c1.1 0 2-.9 2-2z"
+            fill="#E37400"
+          />
+          <circle cx="5" cy="18.5" r="2.5" fill="#E37400" />
         </svg>
       );
     default:
@@ -106,44 +160,59 @@ const getIntegrationIcon = (type: string | null) => {
 
 export default function SharedTable() {
   const { shareToken } = useParams();
-  const [dateFilter, setDateFilter] = useState('last_7_days');
+  const [dateFilter, setDateFilter] = useState("last_7_days");
   const [customStart, setCustomStart] = useState<Date | undefined>();
   const [customEnd, setCustomEnd] = useState<Date | undefined>();
   const [isCustomOpen, setIsCustomOpen] = useState(false);
   const [seoShareLocked, setSeoShareLocked] = useState(false);
-  const [adsEntityLevel, setAdsEntityLevel] = useState<AdsEntityLevel>('campaign');
+  const [adsEntityLevel, setAdsEntityLevel] =
+    useState<AdsEntityLevel>("campaign");
   const [monthlyWorkFullPage, setMonthlyWorkFullPage] = useState(false);
-  const [adsReportView, setAdsReportView] = useState<"summary" | "weekly">("summary");
+  const [adsReportView, setAdsReportView] = useState<"summary" | "weekly">(
+    "summary",
+  );
   const queryClient = useQueryClient();
 
   const dateQueryKey = seoShareLocked
     ? "seo"
-    : [dateFilter, customStart?.toISOString() ?? "", customEnd?.toISOString() ?? ""].join("|");
+    : [
+        dateFilter,
+        customStart?.toISOString() ?? "",
+        customEnd?.toISOString() ?? "",
+      ].join("|");
 
-  const { data: coreData, isLoading, error } = useQuery({
-    queryKey: ['shared-table', shareToken, dateQueryKey, 'core'],
+  const {
+    data: coreData,
+    isLoading,
+    error,
+  } = useQuery({
+    queryKey: ["shared-table", shareToken, dateQueryKey, "core"],
     queryFn: async () => {
       const params = new URLSearchParams({ token: shareToken! });
       // SEO share links ignore date_filter server-side — skip sending it to avoid
       // pointless refetches when the user toggles the ads date chips.
       if (!seoShareLocked) {
         params.set("date_filter", dateFilter);
-        if (dateFilter === 'custom' && customStart && customEnd) {
-          params.set('custom_start', format(customStart, 'yyyy-MM-dd'));
-          params.set('custom_end', format(customEnd, 'yyyy-MM-dd'));
+        if (dateFilter === "custom" && customStart && customEnd) {
+          params.set("custom_start", format(customStart, "yyyy-MM-dd"));
+          params.set("custom_end", format(customEnd, "yyyy-MM-dd"));
         }
       }
       // Fast first paint for SEO shares — GSC loads in a follow-up request.
       params.set("seo_part", "core");
       const baseUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/public-table`;
       const res = await fetch(`${baseUrl}?${params.toString()}`, {
-        method: 'GET',
-        headers: { 'apikey': import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY },
+        method: "GET",
+        headers: { apikey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY },
       });
       if (!res.ok) throw new Error(await res.text());
       return res.json();
     },
-    enabled: !!shareToken && (seoShareLocked || dateFilter !== 'custom' || (!!customStart && !!customEnd)),
+    enabled:
+      !!shareToken &&
+      (seoShareLocked ||
+        dateFilter !== "custom" ||
+        (!!customStart && !!customEnd)),
     staleTime: 5 * 60 * 1000,
     retry: false,
   });
@@ -151,13 +220,16 @@ export default function SharedTable() {
   const isSeoShare = coreData?.table?.integration_type === "ahrefs";
 
   const { data: gscPart, isLoading: gscLoading } = useQuery({
-    queryKey: ['shared-table', shareToken, 'gsc'],
+    queryKey: ["shared-table", shareToken, "gsc"],
     queryFn: async () => {
-      const params = new URLSearchParams({ token: shareToken!, seo_part: 'gsc' });
+      const params = new URLSearchParams({
+        token: shareToken!,
+        seo_part: "gsc",
+      });
       const baseUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/public-table`;
       const res = await fetch(`${baseUrl}?${params.toString()}`, {
-        method: 'GET',
-        headers: { 'apikey': import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY },
+        method: "GET",
+        headers: { apikey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY },
       });
       if (!res.ok) throw new Error(await res.text());
       return res.json();
@@ -173,7 +245,8 @@ export default function SharedTable() {
     return {
       ...coreData,
       gsc_records: gscPart?.gsc_records ?? coreData.gsc_records ?? [],
-      gsc_multi_period: gscPart?.gsc_multi_period ?? coreData.gsc_multi_period ?? null,
+      gsc_multi_period:
+        gscPart?.gsc_multi_period ?? coreData.gsc_multi_period ?? null,
       gsc_synced_at: gscPart?.gsc_synced_at ?? coreData.gsc_synced_at ?? null,
     };
   }, [coreData, gscPart, isSeoShare]);
@@ -185,31 +258,42 @@ export default function SharedTable() {
   }, [coreData?.table?.integration_type]);
 
   const integrationType = data?.table?.integration_type;
-  const isIntegrationTable = isAdsPlatform(integrationType || '') || isAnalyticsPlatform(integrationType || '');
+  const isIntegrationTable =
+    isAdsPlatform(integrationType || "") ||
+    isAnalyticsPlatform(integrationType || "");
   const formatCurrency = useMemo(
-    () => makeFormatCurrency((data?.table?.integration_settings as any)?.currency),
-    [data?.table?.integration_settings]
+    () =>
+      makeFormatCurrency((data?.table?.integration_settings as any)?.currency),
+    [data?.table?.integration_settings],
   );
 
   // Deterministic table mode based on integration type + campaign_type setting
-  const tableCampaignType = String((data?.table?.integration_settings as any)?.campaign_type || '').toLowerCase();
-  const isGoogleAds = integrationType === 'google_ads';
-  const tableMode: 'leads' | 'ecommerce' =
-    integrationType === 'facebook_ecommerce' ? 'ecommerce' :
-    integrationType === 'facebook_insights' ? 'leads' :
-    integrationType === 'google_ads'
-      ? (tableCampaignType === 'ecommerce' ? 'ecommerce' : 'leads')
-      : (tableCampaignType === 'ecommerce' ? 'ecommerce' : 'leads');
-  const forceLeadsOnly = tableMode === 'leads';
-  const forceEcommerceOnly = tableMode === 'ecommerce';
+  const tableCampaignType = String(
+    (data?.table?.integration_settings as any)?.campaign_type || "",
+  ).toLowerCase();
+  const isGoogleAds = integrationType === "google_ads";
+  const tableMode: "leads" | "ecommerce" =
+    integrationType === "facebook_ecommerce"
+      ? "ecommerce"
+      : integrationType === "facebook_insights"
+        ? "leads"
+        : integrationType === "google_ads"
+          ? tableCampaignType === "ecommerce"
+            ? "ecommerce"
+            : "leads"
+          : tableCampaignType === "ecommerce"
+            ? "ecommerce"
+            : "leads";
+  const forceLeadsOnly = tableMode === "leads";
+  const forceEcommerceOnly = tableMode === "ecommerce";
 
   const { data: weeklyData, isPending: weeklyPending } = useQuery({
-    queryKey: ['shared-table', shareToken, 'last_365_days', 'weekly'],
+    queryKey: ["shared-table", shareToken, "last_365_days", "weekly"],
     queryFn: async () => {
       const query = new URLSearchParams({
         token: shareToken!,
-        date_filter: 'last_365_days',
-        seo_part: 'core',
+        date_filter: "last_365_days",
+        seo_part: "core",
       });
       const baseUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/public-table`;
       const res = await fetch(`${baseUrl}?${query}`, {
@@ -218,7 +302,10 @@ export default function SharedTable() {
       if (!res.ok) throw new Error(await res.text());
       return res.json();
     },
-    enabled: !!shareToken && isAdsPlatform(integrationType || '') && adsReportView === 'weekly',
+    enabled:
+      !!shareToken &&
+      isAdsPlatform(integrationType || "") &&
+      adsReportView === "weekly",
     staleTime: 5 * 60_000,
     retry: false,
   });
@@ -230,19 +317,25 @@ export default function SharedTable() {
   // window using the same logic as the internal view.
   const filteredRecords = useMemo(() => {
     const records = data?.records || [];
-    if (!isAdsPlatform(integrationType || '')) return records;
+    if (!isAdsPlatform(integrationType || "")) return records;
     return filterRecordsByEntityLevel(records, adsEntityLevel);
   }, [data, integrationType, adsEntityLevel]);
 
   // Summary for integration tables
   const summary = useMemo(() => {
     if (!isIntegrationTable) return null;
-    let spend = 0, impressions = 0, clicks = 0, leads = 0, sessions = 0;
-    let purchases = 0, revenue = 0, addToCart = 0;
+    let spend = 0,
+      impressions = 0,
+      clicks = 0,
+      leads = 0,
+      sessions = 0;
+    let purchases = 0,
+      revenue = 0,
+      addToCart = 0;
 
     filteredRecords.forEach((r: any) => {
       const d = r.data || {};
-      if (isAnalyticsPlatform(integrationType || '')) {
+      if (isAnalyticsPlatform(integrationType || "")) {
         sessions += getSessionsFromData(d);
         purchases += getPurchasesFromData(d);
         revenue += getRevenueFromData(d);
@@ -279,21 +372,46 @@ export default function SharedTable() {
     const hasEcommerce = forceEcommerceOnly;
     const hasLeads = forceLeadsOnly;
 
-    return { spend, impressions, clicks, leads, sessions, purchases, revenue, addToCart, roas, cpl, hasEcommerce, hasLeads };
-  }, [filteredRecords, integrationType, isIntegrationTable, forceLeadsOnly, forceEcommerceOnly, isGoogleAds]);
+    return {
+      spend,
+      impressions,
+      clicks,
+      leads,
+      sessions,
+      purchases,
+      revenue,
+      addToCart,
+      roas,
+      cpl,
+      hasEcommerce,
+      hasLeads,
+    };
+  }, [
+    filteredRecords,
+    integrationType,
+    isIntegrationTable,
+    forceLeadsOnly,
+    forceEcommerceOnly,
+    isGoogleAds,
+  ]);
 
   // Campaign/adset/ad aggregation for Facebook / Google Ads
   const campaignSummary = useMemo(() => {
-    if (!isAdsPlatform(integrationType || '')) return { ecommerce: [] as any[], leads: [] as any[], all: [] as any[] };
+    if (!isAdsPlatform(integrationType || ""))
+      return { ecommerce: [] as any[], leads: [] as any[], all: [] as any[] };
 
-    const entityColumnLabel = adsEntityLevel === 'ad'
-      ? 'מודעה'
-      : adsEntityLevel === 'adset'
-        ? 'קבוצת מודעות'
-        : 'קמפיין';
+    const entityColumnLabel =
+      adsEntityLevel === "ad"
+        ? "מודעה"
+        : adsEntityLevel === "adset"
+          ? "קבוצת מודעות"
+          : "קמפיין";
 
-    if (isFacebookPlatform(integrationType || '')) {
-      const rows = aggregateFacebookRecordsAtLevel(filteredRecords, adsEntityLevel).map((c) => ({
+    if (isFacebookPlatform(integrationType || "")) {
+      const rows = aggregateFacebookRecordsAtLevel(
+        filteredRecords,
+        adsEntityLevel,
+      ).map((c) => ({
         name: c.name,
         spend: c.spend,
         impressions: c.impressions,
@@ -310,7 +428,10 @@ export default function SharedTable() {
       return { ecommerce: [], leads: rows, all: rows, entityColumnLabel };
     }
 
-    const rows = aggregateGoogleRecordsAtLevel(filteredRecords, adsEntityLevel).map((c) => ({
+    const rows = aggregateGoogleRecordsAtLevel(
+      filteredRecords,
+      adsEntityLevel,
+    ).map((c) => ({
       name: c.name,
       spend: c.cost || c.spend,
       impressions: c.impressions,
@@ -325,23 +446,44 @@ export default function SharedTable() {
       return { ecommerce: rows, leads: [], all: rows, entityColumnLabel };
     }
     return { ecommerce: [], leads: rows, all: rows, entityColumnLabel };
-  }, [filteredRecords, integrationType, forceLeadsOnly, forceEcommerceOnly, isGoogleAds, adsEntityLevel]);
+  }, [
+    filteredRecords,
+    integrationType,
+    forceLeadsOnly,
+    forceEcommerceOnly,
+    isGoogleAds,
+    adsEntityLevel,
+  ]);
 
   // Generic table columns from fields or data keys
   const genericColumns = useMemo(() => {
     if (isIntegrationTable) return [];
-    if (!data?.records?.length) return data?.fields?.map((f: any) => ({ key: f.field_key, label: f.field_label })) || [];
+    if (!data?.records?.length)
+      return (
+        data?.fields?.map((f: any) => ({
+          key: f.field_key,
+          label: f.field_label,
+        })) || []
+      );
     if (data?.fields?.length) {
-      return data.fields.map((f: any) => ({ key: f.field_key, label: f.field_label }));
+      return data.fields.map((f: any) => ({
+        key: f.field_key,
+        label: f.field_label,
+      }));
     }
-    const keys = Object.keys(data.records[0]?.data || {}).filter((k: string) => !k.startsWith('_') && k !== 'report_type');
+    const keys = Object.keys(data.records[0]?.data || {}).filter(
+      (k: string) => !k.startsWith("_") && k !== "report_type",
+    );
     return keys.map((k: string) => ({ key: k, label: k }));
   }, [data, isIntegrationTable]);
 
   // Loading
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-background flex items-center justify-center" dir="rtl">
+      <div
+        className="min-h-screen bg-background flex items-center justify-center"
+        dir="rtl"
+      >
         <div className="w-full max-w-6xl mx-auto p-6 space-y-4">
           <Skeleton className="h-10 w-64" />
           <Skeleton className="h-96 w-full" />
@@ -353,11 +495,16 @@ export default function SharedTable() {
   // Error
   if (error || data?.error) {
     return (
-      <div className="min-h-screen bg-background flex items-center justify-center" dir="rtl">
+      <div
+        className="min-h-screen bg-background flex items-center justify-center"
+        dir="rtl"
+      >
         <Card className="w-full max-w-md mx-4">
           <CardContent className="py-12 text-center">
             <p className="text-lg font-semibold mb-2">הקישור אינו תקין</p>
-            <p className="text-sm text-muted-foreground">קישור השיתוף לא נמצא או שאינו פעיל יותר.</p>
+            <p className="text-sm text-muted-foreground">
+              קישור השיתוף לא נמצא או שאינו פעיל יותר.
+            </p>
           </CardContent>
         </Card>
       </div>
@@ -372,7 +519,9 @@ export default function SharedTable() {
     const gscRecords = data.gsc_records || [];
     const maskyooSnapshots = data.maskyoo_snapshots || [];
     const maskyooPeriod = data.maskyoo_period || null;
-    const periodLabel = maskyooPeriod ? `${maskyooPeriod.start} – ${maskyooPeriod.end}` : undefined;
+    const periodLabel = maskyooPeriod
+      ? `${maskyooPeriod.start} – ${maskyooPeriod.end}`
+      : undefined;
     // Per-report tab visibility, set in the share dialog.
     const sharedTabs = parseSharedReportTabs(data.table.integration_settings);
     const hasGa = gaRecords.length > 0 && sharedTabs.ga;
@@ -380,7 +529,9 @@ export default function SharedTable() {
     const gscPending = isSeoShare && gscLoading && !hasGsc && sharedTabs.gsc;
     const seoMonthly = (data as any).seo_monthly || null;
     const hasMonthlyWork =
-      Array.isArray(seoMonthly?.months) && seoMonthly.months.length > 0 && sharedTabs.monthly_work;
+      Array.isArray(seoMonthly?.months) &&
+      seoMonthly.months.length > 0 &&
+      sharedTabs.monthly_work;
 
     // Derive monthly NON-PAID GA sessions for the SEO traffic chart — using the
     // shared helper so the public viewer matches the internal SeoDashboardView 1:1.
@@ -389,15 +540,17 @@ export default function SharedTable() {
     // Impression-weighted position. Days with position 0 are not a rank.
     const gscAggregated = (() => {
       if (!hasGsc) return [];
-      return aggregateGscQueryRows(gscRecords.map((rec: any) => {
-        const d = rec.data || rec;
-        return {
-          query: d.query || d.keyword || "",
-          clicks: d.clicks,
-          impressions: d.impressions,
-          position: d.position,
-        };
-      })).map((row) => ({
+      return aggregateGscQueryRows(
+        gscRecords.map((rec: any) => {
+          const d = rec.data || rec;
+          return {
+            query: d.query || d.keyword || "",
+            clicks: d.clicks,
+            impressions: d.impressions,
+            position: d.position,
+          };
+        }),
+      ).map((row) => ({
         keyword: row.query,
         clicks: row.clicks,
         impressions: row.impressions,
@@ -414,12 +567,19 @@ export default function SharedTable() {
           fullPage
           onBack={() => setMonthlyWorkFullPage(false)}
           clientName={seoMonthly?.client_name || data.table.name}
-          domain={seoMonthly?.domain || ((data.table.integration_settings as any)?.targetDomain as string)}
+          domain={
+            seoMonthly?.domain ||
+            ((data.table.integration_settings as any)?.targetDomain as string)
+          }
           months={hasMonthlyWork ? seoMonthly.months : []}
           shareToken={seoMonthly?.share_token || null}
           ahrefsReports={data.ahrefs_reports || []}
-          forceRelevant={(data as any).seo_keyword_relevance?.force_relevant || []}
-          forceIrrelevant={(data as any).seo_keyword_relevance?.force_irrelevant || []}
+          forceRelevant={
+            (data as any).seo_keyword_relevance?.force_relevant || []
+          }
+          forceIrrelevant={
+            (data as any).seo_keyword_relevance?.force_irrelevant || []
+          }
         />
       );
     }
@@ -430,7 +590,9 @@ export default function SharedTable() {
           <div className="flex items-center justify-between flex-wrap gap-3">
             <div className="flex items-center gap-3">
               <Globe className="h-5 w-5 text-primary" />
-              <h1 className="text-xl md:text-2xl font-bold">{data.table.name}</h1>
+              <h1 className="text-xl md:text-2xl font-bold">
+                {data.table.name}
+              </h1>
             </div>
           </div>
 
@@ -446,7 +608,9 @@ export default function SharedTable() {
               <span className="flex items-center gap-3 text-right">
                 <FileText className="h-6 w-6 shrink-0 sm:h-7 sm:w-7" />
                 <span className="flex flex-col">
-                  <span className="text-base font-bold leading-tight sm:text-xl">דוח עבודה שנעשתה</span>
+                  <span className="text-base font-bold leading-tight sm:text-xl">
+                    דוח עבודה שנעשתה
+                  </span>
                   <span className="text-xs font-normal text-emerald-50 sm:text-sm">
                     כל מה שקודם באתר החודש — תוכן, קישורים ושיפורים
                   </span>
@@ -480,9 +644,11 @@ export default function SharedTable() {
   }
 
   const formatCellValue = (value: any) => {
-    if (value === null || value === undefined) return '—';
-    if (typeof value === 'number') {
-      return new Intl.NumberFormat('he-IL', { maximumFractionDigits: 2 }).format(value);
+    if (value === null || value === undefined) return "—";
+    if (typeof value === "number") {
+      return new Intl.NumberFormat("he-IL", {
+        maximumFractionDigits: 2,
+      }).format(value);
     }
     return String(value);
   };
@@ -498,22 +664,32 @@ export default function SharedTable() {
           </div>
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button variant="outline" className="gap-2 min-w-[180px] justify-between">
+              <Button
+                variant="outline"
+                className="gap-2 min-w-[180px] justify-between"
+              >
                 <CalendarIcon className="h-4 w-4" />
                 <span>
-                  {dateFilter === 'custom' && customStart && customEnd
-                    ? `${format(customStart, 'dd/MM/yy', { locale: he })} - ${format(customEnd, 'dd/MM/yy', { locale: he })}`
-                    : DATE_FILTERS.find(f => f.value === dateFilter)?.label || 'בחר טווח'}
+                  {dateFilter === "custom" && customStart && customEnd
+                    ? `${format(customStart, "dd/MM/yy", { locale: he })} - ${format(customEnd, "dd/MM/yy", { locale: he })}`
+                    : DATE_FILTERS.find((f) => f.value === dateFilter)?.label ||
+                      "בחר טווח"}
                 </span>
                 <ChevronDown className="h-4 w-4 opacity-50" />
               </Button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="start" className="w-56 bg-background z-[100]">
-              {DATE_FILTERS.map(f => (
+            <DropdownMenuContent
+              align="start"
+              className="w-56 bg-background z-[100]"
+            >
+              {DATE_FILTERS.map((f) => (
                 <DropdownMenuItem
                   key={f.value}
                   onClick={() => setDateFilter(f.value)}
-                  className={cn("cursor-pointer", dateFilter === f.value && "bg-accent font-medium")}
+                  className={cn(
+                    "cursor-pointer",
+                    dateFilter === f.value && "bg-accent font-medium",
+                  )}
                 >
                   {f.label}
                 </DropdownMenuItem>
@@ -526,7 +702,11 @@ export default function SharedTable() {
                       טווח מותאם אישית...
                     </button>
                   </PopoverTrigger>
-                  <PopoverContent className="w-auto p-0 z-[100] bg-background" align="start" side="bottom">
+                  <PopoverContent
+                    className="w-auto p-0 z-[100] bg-background"
+                    align="start"
+                    side="bottom"
+                  >
                     <div className="p-3 space-y-3">
                       <div className="flex gap-3">
                         <div className="space-y-1">
@@ -535,7 +715,10 @@ export default function SharedTable() {
                             mode="single"
                             selected={customStart}
                             onSelect={setCustomStart}
-                            disabled={(date) => date > new Date() || (!!customEnd && date > customEnd)}
+                            disabled={(date) =>
+                              date > new Date() ||
+                              (!!customEnd && date > customEnd)
+                            }
                             initialFocus
                             className={cn("p-3 pointer-events-auto")}
                           />
@@ -546,20 +729,27 @@ export default function SharedTable() {
                             mode="single"
                             selected={customEnd}
                             onSelect={setCustomEnd}
-                            disabled={(date) => date > new Date() || (!!customStart && date < customStart)}
+                            disabled={(date) =>
+                              date > new Date() ||
+                              (!!customStart && date < customStart)
+                            }
                             className={cn("p-3 pointer-events-auto")}
                           />
                         </div>
                       </div>
                       <div className="flex justify-end gap-2">
-                        <Button variant="outline" size="sm" onClick={() => setIsCustomOpen(false)}>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => setIsCustomOpen(false)}
+                        >
                           ביטול
                         </Button>
                         <Button
                           size="sm"
                           disabled={!customStart || !customEnd}
                           onClick={() => {
-                            setDateFilter('custom');
+                            setDateFilter("custom");
                             setIsCustomOpen(false);
                           }}
                         >
@@ -574,25 +764,37 @@ export default function SharedTable() {
           </DropdownMenu>
         </div>
 
-        {isAdsPlatform(integrationType || '') && (
-          <Tabs value={adsReportView} onValueChange={(value) => setAdsReportView(value as "summary" | "weekly")}>
+        {isAdsPlatform(integrationType || "") && (
+          <Tabs
+            value={adsReportView}
+            onValueChange={(value) =>
+              setAdsReportView(value as "summary" | "weekly")
+            }
+          >
             <ResponsiveTabsList
               items={[
                 { value: "summary", label: "הדוח" },
                 { value: "weekly", label: "השוואה שבועית", icon: BarChart3 },
               ]}
               value={adsReportView}
-              onValueChange={(value) => setAdsReportView(value as "summary" | "weekly")}
+              onValueChange={(value) =>
+                setAdsReportView(value as "summary" | "weekly")
+              }
               mobileLabel="בחר תצוגה"
             />
           </Tabs>
         )}
 
-        {isAdsPlatform(integrationType || '') && adsReportView === "weekly" && (
+        {isAdsPlatform(integrationType || "") && adsReportView === "weekly" && (
           <WeeklyCampaignComparison
             records={weeklyData?.records || []}
-            defaultSource={integrationType as "facebook_insights" | "facebook_ecommerce" | "google_ads"}
-            currency={getCurrencySymbol((data?.table?.integration_settings as any)?.currency)}
+            defaultSource={
+              integrationType as
+                "facebook_insights" | "facebook_ecommerce" | "google_ads"
+            }
+            currency={getCurrencySymbol(
+              (data?.table?.integration_settings as any)?.currency,
+            )}
             isLoading={weeklyPending}
             sourceModes={{
               facebook_insights: forceLeadsOnly ? "leads" : undefined,
@@ -603,297 +805,501 @@ export default function SharedTable() {
         )}
 
         {/* Summary Cards for integration tables */}
-        {isIntegrationTable && summary && (!isAdsPlatform(integrationType || '') || adsReportView === "summary") && (
-          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-            {isAdsPlatform(integrationType!) && (
-              <Card className="bg-gradient-to-br from-blue-50 to-blue-100 dark:from-blue-950 dark:to-blue-900">
-                <CardContent className="p-6">
-                  <p className="text-sm text-muted-foreground">הוצאה כוללת</p>
-                  <p className="text-3xl font-bold mt-2">{formatCurrency(summary.spend)}</p>
-                </CardContent>
-              </Card>
-            )}
-
-            {isAnalyticsPlatform(integrationType!) && (
-              <Card className="bg-gradient-to-br from-orange-50 to-orange-100 dark:from-orange-950 dark:to-orange-900">
-                <CardContent className="p-6">
-                  <p className="text-sm text-muted-foreground">סשנים</p>
-                  <p className="text-3xl font-bold mt-2">{formatNumber(summary.sessions)}</p>
-                </CardContent>
-              </Card>
-            )}
-
-            {!forceLeadsOnly && (summary.hasEcommerce || isAnalyticsPlatform(integrationType!)) ? (
-              <>
-                <Card className="bg-gradient-to-br from-green-50 to-green-100 dark:from-green-950 dark:to-green-900">
+        {isIntegrationTable &&
+          summary &&
+          (!isAdsPlatform(integrationType || "") ||
+            adsReportView === "summary") && (
+            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+              {isAdsPlatform(integrationType!) && (
+                <Card className="bg-gradient-to-br from-blue-50 to-blue-100 dark:from-blue-950 dark:to-blue-900">
                   <CardContent className="p-6">
-                    <p className="text-sm text-muted-foreground">הכנסות</p>
-                    <p className="text-3xl font-bold mt-2">{formatCurrency(summary.revenue)}</p>
+                    <p className="text-sm text-muted-foreground">הוצאה כוללת</p>
+                    <p className="text-3xl font-bold mt-2">
+                      {formatCurrency(summary.spend)}
+                    </p>
                   </CardContent>
                 </Card>
-                <Card className="bg-gradient-to-br from-purple-50 to-purple-100 dark:from-purple-950 dark:to-purple-900">
+              )}
+
+              {isAnalyticsPlatform(integrationType!) && (
+                <Card className="bg-gradient-to-br from-orange-50 to-orange-100 dark:from-orange-950 dark:to-orange-900">
                   <CardContent className="p-6">
-                    <p className="text-sm text-muted-foreground">רכישות</p>
-                    <p className="text-3xl font-bold mt-2">{formatNumber(summary.purchases)}</p>
+                    <p className="text-sm text-muted-foreground">סשנים</p>
+                    <p className="text-3xl font-bold mt-2">
+                      {formatNumber(summary.sessions)}
+                    </p>
                   </CardContent>
                 </Card>
-                {isAdsPlatform(integrationType!) && (
-                  <Card className={`bg-gradient-to-br ${summary.roas >= 1 ? 'from-emerald-50 to-emerald-100 dark:from-emerald-950 dark:to-emerald-900' : 'from-red-50 to-red-100 dark:from-red-950 dark:to-red-900'}`}>
+              )}
+
+              {!forceLeadsOnly &&
+              (summary.hasEcommerce ||
+                isAnalyticsPlatform(integrationType!)) ? (
+                <>
+                  <Card className="bg-gradient-to-br from-green-50 to-green-100 dark:from-green-950 dark:to-green-900">
                     <CardContent className="p-6">
-                      <p className="text-sm text-muted-foreground">ROAS</p>
-                      <div className="flex items-center gap-2 mt-2">
-                        <p className="text-3xl font-bold">{summary.roas.toFixed(2)}</p>
-                        {summary.roas > 1 ? <TrendingUp className="h-6 w-6 text-green-600" /> :
-                          summary.roas < 1 ? <TrendingDown className="h-6 w-6 text-red-600" /> :
-                          <Minus className="h-6 w-6 text-muted-foreground" />}
-                      </div>
+                      <p className="text-sm text-muted-foreground">הכנסות</p>
+                      <p className="text-3xl font-bold mt-2">
+                        {formatCurrency(summary.revenue)}
+                      </p>
                     </CardContent>
                   </Card>
-                )}
-                {summary.hasLeads && (
-                  <>
-                    <Card className="bg-gradient-to-br from-cyan-50 to-cyan-100 dark:from-cyan-950 dark:to-cyan-900">
+                  <Card className="bg-gradient-to-br from-purple-50 to-purple-100 dark:from-purple-950 dark:to-purple-900">
+                    <CardContent className="p-6">
+                      <p className="text-sm text-muted-foreground">רכישות</p>
+                      <p className="text-3xl font-bold mt-2">
+                        {formatNumber(summary.purchases)}
+                      </p>
+                    </CardContent>
+                  </Card>
+                  {isAdsPlatform(integrationType!) && (
+                    <Card
+                      className={`bg-gradient-to-br ${summary.roas >= 1 ? "from-emerald-50 to-emerald-100 dark:from-emerald-950 dark:to-emerald-900" : "from-red-50 to-red-100 dark:from-red-950 dark:to-red-900"}`}
+                    >
                       <CardContent className="p-6">
-                        <p className="text-sm text-muted-foreground">{isGoogleAds ? 'המרות' : 'לידים'}</p>
-                        <p className="text-3xl font-bold mt-2">{formatNumber(summary.leads)}</p>
+                        <p className="text-sm text-muted-foreground">ROAS</p>
+                        <div className="flex items-center gap-2 mt-2">
+                          <p className="text-3xl font-bold">
+                            {summary.roas.toFixed(2)}
+                          </p>
+                          {summary.roas > 1 ? (
+                            <TrendingUp className="h-6 w-6 text-green-600" />
+                          ) : summary.roas < 1 ? (
+                            <TrendingDown className="h-6 w-6 text-red-600" />
+                          ) : (
+                            <Minus className="h-6 w-6 text-muted-foreground" />
+                          )}
+                        </div>
                       </CardContent>
                     </Card>
-                    <Card className="bg-gradient-to-br from-teal-50 to-teal-100 dark:from-teal-950 dark:to-teal-900">
-                      <CardContent className="p-6">
-                        <p className="text-sm text-muted-foreground">{isGoogleAds ? 'עלות להמרה' : 'עלות לליד (CPL)'}</p>
-                        <p className="text-3xl font-bold mt-2">{formatCurrency(summary.cpl)}</p>
-                      </CardContent>
-                    </Card>
-                  </>
-                )}
-              </>
-            ) : (
-              <>
-                <Card className="bg-gradient-to-br from-green-50 to-green-100 dark:from-green-950 dark:to-green-900">
-                  <CardContent className="p-6">
-                    <p className="text-sm text-muted-foreground">{isGoogleAds ? 'המרות' : 'לידים'}</p>
-                    <p className="text-3xl font-bold mt-2">{formatNumber(summary.leads)}</p>
-                  </CardContent>
-                </Card>
-                <Card className="bg-gradient-to-br from-purple-50 to-purple-100 dark:from-purple-950 dark:to-purple-900">
-                  <CardContent className="p-6">
-                    <p className="text-sm text-muted-foreground">קליקים</p>
-                    <p className="text-3xl font-bold mt-2">{formatNumber(summary.clicks)}</p>
-                  </CardContent>
-                </Card>
-                <Card className="bg-gradient-to-br from-emerald-50 to-emerald-100 dark:from-emerald-950 dark:to-emerald-900">
-                  <CardContent className="p-6">
-                    <p className="text-sm text-muted-foreground">עלות לליד (CPL)</p>
-                    <p className="text-3xl font-bold mt-2">{formatCurrency(summary.cpl)}</p>
-                  </CardContent>
-                </Card>
-              </>
-            )}
-          </div>
-        )}
+                  )}
+                  {summary.hasLeads && (
+                    <>
+                      <Card className="bg-gradient-to-br from-cyan-50 to-cyan-100 dark:from-cyan-950 dark:to-cyan-900">
+                        <CardContent className="p-6">
+                          <p className="text-sm text-muted-foreground">
+                            {isGoogleAds ? "המרות" : "לידים"}
+                          </p>
+                          <p className="text-3xl font-bold mt-2">
+                            {formatNumber(summary.leads)}
+                          </p>
+                        </CardContent>
+                      </Card>
+                      <Card className="bg-gradient-to-br from-teal-50 to-teal-100 dark:from-teal-950 dark:to-teal-900">
+                        <CardContent className="p-6">
+                          <p className="text-sm text-muted-foreground">
+                            {isGoogleAds ? "עלות להמרה" : "עלות לליד (CPL)"}
+                          </p>
+                          <p className="text-3xl font-bold mt-2">
+                            {formatCurrency(summary.cpl)}
+                          </p>
+                        </CardContent>
+                      </Card>
+                    </>
+                  )}
+                </>
+              ) : (
+                <>
+                  <Card className="bg-gradient-to-br from-green-50 to-green-100 dark:from-green-950 dark:to-green-900">
+                    <CardContent className="p-6">
+                      <p className="text-sm text-muted-foreground">
+                        {isGoogleAds ? "המרות" : "לידים"}
+                      </p>
+                      <p className="text-3xl font-bold mt-2">
+                        {formatNumber(summary.leads)}
+                      </p>
+                    </CardContent>
+                  </Card>
+                  <Card className="bg-gradient-to-br from-purple-50 to-purple-100 dark:from-purple-950 dark:to-purple-900">
+                    <CardContent className="p-6">
+                      <p className="text-sm text-muted-foreground">קליקים</p>
+                      <p className="text-3xl font-bold mt-2">
+                        {formatNumber(summary.clicks)}
+                      </p>
+                    </CardContent>
+                  </Card>
+                  <Card className="bg-gradient-to-br from-emerald-50 to-emerald-100 dark:from-emerald-950 dark:to-emerald-900">
+                    <CardContent className="p-6">
+                      <p className="text-sm text-muted-foreground">
+                        עלות לליד (CPL)
+                      </p>
+                      <p className="text-3xl font-bold mt-2">
+                        {formatCurrency(summary.cpl)}
+                      </p>
+                    </CardContent>
+                  </Card>
+                </>
+              )}
+            </div>
+          )}
 
-        {isAdsPlatform(integrationType || '') && adsReportView === "summary" && (data?.records?.length ?? 0) > 0 && (
-          <div className="mb-4">
-            <AdsEntityLevelTabs
-              value={adsEntityLevel}
-              onChange={setAdsEntityLevel}
-            />
-          </div>
-        )}
+        {isAdsPlatform(integrationType || "") &&
+          adsReportView === "summary" &&
+          (data?.records?.length ?? 0) > 0 && (
+            <div className="mb-4">
+              <AdsEntityLevelTabs
+                value={adsEntityLevel}
+                onChange={setAdsEntityLevel}
+              />
+            </div>
+          )}
 
-        {isAdsPlatform(integrationType || '') && adsReportView === "summary" && adsEntityLevel !== 'campaign' && filteredRecords.length === 0 && (data?.records?.length ?? 0) > 0 && (
-          <Card className="mb-4 border-dashed">
-            <CardContent className="py-8 text-center text-sm text-muted-foreground" dir="rtl">
-              אין עדיין נתונים ברמת {ADS_ENTITY_LEVEL_LABELS[adsEntityLevel]} בקישור זה.
-            </CardContent>
-          </Card>
-        )}
+        {isAdsPlatform(integrationType || "") &&
+          adsReportView === "summary" &&
+          adsEntityLevel !== "campaign" &&
+          filteredRecords.length === 0 &&
+          (data?.records?.length ?? 0) > 0 && (
+            <Card className="mb-4 border-dashed">
+              <CardContent
+                className="py-8 text-center text-sm text-muted-foreground"
+                dir="rtl"
+              >
+                אין עדיין נתונים ברמת {ADS_ENTITY_LEVEL_LABELS[adsEntityLevel]}{" "}
+                בקישור זה.
+              </CardContent>
+            </Card>
+          )}
 
         {/* Campaign Breakdown for Ads platforms - Ecommerce */}
-        {isAdsPlatform(integrationType || '') && adsReportView === "summary" && campaignSummary.ecommerce?.length > 0 && (
-          <Card>
-            <CardHeader>
-              <CardTitle>קמפייני איקומרס</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="overflow-x-auto">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead className="text-right">{campaignSummary.entityColumnLabel || 'קמפיין'}</TableHead>
-                      <TableHead className="text-right">הוצאה</TableHead>
-                      <TableHead className="text-right">חשיפות</TableHead>
-                      <TableHead className="text-right">קליקים</TableHead>
-                      <TableHead className="text-right">הוספות לסל</TableHead>
-                      <TableHead className="text-right">רכישות</TableHead>
-                      <TableHead className="text-right">הכנסות</TableHead>
-                      <TableHead className="text-right">ROAS</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {campaignSummary.ecommerce.map((c: any) => {
-                      const roas = c.spend > 0 ? c.revenue / c.spend : 0;
-                      return (
-                        <TableRow key={c.name}>
-                          <TableCell className="font-medium max-w-[200px] truncate">{c.name}</TableCell>
-                          <TableCell>{formatCurrency(c.spend)}</TableCell>
-                          <TableCell>{formatNumber(c.impressions)}</TableCell>
-                          <TableCell>{formatNumber(c.clicks)}</TableCell>
-                          <TableCell>{formatNumber(c.addToCart)}</TableCell>
-                          <TableCell>{formatNumber(c.purchases)}</TableCell>
-                          <TableCell>{formatCurrency(c.revenue)}</TableCell>
-                          <TableCell>
-                            <span className={roas >= 1 ? 'text-green-600 font-semibold' : 'text-red-600'}>
-                              {roas.toFixed(2)}
-                            </span>
-                          </TableCell>
-                        </TableRow>
-                      );
-                    })}
-                    <TableRow className="bg-primary/10 font-bold border-t-2">
-                      <TableCell>סה"כ</TableCell>
-                      <TableCell>{formatCurrency(campaignSummary.ecommerce.reduce((s: number, c: any) => s + c.spend, 0))}</TableCell>
-                      <TableCell>{formatNumber(campaignSummary.ecommerce.reduce((s: number, c: any) => s + c.impressions, 0))}</TableCell>
-                      <TableCell>{formatNumber(campaignSummary.ecommerce.reduce((s: number, c: any) => s + c.clicks, 0))}</TableCell>
-                      <TableCell>{formatNumber(campaignSummary.ecommerce.reduce((s: number, c: any) => s + c.addToCart, 0))}</TableCell>
-                      <TableCell>{formatNumber(campaignSummary.ecommerce.reduce((s: number, c: any) => s + c.purchases, 0))}</TableCell>
-                      <TableCell>{formatCurrency(campaignSummary.ecommerce.reduce((s: number, c: any) => s + c.revenue, 0))}</TableCell>
-                      <TableCell>
-                        {(() => {
-                          const totalSpend = campaignSummary.ecommerce.reduce((s: number, c: any) => s + c.spend, 0);
-                          const totalRevenue = campaignSummary.ecommerce.reduce((s: number, c: any) => s + c.revenue, 0);
-                          const roas = totalSpend > 0 ? totalRevenue / totalSpend : 0;
-                          return <span className={roas >= 1 ? 'text-green-600' : 'text-red-600'}>{roas.toFixed(2)}</span>;
-                        })()}
-                      </TableCell>
-                    </TableRow>
-                  </TableBody>
-                </Table>
-              </div>
-            </CardContent>
-          </Card>
-        )}
+        {isAdsPlatform(integrationType || "") &&
+          adsReportView === "summary" &&
+          campaignSummary.ecommerce?.length > 0 && (
+            <Card>
+              <CardHeader>
+                <CardTitle>קמפייני איקומרס</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="overflow-x-auto">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead className="text-right">
+                          {campaignSummary.entityColumnLabel || "קמפיין"}
+                        </TableHead>
+                        <TableHead className="text-right">הוצאה</TableHead>
+                        <TableHead className="text-right">חשיפות</TableHead>
+                        <TableHead className="text-right">קליקים</TableHead>
+                        <TableHead className="text-right">הוספות לסל</TableHead>
+                        <TableHead className="text-right">רכישות</TableHead>
+                        <TableHead className="text-right">הכנסות</TableHead>
+                        <TableHead className="text-right">ROAS</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {campaignSummary.ecommerce.map((c: any) => {
+                        const roas = c.spend > 0 ? c.revenue / c.spend : 0;
+                        return (
+                          <TableRow key={c.name}>
+                            <TableCell className="font-medium max-w-[200px] truncate">
+                              {c.name}
+                            </TableCell>
+                            <TableCell>{formatCurrency(c.spend)}</TableCell>
+                            <TableCell>{formatNumber(c.impressions)}</TableCell>
+                            <TableCell>{formatNumber(c.clicks)}</TableCell>
+                            <TableCell>{formatNumber(c.addToCart)}</TableCell>
+                            <TableCell>{formatNumber(c.purchases)}</TableCell>
+                            <TableCell>{formatCurrency(c.revenue)}</TableCell>
+                            <TableCell>
+                              <span
+                                className={
+                                  roas >= 1
+                                    ? "text-green-600 font-semibold"
+                                    : "text-red-600"
+                                }
+                              >
+                                {roas.toFixed(2)}
+                              </span>
+                            </TableCell>
+                          </TableRow>
+                        );
+                      })}
+                      <TableRow className="bg-primary/10 font-bold border-t-2">
+                        <TableCell>סה"כ</TableCell>
+                        <TableCell>
+                          {formatCurrency(
+                            campaignSummary.ecommerce.reduce(
+                              (s: number, c: any) => s + c.spend,
+                              0,
+                            ),
+                          )}
+                        </TableCell>
+                        <TableCell>
+                          {formatNumber(
+                            campaignSummary.ecommerce.reduce(
+                              (s: number, c: any) => s + c.impressions,
+                              0,
+                            ),
+                          )}
+                        </TableCell>
+                        <TableCell>
+                          {formatNumber(
+                            campaignSummary.ecommerce.reduce(
+                              (s: number, c: any) => s + c.clicks,
+                              0,
+                            ),
+                          )}
+                        </TableCell>
+                        <TableCell>
+                          {formatNumber(
+                            campaignSummary.ecommerce.reduce(
+                              (s: number, c: any) => s + c.addToCart,
+                              0,
+                            ),
+                          )}
+                        </TableCell>
+                        <TableCell>
+                          {formatNumber(
+                            campaignSummary.ecommerce.reduce(
+                              (s: number, c: any) => s + c.purchases,
+                              0,
+                            ),
+                          )}
+                        </TableCell>
+                        <TableCell>
+                          {formatCurrency(
+                            campaignSummary.ecommerce.reduce(
+                              (s: number, c: any) => s + c.revenue,
+                              0,
+                            ),
+                          )}
+                        </TableCell>
+                        <TableCell>
+                          {(() => {
+                            const totalSpend = campaignSummary.ecommerce.reduce(
+                              (s: number, c: any) => s + c.spend,
+                              0,
+                            );
+                            const totalRevenue =
+                              campaignSummary.ecommerce.reduce(
+                                (s: number, c: any) => s + c.revenue,
+                                0,
+                              );
+                            const roas =
+                              totalSpend > 0 ? totalRevenue / totalSpend : 0;
+                            return (
+                              <span
+                                className={
+                                  roas >= 1 ? "text-green-600" : "text-red-600"
+                                }
+                              >
+                                {roas.toFixed(2)}
+                              </span>
+                            );
+                          })()}
+                        </TableCell>
+                      </TableRow>
+                    </TableBody>
+                  </Table>
+                </div>
+              </CardContent>
+            </Card>
+          )}
 
         {/* Campaign Breakdown for Ads platforms - Leads */}
-        {isAdsPlatform(integrationType || '') && adsReportView === "summary" && campaignSummary.leads?.length > 0 && (
-          <Card>
-            <CardHeader>
-              <CardTitle>קמפייני לידים</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="overflow-x-auto">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead className="text-right">{campaignSummary.entityColumnLabel || 'קמפיין'}</TableHead>
-                      <TableHead className="text-right">הוצאה</TableHead>
-                      <TableHead className="text-right">חשיפות</TableHead>
-                      <TableHead className="text-right">קליקים</TableHead>
-                      <TableHead className="text-right">{isGoogleAds ? 'המרות' : 'לידים'}</TableHead>
-                      <TableHead className="text-right">{isGoogleAds ? 'עלות להמרה' : 'עלות לליד'}</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {campaignSummary.leads.map((c: any) => {
-                      const cpl = c.leads > 0 ? c.spend / c.leads : 0;
-                      return (
-                        <TableRow key={c.name}>
-                          <TableCell className="font-medium max-w-[200px] truncate">{c.name}</TableCell>
-                          <TableCell>{formatCurrency(c.spend)}</TableCell>
-                          <TableCell>{formatNumber(c.impressions)}</TableCell>
-                          <TableCell>{formatNumber(c.clicks)}</TableCell>
-                          <TableCell>{formatNumber(c.leads)}</TableCell>
-                          <TableCell>{formatCurrency(cpl)}</TableCell>
-                        </TableRow>
-                      );
-                    })}
-                    <TableRow className="bg-primary/10 font-bold border-t-2">
-                      <TableCell>סה"כ</TableCell>
-                      <TableCell>{formatCurrency(campaignSummary.leads.reduce((s: number, c: any) => s + c.spend, 0))}</TableCell>
-                      <TableCell>{formatNumber(campaignSummary.leads.reduce((s: number, c: any) => s + c.impressions, 0))}</TableCell>
-                      <TableCell>{formatNumber(campaignSummary.leads.reduce((s: number, c: any) => s + c.clicks, 0))}</TableCell>
-                      <TableCell>{formatNumber(campaignSummary.leads.reduce((s: number, c: any) => s + c.leads, 0))}</TableCell>
-                      <TableCell>
-                        {(() => {
-                          const totalSpend = campaignSummary.leads.reduce((s: number, c: any) => s + c.spend, 0);
-                          const totalLeads = campaignSummary.leads.reduce((s: number, c: any) => s + c.leads, 0);
-                          return formatCurrency(totalLeads > 0 ? totalSpend / totalLeads : 0);
-                        })()}
-                      </TableCell>
-                    </TableRow>
-                  </TableBody>
-                </Table>
-              </div>
-            </CardContent>
-          </Card>
-        )}
+        {isAdsPlatform(integrationType || "") &&
+          adsReportView === "summary" &&
+          campaignSummary.leads?.length > 0 && (
+            <Card>
+              <CardHeader>
+                <CardTitle>קמפייני לידים</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="overflow-x-auto">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead className="text-right">
+                          {campaignSummary.entityColumnLabel || "קמפיין"}
+                        </TableHead>
+                        <TableHead className="text-right">הוצאה</TableHead>
+                        <TableHead className="text-right">חשיפות</TableHead>
+                        <TableHead className="text-right">קליקים</TableHead>
+                        <TableHead className="text-right">
+                          {isGoogleAds ? "המרות" : "לידים"}
+                        </TableHead>
+                        <TableHead className="text-right">
+                          {isGoogleAds ? "עלות להמרה" : "עלות לליד"}
+                        </TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {campaignSummary.leads.map((c: any) => {
+                        const cpl = c.leads > 0 ? c.spend / c.leads : 0;
+                        return (
+                          <TableRow key={c.name}>
+                            <TableCell className="font-medium max-w-[200px] truncate">
+                              {c.name}
+                            </TableCell>
+                            <TableCell>{formatCurrency(c.spend)}</TableCell>
+                            <TableCell>{formatNumber(c.impressions)}</TableCell>
+                            <TableCell>{formatNumber(c.clicks)}</TableCell>
+                            <TableCell>{formatNumber(c.leads)}</TableCell>
+                            <TableCell>{formatCurrency(cpl)}</TableCell>
+                          </TableRow>
+                        );
+                      })}
+                      <TableRow className="bg-primary/10 font-bold border-t-2">
+                        <TableCell>סה"כ</TableCell>
+                        <TableCell>
+                          {formatCurrency(
+                            campaignSummary.leads.reduce(
+                              (s: number, c: any) => s + c.spend,
+                              0,
+                            ),
+                          )}
+                        </TableCell>
+                        <TableCell>
+                          {formatNumber(
+                            campaignSummary.leads.reduce(
+                              (s: number, c: any) => s + c.impressions,
+                              0,
+                            ),
+                          )}
+                        </TableCell>
+                        <TableCell>
+                          {formatNumber(
+                            campaignSummary.leads.reduce(
+                              (s: number, c: any) => s + c.clicks,
+                              0,
+                            ),
+                          )}
+                        </TableCell>
+                        <TableCell>
+                          {formatNumber(
+                            campaignSummary.leads.reduce(
+                              (s: number, c: any) => s + c.leads,
+                              0,
+                            ),
+                          )}
+                        </TableCell>
+                        <TableCell>
+                          {(() => {
+                            const totalSpend = campaignSummary.leads.reduce(
+                              (s: number, c: any) => s + c.spend,
+                              0,
+                            );
+                            const totalLeads = campaignSummary.leads.reduce(
+                              (s: number, c: any) => s + c.leads,
+                              0,
+                            );
+                            return formatCurrency(
+                              totalLeads > 0 ? totalSpend / totalLeads : 0,
+                            );
+                          })()}
+                        </TableCell>
+                      </TableRow>
+                    </TableBody>
+                  </Table>
+                </div>
+              </CardContent>
+            </Card>
+          )}
 
         {/* Manual ROI summary — viewers can fill in closures & revenue */}
-        {isAdsPlatform(integrationType || '') && adsReportView === "summary" && summary && (summary.hasLeads || campaignSummary.leads.length > 0) && (
-          <ManualROICard
-            tableId={data.table.id}
-            spend={campaignSummary.leads.reduce((s: number, c: any) => s + c.spend, 0) || summary.spend}
-            leads={campaignSummary.leads.reduce((s: number, c: any) => s + c.leads, 0) || summary.leads}
-            currency={(() => {
-              const code = ((data?.table?.integration_settings as any)?.currency || 'ILS').toUpperCase();
-              return code === 'USD' ? '$' : code === 'EUR' ? '€' : '₪';
-            })()}
-            initialClosures={(data.table.integration_settings as any)?.manual_roi?.closures ?? null}
-            initialRevenue={(data.table.integration_settings as any)?.manual_roi?.revenue ?? null}
-            integrationSettings={data.table.integration_settings as any}
-            saveFn={async (manual_roi) => {
-              const baseUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/public-table`;
-              const res = await fetch(baseUrl, {
-                method: 'POST',
-                headers: {
-                  'Content-Type': 'application/json',
-                  'apikey': import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
-                },
-                body: JSON.stringify({ token: shareToken, manual_roi }),
-              });
-              if (!res.ok) throw new Error(await res.text());
-              await queryClient.invalidateQueries({ queryKey: ['shared-table', shareToken] });
-            }}
-          />
-        )}
+        {isAdsPlatform(integrationType || "") &&
+          adsReportView === "summary" &&
+          summary &&
+          (summary.hasLeads || campaignSummary.leads.length > 0) && (
+            <ManualROICard
+              tableId={data.table.id}
+              spend={
+                campaignSummary.leads.reduce(
+                  (s: number, c: any) => s + c.spend,
+                  0,
+                ) || summary.spend
+              }
+              leads={
+                campaignSummary.leads.reduce(
+                  (s: number, c: any) => s + c.leads,
+                  0,
+                ) || summary.leads
+              }
+              currency={(() => {
+                const code = (
+                  (data?.table?.integration_settings as any)?.currency || "ILS"
+                ).toUpperCase();
+                return code === "USD" ? "$" : code === "EUR" ? "€" : "₪";
+              })()}
+              initialClosures={
+                (data.table.integration_settings as any)?.manual_roi
+                  ?.closures ?? null
+              }
+              initialRevenue={
+                (data.table.integration_settings as any)?.manual_roi?.revenue ??
+                null
+              }
+              integrationSettings={data.table.integration_settings as any}
+              saveFn={async (manual_roi) => {
+                const baseUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/public-table`;
+                const res = await fetch(baseUrl, {
+                  method: "POST",
+                  headers: {
+                    "Content-Type": "application/json",
+                    apikey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
+                  },
+                  body: JSON.stringify({ token: shareToken, manual_roi }),
+                });
+                if (!res.ok) throw new Error(await res.text());
+                await queryClient.invalidateQueries({
+                  queryKey: ["shared-table", shareToken],
+                });
+              }}
+            />
+          )}
 
-
-        {isAnalyticsPlatform(integrationType || '') && filteredRecords.length > 0 && (
-          <Card>
-            <CardHeader>
-              <CardTitle>פירוט יומי</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="overflow-x-auto">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead className="text-right">תאריך</TableHead>
-                      <TableHead className="text-right">סשנים</TableHead>
-                      <TableHead className="text-right">צפיות עמוד</TableHead>
-                      <TableHead className="text-right">רכישות</TableHead>
-                      <TableHead className="text-right">הכנסות</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {filteredRecords
-                      .sort((a: any, b: any) => (b.data?.date || '').localeCompare(a.data?.date || ''))
-                      .slice(0, 60)
-                      .map((r: any, i: number) => (
-                        <TableRow key={r.id || i}>
-                          <TableCell>{r.data?.date || '—'}</TableCell>
-                          <TableCell>{formatNumber(getSessionsFromData(r.data))}</TableCell>
-                          <TableCell>{formatNumber(Number(r.data?.screenPageViews) || Number(r.data?.pageviews) || 0)}</TableCell>
-                          <TableCell>{formatNumber(getPurchasesFromData(r.data))}</TableCell>
-                          <TableCell>{formatCurrency(getRevenueFromData(r.data))}</TableCell>
-                        </TableRow>
-                      ))}
-                  </TableBody>
-                </Table>
-              </div>
-            </CardContent>
-          </Card>
-        )}
+        {isAnalyticsPlatform(integrationType || "") &&
+          filteredRecords.length > 0 && (
+            <Card>
+              <CardHeader>
+                <CardTitle>פירוט יומי</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="overflow-x-auto">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead className="text-right">תאריך</TableHead>
+                        <TableHead className="text-right">סשנים</TableHead>
+                        <TableHead className="text-right">צפיות עמוד</TableHead>
+                        <TableHead className="text-right">רכישות</TableHead>
+                        <TableHead className="text-right">הכנסות</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {filteredRecords
+                        .sort((a: any, b: any) =>
+                          (b.data?.date || "").localeCompare(
+                            a.data?.date || "",
+                          ),
+                        )
+                        .slice(0, 60)
+                        .map((r: any, i: number) => (
+                          <TableRow key={r.id || i}>
+                            <TableCell>{r.data?.date || "—"}</TableCell>
+                            <TableCell>
+                              {formatNumber(getSessionsFromData(r.data))}
+                            </TableCell>
+                            <TableCell>
+                              {formatNumber(
+                                Number(r.data?.screenPageViews) ||
+                                  Number(r.data?.pageviews) ||
+                                  0,
+                              )}
+                            </TableCell>
+                            <TableCell>
+                              {formatNumber(getPurchasesFromData(r.data))}
+                            </TableCell>
+                            <TableCell>
+                              {formatCurrency(getRevenueFromData(r.data))}
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                    </TableBody>
+                  </Table>
+                </div>
+              </CardContent>
+            </Card>
+          )}
 
         {/* Generic table for non-integration tables */}
         {!isIntegrationTable && (
@@ -904,7 +1310,10 @@ export default function SharedTable() {
                   <TableHeader>
                     <TableRow>
                       {genericColumns.map((col: any) => (
-                        <TableHead key={col.key} className="text-right whitespace-nowrap">
+                        <TableHead
+                          key={col.key}
+                          className="text-right whitespace-nowrap"
+                        >
                           {col.label}
                         </TableHead>
                       ))}
@@ -913,7 +1322,10 @@ export default function SharedTable() {
                   <TableBody>
                     {filteredRecords.length === 0 ? (
                       <TableRow>
-                        <TableCell colSpan={genericColumns.length || 1} className="text-center py-12 text-muted-foreground">
+                        <TableCell
+                          colSpan={genericColumns.length || 1}
+                          className="text-center py-12 text-muted-foreground"
+                        >
                           אין נתונים לתקופה זו
                         </TableCell>
                       </TableRow>
@@ -921,7 +1333,10 @@ export default function SharedTable() {
                       filteredRecords.map((record: any, i: number) => (
                         <TableRow key={record.id || i}>
                           {genericColumns.map((col: any) => (
-                            <TableCell key={col.key} className="whitespace-nowrap">
+                            <TableCell
+                              key={col.key}
+                              className="whitespace-nowrap"
+                            >
                               {formatCellValue(record.data?.[col.key])}
                             </TableCell>
                           ))}
@@ -936,7 +1351,8 @@ export default function SharedTable() {
         )}
 
         <p className="text-center text-xs text-muted-foreground">
-          {filteredRecords.length} שורות • {data.table.name} • Powered by {data.table.agency_name || 'Marketing Captain'}
+          {filteredRecords.length} שורות • {data.table.name} • Powered by{" "}
+          {data.table.agency_name || "Marketing Captain"}
         </p>
       </div>
     </div>
@@ -975,7 +1391,10 @@ function AhrefsSharedReportTabs({
   clientId: string | null;
   ahrefsReports: any[];
   gscMultiPeriod: any;
-  seoKeywordRelevance?: { force_relevant?: string[]; force_irrelevant?: string[] };
+  seoKeywordRelevance?: {
+    force_relevant?: string[];
+    force_irrelevant?: string[];
+  };
   sharedTabs: SharedReportTabVisibility;
 }) {
   const [activeTab, setActiveTab] = useState("seo");
@@ -1022,7 +1441,9 @@ function AhrefsSharedReportTabs({
       {sharedTabs.seo && (
         <TabsContent value="seo" className="space-y-4">
           {gscPending && (
-            <p className="text-sm text-muted-foreground">טוען נתוני Search Console…</p>
+            <p className="text-sm text-muted-foreground">
+              טוען נתוני Search Console…
+            </p>
           )}
           <PublicSeoView
             tableName={tableName}
@@ -1030,7 +1451,9 @@ function AhrefsSharedReportTabs({
             gscData={gscAggregated}
             gscMultiPeriod={gscMultiPeriod}
             gaOrganicByMonth={gaOrganicByMonth}
-            initialLangFilter={(tableSettings.linkedGscLangFilter as string) || "all"}
+            initialLangFilter={
+              (tableSettings.linkedGscLangFilter as string) || "all"
+            }
             clientId={clientId}
             forceRelevant={seoKeywordRelevance?.force_relevant || []}
             forceIrrelevant={seoKeywordRelevance?.force_irrelevant || []}
@@ -1052,7 +1475,10 @@ function AhrefsSharedReportTabs({
 
       {sharedTabs.maskyoo && (
         <TabsContent value="maskyoo">
-          <PublicMaskyooCallsCard snapshots={maskyooSnapshots} periodLabel={periodLabel} />
+          <PublicMaskyooCallsCard
+            snapshots={maskyooSnapshots}
+            periodLabel={periodLabel}
+          />
         </TabsContent>
       )}
     </Tabs>

@@ -31,11 +31,20 @@ import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Badge } from "@/components/ui/badge";
-import { Loader2, TrendingUp, TrendingDown, Minus, History } from "lucide-react";
+import {
+  Loader2,
+  TrendingUp,
+  TrendingDown,
+  Minus,
+  History,
+} from "lucide-react";
 import { format, startOfMonth, subMonths } from "date-fns";
 import { he } from "date-fns/locale";
 import { SEO_STATUS_COLORS, SEO_STATUS_LABELS } from "@/lib/healthScore";
-import { parseSeoMonthlyWork, sanitizeSeoMonthlyWork } from "@/lib/seoMonthlyWork";
+import {
+  parseSeoMonthlyWork,
+  sanitizeSeoMonthlyWork,
+} from "@/lib/seoMonthlyWork";
 
 interface SeoUpdateModalProps {
   clientId: string;
@@ -89,16 +98,23 @@ export function SeoUpdateModal({
 
   useEffect(() => {
     if (!open) return;
-    const existing = (seoHistory as Array<{ month?: string; status?: string; notes?: string | null; work?: unknown }>).find(
-      (entry) => String(entry.month || "").slice(0, 10) === selectedMonth,
-    );
+    const existing = (
+      seoHistory as Array<{
+        month?: string;
+        status?: string;
+        notes?: string | null;
+        work?: unknown;
+      }>
+    ).find((entry) => String(entry.month || "").slice(0, 10) === selectedMonth);
     if (!existing) {
       setStatus("stable");
       setNotes("");
       return;
     }
     setStatus(
-      existing.status === "up" || existing.status === "down" ? existing.status : "stable",
+      existing.status === "up" || existing.status === "down"
+        ? existing.status
+        : "stable",
     );
     const savedWork = parseSeoMonthlyWork(existing.work);
     setNotes(savedWork.summary || existing.notes || "");
@@ -110,9 +126,13 @@ export function SeoUpdateModal({
 
       // Keep the row on the client's home / existing tenant so shared-agency
       // viewers don't fork a second empty history under their session tenant.
-      const existing = (seoHistory as Array<{ month?: string; tenant_id?: string; work?: unknown }>).find(
-        (r) => String(r.month || "").slice(0, 10) === selectedMonth,
-      );
+      const existing = (
+        seoHistory as Array<{
+          month?: string;
+          tenant_id?: string;
+          work?: unknown;
+        }>
+      ).find((r) => String(r.month || "").slice(0, 10) === selectedMonth);
       let saveTenantId = existing?.tenant_id || tenantId || "";
       if (!existing?.tenant_id) {
         const { data: clientRow } = await supabase
@@ -141,18 +161,26 @@ export function SeoUpdateModal({
             work: nextWork,
             updated_by: user.id,
           },
-          { onConflict: "client_id,month" }
+          { onConflict: "client_id,month" },
         );
       if (error) throw error;
     },
     onSuccess: () => {
       toast.success("עדכון SEO נשמר בהצלחה");
-      queryClient.invalidateQueries({ queryKey: ["seo-monthly-history", clientId] });
+      queryClient.invalidateQueries({
+        queryKey: ["seo-monthly-history", clientId],
+      });
       queryClient.invalidateQueries({ queryKey: ["seo-history", clientId] });
-      queryClient.invalidateQueries({ queryKey: ["seo-monthly-work", clientId] });
+      queryClient.invalidateQueries({
+        queryKey: ["seo-monthly-work", clientId],
+      });
       queryClient.invalidateQueries({ queryKey: ["seo-monthly-latest"] });
-      queryClient.invalidateQueries({ queryKey: ["seo-monthly-single", clientId] });
-      queryClient.invalidateQueries({ queryKey: ["seo-monthly-months", clientId] });
+      queryClient.invalidateQueries({
+        queryKey: ["seo-monthly-single", clientId],
+      });
+      queryClient.invalidateQueries({
+        queryKey: ["seo-monthly-months", clientId],
+      });
       queryClient.invalidateQueries({ queryKey: ["client-updates", clientId] });
       queryClient.invalidateQueries({ queryKey: ["dmm-clients", tenantId] });
       setNotes("");
@@ -255,16 +283,21 @@ export function SeoUpdateModal({
                     className="flex items-center gap-2 text-sm p-2 rounded-md bg-muted/40"
                   >
                     <span className="text-muted-foreground w-24 shrink-0">
-                      {format(new Date(entry.month), "MMM yyyy", { locale: he })}
+                      {format(new Date(entry.month), "MMM yyyy", {
+                        locale: he,
+                      })}
                     </span>
                     <Badge
                       variant="outline"
                       className={`text-xs ${SEO_STATUS_COLORS[entry.status as string] || ""}`}
                     >
-                      {SEO_STATUS_LABELS[entry.status as string] || entry.status}
+                      {SEO_STATUS_LABELS[entry.status as string] ||
+                        entry.status}
                     </Badge>
                     {entry.notes && (
-                      <span className="text-muted-foreground truncate">{entry.notes}</span>
+                      <span className="text-muted-foreground truncate">
+                        {entry.notes}
+                      </span>
                     )}
                   </div>
                 ))}
@@ -277,8 +310,13 @@ export function SeoUpdateModal({
           <Button variant="outline" onClick={() => onOpenChange(false)}>
             ביטול
           </Button>
-          <Button onClick={() => mutation.mutate()} disabled={mutation.isPending}>
-            {mutation.isPending && <Loader2 className="ml-2 h-4 w-4 animate-spin" />}
+          <Button
+            onClick={() => mutation.mutate()}
+            disabled={mutation.isPending}
+          >
+            {mutation.isPending && (
+              <Loader2 className="ml-2 h-4 w-4 animate-spin" />
+            )}
             שמור עדכון SEO
           </Button>
         </DialogFooter>

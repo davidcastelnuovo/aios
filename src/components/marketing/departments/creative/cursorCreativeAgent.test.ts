@@ -14,7 +14,12 @@ import type { CreativeBrandKit } from "./brandKit.ts";
 const kit = (overrides: Partial<CreativeBrandKit> = {}): CreativeBrandKit => ({
   logoUrl: "https://cdn.example/logo.png",
   styleReferences: [{ url: "https://cdn.example/ref.jpg", name: "grade" }],
-  brandBook: { name: "פרומו", colors: ["#c00000", "#111111"], notes: "", source: "auto" },
+  brandBook: {
+    name: "פרומו",
+    colors: ["#c00000", "#111111"],
+    notes: "",
+    source: "auto",
+  },
   ...overrides,
 });
 
@@ -38,7 +43,10 @@ test("formatConceptJobBrief uses the approved concept fields", () => {
 test("formatBrandColorJobBrief locks hex colors and admits when none exist", () => {
   assert.match(formatBrandColorJobBrief(kit()), /#c00000/);
   assert.match(formatBrandColorJobBrief(kit()), /hard lock/);
-  assert.match(formatBrandColorJobBrief(kit({ brandBook: undefined })), /none on file/);
+  assert.match(
+    formatBrandColorJobBrief(kit({ brandBook: undefined })),
+    /none on file/,
+  );
 });
 
 test("formatReferenceJobBrief lists download URLs as a fail-if-skipped block", () => {
@@ -74,15 +82,39 @@ test("resolvePreviousStyleId prefers the replaced card, then sibling source, the
     { visualStyle: "cinematic" as const, rejected: true },
     { visualStyle: "industrial" as const },
   ];
-  assert.equal(resolvePreviousStyleId({ visualStyle: "collage" }, { visualStyle: "swiss" }, live), "collage");
-  assert.equal(resolvePreviousStyleId(undefined, { visualStyle: "swiss" }, live), "swiss");
-  assert.equal(resolvePreviousStyleId(undefined, undefined, live), "industrial");
-  assert.equal(resolvePreviousStyleId({ visualStyle: undefined }, undefined, live), undefined);
+  assert.equal(
+    resolvePreviousStyleId(
+      { visualStyle: "collage" },
+      { visualStyle: "swiss" },
+      live,
+    ),
+    "collage",
+  );
+  assert.equal(
+    resolvePreviousStyleId(undefined, { visualStyle: "swiss" }, live),
+    "swiss",
+  );
+  assert.equal(
+    resolvePreviousStyleId(undefined, undefined, live),
+    "industrial",
+  );
+  assert.equal(
+    resolvePreviousStyleId({ visualStyle: undefined }, undefined, live),
+    undefined,
+  );
 });
 
 test("buildCreativeJobBrief includes concept, colors, refs, and style", () => {
   const brief = buildCreativeJobBrief({
-    concept: { name: "הכיס הריק", bigIdea: "ארנק פעור", visualLanguage: "", hook: "כיס", copyAngle: "", whyItWorks: "", reference: "" },
+    concept: {
+      name: "הכיס הריק",
+      bigIdea: "ארנק פעור",
+      visualLanguage: "",
+      hook: "כיס",
+      copyAngle: "",
+      whyItWorks: "",
+      reference: "",
+    },
     kit: kit(),
     refs: [{ url: "https://cdn.example/ref.jpg", kind: "style" }],
     styleId: "swiss",
@@ -100,10 +132,19 @@ test("buildCreativeAgentPrompt leads with the job brief then the photograph lock
   const prompt = buildCreativeAgentPrompt({
     format: "1:1",
     copyText: "כותרת:\nפעם חיפשו אותך.\nCTA:\nהשאירו פרטים",
-    visualPrompt: "MUST FOLLOW THIS APPROVED VISUAL CONCEPT\nPhotograph a hollow pocket",
+    visualPrompt:
+      "MUST FOLLOW THIS APPROVED VISUAL CONCEPT\nPhotograph a hollow pocket",
     kit: kit(),
     refs: [{ url: "https://cdn.example/ref.jpg", kind: "style" }],
-    concept: { name: "הכיס הריק", bigIdea: "ארנק פעור", visualLanguage: "שחור-זהב", hook: "כיס הפוך", copyAngle: "", whyItWorks: "", reference: "" },
+    concept: {
+      name: "הכיס הריק",
+      bigIdea: "ארנק פעור",
+      visualLanguage: "שחור-זהב",
+      hook: "כיס הפוך",
+      copyAngle: "",
+      whyItWorks: "",
+      reference: "",
+    },
     styleId: "swiss",
     previousStyleId: "cinematic",
   });

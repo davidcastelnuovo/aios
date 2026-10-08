@@ -28,7 +28,8 @@ export interface SocialMediaPost {
   content: string;
   media_urls: string[];
   post_type: "text" | "image" | "video" | "carousel" | "story" | "reel";
-  status: "draft" | "scheduled" | "publishing" | "published" | "failed" | "cancelled";
+  status:
+    "draft" | "scheduled" | "publishing" | "published" | "failed" | "cancelled";
   scheduled_at: string | null;
   published_at: string | null;
   wordpress_post_id: string | null;
@@ -106,7 +107,9 @@ export function useCreateChannel() {
       return data as unknown as SocialMediaChannel;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["social-media-channels", tenantId] });
+      queryClient.invalidateQueries({
+        queryKey: ["social-media-channels", tenantId],
+      });
       toast.success("ערוץ נוסף בהצלחה");
     },
     onError: (error: Error) => {
@@ -128,7 +131,9 @@ export function useDeleteChannel() {
       if (error) throw error;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["social-media-channels", tenantId] });
+      queryClient.invalidateQueries({
+        queryKey: ["social-media-channels", tenantId],
+      });
       toast.success("ערוץ נמחק בהצלחה");
     },
     onError: (error: Error) => {
@@ -223,7 +228,9 @@ export function useCreatePost() {
       return typedPost;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["social-media-posts", tenantId] });
+      queryClient.invalidateQueries({
+        queryKey: ["social-media-posts", tenantId],
+      });
       toast.success("פוסט נוצר בהצלחה");
     },
     onError: (error: Error) => {
@@ -237,7 +244,13 @@ export function useUpdatePostStatus() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async ({ postId, status }: { postId: string; status: SocialMediaPost["status"] }) => {
+    mutationFn: async ({
+      postId,
+      status,
+    }: {
+      postId: string;
+      status: SocialMediaPost["status"];
+    }) => {
       const { error } = await supabase
         .from("social_media_posts" as any)
         .update({ status, updated_at: new Date().toISOString() })
@@ -245,7 +258,9 @@ export function useUpdatePostStatus() {
       if (error) throw error;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["social-media-posts", tenantId] });
+      queryClient.invalidateQueries({
+        queryKey: ["social-media-posts", tenantId],
+      });
     },
   });
 }
@@ -263,7 +278,9 @@ export function useDeletePost() {
       if (error) throw error;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["social-media-posts", tenantId] });
+      queryClient.invalidateQueries({
+        queryKey: ["social-media-posts", tenantId],
+      });
       toast.success("פוסט נמחק בהצלחה");
     },
     onError: (error: Error) => {
@@ -313,7 +330,9 @@ export function useCreateWordPressSite() {
       return data as unknown as WordPressSite;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["wordpress-sites", tenantId] });
+      queryClient.invalidateQueries({
+        queryKey: ["wordpress-sites", tenantId],
+      });
       toast.success("אתר וורדפרס נוסף בהצלחה");
     },
     onError: (error: Error) => {
@@ -335,7 +354,9 @@ export function useDeleteWordPressSite() {
       if (error) throw error;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["wordpress-sites", tenantId] });
+      queryClient.invalidateQueries({
+        queryKey: ["wordpress-sites", tenantId],
+      });
       toast.success("אתר וורדפרס נמחק בהצלחה");
     },
     onError: (error: Error) => {
@@ -351,14 +372,19 @@ export function usePublishPost() {
 
   return useMutation({
     mutationFn: async (postId: string) => {
-      const { data, error } = await supabase.functions.invoke("social-media-publish", {
-        body: { post_id: postId },
-      });
+      const { data, error } = await supabase.functions.invoke(
+        "social-media-publish",
+        {
+          body: { post_id: postId },
+        },
+      );
       if (error) throw error;
       return data;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["social-media-posts", tenantId] });
+      queryClient.invalidateQueries({
+        queryKey: ["social-media-posts", tenantId],
+      });
       toast.success("הפוסט נשלח לפרסום");
     },
     onError: (error: Error) => {

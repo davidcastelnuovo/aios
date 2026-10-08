@@ -1,30 +1,31 @@
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.75.0';
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2.75.0";
 import {
   campaignStateMap,
   evaluateGoogleOperationalIssues,
   type OperationalCampaignState,
-} from '../_shared/campaign-operational-health.ts';
-import { fireIntegrationAlert } from '../_shared/fireIntegrationAlert.ts';
+} from "../_shared/campaign-operational-health.ts";
+import { fireIntegrationAlert } from "../_shared/fireIntegrationAlert.ts";
 import {
   replacedRecordsFilter,
   resolveAdsSyncWindow,
   resolvePruneStart,
   toDateString,
-} from '../_shared/report-sync-window.ts';
+} from "../_shared/report-sync-window.ts";
 
 const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-  'Access-Control-Allow-Methods': 'POST, OPTIONS',
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Headers":
+    "authorization, x-client-info, apikey, content-type",
+  "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
 
-const DEVELOPER_TOKEN = Deno.env.get('GOOGLE_ADS_DEVELOPER_TOKEN') || '';
-const GOOGLE_CLIENT_ID = Deno.env.get('GOOGLE_CLIENT_ID') || '';
-const GOOGLE_CLIENT_SECRET = Deno.env.get('GOOGLE_CLIENT_SECRET') || '';
+const DEVELOPER_TOKEN = Deno.env.get("GOOGLE_ADS_DEVELOPER_TOKEN") || "";
+const GOOGLE_CLIENT_ID = Deno.env.get("GOOGLE_CLIENT_ID") || "";
+const GOOGLE_CLIENT_SECRET = Deno.env.get("GOOGLE_CLIENT_SECRET") || "";
 
 interface GoogleAdsRecord {
   date: string;
-  entity_level?: 'campaign' | 'adset' | 'ad';
+  entity_level?: "campaign" | "adset" | "ad";
   campaign_id: string;
   campaign_name: string;
   adset_id?: string;
@@ -66,57 +67,68 @@ async function patchIntegrationSettings(
   fallback: Record<string, unknown> = {},
 ) {
   const { data: fresh } = await admin
-    .from('crm_tables')
-    .select('integration_settings')
-    .eq('id', tableId)
+    .from("crm_tables")
+    .select("integration_settings")
+    .eq("id", tableId)
     .maybeSingle();
-  const current = (fresh?.integration_settings || fallback || {}) as Record<string, unknown>;
+  const current = (fresh?.integration_settings || fallback || {}) as Record<
+    string,
+    unknown
+  >;
   const { error } = await admin
-    .from('crm_tables')
+    .from("crm_tables")
     .update({
       integration_settings: { ...current, ...patch },
     })
-    .eq('id', tableId);
+    .eq("id", tableId);
   if (error) {
-    console.error('[sync-google-ads] settings patch failed:', error.message);
+    console.error("[sync-google-ads] settings patch failed:", error.message);
   }
 }
 
 Deno.serve(async (req) => {
-  if (req.method === 'OPTIONS') {
+  if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
   }
 
   try {
     const supabase = createClient(
-      Deno.env.get('SUPABASE_URL') ?? '',
-      Deno.env.get('SUPABASE_ANON_KEY') ?? '',
-      { global: { headers: { Authorization: req.headers.get('Authorization')! } } }
+      Deno.env.get("SUPABASE_URL") ?? "",
+      Deno.env.get("SUPABASE_ANON_KEY") ?? "",
+      {
+        global: {
+          headers: { Authorization: req.headers.get("Authorization")! },
+        },
+      },
     );
 
     // Service-role client for writes (bypass RLS - tables can be in different tenants than the requester)
     const supabaseAdmin = createClient(
-      Deno.env.get('SUPABASE_URL') ?? '',
-      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
+      Deno.env.get("SUPABASE_URL") ?? "",
+      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "",
     );
 
     // Allow service-role internal calls (e.g. from cron) to bypass user auth.
     // The caller must include x-internal-cron: true AND a valid service role bearer token.
-    const isInternalCron = req.headers.get('x-internal-cron') === 'true';
-    const authHeader = req.headers.get('Authorization') || '';
-    const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '';
-    const hasServiceRole = !!serviceRoleKey && authHeader === `Bearer ${serviceRoleKey}`;
+    const isInternalCron = req.headers.get("x-internal-cron") === "true";
+    const authHeader = req.headers.get("Authorization") || "";
+    const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
+    const hasServiceRole =
+      !!serviceRoleKey && authHeader === `Bearer ${serviceRoleKey}`;
 
     let user: { id: string | null };
     if (isInternalCron && hasServiceRole) {
       // System cron: created_by must be NULL (placeholder UUID violates FK to auth.users)
       user = { id: null };
     } else {
-      const { data: { user: authedUser }, error: authError } = await supabase.auth.getUser();
+      const {
+        data: { user: authedUser },
+        error: authError,
+      } = await supabase.auth.getUser();
       if (authError || !authedUser) {
-        return new Response(JSON.stringify({ error: 'Unauthorized' }), {
+        return new Response(JSON.stringify({ error: "Unauthorized" }), {
           status: 401,
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
       user = authedUser;
@@ -132,11 +144,11 @@ Deno.serve(async (req) => {
       scheduled_lookback_on,
       update_last_sync = true,
     } = await req.json();
-    
+
     if (!table_id) {
-      return new Response(JSON.stringify({ error: 'table_id required' }), {
+      return new Response(JSON.stringify({ error: "table_id required" }), {
         status: 400,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
@@ -145,52 +157,63 @@ Deno.serve(async (req) => {
     // the anon-key + service-bearer user client resolves as the `anon` role, so
     // RLS hides every row and the lookup 404s (this silently broke the cron sync
     // for ALL Google Ads tables). Real user calls keep RLS enforcement.
-    const tableClient = (isInternalCron && hasServiceRole) ? supabaseAdmin : supabase;
+    const tableClient =
+      isInternalCron && hasServiceRole ? supabaseAdmin : supabase;
     const { data: table, error: tableError } = await tableClient
-      .from('crm_tables')
-      .select('*')
-      .eq('id', table_id)
+      .from("crm_tables")
+      .select("*")
+      .eq("id", table_id)
       .maybeSingle();
 
     if (tableError || !table) {
-      return new Response(JSON.stringify({ error: 'Table not found' }), {
+      return new Response(JSON.stringify({ error: "Table not found" }), {
         status: 404,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
     const tableTenantId = table.tenant_id;
 
-    if (table.integration_type !== 'google_ads') {
-      return new Response(JSON.stringify({ error: 'Table is not a Google Ads table' }), {
-        status: 400,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-      });
+    if (table.integration_type !== "google_ads") {
+      return new Response(
+        JSON.stringify({ error: "Table is not a Google Ads table" }),
+        {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        },
+      );
     }
 
     const settings = table.integration_settings || {};
-    const dataSource = settings.data_source || 'direct_api';
-    
+    const dataSource = settings.data_source || "direct_api";
+
     // Check if this table uses Make.com or Webhook for syncing
-    if (dataSource === 'make_api' || dataSource === 'webhook') {
-      return new Response(JSON.stringify({ 
-        error: 'This table uses Make.com for data sync',
-        message: 'טבלה זו משתמשת ב-Make.com לסנכרון נתונים. הגדר Scenario ב-Make.com כדי לסנכרן את הנתונים.',
-        data_source: dataSource
-      }), {
-        status: 400,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-      });
+    if (dataSource === "make_api" || dataSource === "webhook") {
+      return new Response(
+        JSON.stringify({
+          error: "This table uses Make.com for data sync",
+          message:
+            "טבלה זו משתמשת ב-Make.com לסנכרון נתונים. הגדר Scenario ב-Make.com כדי לסנכרן את הנתונים.",
+          data_source: dataSource,
+        }),
+        {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        },
+      );
     }
-    
+
     const customerId = settings.customer_id;
-    const dateRange = settings.date_range || 'last_30_days';
+    const dateRange = settings.date_range || "last_30_days";
 
     if (!customerId) {
-      return new Response(JSON.stringify({ error: 'No Google Ads account configured' }), {
-        status: 400,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-      });
+      return new Response(
+        JSON.stringify({ error: "No Google Ads account configured" }),
+        {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        },
+      );
     }
 
     // Resolve WHICH Google Ads connection to use.
@@ -205,16 +228,17 @@ Deno.serve(async (req) => {
     // newest-updated first, preferring one not flagged needs_reauth. We must NEVER use
     // `.maybeSingle()` here — it throws when a tenant has 2+ Google Ads connections, which is
     // exactly what broke every account when a second user connected their own account.
-    const chosenIntegrationId = settings.integrationId || settings.integration_id || null;
+    const chosenIntegrationId =
+      settings.integrationId || settings.integration_id || null;
 
     let integration: any = null;
 
     if (chosenIntegrationId) {
       const { data } = await supabaseAdmin
-        .from('tenant_integrations')
-        .select('*')
-        .eq('id', chosenIntegrationId)
-        .eq('integration_type', 'google_ads')
+        .from("tenant_integrations")
+        .select("*")
+        .eq("id", chosenIntegrationId)
+        .eq("integration_type", "google_ads")
         .maybeSingle();
       // Only use it if it's still active and usable; otherwise fall through to the resolver
       // so a disabled/removed connection doesn't hard-fail an existing table.
@@ -223,31 +247,39 @@ Deno.serve(async (req) => {
 
     if (!integration) {
       const { data: accessRows } = await supabaseAdmin
-        .from('agency_tenant_access')
-        .select('source_tenant_id')
-        .eq('accessing_tenant_id', tableTenantId);
-      const sourceTenantIds = Array.from(new Set([
-        tableTenantId,
-        ...((accessRows || []).map((r: any) => r.source_tenant_id).filter(Boolean)),
-      ]));
+        .from("agency_tenant_access")
+        .select("source_tenant_id")
+        .eq("accessing_tenant_id", tableTenantId);
+      const sourceTenantIds = Array.from(
+        new Set([
+          tableTenantId,
+          ...(accessRows || [])
+            .map((r: any) => r.source_tenant_id)
+            .filter(Boolean),
+        ]),
+      );
 
       const { data: candidates } = await supabaseAdmin
-        .from('tenant_integrations')
-        .select('*')
-        .in('tenant_id', sourceTenantIds)
-        .eq('integration_type', 'google_ads')
-        .eq('is_active', true)
-        .order('updated_at', { ascending: false });
+        .from("tenant_integrations")
+        .select("*")
+        .in("tenant_id", sourceTenantIds)
+        .eq("integration_type", "google_ads")
+        .eq("is_active", true)
+        .order("updated_at", { ascending: false });
 
       const usable = (candidates || []).filter((i: any) => i?.api_key);
-      integration = usable.find((i: any) => !(i.settings?.needs_reauth)) || usable[0] || null;
+      integration =
+        usable.find((i: any) => !i.settings?.needs_reauth) || usable[0] || null;
     }
 
     if (!integration?.api_key) {
-      return new Response(JSON.stringify({ error: 'Google Ads not connected' }), {
-        status: 400,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-      });
+      return new Response(
+        JSON.stringify({ error: "Google Ads not connected" }),
+        {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        },
+      );
     }
 
     // Mutable settings reference for refresh logic
@@ -255,50 +287,61 @@ Deno.serve(async (req) => {
     let accessToken: string = integration.api_key;
 
     // Refresh if expired/near expiry, OR forced (after a 401).
-    async function ensureFreshToken(force = false): Promise<{ ok: boolean; needsReauth?: boolean; error?: string }> {
+    async function ensureFreshToken(
+      force = false,
+    ): Promise<{ ok: boolean; needsReauth?: boolean; error?: string }> {
       const refreshTokenStr = integrationSettings?.refresh_token;
       if (!refreshTokenStr) return { ok: true }; // nothing to do (legacy connection)
 
-      const expiresAtMs = integrationSettings?.expires_at ? new Date(integrationSettings.expires_at).getTime() : 0;
+      const expiresAtMs = integrationSettings?.expires_at
+        ? new Date(integrationSettings.expires_at).getTime()
+        : 0;
       const fiveMinFromNow = Date.now() + 5 * 60 * 1000;
       const stale = !expiresAtMs || expiresAtMs < fiveMinFromNow;
       if (!force && !stale) return { ok: true };
 
-      const refreshResp = await fetch('https://oauth2.googleapis.com/token', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      const refreshResp = await fetch("https://oauth2.googleapis.com/token", {
+        method: "POST",
+        headers: { "Content-Type": "application/x-www-form-urlencoded" },
         body: new URLSearchParams({
           client_id: GOOGLE_CLIENT_ID,
           client_secret: GOOGLE_CLIENT_SECRET,
           refresh_token: refreshTokenStr,
-          grant_type: 'refresh_token',
+          grant_type: "refresh_token",
         }),
       });
       const refreshData = await refreshResp.json().catch(() => ({}));
 
       if (!refreshResp.ok || !refreshData.access_token) {
-        const err = refreshData?.error || 'refresh_failed';
-        const errDesc = refreshData?.error_description || '';
-        const isPermanent = err === 'invalid_grant' || err === 'unauthorized_client' || err === 'invalid_client';
+        const err = refreshData?.error || "refresh_failed";
+        const errDesc = refreshData?.error_description || "";
+        const isPermanent =
+          err === "invalid_grant" ||
+          err === "unauthorized_client" ||
+          err === "invalid_client";
         // Mark needs_reauth on permanent failures so the UI can prompt reconnection
         await supabaseAdmin
-          .from('tenant_integrations')
+          .from("tenant_integrations")
           .update({
             is_active: isPermanent ? false : integration.is_active,
             settings: {
               ...integrationSettings,
-              needs_reauth: isPermanent ? true : (integrationSettings?.needs_reauth || false),
-              last_auth_error: `${err}${errDesc ? ': ' + errDesc : ''}`,
+              needs_reauth: isPermanent
+                ? true
+                : integrationSettings?.needs_reauth || false,
+              last_auth_error: `${err}${errDesc ? ": " + errDesc : ""}`,
               last_auth_error_at: new Date().toISOString(),
             },
           })
-          .eq('id', integration.id);
-        console.error('[sync-google-ads] token refresh failed:', err, errDesc);
+          .eq("id", integration.id);
+        console.error("[sync-google-ads] token refresh failed:", err, errDesc);
         return { ok: false, needsReauth: isPermanent, error: errDesc || err };
       }
 
       accessToken = refreshData.access_token;
-      const newExpiresAt = new Date(Date.now() + (refreshData.expires_in * 1000)).toISOString();
+      const newExpiresAt = new Date(
+        Date.now() + refreshData.expires_in * 1000,
+      ).toISOString();
       integrationSettings = {
         ...integrationSettings,
         expires_at: newExpiresAt,
@@ -308,13 +351,13 @@ Deno.serve(async (req) => {
       delete integrationSettings.last_auth_error_at;
 
       await supabaseAdmin
-        .from('tenant_integrations')
+        .from("tenant_integrations")
         .update({
           api_key: accessToken,
           is_active: true,
           settings: integrationSettings,
         })
-        .eq('id', integration.id);
+        .eq("id", integration.id);
 
       return { ok: true };
     }
@@ -323,27 +366,41 @@ Deno.serve(async (req) => {
     {
       const r = await ensureFreshToken(false);
       if (!r.ok) {
-        return new Response(JSON.stringify({
-          error: r.needsReauth ? 'needs_reauth' : 'token_refresh_failed',
-          message: r.needsReauth
-            ? 'החיבור ל-Google Ads בוטל או פג תוקף. יש לחבר מחדש.'
-            : 'נכשל רענון של ה-token מול Google.',
-          details: r.error,
-        }), {
-          status: 401,
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-        });
+        return new Response(
+          JSON.stringify({
+            error: r.needsReauth ? "needs_reauth" : "token_refresh_failed",
+            message: r.needsReauth
+              ? "החיבור ל-Google Ads בוטל או פג תוקף. יש לחבר מחדש."
+              : "נכשל רענון של ה-token מול Google.",
+            details: r.error,
+          }),
+          {
+            status: 401,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          },
+        );
       }
     }
 
     // Wrapper: any Google Ads call goes through this so 401 triggers a forced refresh + one retry.
-    const adsFetch = async (url: string, init: RequestInit): Promise<Response> => {
-      const baseHeaders = { ...(init.headers as Record<string, string> || {}) };
-      let res = await fetch(url, { ...init, headers: { ...baseHeaders, 'Authorization': `Bearer ${accessToken}` } });
+    const adsFetch = async (
+      url: string,
+      init: RequestInit,
+    ): Promise<Response> => {
+      const baseHeaders = {
+        ...((init.headers as Record<string, string>) || {}),
+      };
+      let res = await fetch(url, {
+        ...init,
+        headers: { ...baseHeaders, Authorization: `Bearer ${accessToken}` },
+      });
       if (res.status === 401) {
         const r = await ensureFreshToken(true);
         if (!r.ok) return res; // surface the original 401; outer handler will report needs_reauth
-        res = await fetch(url, { ...init, headers: { ...baseHeaders, 'Authorization': `Bearer ${accessToken}` } });
+        res = await fetch(url, {
+          ...init,
+          headers: { ...baseHeaders, Authorization: `Bearer ${accessToken}` },
+        });
       }
       return res;
     };
@@ -352,51 +409,95 @@ Deno.serve(async (req) => {
     const now = new Date();
     let startDate: Date;
     let endDate = new Date(now);
-    
+
     switch (dateRange) {
-      case 'today':
+      case "today":
         startDate = new Date(now.getFullYear(), now.getMonth(), now.getDate());
         break;
-      case 'yesterday':
-        startDate = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1);
-        endDate = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1);
+      case "yesterday":
+        startDate = new Date(
+          now.getFullYear(),
+          now.getMonth(),
+          now.getDate() - 1,
+        );
+        endDate = new Date(
+          now.getFullYear(),
+          now.getMonth(),
+          now.getDate() - 1,
+        );
         break;
-      case 'this_week':
+      case "this_week":
         const dayOfWeek = now.getDay();
-        startDate = new Date(now.getFullYear(), now.getMonth(), now.getDate() - dayOfWeek);
+        startDate = new Date(
+          now.getFullYear(),
+          now.getMonth(),
+          now.getDate() - dayOfWeek,
+        );
         break;
-      case 'last_week': {
+      case "last_week": {
         const dow = now.getDay();
-        const startOfThisWeek = new Date(now.getFullYear(), now.getMonth(), now.getDate() - dow);
+        const startOfThisWeek = new Date(
+          now.getFullYear(),
+          now.getMonth(),
+          now.getDate() - dow,
+        );
         startDate = new Date(startOfThisWeek);
         startDate.setDate(startOfThisWeek.getDate() - 7);
         endDate = new Date(startOfThisWeek);
         endDate.setDate(startOfThisWeek.getDate() - 1);
         break;
       }
-      case 'last_7_days':
-        startDate = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 6);
+      case "last_7_days":
+        startDate = new Date(
+          now.getFullYear(),
+          now.getMonth(),
+          now.getDate() - 6,
+        );
         break;
-      case 'last_14_days':
-        startDate = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 14);
+      case "last_14_days":
+        startDate = new Date(
+          now.getFullYear(),
+          now.getMonth(),
+          now.getDate() - 14,
+        );
         break;
-      case 'this_month':
+      case "this_month":
         startDate = new Date(now.getFullYear(), now.getMonth(), 1);
         break;
-      case 'last_30_days':
-        startDate = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 30);
+      case "last_30_days":
+        startDate = new Date(
+          now.getFullYear(),
+          now.getMonth(),
+          now.getDate() - 30,
+        );
         break;
-      case 'last_60_days':
-        startDate = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 60);
+      case "last_60_days":
+        startDate = new Date(
+          now.getFullYear(),
+          now.getMonth(),
+          now.getDate() - 60,
+        );
         break;
-      case 'last_90_days':
-        startDate = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 90);
+      case "last_90_days":
+        startDate = new Date(
+          now.getFullYear(),
+          now.getMonth(),
+          now.getDate() - 90,
+        );
         break;
-      case 'last_120_days':
-        startDate = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 120);
+      case "last_120_days":
+        startDate = new Date(
+          now.getFullYear(),
+          now.getMonth(),
+          now.getDate() - 120,
+        );
         break;
       default:
-        startDate = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 30);
+        startDate = new Date(
+          now.getFullYear(),
+          now.getMonth(),
+          now.getDate() - 30,
+        );
     }
 
     // `date_range` is the table's display default; reports can look back further than
@@ -407,7 +508,12 @@ Deno.serve(async (req) => {
     );
     // Morning cron passes an explicit short window. Manual sync keeps the full history pull.
     const isoDate = /^\d{4}-\d{2}-\d{2}$/;
-    if (typeof start_date === 'string' && typeof end_date === 'string' && isoDate.test(start_date) && isoDate.test(end_date)) {
+    if (
+      typeof start_date === "string" &&
+      typeof end_date === "string" &&
+      isoDate.test(start_date) &&
+      isoDate.test(end_date)
+    ) {
       syncWindow = { startDate: start_date, endDate: end_date };
     }
     const startIso = syncWindow.startDate;
@@ -416,7 +522,8 @@ Deno.serve(async (req) => {
     const detectGAError = (data: any): any | null => {
       if (!data) return null;
       if (data.error) return data.error;
-      if (Array.isArray(data) && data.length > 0 && data[0]?.error) return data[0].error;
+      if (Array.isArray(data) && data.length > 0 && data[0]?.error)
+        return data[0].error;
       return null;
     };
 
@@ -434,38 +541,45 @@ Deno.serve(async (req) => {
 
     const parseGaqlResults = (
       batchesArr: any[],
-      entityLevel: 'campaign' | 'adset' | 'ad',
+      entityLevel: "campaign" | "adset" | "ad",
     ): GoogleAdsRecord[] => {
       const parsed: GoogleAdsRecord[] = [];
       for (const batch of batchesArr) {
         for (const result of batch.results || []) {
-          const costMicros = parseInt(result.metrics?.costMicros || '0');
+          const costMicros = parseInt(result.metrics?.costMicros || "0");
           const cost = costMicros / 1000000;
-          const conversions = parseFloat(result.metrics?.conversions || '0');
-          const conversionsValue = parseFloat(result.metrics?.conversionsValue || '0');
-          const allConversions = parseFloat(result.metrics?.allConversions || '0');
-          const allConversionsValue = parseFloat(result.metrics?.allConversionsValue || '0');
+          const conversions = parseFloat(result.metrics?.conversions || "0");
+          const conversionsValue = parseFloat(
+            result.metrics?.conversionsValue || "0",
+          );
+          const allConversions = parseFloat(
+            result.metrics?.allConversions || "0",
+          );
+          const allConversionsValue = parseFloat(
+            result.metrics?.allConversionsValue || "0",
+          );
           const finalConversions = conversions;
           const roas = cost > 0 ? conversionsValue / cost : 0;
           parsed.push({
             entity_level: entityLevel,
-            date: result.segments?.date || '',
-            campaign_id: result.campaign?.id || '',
-            campaign_name: result.campaign?.name || '',
+            date: result.segments?.date || "",
+            campaign_id: result.campaign?.id || "",
+            campaign_name: result.campaign?.name || "",
             adset_id: result.adGroup?.id || undefined,
             adset_name: result.adGroup?.name || undefined,
             ad_id: result.adGroupAd?.ad?.id || undefined,
             ad_name: result.adGroupAd?.ad?.name || undefined,
-            impressions: parseInt(result.metrics?.impressions || '0'),
-            clicks: parseInt(result.metrics?.clicks || '0'),
-            ctr: parseFloat(result.metrics?.ctr || '0') * 100,
-            cpc: parseInt(result.metrics?.averageCpc || '0') / 1000000,
+            impressions: parseInt(result.metrics?.impressions || "0"),
+            clicks: parseInt(result.metrics?.clicks || "0"),
+            ctr: parseFloat(result.metrics?.ctr || "0") * 100,
+            cpc: parseInt(result.metrics?.averageCpc || "0") / 1000000,
             cost,
             conversions: finalConversions,
             conversions_value: conversionsValue,
             all_conversions: allConversions,
             all_conversions_value: allConversionsValue,
-            cost_per_conversion: parseInt(result.metrics?.costPerConversion || '0') / 1000000,
+            cost_per_conversion:
+              parseInt(result.metrics?.costPerConversion || "0") / 1000000,
             roas: Math.round(roas * 100) / 100,
           });
         }
@@ -477,21 +591,25 @@ Deno.serve(async (req) => {
       const response = await adsFetch(
         `https://googleads.googleapis.com/v23/customers/${customerId}/googleAds:searchStream`,
         {
-          method: 'POST',
+          method: "POST",
           headers: {
-            'developer-token': DEVELOPER_TOKEN,
-            'login-customer-id': loginCustomerId,
-            'Content-Type': 'application/json',
+            "developer-token": DEVELOPER_TOKEN,
+            "login-customer-id": loginCustomerId,
+            "Content-Type": "application/json",
           },
           body: JSON.stringify({ query }),
         },
       );
       const rawText = await response.text();
       let data: any = null;
-      try { data = JSON.parse(rawText); } catch { data = null; }
+      try {
+        data = JSON.parse(rawText);
+      } catch {
+        data = null;
+      }
       const err = detectGAError(data);
       if (err) throw err;
-      return Array.isArray(data) ? data : (data?.results ? [data] : []);
+      return Array.isArray(data) ? data : data?.results ? [data] : [];
     };
 
     // Use Google Ads Query Language to fetch campaign performance.
@@ -551,39 +669,52 @@ Deno.serve(async (req) => {
         WHERE campaign.status != 'REMOVED'
       `;
       const batches = await runGaqlSearch(statusQuery);
-      const campaigns: OperationalCampaignState[] = batches.flatMap((batch: any) =>
-        (batch.results || []).map((result: any) => ({
-          id: String(result.campaign?.id || ''),
-          name: String(result.campaign?.name || result.campaign?.id || ''),
-          status: String(result.campaign?.status || ''),
-          primary_status: result.campaign?.primaryStatus || null,
-          primary_status_reasons: result.campaign?.primaryStatusReasons || [],
-        })).filter((campaign: OperationalCampaignState) => campaign.id),
+      const campaigns: OperationalCampaignState[] = batches.flatMap(
+        (batch: any) =>
+          (batch.results || [])
+            .map((result: any) => ({
+              id: String(result.campaign?.id || ""),
+              name: String(result.campaign?.name || result.campaign?.id || ""),
+              status: String(result.campaign?.status || ""),
+              primary_status: result.campaign?.primaryStatus || null,
+              primary_status_reasons:
+                result.campaign?.primaryStatusReasons || [],
+            }))
+            .filter((campaign: OperationalCampaignState) => campaign.id),
       );
       const previous =
-        settings.operational_campaign_states && typeof settings.operational_campaign_states === 'object'
+        settings.operational_campaign_states &&
+        typeof settings.operational_campaign_states === "object"
           ? settings.operational_campaign_states
           : null;
       const issues = evaluateGoogleOperationalIssues(previous, campaigns);
       const checkedAt = new Date().toISOString();
-      await patchIntegrationSettings(supabaseAdmin, table_id, {
-        operational_campaign_states: campaignStateMap(campaigns),
-        operational_status_checked_at: checkedAt,
-      }, settings);
+      await patchIntegrationSettings(
+        supabaseAdmin,
+        table_id,
+        {
+          operational_campaign_states: campaignStateMap(campaigns),
+          operational_status_checked_at: checkedAt,
+        },
+        settings,
+      );
 
       for (const issue of issues) {
         const { data: existing } = await supabaseAdmin
-          .from('campaign_alerts')
-          .select('id')
-          .eq('tenant_id', tableTenantId)
-          .eq('campaign_id', issue.campaign_id)
-          .eq('alert_type', issue.alert_type)
-          .is('resolved_at', null)
-          .gte('created_at', new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString())
+          .from("campaign_alerts")
+          .select("id")
+          .eq("tenant_id", tableTenantId)
+          .eq("campaign_id", issue.campaign_id)
+          .eq("alert_type", issue.alert_type)
+          .is("resolved_at", null)
+          .gte(
+            "created_at",
+            new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString(),
+          )
           .limit(1)
           .maybeSingle();
         if (existing) continue;
-        await supabaseAdmin.from('campaign_alerts').insert({
+        await supabaseAdmin.from("campaign_alerts").insert({
           tenant_id: tableTenantId,
           client_id: table.client_id || null,
           campaign_id: issue.campaign_id,
@@ -595,95 +726,125 @@ Deno.serve(async (req) => {
         });
         await fireIntegrationAlert({
           tenant_id: tableTenantId,
-          provider: 'google_ads',
-          alert_type: 'blocked',
+          provider: "google_ads",
+          alert_type: "blocked",
           account_id: String(customerId),
           account_name: issue.campaign_name,
           client_id: table.client_id || null,
-          reason: (issue.details.primary_status_reasons as string[] | undefined)?.join(', ')
-            || String(issue.details.primary_status || issue.details.status || 'campaign_not_serving'),
+          reason:
+            (
+              issue.details.primary_status_reasons as string[] | undefined
+            )?.join(", ") ||
+            String(
+              issue.details.primary_status ||
+                issue.details.status ||
+                "campaign_not_serving",
+            ),
           throttleHours: 2,
         });
       }
 
-      return new Response(JSON.stringify({
-        success: true,
-        operational_only: true,
-        campaigns_scanned: campaigns.length,
-        alerts_created: issues.length,
-        checked_at: checkedAt,
-      }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+      return new Response(
+        JSON.stringify({
+          success: true,
+          operational_only: true,
+          campaigns_scanned: campaigns.length,
+          alerts_created: issues.length,
+          checked_at: checkedAt,
+        }),
+        { headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      );
     }
 
     let searchResponse = await adsFetch(
       `https://googleads.googleapis.com/v23/customers/${customerId}/googleAds:searchStream`,
       {
-        method: 'POST',
+        method: "POST",
         headers: {
-          'developer-token': DEVELOPER_TOKEN,
-          'login-customer-id': loginCustomerId,
-          'Content-Type': 'application/json',
+          "developer-token": DEVELOPER_TOKEN,
+          "login-customer-id": loginCustomerId,
+          "Content-Type": "application/json",
         },
         body: JSON.stringify({ query: campaignQuery }),
-      }
+      },
     );
 
     const _rawText = await searchResponse.text();
     let searchData: any = null;
-    try { searchData = JSON.parse(_rawText); } catch { searchData = null; }
-    console.log(`[sync-google-ads] table=${table_id} customer=${customerId} login=${loginCustomerId} status=${searchResponse.status} dateRange=${startIso}..${endIso}`);
+    try {
+      searchData = JSON.parse(_rawText);
+    } catch {
+      searchData = null;
+    }
+    console.log(
+      `[sync-google-ads] table=${table_id} customer=${customerId} login=${loginCustomerId} status=${searchResponse.status} dateRange=${startIso}..${endIso}`,
+    );
     console.log(`[sync-google-ads] response preview:`, _rawText.slice(0, 800));
     // DIAG: persist exactly what Google returned on the first call so failures are debuggable from the DB.
     // Records HTTP status, whether the developer-token secret is present (boolean only, never the value),
     // the login-customer-id used, and the first 1500 chars of the response body.
     try {
-      await patchIntegrationSettings(supabaseAdmin, table_id, {
-        last_sync_diag: {
-          at: new Date().toISOString(),
-          http_status: searchResponse.status,
-          dev_token_present: !!DEVELOPER_TOKEN,
-          client_id_present: !!GOOGLE_CLIENT_ID,
-          login_customer_id: loginCustomerId,
-          customer_id: customerId,
-          body: _rawText.slice(0, 1500),
+      await patchIntegrationSettings(
+        supabaseAdmin,
+        table_id,
+        {
+          last_sync_diag: {
+            at: new Date().toISOString(),
+            http_status: searchResponse.status,
+            dev_token_present: !!DEVELOPER_TOKEN,
+            client_id_present: !!GOOGLE_CLIENT_ID,
+            login_customer_id: loginCustomerId,
+            customer_id: customerId,
+            body: _rawText.slice(0, 1500),
+          },
         },
-      }, settings);
-    } catch (_e) { /* diagnostics are best-effort */ }
+        settings,
+      );
+    } catch (_e) {
+      /* diagnostics are best-effort */
+    }
 
     // If still 401 after a refresh attempt — refresh_token is bad/revoked
     if (searchResponse.status === 401) {
-      return new Response(JSON.stringify({
-        error: 'needs_reauth',
-        message: 'החיבור ל-Google Ads בוטל או פג תוקף. יש לחבר מחדש.',
-      }), {
-        status: 401,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-      });
+      return new Response(
+        JSON.stringify({
+          error: "needs_reauth",
+          message: "החיבור ל-Google Ads בוטל או פג תוקף. יש לחבר מחדש.",
+        }),
+        {
+          status: 401,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        },
+      );
     }
 
-
     // Helper: try a list of candidate MCCs and return the first that works
-    const tryMccCandidates = async (candidates: string[]): Promise<{ data: any; mcc: string } | null> => {
+    const tryMccCandidates = async (
+      candidates: string[],
+    ): Promise<{ data: any; mcc: string } | null> => {
       for (const mcc of candidates) {
         if (!mcc || mcc === customerId) continue;
         const retryResponse = await adsFetch(
           `https://googleads.googleapis.com/v23/customers/${customerId}/googleAds:searchStream`,
           {
-            method: 'POST',
+            method: "POST",
             headers: {
-              'developer-token': DEVELOPER_TOKEN,
-              'login-customer-id': mcc,
-              'Content-Type': 'application/json',
+              "developer-token": DEVELOPER_TOKEN,
+              "login-customer-id": mcc,
+              "Content-Type": "application/json",
             },
             body: JSON.stringify({ query: campaignQuery }),
-          }
+          },
         );
         const retryData = await retryResponse.json().catch(() => null);
         if (retryData && !detectGAError(retryData)) {
           console.log(`[sync-google-ads] Found working MCC: ${mcc}`);
           return { data: retryData, mcc };
         }
-        console.log(`[sync-google-ads] MCC ${mcc} failed:`, JSON.stringify(detectGAError(retryData)).slice(0, 200));
+        console.log(
+          `[sync-google-ads] MCC ${mcc} failed:`,
+          JSON.stringify(detectGAError(retryData)).slice(0, 200),
+        );
       }
       return null;
     };
@@ -692,44 +853,62 @@ Deno.serve(async (req) => {
 
     // If failed and no manager_id was set, try to discover the MCC
     if (initialError && !settings.manager_id) {
-      console.log('[sync-google-ads] First attempt failed, trying to discover MCC for account', customerId);
+      console.log(
+        "[sync-google-ads] First attempt failed, trying to discover MCC for account",
+        customerId,
+      );
 
       // Build a candidate list:
       // 1) Known historical MCCs (hardcoded fallback for this project)
       // 2) Any MCCs already discovered for other tables in this tenant
       // 3) listAccessibleCustomers
-      const knownMccs = ['1625878765', '4568787244', '8225555809', '6200958104'];
+      const knownMccs = [
+        "1625878765",
+        "4568787244",
+        "8225555809",
+        "6200958104",
+      ];
 
       const { data: tenantTables } = await supabaseAdmin
-        .from('crm_tables')
-        .select('integration_settings')
-        .eq('tenant_id', tableTenantId)
-        .eq('integration_type', 'google_ads');
-      const tenantMccs = Array.from(new Set(
-        (tenantTables || [])
-          .map((t: any) => t.integration_settings?.manager_id)
-          .filter(Boolean)
-          .map(String)
-      ));
+        .from("crm_tables")
+        .select("integration_settings")
+        .eq("tenant_id", tableTenantId)
+        .eq("integration_type", "google_ads");
+      const tenantMccs = Array.from(
+        new Set(
+          (tenantTables || [])
+            .map((t: any) => t.integration_settings?.manager_id)
+            .filter(Boolean)
+            .map(String),
+        ),
+      );
 
       let listMccs: string[] = [];
       try {
-        const listResponse = await adsFetch('https://googleads.googleapis.com/v23/customers:listAccessibleCustomers', {
-          method: 'GET',
-          headers: {
-            'developer-token': DEVELOPER_TOKEN,
+        const listResponse = await adsFetch(
+          "https://googleads.googleapis.com/v23/customers:listAccessibleCustomers",
+          {
+            method: "GET",
+            headers: {
+              "developer-token": DEVELOPER_TOKEN,
+            },
           },
-        });
+        );
         const listData = await listResponse.json();
         listMccs = (listData?.resourceNames || [])
-          .map((r: any) => typeof r === 'string' ? r.split('/')[1] : null)
+          .map((r: any) => (typeof r === "string" ? r.split("/")[1] : null))
           .filter(Boolean);
       } catch (e) {
-        console.warn('[sync-google-ads] listAccessibleCustomers failed:', e);
+        console.warn("[sync-google-ads] listAccessibleCustomers failed:", e);
       }
 
-      const candidates = Array.from(new Set([...tenantMccs, ...knownMccs, ...listMccs]));
-      console.log(`[sync-google-ads] MCC candidates to try (${candidates.length}):`, candidates);
+      const candidates = Array.from(
+        new Set([...tenantMccs, ...knownMccs, ...listMccs]),
+      );
+      console.log(
+        `[sync-google-ads] MCC candidates to try (${candidates.length}):`,
+        candidates,
+      );
 
       const result = await tryMccCandidates(candidates);
       if (result) {
@@ -749,35 +928,54 @@ Deno.serve(async (req) => {
 
     const finalError = detectGAError(searchData);
     if (finalError) {
-      console.error('Google Ads API error:', finalError);
-      return new Response(JSON.stringify({
-        error: 'Google Ads API error',
-        details: finalError.message || JSON.stringify(finalError)
-      }), {
-        status: 400,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-      });
+      console.error("Google Ads API error:", finalError);
+      return new Response(
+        JSON.stringify({
+          error: "Google Ads API error",
+          details: finalError.message || JSON.stringify(finalError),
+        }),
+        {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        },
+      );
     }
 
     // Process results — campaign + ad group + ad levels (like Ads Manager tabs)
-    const batchesArr = Array.isArray(searchData) ? searchData : (searchData?.results ? [searchData] : []);
-    console.log(`[sync-google-ads] campaign batches received: ${batchesArr.length}`);
-    const records: GoogleAdsRecord[] = parseGaqlResults(batchesArr, 'campaign');
+    const batchesArr = Array.isArray(searchData)
+      ? searchData
+      : searchData?.results
+        ? [searchData]
+        : [];
+    console.log(
+      `[sync-google-ads] campaign batches received: ${batchesArr.length}`,
+    );
+    const records: GoogleAdsRecord[] = parseGaqlResults(batchesArr, "campaign");
 
     try {
       const adGroupBatches = await runGaqlSearch(adGroupQuery);
-      records.push(...parseGaqlResults(adGroupBatches, 'adset'));
-      console.log(`[sync-google-ads] ad group rows: ${records.filter((r) => r.entity_level === 'adset').length}`);
+      records.push(...parseGaqlResults(adGroupBatches, "adset"));
+      console.log(
+        `[sync-google-ads] ad group rows: ${records.filter((r) => r.entity_level === "adset").length}`,
+      );
     } catch (adGroupErr) {
-      console.warn('[sync-google-ads] ad group query failed (non-fatal):', adGroupErr instanceof Error ? adGroupErr.message : adGroupErr);
+      console.warn(
+        "[sync-google-ads] ad group query failed (non-fatal):",
+        adGroupErr instanceof Error ? adGroupErr.message : adGroupErr,
+      );
     }
 
     try {
       const adBatches = await runGaqlSearch(adQuery);
-      records.push(...parseGaqlResults(adBatches, 'ad'));
-      console.log(`[sync-google-ads] ad rows: ${records.filter((r) => r.entity_level === 'ad').length}`);
+      records.push(...parseGaqlResults(adBatches, "ad"));
+      console.log(
+        `[sync-google-ads] ad rows: ${records.filter((r) => r.entity_level === "ad").length}`,
+      );
     } catch (adErr) {
-      console.warn('[sync-google-ads] ad query failed (non-fatal):', adErr instanceof Error ? adErr.message : adErr);
+      console.warn(
+        "[sync-google-ads] ad query failed (non-fatal):",
+        adErr instanceof Error ? adErr.message : adErr,
+      );
     }
 
     console.log(`[sync-google-ads] total records parsed: ${records.length}`);
@@ -791,7 +989,7 @@ Deno.serve(async (req) => {
     // `conversions`. Purchases deliberately stay on `metrics.conversions` so the
     // report keeps matching the Google Ads UI "Conversions" column.
     // ============================================================
-    if (settings.campaign_type === 'ecommerce') {
+    if (settings.campaign_type === "ecommerce") {
       try {
         const categoryQuery = `
           SELECT
@@ -805,44 +1003,59 @@ Deno.serve(async (req) => {
         const categoryResponse = await adsFetch(
           `https://googleads.googleapis.com/v23/customers/${customerId}/googleAds:searchStream`,
           {
-            method: 'POST',
+            method: "POST",
             headers: {
-              'developer-token': DEVELOPER_TOKEN,
-              'login-customer-id': loginCustomerId,
-              'Content-Type': 'application/json',
+              "developer-token": DEVELOPER_TOKEN,
+              "login-customer-id": loginCustomerId,
+              "Content-Type": "application/json",
             },
             body: JSON.stringify({ query: categoryQuery }),
-          }
+          },
         );
         const categoryData = await categoryResponse.json().catch(() => null);
         const categoryError = detectGAError(categoryData);
         if (categoryError) {
-          console.warn('[sync-google-ads] add-to-cart segmentation failed:', JSON.stringify(categoryError).slice(0, 300));
+          console.warn(
+            "[sync-google-ads] add-to-cart segmentation failed:",
+            JSON.stringify(categoryError).slice(0, 300),
+          );
         } else {
           const addToCartByCampaignDay = new Map<string, number>();
-          const categoryBatches = Array.isArray(categoryData) ? categoryData : (categoryData?.results ? [categoryData] : []);
+          const categoryBatches = Array.isArray(categoryData)
+            ? categoryData
+            : categoryData?.results
+              ? [categoryData]
+              : [];
           for (const batch of categoryBatches) {
             for (const row of batch.results || []) {
-              if (row.segments?.conversionActionCategory !== 'ADD_TO_CART') continue;
-              const key = `${row.campaign?.id || ''}|${row.segments?.date || ''}`;
-              const value = parseFloat(row.metrics?.allConversions || '0');
-              addToCartByCampaignDay.set(key, (addToCartByCampaignDay.get(key) || 0) + value);
+              if (row.segments?.conversionActionCategory !== "ADD_TO_CART")
+                continue;
+              const key = `${row.campaign?.id || ""}|${row.segments?.date || ""}`;
+              const value = parseFloat(row.metrics?.allConversions || "0");
+              addToCartByCampaignDay.set(
+                key,
+                (addToCartByCampaignDay.get(key) || 0) + value,
+              );
             }
           }
           // Only annotate when the account actually tracks add-to-cart; leaving the
           // field out keeps the report showing the column as unavailable.
           if (addToCartByCampaignDay.size > 0) {
             for (const rec of records) {
-              if ((rec.entity_level || 'campaign') !== 'campaign') continue;
-              rec.add_to_cart = addToCartByCampaignDay.get(`${rec.campaign_id}|${rec.date}`) || 0;
+              if ((rec.entity_level || "campaign") !== "campaign") continue;
+              rec.add_to_cart =
+                addToCartByCampaignDay.get(`${rec.campaign_id}|${rec.date}`) ||
+                0;
             }
           }
-          console.log(`[sync-google-ads] add-to-cart segments matched: ${addToCartByCampaignDay.size}`);
+          console.log(
+            `[sync-google-ads] add-to-cart segments matched: ${addToCartByCampaignDay.size}`,
+          );
         }
       } catch (atcErr) {
         // Non-fatal: the report falls back to showing add-to-cart as unavailable.
         console.warn(
-          '[sync-google-ads] add-to-cart enrichment error (non-fatal):',
+          "[sync-google-ads] add-to-cart enrichment error (non-fatal):",
           atcErr instanceof Error ? atcErr.message : atcErr,
         );
       }
@@ -860,43 +1073,52 @@ Deno.serve(async (req) => {
       const tableClientId = (table as any).client_id as string | null;
       if (tableClientId) {
         const { data: wpSites } = await supabaseAdmin
-          .from('social_media_wordpress_sites')
-          .select('id, site_url, campaign_url_mapping, campaign_form_mapping')
-          .eq('client_id', tableClientId)
-          .eq('is_active', true)
+          .from("social_media_wordpress_sites")
+          .select("id, site_url, campaign_url_mapping, campaign_form_mapping")
+          .eq("client_id", tableClientId)
+          .eq("is_active", true)
           .limit(1);
 
         const site = wpSites?.[0];
         if (site) {
           verifiedSiteUrl = site.site_url;
           // Compute days from date range to limit submission scan
-          const daysDiff = Math.max(1, Math.round((Date.parse(endIso) - Date.parse(startIso)) / 86400000) + 1);
-
-          const { data: subData, error: subErr } = await supabaseAdmin.functions.invoke(
-            'fetch-elementor-submissions',
-            { body: { site_id: site.id, days: Math.min(daysDiff, 90) } }
+          const daysDiff = Math.max(
+            1,
+            Math.round((Date.parse(endIso) - Date.parse(startIso)) / 86400000) +
+              1,
           );
 
-          if (!subErr && subData?.success && Array.isArray(subData.submissions)) {
+          const { data: subData, error: subErr } =
+            await supabaseAdmin.functions.invoke(
+              "fetch-elementor-submissions",
+              { body: { site_id: site.id, days: Math.min(daysDiff, 90) } },
+            );
+
+          if (
+            !subErr &&
+            subData?.success &&
+            Array.isArray(subData.submissions)
+          ) {
             // Helper: extract URL slug (path segment) from referer
             const extractSlug = (referer: string | null): string => {
-              if (!referer) return '';
+              if (!referer) return "";
               try {
                 const u = new URL(referer);
-                const seg = u.pathname.split('/').filter(Boolean)[0] || '';
+                const seg = u.pathname.split("/").filter(Boolean)[0] || "";
                 return decodeURIComponent(seg).toLowerCase();
               } catch {
-                return '';
+                return "";
               }
             };
 
             // Hebrew normalization helper for fuzzy campaign↔slug matching
             const normalize = (s: string) =>
-              (s || '')
+              (s || "")
                 .toLowerCase()
-                .replace(/[-_]/g, ' ')
-                .replace(/[^\u0590-\u05FF\w\s]/g, '')
-                .replace(/\s+/g, ' ')
+                .replace(/[-_]/g, " ")
+                .replace(/[^\u0590-\u05FF\w\s]/g, "")
+                .replace(/\s+/g, " ")
                 .trim();
 
             // Build maps:
@@ -907,11 +1129,14 @@ Deno.serve(async (req) => {
             const byCampaignId = new Map<string, Map<string, number>>();
             const bySlug = new Map<string, Map<string, number>>();
             const byFormId = new Map<string, Map<string, number>>();
-            const formTotals = new Map<string, { total: number; name: string }>();
+            const formTotals = new Map<
+              string,
+              { total: number; name: string }
+            >();
 
             for (const sub of subData.submissions) {
-              if (sub.source === 'test') continue;
-              const day = (sub.created_at || '').slice(0, 10);
+              if (sub.source === "test") continue;
+              const day = (sub.created_at || "").slice(0, 10);
               if (!day) continue;
 
               const cid = sub.gad_campaignid;
@@ -922,7 +1147,7 @@ Deno.serve(async (req) => {
               }
 
               // Index by form_id (primary mapping key)
-              const fid = sub.form_id ? String(sub.form_id) : '';
+              const fid = sub.form_id ? String(sub.form_id) : "";
               if (fid) {
                 if (!byFormId.has(fid)) byFormId.set(fid, new Map());
                 const dm = byFormId.get(fid)!;
@@ -935,8 +1160,11 @@ Deno.serve(async (req) => {
               }
 
               // Legacy: count slug for google_ads-sourced submissions
-              if (sub.source === 'google_ads' || sub.source === 'google') {
-                const slug = (sub.slug && sub.slug.length > 0) ? sub.slug : extractSlug(sub.referer);
+              if (sub.source === "google_ads" || sub.source === "google") {
+                const slug =
+                  sub.slug && sub.slug.length > 0
+                    ? sub.slug
+                    : extractSlug(sub.referer);
                 if (slug) {
                   if (!bySlug.has(slug)) bySlug.set(slug, new Map());
                   const dm = bySlug.get(slug)!;
@@ -946,7 +1174,8 @@ Deno.serve(async (req) => {
             }
 
             // PRIMARY: form_id -> campaign_id mapping
-            const formMapping: Record<string, string> = (site as any).campaign_form_mapping || {};
+            const formMapping: Record<string, string> =
+              (site as any).campaign_form_mapping || {};
             const campaignIdToForms = new Map<string, string[]>();
             for (const [fid, cid] of Object.entries(formMapping)) {
               if (!cid) continue;
@@ -955,7 +1184,8 @@ Deno.serve(async (req) => {
             }
 
             // LEGACY: slug -> campaign_id mapping (kept for backward compat)
-            const manualMapping: Record<string, string> = (site as any).campaign_url_mapping || {};
+            const manualMapping: Record<string, string> =
+              (site as any).campaign_url_mapping || {};
             const campaignIdToSlugs = new Map<string, string[]>();
             for (const [slug, cid] of Object.entries(manualMapping)) {
               if (!cid) continue;
@@ -968,10 +1198,15 @@ Deno.serve(async (req) => {
             //  2) Exact match by gad_campaignid
             //  3) Legacy slug→campaign mapping (backward compat)
             //  4) Fuzzy match campaign_name ↔ slug
-            const slugEntries = Array.from(bySlug.keys()).map((s) => ({ slug: s, tokens: normalize(s).split(' ').filter((t) => t.length > 1) }));
+            const slugEntries = Array.from(bySlug.keys()).map((s) => ({
+              slug: s,
+              tokens: normalize(s)
+                .split(" ")
+                .filter((t) => t.length > 1),
+            }));
 
             for (const rec of records) {
-              if ((rec.entity_level || 'campaign') !== 'campaign') continue;
+              if ((rec.entity_level || "campaign") !== "campaign") continue;
               // Strategy 1: manual FORM mapping (PRIMARY)
               const mappedForms = campaignIdToForms.get(rec.campaign_id) || [];
               if (mappedForms.length > 0) {
@@ -981,8 +1216,10 @@ Deno.serve(async (req) => {
                   if (dm) mappedCount += dm.get(rec.date) || 0;
                 }
                 rec.verified_leads = mappedCount;
-                const formNames = mappedForms.map((fid) => formTotals.get(fid)?.name || fid);
-                rec.verified_source = `${site.site_url} (טופס: ${formNames.join(', ')})`;
+                const formNames = mappedForms.map(
+                  (fid) => formTotals.get(fid)?.name || fid,
+                );
+                rec.verified_source = `${site.site_url} (טופס: ${formNames.join(", ")})`;
                 continue;
               }
 
@@ -1004,12 +1241,14 @@ Deno.serve(async (req) => {
                   if (dm) mappedCount += dm.get(rec.date) || 0;
                 }
                 rec.verified_leads = mappedCount;
-                rec.verified_source = `${site.site_url} (slug: ${mappedSlugs.join(', ')})`;
+                rec.verified_source = `${site.site_url} (slug: ${mappedSlugs.join(", ")})`;
                 continue;
               }
 
               // Strategy 4: fuzzy fallback - match campaign_name tokens against slug tokens
-              const cnTokens = normalize(rec.campaign_name).split(' ').filter((t) => t.length > 1);
+              const cnTokens = normalize(rec.campaign_name)
+                .split(" ")
+                .filter((t) => t.length > 1);
               if (cnTokens.length === 0) {
                 rec.verified_leads = exactCount;
                 continue;
@@ -1017,7 +1256,9 @@ Deno.serve(async (req) => {
               let bestSlug: string | null = null;
               let bestOverlap = 0;
               for (const { slug, tokens } of slugEntries) {
-                const overlap = tokens.filter((t) => cnTokens.includes(t)).length;
+                const overlap = tokens.filter((t) =>
+                  cnTokens.includes(t),
+                ).length;
                 if (overlap > bestOverlap) {
                   bestOverlap = overlap;
                   bestSlug = slug;
@@ -1027,46 +1268,114 @@ Deno.serve(async (req) => {
                 const dm = bySlug.get(bestSlug)!;
                 const fuzzyCount = dm.get(rec.date) || 0;
                 rec.verified_leads = fuzzyCount;
-                if (fuzzyCount > 0) rec.verified_source = `${site.site_url}/${bestSlug} (fuzzy)`;
+                if (fuzzyCount > 0)
+                  rec.verified_source = `${site.site_url}/${bestSlug} (fuzzy)`;
               } else {
                 rec.verified_leads = 0;
               }
             }
-            console.log(`[sync-google-ads] enrichment: ${byCampaignId.size} cids, ${byFormId.size} forms, ${bySlug.size} slugs, ${Object.keys(formMapping).length} form mappings, ${Object.keys(manualMapping).length} slug mappings`);
+            console.log(
+              `[sync-google-ads] enrichment: ${byCampaignId.size} cids, ${byFormId.size} forms, ${bySlug.size} slugs, ${Object.keys(formMapping).length} form mappings, ${Object.keys(manualMapping).length} slug mappings`,
+            );
           } else {
-            console.warn('[sync-google-ads] WP enrichment skipped:', subErr?.message || subData?.error);
+            console.warn(
+              "[sync-google-ads] WP enrichment skipped:",
+              subErr?.message || subData?.error,
+            );
           }
         } else {
-          console.log('[sync-google-ads] no active WP site for client; skipping verification');
+          console.log(
+            "[sync-google-ads] no active WP site for client; skipping verification",
+          );
         }
       }
     } catch (enrichErr: any) {
       // Non-fatal: continue with raw Google Ads data
-      console.warn('[sync-google-ads] enrichment error (non-fatal):', enrichErr?.message);
+      console.warn(
+        "[sync-google-ads] enrichment error (non-fatal):",
+        enrichErr?.message,
+      );
     }
 
     // Create fields if they don't exist (use admin client - table may belong to a different tenant)
-    const fieldKeys = ['date', 'campaign_name', 'campaign_id', 'impressions', 'clicks', 'ctr', 'cpc', 'cost', 'conversions', 'conversions_value', 'all_conversions', 'all_conversions_value', 'cost_per_conversion', 'roas', 'add_to_cart', 'verified_leads'];
-    const fieldNames = ['תאריך', 'שם הקמפיין', 'מזהה קמפיין', 'חשיפות', 'קליקים', 'אחוז קליקים', 'עלות לקליק', 'הוצאה', 'המרות', 'ערך המרות', 'כל ההמרות', 'ערך כל ההמרות', 'עלות להמרה', 'ROAS', 'הוספות לעגלה', 'לידים באתר'];
-    const fieldTypes = ['date', 'text', 'text', 'number', 'number', 'number', 'number', 'number', 'number', 'number', 'number', 'number', 'number', 'number', 'number', 'number'];
+    const fieldKeys = [
+      "date",
+      "campaign_name",
+      "campaign_id",
+      "impressions",
+      "clicks",
+      "ctr",
+      "cpc",
+      "cost",
+      "conversions",
+      "conversions_value",
+      "all_conversions",
+      "all_conversions_value",
+      "cost_per_conversion",
+      "roas",
+      "add_to_cart",
+      "verified_leads",
+    ];
+    const fieldNames = [
+      "תאריך",
+      "שם הקמפיין",
+      "מזהה קמפיין",
+      "חשיפות",
+      "קליקים",
+      "אחוז קליקים",
+      "עלות לקליק",
+      "הוצאה",
+      "המרות",
+      "ערך המרות",
+      "כל ההמרות",
+      "ערך כל ההמרות",
+      "עלות להמרה",
+      "ROAS",
+      "הוספות לעגלה",
+      "לידים באתר",
+    ];
+    const fieldTypes = [
+      "date",
+      "text",
+      "text",
+      "number",
+      "number",
+      "number",
+      "number",
+      "number",
+      "number",
+      "number",
+      "number",
+      "number",
+      "number",
+      "number",
+      "number",
+      "number",
+    ];
 
     for (let i = 0; i < fieldKeys.length; i++) {
       const { data: existingField } = await supabaseAdmin
-        .from('crm_fields')
-        .select('id')
-        .eq('table_id', table_id)
-        .eq('key', fieldKeys[i])
+        .from("crm_fields")
+        .select("id")
+        .eq("table_id", table_id)
+        .eq("key", fieldKeys[i])
         .maybeSingle();
 
       if (!existingField) {
-        const { error: fieldErr } = await supabaseAdmin.from('crm_fields').insert({
-          table_id,
-          key: fieldKeys[i],
-          name: fieldNames[i],
-          type: fieldTypes[i],
-          position: i,
-        });
-        if (fieldErr) console.error(`[sync-google-ads] field insert error for ${fieldKeys[i]}:`, fieldErr.message);
+        const { error: fieldErr } = await supabaseAdmin
+          .from("crm_fields")
+          .insert({
+            table_id,
+            key: fieldKeys[i],
+            name: fieldNames[i],
+            type: fieldTypes[i],
+            position: i,
+          });
+        if (fieldErr)
+          console.error(
+            `[sync-google-ads] field insert error for ${fieldKeys[i]}:`,
+            fieldErr.message,
+          );
       }
     }
 
@@ -1077,11 +1386,19 @@ Deno.serve(async (req) => {
     // table_id only — orphan rows from a previous tenant_id must not survive sync.
     if (records.length > 0) {
       const { error: delErr } = await supabaseAdmin
-        .from('crm_records')
+        .from("crm_records")
         .delete()
-        .eq('table_id', table_id)
-        .or(replacedRecordsFilter(resolvePruneStart(syncWindow, records.map((r) => r.date))));
-      if (delErr) console.error('[sync-google-ads] delete error:', delErr.message);
+        .eq("table_id", table_id)
+        .or(
+          replacedRecordsFilter(
+            resolvePruneStart(
+              syncWindow,
+              records.map((r) => r.date),
+            ),
+          ),
+        );
+      if (delErr)
+        console.error("[sync-google-ads] delete error:", delErr.message);
     }
 
     // Insert new records (batched)
@@ -1094,10 +1411,10 @@ Deno.serve(async (req) => {
         data: record as any,
       }));
       const { error: insErr, count } = await supabaseAdmin
-        .from('crm_records')
-        .insert(rows, { count: 'exact' });
+        .from("crm_records")
+        .insert(rows, { count: "exact" });
       if (insErr) {
-        console.error('[sync-google-ads] insert error:', insErr.message);
+        console.error("[sync-google-ads] insert error:", insErr.message);
       } else {
         inserted = count ?? rows.length;
       }
@@ -1110,13 +1427,22 @@ Deno.serve(async (req) => {
     const syncedAt = new Date().toISOString();
     const settingsPatch: Record<string, unknown> = {};
     if (update_last_sync !== false) settingsPatch.last_sync_at = syncedAt;
-    if (typeof scheduled_history_from === 'string' && isoDate.test(scheduled_history_from)) {
+    if (
+      typeof scheduled_history_from === "string" &&
+      isoDate.test(scheduled_history_from)
+    ) {
       settingsPatch.scheduled_history_from = scheduled_history_from;
     }
-    if (typeof scheduled_synced_through === 'string' && isoDate.test(scheduled_synced_through)) {
+    if (
+      typeof scheduled_synced_through === "string" &&
+      isoDate.test(scheduled_synced_through)
+    ) {
       settingsPatch.scheduled_synced_through = scheduled_synced_through;
     }
-    if (typeof scheduled_lookback_on === 'string' && isoDate.test(scheduled_lookback_on)) {
+    if (
+      typeof scheduled_lookback_on === "string" &&
+      isoDate.test(scheduled_lookback_on)
+    ) {
       settingsPatch.scheduled_lookback_on = scheduled_lookback_on;
     }
     if (Object.keys(settingsPatch).length > 0) {
@@ -1129,36 +1455,43 @@ Deno.serve(async (req) => {
     }
     if (update_last_sync !== false) {
       const { error: lastSyncColErr } = await supabaseAdmin
-        .from('crm_tables')
+        .from("crm_tables")
         .update({ last_sync_at: syncedAt })
-        .eq('id', table_id);
+        .eq("id", table_id);
       if (lastSyncColErr) {
-        console.error('[sync-google-ads] last_sync_at column update failed:', lastSyncColErr.message);
+        console.error(
+          "[sync-google-ads] last_sync_at column update failed:",
+          lastSyncColErr.message,
+        );
       }
     }
 
     const byLevel = {
-      campaign: records.filter((r) => (r.entity_level || 'campaign') === 'campaign').length,
-      adset: records.filter((r) => r.entity_level === 'adset').length,
-      ad: records.filter((r) => r.entity_level === 'ad').length,
+      campaign: records.filter(
+        (r) => (r.entity_level || "campaign") === "campaign",
+      ).length,
+      adset: records.filter((r) => r.entity_level === "adset").length,
+      ad: records.filter((r) => r.entity_level === "ad").length,
     };
     console.log(`[sync-google-ads] by_level`, byLevel);
 
-    return new Response(JSON.stringify({
-      success: true,
-      records_synced: inserted,
-      by_level: byLevel,
-      last_sync_at: syncedAt,
-      verified_against: verifiedSiteUrl,
-    }), {
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-    });
-
+    return new Response(
+      JSON.stringify({
+        success: true,
+        records_synced: inserted,
+        by_level: byLevel,
+        last_sync_at: syncedAt,
+        verified_against: verifiedSiteUrl,
+      }),
+      {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      },
+    );
   } catch (error: any) {
-    console.error('Error in sync-google-ads-data:', error);
+    console.error("Error in sync-google-ads-data:", error);
     return new Response(JSON.stringify({ error: error.message }), {
       status: 500,
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   }
 });

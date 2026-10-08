@@ -20,8 +20,14 @@ test("filesFromClipboardData reads screenshot blobs from items", () => {
 });
 
 test("filesFromClipboardData collapses the same image from items and files", () => {
-  const fromItem = new File([new Uint8Array([1, 2, 3])], "image.png", { type: "image/png", lastModified: 10 });
-  const fromList = new File([new Uint8Array([1, 2, 3])], "screenshot.png", { type: "image/png", lastModified: 99 });
+  const fromItem = new File([new Uint8Array([1, 2, 3])], "image.png", {
+    type: "image/png",
+    lastModified: 10,
+  });
+  const fromList = new File([new Uint8Array([1, 2, 3])], "screenshot.png", {
+    type: "image/png",
+    lastModified: 99,
+  });
   const files = filesFromClipboardData({
     items: [{ kind: "file", type: "image/png", getAsFile: () => fromItem }],
     files: [fromList],
@@ -30,7 +36,10 @@ test("filesFromClipboardData collapses the same image from items and files", () 
 });
 
 test("filesFromClipboardData keeps a real filename and de-dupes files list", () => {
-  const file = new File([new Uint8Array([9])], "brief.pdf", { type: "application/pdf", lastModified: 1 });
+  const file = new File([new Uint8Array([9])], "brief.pdf", {
+    type: "application/pdf",
+    lastModified: 1,
+  });
   const files = filesFromClipboardData({
     items: [{ kind: "file", getAsFile: () => file }],
     files: [file],
@@ -45,10 +54,25 @@ test("claimClipboardPaste de-dupes the same tick", () => {
 });
 
 test("isClipboardTypingTarget skips inputs and textareas but not the files cube", () => {
-  assert.equal(isClipboardTypingTarget({ tagName: "INPUT" } as EventTarget), true);
-  assert.equal(isClipboardTypingTarget({ tagName: "TEXTAREA" } as EventTarget), true);
-  assert.equal(isClipboardTypingTarget({ tagName: "DIV", isContentEditable: false } as EventTarget), false);
-  assert.equal(isClipboardTypingTarget({ tagName: "BUTTON" } as EventTarget), false);
+  assert.equal(
+    isClipboardTypingTarget({ tagName: "INPUT" } as EventTarget),
+    true,
+  );
+  assert.equal(
+    isClipboardTypingTarget({ tagName: "TEXTAREA" } as EventTarget),
+    true,
+  );
+  assert.equal(
+    isClipboardTypingTarget({
+      tagName: "DIV",
+      isContentEditable: false,
+    } as EventTarget),
+    false,
+  );
+  assert.equal(
+    isClipboardTypingTarget({ tagName: "BUTTON" } as EventTarget),
+    false,
+  );
 });
 
 test("file paste field accepts Ctrl+V even though it is a textarea", () => {
@@ -61,21 +85,37 @@ test("file paste field accepts Ctrl+V even though it is a textarea", () => {
 });
 
 test("isClipboardImage treats screenshot names as images", () => {
-  assert.equal(isClipboardImage(new File([new Uint8Array([1])], "screenshot.png", { type: "" })), true);
-  assert.equal(isClipboardImage(new File([new Uint8Array([1])], "brief.pdf", { type: "application/pdf" })), false);
+  assert.equal(
+    isClipboardImage(
+      new File([new Uint8Array([1])], "screenshot.png", { type: "" }),
+    ),
+    true,
+  );
+  assert.equal(
+    isClipboardImage(
+      new File([new Uint8Array([1])], "brief.pdf", { type: "application/pdf" }),
+    ),
+    false,
+  );
 });
 
 test("notes paste keeps text and pulls images into files", () => {
   const notes = { tagName: "TEXTAREA" } as EventTarget;
-  const image = new File([new Uint8Array([1])], "screenshot.png", { type: "image/png" });
-  const pdf = new File([new Uint8Array([1])], "brief.pdf", { type: "application/pdf" });
+  const image = new File([new Uint8Array([1])], "screenshot.png", {
+    type: "image/png",
+  });
+  const pdf = new File([new Uint8Array([1])], "brief.pdf", {
+    type: "application/pdf",
+  });
   assert.equal(shouldUploadClipboardPaste(notes, [image]), true);
   assert.equal(shouldUploadClipboardPaste(notes, [pdf]), false);
   assert.equal(shouldUploadClipboardPaste(notes, []), false);
 });
 
 test("filesFromClipboardData reads an image item that is not marked as a file", () => {
-  const blob = new File([new Uint8Array([4])], "shot.png", { type: "image/png" });
+  const blob = new File([new Uint8Array([4])], "shot.png", {
+    type: "image/png",
+  });
   const files = filesFromClipboardData({
     items: [{ kind: "string", type: "image/png", getAsFile: () => blob }],
   });

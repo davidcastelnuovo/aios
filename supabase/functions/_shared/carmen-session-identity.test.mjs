@@ -45,10 +45,22 @@ test("requireOriginChatId refuses phone-only / missing keys", () => {
 });
 
 test("reply destination must match JID type", () => {
-  assert.equal(replyDestinationIsConsistent({ chatId: GROUP_A, isGroup: true }), true);
-  assert.equal(replyDestinationIsConsistent({ chatId: GROUP_A, isGroup: false }), false);
-  assert.equal(replyDestinationIsConsistent({ chatId: DAVID_PRIVATE, isGroup: false }), true);
-  assert.equal(replyDestinationIsConsistent({ chatId: DAVID_PRIVATE, isGroup: true }), false);
+  assert.equal(
+    replyDestinationIsConsistent({ chatId: GROUP_A, isGroup: true }),
+    true,
+  );
+  assert.equal(
+    replyDestinationIsConsistent({ chatId: GROUP_A, isGroup: false }),
+    false,
+  );
+  assert.equal(
+    replyDestinationIsConsistent({ chatId: DAVID_PRIVATE, isGroup: false }),
+    true,
+  );
+  assert.equal(
+    replyDestinationIsConsistent({ chatId: DAVID_PRIVATE, isGroup: true }),
+    false,
+  );
 });
 
 test("wa_notify is pinned to the originating group, not the speaker phone", () => {
@@ -70,12 +82,21 @@ test("a question in group A cannot restore history from group B", () => {
   const askedIn = requireOriginChatId(GROUP_A);
   const otherSession = { chat_id: GROUP_B, phone: DAVID_PHONE };
   assert.equal(askedIn.ok, true);
-  assert.equal(originChatsMatch(askedIn.ok ? askedIn.chatId : null, otherSession.chat_id), false);
+  assert.equal(
+    originChatsMatch(askedIn.ok ? askedIn.chatId : null, otherSession.chat_id),
+    false,
+  );
 });
 
 test("system automations never take a group JID as the destination", () => {
   // Pulse / health / coding-agent notify must stay on the configured private chat.
   assert.equal(isGroupChatId(GROUP_A), true);
-  assert.equal(replyDestinationIsConsistent({ chatId: GROUP_A, isGroup: false }), false);
-  assert.equal(replyDestinationIsConsistent({ chatId: DAVID_PRIVATE, isGroup: false }), true);
+  assert.equal(
+    replyDestinationIsConsistent({ chatId: GROUP_A, isGroup: false }),
+    false,
+  );
+  assert.equal(
+    replyDestinationIsConsistent({ chatId: DAVID_PRIVATE, isGroup: false }),
+    true,
+  );
 });

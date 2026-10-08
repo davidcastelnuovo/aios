@@ -29,9 +29,9 @@ Grok Bot → reply_to_cursor_session({ session_id, message }) → same Cursor ch
 
 ## Cursor ↔ Grok Bot direct (no Carmen)
 
-| Direction | Setup |
-| --- | --- |
-| **Cursor → Grok** | `.mcp.json` → `grok-mcp/mcp` + `GROK_MCP_BEARER` in Cloud Environment secrets |
+| Direction         | Setup                                                                                                 |
+| ----------------- | ----------------------------------------------------------------------------------------------------- |
+| **Cursor → Grok** | `.mcp.json` → `grok-mcp/mcp` + `GROK_MCP_BEARER` in Cloud Environment secrets                         |
 | **Grok → Cursor** | Grok Bot Plugins → `cursor-mcp/mcp` + **`GROK_CURSOR_MCP_BEARER`** (not Carmen's `CURSOR_MCP_BEARER`) |
 
 Both URLs **must end with `/mcp`** (Streamable HTTP).
@@ -42,10 +42,10 @@ If webhook secrets are **not** set, `grok-mcp` falls back to launching a Cursor 
 
 ## Tools
 
-| Tool | What it does |
-| --- | --- |
+| Tool               | What it does                                                     |
+| ------------------ | ---------------------------------------------------------------- |
 | `request_dev_task` | Code/feature/bugfix. Grok implements on a branch and opens a PR. |
-| `ask_grok` | Research, analysis, planning, investigation. |
+| `ask_grok`         | Research, analysis, planning, investigation.                     |
 
 Both are **asynchronous** in webhook mode: Carmen gets an immediate ack; Grok replies later via `ask_carmen`.
 
@@ -53,14 +53,14 @@ Both are **asynchronous** in webhook mode: Carmen gets an immediate ack; Grok re
 
 ### 1. Secrets (project `zvoijyneresvkadpprel`)
 
-| Secret | Required | Value |
-| --- | --- | --- |
-| `GROK_MCP_BEARER` | ✅ | strong random string; Carmen presents this as the MCP bearer. Falls back to `CURSOR_MCP_BEARER`. |
-| `GROK_BOT_WEBHOOK_URL` | ✅ (webhook mode) | `https://api2.cursor.sh/automations/webhook/…` from the Grok Bot automation panel |
-| `GROK_BOT_WEBHOOK_KEY` | ✅ (webhook mode) | Bearer token from the same panel |
-| `CURSOR_API_KEY` | fallback only | same Cursor API key used by `cursor-mcp` |
-| `GROK_MODEL_ID` | optional | default `cursor-grok-4.6-high-fast` (cloud-agent fallback) |
-| `CURSOR_CLOUD_ENV_NAME` | optional | `davidcastelnuovo/aios` (cloud-agent fallback) |
+| Secret                  | Required          | Value                                                                                            |
+| ----------------------- | ----------------- | ------------------------------------------------------------------------------------------------ |
+| `GROK_MCP_BEARER`       | ✅                | strong random string; Carmen presents this as the MCP bearer. Falls back to `CURSOR_MCP_BEARER`. |
+| `GROK_BOT_WEBHOOK_URL`  | ✅ (webhook mode) | `https://api2.cursor.sh/automations/webhook/…` from the Grok Bot automation panel                |
+| `GROK_BOT_WEBHOOK_KEY`  | ✅ (webhook mode) | Bearer token from the same panel                                                                 |
+| `CURSOR_API_KEY`        | fallback only     | same Cursor API key used by `cursor-mcp`                                                         |
+| `GROK_MODEL_ID`         | optional          | default `cursor-grok-4.6-high-fast` (cloud-agent fallback)                                       |
+| `CURSOR_CLOUD_ENV_NAME` | optional          | `davidcastelnuovo/aios` (cloud-agent fallback)                                                   |
 
 ```bash
 supabase secrets set \

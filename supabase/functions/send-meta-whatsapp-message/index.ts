@@ -9,7 +9,8 @@ import { checkWhatsAppSend } from "../_shared/integration-guard.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+  "Access-Control-Allow-Headers":
+    "authorization, x-client-info, apikey, content-type",
 };
 
 const reply = (body: unknown, status = 200) =>
@@ -19,8 +20,10 @@ const reply = (body: unknown, status = 200) =>
   });
 
 Deno.serve(async (request) => {
-  if (request.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
-  if (request.method !== "POST") return reply({ error: "method_not_allowed" }, 405);
+  if (request.method === "OPTIONS")
+    return new Response(null, { headers: corsHeaders });
+  if (request.method !== "POST")
+    return reply({ error: "method_not_allowed" }, 405);
 
   try {
     const supabaseUrl = Deno.env.get("SUPABASE_URL") ?? "";
@@ -28,7 +31,8 @@ Deno.serve(async (request) => {
     const anonKey = Deno.env.get("SUPABASE_ANON_KEY") ?? "";
     const authHeader = request.headers.get("Authorization") ?? "";
     const jwt = authHeader.replace(/^Bearer\s+/i, "");
-    if (!supabaseUrl || !serviceKey || !jwt) return reply({ error: "unauthorized" }, 401);
+    if (!supabaseUrl || !serviceKey || !jwt)
+      return reply({ error: "unauthorized" }, 401);
 
     const admin = createClient(supabaseUrl, serviceKey, {
       auth: { persistSession: false, autoRefreshToken: false },
@@ -63,28 +67,43 @@ Deno.serve(async (request) => {
     if (clientId && leadId && !phoneNumber) {
       return reply({ error: "choose_client_or_lead" }, 400);
     }
-    if (groupId) return reply({ error: "Meta WhatsApp Cloud API does not support groups" }, 400);
+    if (groupId)
+      return reply(
+        { error: "Meta WhatsApp Cloud API does not support groups" },
+        400,
+      );
     if (isServiceRole) {
       if (typeof senderUserId !== "string" || !senderUserId) {
         return reply({ error: "senderUserId_required_for_service_role" }, 400);
       }
       userId = senderUserId;
     }
-    if (!message && !template?.name) return reply({ error: "message_or_template_required" }, 400);
+    if (!message && !template?.name)
+      return reply({ error: "message_or_template_required" }, 400);
 
     let tenantId = typeof suppliedTenantId === "string" ? suppliedTenantId : "";
     let contactPhone = typeof phoneNumber === "string" ? phoneNumber : "";
     const entityClient = isServiceRole ? admin : authClient;
     if (clientId) {
-      const { data } = await entityClient.from("clients").select("tenant_id,phone").eq("id", clientId).single();
+      const { data } = await entityClient
+        .from("clients")
+        .select("tenant_id,phone")
+        .eq("id", clientId)
+        .single();
       if (!data?.tenant_id) return reply({ error: "client_not_found" }, 404);
-      if (tenantId && tenantId !== data.tenant_id) return reply({ error: "tenant_entity_mismatch" }, 403);
+      if (tenantId && tenantId !== data.tenant_id)
+        return reply({ error: "tenant_entity_mismatch" }, 403);
       tenantId = data.tenant_id;
       contactPhone ||= data?.phone ?? "";
     } else if (leadId) {
-      const { data } = await entityClient.from("leads").select("tenant_id,phone").eq("id", leadId).single();
+      const { data } = await entityClient
+        .from("leads")
+        .select("tenant_id,phone")
+        .eq("id", leadId)
+        .single();
       if (!data?.tenant_id) return reply({ error: "lead_not_found" }, 404);
-      if (tenantId && tenantId !== data.tenant_id) return reply({ error: "tenant_entity_mismatch" }, 403);
+      if (tenantId && tenantId !== data.tenant_id)
+        return reply({ error: "tenant_entity_mismatch" }, 403);
       tenantId = data.tenant_id;
       contactPhone ||= data?.phone ?? "";
     }
@@ -95,18 +114,27 @@ Deno.serve(async (request) => {
     const guard = checkWhatsAppSend(to);
     if (guard.decision === "BLOCK") {
       console.warn("[send-meta-whatsapp] blocked by integration-guard", guard);
-      return reply({
-        error: "blocked_by_staging_safe_mode",
-        reason: guard.reason,
-        environment: guard.environment,
-      }, 403);
+      return reply(
+        {
+          error: "blocked_by_staging_safe_mode",
+          reason: guard.reason,
+          environment: guard.environment,
+        },
+        403,
+      );
     }
 
     const [{ data: membership }, { data: superAdmin }] = await Promise.all([
-      admin.from("tenant_users").select("user_id").eq("tenant_id", tenantId).eq("user_id", userId).maybeSingle(),
+      admin
+        .from("tenant_users")
+        .select("user_id")
+        .eq("tenant_id", tenantId)
+        .eq("user_id", userId)
+        .maybeSingle(),
       admin.rpc("is_super_admin", { _user_id: userId }),
     ]);
-    if (!membership && superAdmin !== true) return reply({ error: "forbidden" }, 403);
+    if (!membership && superAdmin !== true)
+      return reply({ error: "forbidden" }, 403);
 
     let integrationQuery = admin
       .from("tenant_integrations")
@@ -120,17 +148,22 @@ Deno.serve(async (request) => {
     } else {
       integrationQuery = integrationQuery.eq("tenant_id", tenantId);
     }
-    const { data: integrations, error: integrationError } = await integrationQuery.order("created_at").limit(1);
+    const { data: integrations, error: integrationError } =
+      await integrationQuery.order("created_at").limit(1);
     if (integrationError) throw integrationError;
     const integration = integrations?.[0];
-    if (!integration) return reply({ error: "meta_whatsapp_not_connected" }, 400);
+    if (!integration)
+      return reply({ error: "meta_whatsapp_not_connected" }, 400);
 
     const isSharedAcrossTenants = integration.tenant_id !== tenantId;
     if (isSharedAcrossTenants) {
-      const { data: canUse, error: accessError } = await admin.rpc("tenant_can_use_integration", {
-        p_tenant_id: tenantId,
-        p_integration_id: integration.id,
-      });
+      const { data: canUse, error: accessError } = await admin.rpc(
+        "tenant_can_use_integration",
+        {
+          p_tenant_id: tenantId,
+          p_integration_id: integration.id,
+        },
+      );
       if (accessError) throw accessError;
       if (canUse !== true && superAdmin !== true) {
         return reply({ error: "integration_not_shared_with_tenant" }, 403);
@@ -156,12 +189,18 @@ Deno.serve(async (request) => {
       .eq("integration_id", integration.id)
       .maybeSingle();
     if (tokenError) throw tokenError;
-    if (!tokenRow?.access_token) return reply({ error: "meta_whatsapp_token_missing" }, 400);
+    if (!tokenRow?.access_token)
+      return reply({ error: "meta_whatsapp_token_missing" }, 400);
 
     const settings = (integration.settings ?? {}) as Record<string, any>;
-    const phoneNumberId = String(settings.phone_number_id ?? integration.instance_id ?? "");
-    const graphVersion =
-      String(settings.graph_version ?? Deno.env.get("META_GRAPH_API_VERSION") ?? DEFAULT_META_GRAPH_VERSION);
+    const phoneNumberId = String(
+      settings.phone_number_id ?? integration.instance_id ?? "",
+    );
+    const graphVersion = String(
+      settings.graph_version ??
+        Deno.env.get("META_GRAPH_API_VERSION") ??
+        DEFAULT_META_GRAPH_VERSION,
+    );
     if (!phoneNumberId) return reply({ error: "phone_number_id_missing" }, 400);
 
     const graphBody = template?.name
@@ -173,7 +212,9 @@ Deno.serve(async (request) => {
           template: {
             name: template.name,
             language: { code: template.language ?? "he" },
-            ...(Array.isArray(template.components) ? { components: template.components } : {}),
+            ...(Array.isArray(template.components)
+              ? { components: template.components }
+              : {}),
           },
         }
       : {
@@ -209,13 +250,16 @@ Deno.serve(async (request) => {
         result?.error?.message ||
         null;
       const explained = explainMetaWhatsAppError(code, detail);
-      return reply({
-        error: explained.messageHe,
-        error_label: explained.labelHe,
-        ops_hint: explained.opsHintHe,
-        retryable: explained.retryable,
-        meta_error: result?.error ?? result,
-      }, graphResponse.status || 502);
+      return reply(
+        {
+          error: explained.messageHe,
+          error_label: explained.labelHe,
+          ops_hint: explained.opsHintHe,
+          retryable: explained.retryable,
+          meta_error: result?.error ?? result,
+        },
+        graphResponse.status || 502,
+      );
     }
 
     const messageId = result?.messages?.[0]?.id ?? null;
@@ -223,11 +267,15 @@ Deno.serve(async (request) => {
     // Resolved after the send so a failure here can never affect delivery.
     let templateText: string | null = null;
     if (template?.name) {
-      const bodyComponent = (Array.isArray(template.components) ? template.components : []).find(
+      const bodyComponent = (
+        Array.isArray(template.components) ? template.components : []
+      ).find(
         (component: Record<string, unknown>) => component?.type === "body",
       );
-      const parameters = (Array.isArray(bodyComponent?.parameters) ? bodyComponent.parameters : []).map(
-        (parameter: Record<string, unknown>) => String(parameter?.text ?? ""),
+      const parameters = (
+        Array.isArray(bodyComponent?.parameters) ? bodyComponent.parameters : []
+      ).map((parameter: Record<string, unknown>) =>
+        String(parameter?.text ?? ""),
       );
       templateText = await renderTemplateText(
         String(settings.waba_id ?? ""),
@@ -258,11 +306,15 @@ Deno.serve(async (request) => {
         template: template ?? null,
       },
     });
-    if (insertError) console.error("Failed to save Meta WhatsApp message", insertError);
+    if (insertError)
+      console.error("Failed to save Meta WhatsApp message", insertError);
 
     return reply({ success: true, messageId });
   } catch (error) {
     console.error("send-meta-whatsapp-message error", error);
-    return reply({ error: error instanceof Error ? error.message : "unknown_error" }, 500);
+    return reply(
+      { error: error instanceof Error ? error.message : "unknown_error" },
+      500,
+    );
   }
 });

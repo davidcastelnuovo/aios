@@ -22,9 +22,16 @@ export function parsePulseAlertRules(raw: unknown): PulseAlertRules {
   return {
     instant_wa_enabled: input.instant_wa_enabled !== false,
     no_contact_enabled: input.no_contact_enabled !== false,
-    no_contact_days: Math.max(1, Number(input.no_contact_days) || DEFAULT_PULSE_ALERT_RULES.no_contact_days!),
+    no_contact_days: Math.max(
+      1,
+      Number(input.no_contact_days) ||
+        DEFAULT_PULSE_ALERT_RULES.no_contact_days!,
+    ),
     cpl_spike_enabled: input.cpl_spike_enabled !== false,
-    cpl_spike_pct: Math.max(1, Number(input.cpl_spike_pct) || DEFAULT_PULSE_ALERT_RULES.cpl_spike_pct!),
+    cpl_spike_pct: Math.max(
+      1,
+      Number(input.cpl_spike_pct) || DEFAULT_PULSE_ALERT_RULES.cpl_spike_pct!,
+    ),
     disconnected_enabled: input.disconnected_enabled !== false,
   };
 }

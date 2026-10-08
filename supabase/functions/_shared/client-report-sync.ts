@@ -11,4 +11,4 @@ export {
   syncClientCardFromReportTable,
   googleResolveClientCustomerId,
   buildGoogleCustomerClientMap,
-} from './client-report-sync.mjs';
+} from "./client-report-sync.mjs";

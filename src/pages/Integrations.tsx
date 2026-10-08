@@ -1,7 +1,32 @@
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Webhook, Facebook, MessageCircle, ArrowLeft, Settings, TrendingUp, Calculator, Zap, Search, Video, Mail, Brain, Phone, Globe, ShoppingCart, Link2, Send, Music2 } from "lucide-react";
+import {
+  Webhook,
+  Facebook,
+  MessageCircle,
+  ArrowLeft,
+  Settings,
+  TrendingUp,
+  Calculator,
+  Zap,
+  Search,
+  Video,
+  Mail,
+  Brain,
+  Phone,
+  Globe,
+  ShoppingCart,
+  Link2,
+  Send,
+  Music2,
+} from "lucide-react";
 import { useTenantPath } from "@/hooks/useTenantPath";
 import { useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
@@ -19,7 +44,15 @@ interface IntegrationCardProps {
   gradient: string;
 }
 
-function IntegrationCard({ icon, title, description, features, isConnected, route, gradient }: IntegrationCardProps) {
+function IntegrationCard({
+  icon,
+  title,
+  description,
+  features,
+  isConnected,
+  route,
+  gradient,
+}: IntegrationCardProps) {
   const navigate = useNavigate();
   const { buildPath } = useTenantPath();
 
@@ -31,7 +64,10 @@ function IntegrationCard({ icon, title, description, features, isConnected, rout
             {icon}
             <h3 className="text-lg font-semibold">{title}</h3>
           </div>
-          <Badge variant={isConnected ? "default" : "secondary"} className={isConnected ? "bg-green-500/90 hover:bg-green-500" : ""}>
+          <Badge
+            variant={isConnected ? "default" : "secondary"}
+            className={isConnected ? "bg-green-500/90 hover:bg-green-500" : ""}
+          >
             {isConnected ? "✓ מחובר" : "לא מוגדר"}
           </Badge>
         </div>
@@ -46,8 +82,8 @@ function IntegrationCard({ icon, title, description, features, isConnected, rout
             </li>
           ))}
         </ul>
-        <Button 
-          className="w-full" 
+        <Button
+          className="w-full"
           variant="outline"
           onClick={() => navigate(buildPath(route))}
         >
@@ -64,15 +100,15 @@ export default function Integrations() {
 
   // Check Green API connection status
   const { data: greenApiIntegration } = useQuery({
-    queryKey: ['green-api-integration', currentTenantId],
+    queryKey: ["green-api-integration", currentTenantId],
     queryFn: async () => {
       if (!currentTenantId) return null;
       const { data } = await supabase
-        .from('tenant_integrations')
-        .select('*')
-        .eq('tenant_id', currentTenantId)
-        .eq('integration_type', 'green_api')
-        .eq('is_active', true)
+        .from("tenant_integrations")
+        .select("*")
+        .eq("tenant_id", currentTenantId)
+        .eq("integration_type", "green_api")
+        .eq("is_active", true)
         .maybeSingle();
       return data;
     },
@@ -81,15 +117,15 @@ export default function Integrations() {
 
   // Check Manus WhatsApp integration status
   const { data: manusWaIntegration } = useQuery({
-    queryKey: ['manus-wa-integration', currentTenantId],
+    queryKey: ["manus-wa-integration", currentTenantId],
     queryFn: async () => {
       if (!currentTenantId) return null;
       const { data } = await supabase
-        .from('tenant_integrations')
-        .select('*')
-        .eq('tenant_id', currentTenantId)
-        .eq('integration_type', 'manus_wa')
-        .eq('is_active', true)
+        .from("tenant_integrations")
+        .select("*")
+        .eq("tenant_id", currentTenantId)
+        .eq("integration_type", "manus_wa")
+        .eq("is_active", true)
         .maybeSingle();
       return data;
     },
@@ -98,15 +134,15 @@ export default function Integrations() {
 
   // Check official Meta WhatsApp Cloud API connection status
   const { data: metaWhatsAppIntegration } = useQuery({
-    queryKey: ['meta-whatsapp-integration', currentTenantId],
+    queryKey: ["meta-whatsapp-integration", currentTenantId],
     queryFn: async () => {
       if (!currentTenantId) return null;
       const { data } = await supabase
-        .from('tenant_integrations')
-        .select('id')
-        .eq('tenant_id', currentTenantId)
-        .eq('integration_type', 'meta_whatsapp')
-        .eq('is_active', true)
+        .from("tenant_integrations")
+        .select("id")
+        .eq("tenant_id", currentTenantId)
+        .eq("integration_type", "meta_whatsapp")
+        .eq("is_active", true)
         .limit(1);
       return data?.[0] || null;
     },
@@ -115,15 +151,15 @@ export default function Integrations() {
 
   // Check Facebook integration status
   const { data: facebookIntegration } = useQuery({
-    queryKey: ['facebook-integration', currentTenantId],
+    queryKey: ["facebook-integration", currentTenantId],
     queryFn: async () => {
       if (!currentTenantId) return null;
       const { data } = await supabase
-        .from('tenant_integrations')
-        .select('*')
-        .eq('tenant_id', currentTenantId)
-        .eq('integration_type', 'facebook')
-        .eq('is_active', true)
+        .from("tenant_integrations")
+        .select("*")
+        .eq("tenant_id", currentTenantId)
+        .eq("integration_type", "facebook")
+        .eq("is_active", true)
         .maybeSingle();
       return data;
     },
@@ -132,15 +168,15 @@ export default function Integrations() {
 
   // Check ManyChat integration status
   const { data: manychatIntegration } = useQuery({
-    queryKey: ['manychat-integration', currentTenantId],
+    queryKey: ["manychat-integration", currentTenantId],
     queryFn: async () => {
       if (!currentTenantId) return null;
       const { data } = await supabase
-        .from('tenant_integrations')
-        .select('*')
-        .eq('tenant_id', currentTenantId)
-        .eq('integration_type', 'manychat')
-        .eq('is_active', true)
+        .from("tenant_integrations")
+        .select("*")
+        .eq("tenant_id", currentTenantId)
+        .eq("integration_type", "manychat")
+        .eq("is_active", true)
         .maybeSingle();
       return data;
     },
@@ -148,19 +184,19 @@ export default function Integrations() {
   });
 
   // Check Google Ads integration status (per-user)
-  const hasGoogleAds = useHasIntegrationAccess(currentTenantId, 'google_ads');
+  const hasGoogleAds = useHasIntegrationAccess(currentTenantId, "google_ads");
 
   // Check Make.com (Google Ads via Make) integration status
   const { data: makeIntegration } = useQuery({
-    queryKey: ['make-integration', currentTenantId],
+    queryKey: ["make-integration", currentTenantId],
     queryFn: async () => {
       if (!currentTenantId) return null;
       const { data } = await supabase
-        .from('tenant_integrations')
-        .select('*')
-        .eq('tenant_id', currentTenantId)
-        .eq('integration_type', 'google_ads_make')
-        .eq('is_active', true)
+        .from("tenant_integrations")
+        .select("*")
+        .eq("tenant_id", currentTenantId)
+        .eq("integration_type", "google_ads_make")
+        .eq("is_active", true)
         .maybeSingle();
       return data;
     },
@@ -168,22 +204,28 @@ export default function Integrations() {
   });
 
   // Check Google Analytics integration status (per-user)
-  const hasGoogleAnalytics = useHasIntegrationAccess(currentTenantId, 'google_analytics');
+  const hasGoogleAnalytics = useHasIntegrationAccess(
+    currentTenantId,
+    "google_analytics",
+  );
 
   // Check Google Search Console integration status (per-user)
-  const hasGoogleSearchConsole = useHasIntegrationAccess(currentTenantId, 'google_search_console');
+  const hasGoogleSearchConsole = useHasIntegrationAccess(
+    currentTenantId,
+    "google_search_console",
+  );
 
   // Check Ahrefs integration status
   const { data: ahrefsIntegration } = useQuery({
-    queryKey: ['ahrefs-integration', currentTenantId],
+    queryKey: ["ahrefs-integration", currentTenantId],
     queryFn: async () => {
       if (!currentTenantId) return null;
       const { data } = await supabase
-        .from('tenant_integrations')
-        .select('*')
-        .eq('tenant_id', currentTenantId)
-        .eq('integration_type', 'ahrefs')
-        .eq('is_active', true)
+        .from("tenant_integrations")
+        .select("*")
+        .eq("tenant_id", currentTenantId)
+        .eq("integration_type", "ahrefs")
+        .eq("is_active", true)
         .maybeSingle();
       return data;
     },
@@ -192,25 +234,25 @@ export default function Integrations() {
 
   // Check DataForSEO / SerpAPI integration status
   const { data: dataForSeoIntegration } = useQuery({
-    queryKey: ['dataforseo-integration', currentTenantId],
+    queryKey: ["dataforseo-integration", currentTenantId],
     queryFn: async () => {
       if (!currentTenantId) return null;
       // Check DataForSEO first
       const { data: dfData } = await supabase
-        .from('tenant_integrations')
-        .select('*')
-        .eq('tenant_id', currentTenantId)
-        .eq('integration_type', 'dataforseo')
-        .eq('is_active', true)
+        .from("tenant_integrations")
+        .select("*")
+        .eq("tenant_id", currentTenantId)
+        .eq("integration_type", "dataforseo")
+        .eq("is_active", true)
         .maybeSingle();
       if (dfData) return dfData;
       // Fallback to SerpAPI
       const { data: serpData } = await supabase
-        .from('tenant_integrations')
-        .select('*')
-        .eq('tenant_id', currentTenantId)
-        .eq('integration_type', 'serpapi')
-        .eq('is_active', true)
+        .from("tenant_integrations")
+        .select("*")
+        .eq("tenant_id", currentTenantId)
+        .eq("integration_type", "serpapi")
+        .eq("is_active", true)
         .maybeSingle();
       return serpData;
     },
@@ -219,15 +261,15 @@ export default function Integrations() {
 
   // Check Sumit integration status
   const { data: sumitIntegration } = useQuery({
-    queryKey: ['sumit-integration', currentTenantId],
+    queryKey: ["sumit-integration", currentTenantId],
     queryFn: async () => {
       if (!currentTenantId) return null;
       const { data } = await supabase
-        .from('tenant_integrations')
-        .select('*')
-        .eq('tenant_id', currentTenantId)
-        .eq('integration_type', 'sumit')
-        .eq('is_active', true)
+        .from("tenant_integrations")
+        .select("*")
+        .eq("tenant_id", currentTenantId)
+        .eq("integration_type", "sumit")
+        .eq("is_active", true)
         .maybeSingle();
       return data;
     },
@@ -236,15 +278,15 @@ export default function Integrations() {
 
   // Check Zoom integration status
   const { data: zoomIntegration } = useQuery({
-    queryKey: ['zoom-integration', currentTenantId],
+    queryKey: ["zoom-integration", currentTenantId],
     queryFn: async () => {
       if (!currentTenantId) return null;
       const { data } = await supabase
-        .from('tenant_integrations')
-        .select('*')
-        .eq('tenant_id', currentTenantId)
-        .eq('integration_type', 'zoom')
-        .eq('is_active', true)
+        .from("tenant_integrations")
+        .select("*")
+        .eq("tenant_id", currentTenantId)
+        .eq("integration_type", "zoom")
+        .eq("is_active", true)
         .maybeSingle();
       return data;
     },
@@ -253,10 +295,10 @@ export default function Integrations() {
 
   // Check Gmail connection status
   const { data: gmailStatus } = useQuery({
-    queryKey: ['gmail-status-integrations'],
+    queryKey: ["gmail-status-integrations"],
     queryFn: async () => {
-      const { data, error } = await supabase.functions.invoke('gmail-auth', {
-        body: { action: 'status' },
+      const { data, error } = await supabase.functions.invoke("gmail-auth", {
+        body: { action: "status" },
       });
       if (error) return null;
       return data as { connected: boolean } | null;
@@ -265,14 +307,14 @@ export default function Integrations() {
 
   // Check WordPress / WooCommerce integration status
   const { data: wordpressSite } = useQuery({
-    queryKey: ['wordpress-site-integration', currentTenantId],
+    queryKey: ["wordpress-site-integration", currentTenantId],
     queryFn: async () => {
       if (!currentTenantId) return null;
       const { data } = await (supabase
-        .from('social_media_wordpress_sites' as any)
-        .select('id, woocommerce_enabled')
-        .eq('tenant_id', currentTenantId)
-        .eq('is_active', true)
+        .from("social_media_wordpress_sites" as any)
+        .select("id, woocommerce_enabled")
+        .eq("tenant_id", currentTenantId)
+        .eq("is_active", true)
         .limit(1)
         .maybeSingle() as any);
       return data;
@@ -282,15 +324,15 @@ export default function Integrations() {
 
   // Check Manus integration status
   const { data: manusIntegration } = useQuery({
-    queryKey: ['manus-integration', currentTenantId],
+    queryKey: ["manus-integration", currentTenantId],
     queryFn: async () => {
       if (!currentTenantId) return null;
       const { data } = await supabase
-        .from('tenant_integrations')
-        .select('*')
-        .eq('tenant_id', currentTenantId)
-        .eq('integration_type', 'manus')
-        .eq('is_active', true)
+        .from("tenant_integrations")
+        .select("*")
+        .eq("tenant_id", currentTenantId)
+        .eq("integration_type", "manus")
+        .eq("is_active", true)
         .maybeSingle();
       return data;
     },
@@ -299,15 +341,15 @@ export default function Integrations() {
 
   // Check Unified.to connections
   const { data: unifiedConnections } = useQuery({
-    queryKey: ['unified-connections-count', currentTenantId],
+    queryKey: ["unified-connections-count", currentTenantId],
     queryFn: async () => {
       if (!currentTenantId) return null;
       const { data } = await supabase
-        .from('tenant_integrations')
-        .select('id')
-        .eq('tenant_id', currentTenantId)
-        .like('integration_type', 'unified_%')
-        .eq('is_active', true);
+        .from("tenant_integrations")
+        .select("id")
+        .eq("tenant_id", currentTenantId)
+        .like("integration_type", "unified_%")
+        .eq("is_active", true);
       return data;
     },
     enabled: !!currentTenantId,
@@ -315,13 +357,13 @@ export default function Integrations() {
 
   // Check Maskyoo settings
   const { data: maskyooIntegration } = useQuery({
-    queryKey: ['maskyoo-settings', currentTenantId],
+    queryKey: ["maskyoo-settings", currentTenantId],
     queryFn: async () => {
       if (!currentTenantId) return null;
       const { data } = await supabase
-        .from('maskyoo_settings' as any)
-        .select('*')
-        .eq('tenant_id', currentTenantId)
+        .from("maskyoo_settings" as any)
+        .select("*")
+        .eq("tenant_id", currentTenantId)
         .maybeSingle();
       return data;
     },
@@ -330,14 +372,14 @@ export default function Integrations() {
 
   // Check Telegram bot state
   const { data: telegramBotState } = useQuery({
-    queryKey: ['telegram-bot-state', currentTenantId],
+    queryKey: ["telegram-bot-state", currentTenantId],
     queryFn: async () => {
       if (!currentTenantId) return null;
       const { data } = await supabase
-        .from('telegram_bot_state')
-        .select('*')
-        .eq('tenant_id', currentTenantId)
-        .eq('is_active', true)
+        .from("telegram_bot_state")
+        .select("*")
+        .eq("tenant_id", currentTenantId)
+        .eq("is_active", true)
         .maybeSingle();
       return data;
     },
@@ -345,15 +387,15 @@ export default function Integrations() {
   });
   // Check TikTok integration status
   const { data: tiktokIntegration } = useQuery({
-    queryKey: ['tiktok-integration', currentTenantId],
+    queryKey: ["tiktok-integration", currentTenantId],
     queryFn: async () => {
       if (!currentTenantId) return null;
       const { data } = await supabase
-        .from('tenant_integrations')
-        .select('*')
-        .eq('tenant_id', currentTenantId)
-        .eq('integration_type', 'tiktok')
-        .eq('is_active', true)
+        .from("tenant_integrations")
+        .select("*")
+        .eq("tenant_id", currentTenantId)
+        .eq("integration_type", "tiktok")
+        .eq("is_active", true)
         .maybeSingle();
       return data;
     },
@@ -362,15 +404,15 @@ export default function Integrations() {
 
   // Check LLM (AI models) integration status
   const { data: llmIntegration } = useQuery({
-    queryKey: ['llm-integration-card', currentTenantId],
+    queryKey: ["llm-integration-card", currentTenantId],
     queryFn: async () => {
       if (!currentTenantId) return null;
       const { data } = await supabase
-        .from('tenant_integrations')
-        .select('id')
-        .eq('tenant_id', currentTenantId)
-        .eq('integration_type', 'llm')
-        .eq('is_active', true)
+        .from("tenant_integrations")
+        .select("id")
+        .eq("tenant_id", currentTenantId)
+        .eq("integration_type", "llm")
+        .eq("is_active", true)
         .maybeSingle();
       return data;
     },
@@ -381,7 +423,8 @@ export default function Integrations() {
     {
       icon: <Brain className="h-6 w-6" />,
       title: "מודלי AI (LLMs)",
-      description: "חבר את מפתחות ה-API שלך ל-GPT, Claude ו-Gemini — המוח של הסוכנים",
+      description:
+        "חבר את מפתחות ה-API שלך ל-GPT, Claude ו-Gemini — המוח של הסוכנים",
       features: [
         "OpenAI (GPT), Anthropic (Claude), Google (Gemini)",
         "המוח של הסוכנים וכרמן",
@@ -420,7 +463,7 @@ export default function Integrations() {
     {
       icon: (
         <svg className="h-6 w-6" viewBox="0 0 24 24" fill="currentColor">
-          <path d="M12.48 10.92v3.28h7.84c-.24 1.84-.853 3.187-1.787 4.133-1.147 1.147-2.933 2.4-6.053 2.4-4.827 0-8.6-3.893-8.6-8.72s3.773-8.72 8.6-8.72c2.6 0 4.507 1.027 5.907 2.347l2.307-2.307C18.747 1.44 16.133 0 12.48 0 5.867 0 .307 5.387.307 12s5.56 12 12.173 12c3.573 0 6.267-1.173 8.373-3.36 2.16-2.16 2.84-5.213 2.84-7.667 0-.76-.053-1.467-.173-2.053H12.48z"/>
+          <path d="M12.48 10.92v3.28h7.84c-.24 1.84-.853 3.187-1.787 4.133-1.147 1.147-2.933 2.4-6.053 2.4-4.827 0-8.6-3.893-8.6-8.72s3.773-8.72 8.6-8.72c2.6 0 4.507 1.027 5.907 2.347l2.307-2.307C18.747 1.44 16.133 0 12.48 0 5.867 0 .307 5.387.307 12s5.56 12 12.173 12c3.573 0 6.267-1.173 8.373-3.36 2.16-2.16 2.84-5.213 2.84-7.667 0-.76-.053-1.467-.173-2.053H12.48z" />
         </svg>
       ),
       title: "Google Ads",
@@ -437,10 +480,10 @@ export default function Integrations() {
     {
       icon: (
         <svg className="h-6 w-6" viewBox="0 0 24 24" fill="currentColor">
-          <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
-          <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
-          <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/>
-          <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/>
+          <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" />
+          <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" />
+          <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" />
+          <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" />
         </svg>
       ),
       title: "Google Analytics",
@@ -457,7 +500,7 @@ export default function Integrations() {
     {
       icon: (
         <svg className="h-6 w-6" viewBox="0 0 24 24" fill="currentColor">
-          <path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"/>
+          <path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z" />
         </svg>
       ),
       title: "Google Search Console",
@@ -474,7 +517,8 @@ export default function Integrations() {
     {
       icon: <MessageCircle className="h-6 w-6" />,
       title: "WhatsApp Business הרשמי",
-      description: "חיבור ישיר ל־Meta WhatsApp Cloud API באמצעות Embedded Signup",
+      description:
+        "חיבור ישיר ל־Meta WhatsApp Cloud API באמצעות Embedded Signup",
       features: [
         "חיבור רשמי ומאובטח דרך Meta",
         "מספר חדש או Coexistence עם האפליקציה בטלפון",
@@ -553,12 +597,8 @@ export default function Integrations() {
     {
       icon: <Calculator className="h-6 w-6" />,
       title: "Sumit",
-      description: "סנכרון אוטומטי של לקוחות וחשבוניות לתוכנת הנה\"ח",
-      features: [
-        "סנכרון לקוחות",
-        "יצירת חשבוניות אוטומטית",
-        "מעקב תשלומים",
-      ],
+      description: 'סנכרון אוטומטי של לקוחות וחשבוניות לתוכנת הנה"ח',
+      features: ["סנכרון לקוחות", "יצירת חשבוניות אוטומטית", "מעקב תשלומים"],
       isConnected: !!sumitIntegration,
       route: "accounting-settings",
       gradient: "bg-gradient-to-r from-emerald-600 to-teal-700",
@@ -566,7 +606,8 @@ export default function Integrations() {
     {
       icon: <Zap className="h-6 w-6" />,
       title: "Make.com",
-      description: "חיבור API ישיר ל-Make.com - גישה לכל ה-Connections והסינריואים",
+      description:
+        "חיבור API ישיר ל-Make.com - גישה לכל ה-Connections והסינריואים",
       features: [
         "חיבור לכל שירותי Make.com",
         "הפעלת Scenarios מהמערכת",
@@ -606,7 +647,8 @@ export default function Integrations() {
     {
       icon: <Brain className="h-6 w-6" />,
       title: "Manus AI",
-      description: "סוכן AI מתקדם לביצוע משימות מורכבות — מחקר, מצגות, ניתוח נתונים",
+      description:
+        "סוכן AI מתקדם לביצוע משימות מורכבות — מחקר, מצגות, ניתוח נתונים",
       features: [
         "מחקר מעמיק מהאינטרנט",
         "יצירת מצגות ומסמכים",
@@ -647,7 +689,8 @@ export default function Integrations() {
     {
       icon: <Phone className="h-6 w-6" />,
       title: "Maskyoo (מסקיו)",
-      description: "מרכזיה ישראלית - שיחות יוצאות, היסטוריית CDR, הקלטות ו-Webhooks בזמן אמת",
+      description:
+        "מרכזיה ישראלית - שיחות יוצאות, היסטוריית CDR, הקלטות ו-Webhooks בזמן אמת",
       features: [
         "Click2Call ישירות מכרטיס לקוח/ליד",
         "סנכרון היסטוריית שיחות (CDR)",
@@ -674,7 +717,8 @@ export default function Integrations() {
     {
       icon: <Link2 className="h-6 w-6" />,
       title: "Unified.to",
-      description: "גישה ל-420+ אינטגרציות דרך API אחד — CRM, ATS, Ticketing ועוד",
+      description:
+        "גישה ל-420+ אינטגרציות דרך API אחד — CRM, ATS, Ticketing ועוד",
       features: [
         "חיבור ל-Salesforce, HubSpot, Pipedrive",
         "CRM, ATS, Ticketing, Commerce",
@@ -702,17 +746,17 @@ export default function Integrations() {
   return (
     <div className="h-full overflow-y-auto">
       <div className="container mx-auto p-6 space-y-6">
-          <div>
-            <h1 className="text-3xl font-bold">אינטגרציות</h1>
-            <p className="text-muted-foreground mt-2">
-              חבר את המערכת למקורות לידים חיצוניים ולפלטפורמות צ'אט
-            </p>
-          </div>
+        <div>
+          <h1 className="text-3xl font-bold">אינטגרציות</h1>
+          <p className="text-muted-foreground mt-2">
+            חבר את המערכת למקורות לידים חיצוניים ולפלטפורמות צ'אט
+          </p>
+        </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {integrations.map((integration) => (
-              <IntegrationCard key={integration.title} {...integration} />
-            ))}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {integrations.map((integration) => (
+            <IntegrationCard key={integration.title} {...integration} />
+          ))}
         </div>
       </div>
     </div>

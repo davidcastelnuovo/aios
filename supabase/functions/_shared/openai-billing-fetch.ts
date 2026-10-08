@@ -14,7 +14,8 @@ export async function resolveOpenAiAdminKey(
   supabase: { from: (t: string) => any },
   tenantId: string,
 ): Promise<{ key: string | null; source: string | null }> {
-  const fromEnv = Deno.env.get("OPENAI_ADMIN_KEY") || Deno.env.get("OPENAI_ADMIN_API_KEY");
+  const fromEnv =
+    Deno.env.get("OPENAI_ADMIN_KEY") || Deno.env.get("OPENAI_ADMIN_API_KEY");
   if (fromEnv && String(fromEnv).trim()) {
     return { key: String(fromEnv).trim(), source: "env:OPENAI_ADMIN_KEY" };
   }
@@ -29,11 +30,19 @@ export async function resolveOpenAiAdminKey(
       .limit(1)
       .maybeSingle();
     const s = (data?.settings || {}) as Record<string, string>;
-    const fromSettings = s.openai_admin_api_key || s.openai_admin_key || s.openai_organization_admin_key;
+    const fromSettings =
+      s.openai_admin_api_key ||
+      s.openai_admin_key ||
+      s.openai_organization_admin_key;
     if (fromSettings && String(fromSettings).trim()) {
-      return { key: String(fromSettings).trim(), source: "tenant_integrations.llm.settings" };
+      return {
+        key: String(fromSettings).trim(),
+        source: "tenant_integrations.llm.settings",
+      };
     }
-  } catch { /* ignore */ }
+  } catch {
+    /* ignore */
+  }
   return { key: null, source: null };
 }
 
@@ -51,7 +60,11 @@ async function openaiAdminGet(
     });
     const text = await res.text();
     let json: any = null;
-    try { json = text ? JSON.parse(text) : null; } catch { json = null; }
+    try {
+      json = text ? JSON.parse(text) : null;
+    } catch {
+      json = null;
+    }
     if (!res.ok) {
       const msg = redactSecretsFromText(
         json?.error?.message || json?.message || text || `HTTP ${res.status}`,
@@ -60,7 +73,12 @@ async function openaiAdminGet(
     }
     return { ok: true, status: res.status, json };
   } catch (e: any) {
-    return { ok: false, status: 0, json: null, error: redactSecretsFromText(e?.message || String(e)) };
+    return {
+      ok: false,
+      status: 0,
+      json: null,
+      error: redactSecretsFromText(e?.message || String(e)),
+    };
   }
 }
 
@@ -77,13 +95,16 @@ export async function fetchOpenAiBillingStatus(args: {
     return {
       ok: false,
       admin_available: false,
-      error: "חסר מפתח Admin של OpenAI. הגדירי OPENAI_ADMIN_KEY ב-Supabase או openai_admin_api_key באינטגרציית llm.",
+      error:
+        "חסר מפתח Admin של OpenAI. הגדירי OPENAI_ADMIN_KEY ב-Supabase או openai_admin_api_key באינטגרציית llm.",
       remaining_credit: null,
       remaining_credit_available: false,
       remaining_credit_reason: "Admin API key missing",
       setup: {
-        dashboard_admin_keys: "https://platform.openai.com/settings/organization/admin-keys",
-        billing_dashboard: "https://platform.openai.com/settings/organization/billing",
+        dashboard_admin_keys:
+          "https://platform.openai.com/settings/organization/admin-keys",
+        billing_dashboard:
+          "https://platform.openai.com/settings/organization/billing",
       },
     };
   }
@@ -92,16 +113,28 @@ export async function fetchOpenAiBillingStatus(args: {
   const costsQs = `start_time=${period.start_time}&end_time=${period.end_time}&bucket_width=1d&limit=31`;
   const costsRes = await openaiAdminGet(`/organization/costs?${costsQs}`, key);
 
-  let usageRes: { ok: boolean; status: number; json: any; error?: string } | null = null;
+  let usageRes: {
+    ok: boolean;
+    status: number;
+    json: any;
+    error?: string;
+  } | null = null;
   if (includeTokens) {
-    usageRes = await openaiAdminGet(`/organization/usage/completions?${costsQs}`, key);
+    usageRes = await openaiAdminGet(
+      `/organization/usage/completions?${costsQs}`,
+      key,
+    );
   }
 
   const limitsRes = await openaiAdminGet("/organization/spend_limits", key);
   const limitsAlt = !limitsRes.ok
     ? await openaiAdminGet("/organization/spend_limit", key)
     : null;
-  const spend = limitsRes.ok ? limitsRes : (limitsAlt?.ok ? limitsAlt : limitsRes);
+  const spend = limitsRes.ok
+    ? limitsRes
+    : limitsAlt?.ok
+      ? limitsAlt
+      : limitsRes;
 
   const status = buildOpenAiBillingStatus({
     costs: costsRes.ok ? costsRes.json : null,
@@ -115,7 +148,9 @@ export async function fetchOpenAiBillingStatus(args: {
   });
 
   const daily_costs = costsRes.ok ? extractDailyCostBuckets(costsRes.json) : [];
-  const daily_usage = usageRes?.ok ? extractDailyUsageBuckets(usageRes.json) : [];
+  const daily_usage = usageRes?.ok
+    ? extractDailyUsageBuckets(usageRes.json)
+    : [];
 
   return {
     ...status,
@@ -128,8 +163,11 @@ export async function fetchOpenAiBillingStatus(args: {
       spend_limits: spend.ok ? "GET /v1/organization/spend_limits" : null,
     },
     unavailable_fields: {
-      remaining_credit: "Not exposed by OpenAI public Admin API (dashboard only)",
-      spend_limits: spend.ok ? null : (spend.error || "Endpoint unavailable for this org"),
+      remaining_credit:
+        "Not exposed by OpenAI public Admin API (dashboard only)",
+      spend_limits: spend.ok
+        ? null
+        : spend.error || "Endpoint unavailable for this org",
     },
   };
 }

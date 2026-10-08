@@ -1,32 +1,36 @@
 // redeploy trigger: WhatsApp subagent/reminder delivery stays on originating chat_id (2026-08-27b)
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.75.0'
-import { advanceDangerLane, getBatchResults } from '../_shared/subagent.ts'
-import { replyDestinationIsConsistent, requireOriginChatId } from '../_shared/carmen-session-identity.ts'
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2.75.0";
+import { advanceDangerLane, getBatchResults } from "../_shared/subagent.ts";
+import {
+  replyDestinationIsConsistent,
+  requireOriginChatId,
+} from "../_shared/carmen-session-identity.ts";
 
 function originatingNotifyIsValid(notify: any): boolean {
-  if (!notify || notify.surface !== 'whatsapp') return false
-  const origin = requireOriginChatId(notify.chat_id)
-  if (!origin.ok) return false
+  if (!notify || notify.surface !== "whatsapp") return false;
+  const origin = requireOriginChatId(notify.chat_id);
+  if (!origin.ok) return false;
   return replyDestinationIsConsistent({
     chatId: origin.chatId,
     isGroup: !!notify.is_group,
-  })
+  });
 }
 
 const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-}
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Headers":
+    "authorization, x-client-info, apikey, content-type",
+};
 
 // When a dangerous batch subtask reaches a terminal state, advance its tenant's
 // serial lane so the next queued dangerous subtask runs. Best-effort.
 async function maybeAdvanceLane(supabase: any, task: any) {
   try {
     if (task?.batch_id && task?.is_dangerous) {
-      await advanceDangerLane(supabase, task.tenant_id)
+      await advanceDangerLane(supabase, task.tenant_id);
     }
   } catch (e: any) {
-    console.error('[run-agent-task] advanceDangerLane failed:', e?.message)
+    console.error("[run-agent-task] advanceDangerLane failed:", e?.message);
   }
 }
 
@@ -35,61 +39,97 @@ async function maybeAdvanceLane(supabase: any, task: any) {
 // output is a per-item finding (e.g. per-client pulse); we join them under their
 // titles, capped to a WhatsApp-friendly length with a fair per-item budget.
 function buildBatchReport(batch: {
-  total: number
-  completed: number
-  failed: number
-  tasks: Array<{ title?: string | null; status: string; output?: string; error?: string | null }>
+  total: number;
+  completed: number;
+  failed: number;
+  tasks: Array<{
+    title?: string | null;
+    status: string;
+    output?: string;
+    error?: string | null;
+  }>;
 }): string {
-  const MAX = 3800
-  const header = `סיכום מרוכז — ${batch.completed}/${batch.total} הושלמו${batch.failed ? `, ${batch.failed} נכשלו` : ''}:`
-  const perItemBudget = Math.max(200, Math.floor((MAX - header.length) / Math.max(1, batch.tasks.length)))
+  const MAX = 3800;
+  const header = `סיכום מרוכז — ${batch.completed}/${batch.total} הושלמו${batch.failed ? `, ${batch.failed} נכשלו` : ""}:`;
+  const perItemBudget = Math.max(
+    200,
+    Math.floor((MAX - header.length) / Math.max(1, batch.tasks.length)),
+  );
   const sections = batch.tasks.map((t) => {
-    const name = (t.title || 'ללא כותרת').trim()
-    if (t.status === 'failed') return `❌ ${name}: ${t.error || 'נכשל'}`
-    const body = (t.output || '').trim() || '—'
-    const clipped = body.length > perItemBudget ? body.slice(0, perItemBudget - 1) + '…' : body
-    return `• ${name}:\n${clipped}`
-  })
-  let msg = [header, ...sections].join('\n\n')
-  if (msg.length > MAX) msg = msg.slice(0, MAX - 1) + '…'
-  return msg
+    const name = (t.title || "ללא כותרת").trim();
+    if (t.status === "failed") return `❌ ${name}: ${t.error || "נכשל"}`;
+    const body = (t.output || "").trim() || "—";
+    const clipped =
+      body.length > perItemBudget
+        ? body.slice(0, perItemBudget - 1) + "…"
+        : body;
+    return `• ${name}:\n${clipped}`;
+  });
+  let msg = [header, ...sections].join("\n\n");
+  if (msg.length > MAX) msg = msg.slice(0, MAX - 1) + "…";
+  return msg;
 }
 
 // When a delegate_parallel subtask reaches a terminal state (completed OR failed),
 // send exactly ONE aggregated WhatsApp report — but only once the WHOLE batch is
 // done, and only once. The insert into agent_batch_reports is the atomic claim
 // (PK batch_id), so concurrent finishers can't double-send. Best-effort.
-async function maybeSendBatchReport(supabase: any, task: any, preservedNotify: any): Promise<void> {
-  if (!preservedNotify || preservedNotify.surface !== 'whatsapp' || !task?.batch_id) return
+async function maybeSendBatchReport(
+  supabase: any,
+  task: any,
+  preservedNotify: any,
+): Promise<void> {
+  if (
+    !preservedNotify ||
+    preservedNotify.surface !== "whatsapp" ||
+    !task?.batch_id
+  )
+    return;
   if (!originatingNotifyIsValid(preservedNotify)) {
-    console.error('[run-agent-task] refusing batch WA report — notify is not pinned to a valid originating chat', {
-      chat_id: preservedNotify?.chat_id, is_group: preservedNotify?.is_group,
-    })
-    return
+    console.error(
+      "[run-agent-task] refusing batch WA report — notify is not pinned to a valid originating chat",
+      {
+        chat_id: preservedNotify?.chat_id,
+        is_group: preservedNotify?.is_group,
+      },
+    );
+    return;
   }
   try {
-    const batch = await getBatchResults(supabase, preservedNotify.tenant_id, task.batch_id)
-    if (!batch.all_done) return // not the finisher — the last subtask sends
+    const batch = await getBatchResults(
+      supabase,
+      preservedNotify.tenant_id,
+      task.batch_id,
+    );
+    if (!batch.all_done) return; // not the finisher — the last subtask sends
     const { error: claimErr } = await supabase
-      .from('agent_batch_reports')
-      .insert({ batch_id: task.batch_id })
+      .from("agent_batch_reports")
+      .insert({ batch_id: task.batch_id });
     if (claimErr) {
-      console.log(`[run-agent-task] WA batch report already claimed for batch ${task.batch_id}`)
-      return
+      console.log(
+        `[run-agent-task] WA batch report already claimed for batch ${task.batch_id}`,
+      );
+      return;
     }
-    let automationId: string | null = preservedNotify.automation_id || null
+    let automationId: string | null = preservedNotify.automation_id || null;
     if (!automationId) {
       const auto = await findCarmenSessionAutomation(
         supabase,
         preservedNotify.tenant_id,
         null,
-        { isGroup: !!preservedNotify.is_group, chatId: preservedNotify.chat_id, phoneNumber: preservedNotify.phone_number },
-      )
-      automationId = auto?.id || null
+        {
+          isGroup: !!preservedNotify.is_group,
+          chatId: preservedNotify.chat_id,
+          phoneNumber: preservedNotify.phone_number,
+        },
+      );
+      automationId = auto?.id || null;
     }
     if (!automationId) {
-      console.warn(`[run-agent-task] No automation found for WA batch report on batch ${task.batch_id}`)
-      return
+      console.warn(
+        `[run-agent-task] No automation found for WA batch report on batch ${task.batch_id}`,
+      );
+      return;
     }
     const ok = await sendCarmenReplyViaActionStep({
       supabase,
@@ -97,107 +137,131 @@ async function maybeSendBatchReport(supabase: any, task: any, preservedNotify: a
       tenantId: preservedNotify.tenant_id,
       connectionUserId: preservedNotify.connection_user_id,
       chatId: preservedNotify.chat_id,
-      phoneNumber: preservedNotify.phone_number || '',
+      phoneNumber: preservedNotify.phone_number || "",
       isGroup: !!preservedNotify.is_group,
       message: buildBatchReport(batch),
-    })
-    console.log(`[run-agent-task] WA batch report dispatched=${ok} for batch ${task.batch_id} (${batch.total} tasks)`)
+    });
+    console.log(
+      `[run-agent-task] WA batch report dispatched=${ok} for batch ${task.batch_id} (${batch.total} tasks)`,
+    );
   } catch (e: any) {
-    console.error(`[run-agent-task] WA batch report failed for batch ${task?.batch_id}:`, e?.message)
+    console.error(
+      `[run-agent-task] WA batch report failed for batch ${task?.batch_id}:`,
+      e?.message,
+    );
   }
 }
 
-const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!
-const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
-const SUPABASE_ANON_KEY = Deno.env.get('SUPABASE_ANON_KEY')!
+const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
+const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+const SUPABASE_ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY")!;
 
-const MAX_EXECUTION_TIME_MS = 240_000 // 240s, leave 60s buffer before 300s wall clock
+const MAX_EXECUTION_TIME_MS = 240_000; // 240s, leave 60s buffer before 300s wall clock
 
 import { requireAuth } from "../_shared/security.ts";
-import { sendCarmenReplyViaActionStep, findCarmenSessionAutomation } from "../_shared/carmen.ts";
+import {
+  sendCarmenReplyViaActionStep,
+  findCarmenSessionAutomation,
+} from "../_shared/carmen.ts";
 import { extractCampaignShutdownJob } from "../_shared/client-campaign-shutdown.ts";
 import { runClientCampaignShutdownJob } from "../_shared/client-campaign-shutdown-runner.ts";
 
-
 Deno.serve(async (req) => {
-  if (req.method === 'OPTIONS') {
-    return new Response(null, { headers: corsHeaders })
+  if (req.method === "OPTIONS") {
+    return new Response(null, { headers: corsHeaders });
   }
 
-  const auth = await requireAuth(req)
+  const auth = await requireAuth(req);
   if (!auth) {
-    return new Response(JSON.stringify({ error: 'Unauthorized' }), {
-      status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-    })
+    return new Response(JSON.stringify({ error: "Unauthorized" }), {
+      status: 401,
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
   }
 
-  const startTime = Date.now()
+  const startTime = Date.now();
 
   try {
-    const { task_id } = await req.json()
-    if (!task_id) throw new Error('task_id is required')
+    const { task_id } = await req.json();
+    if (!task_id) throw new Error("task_id is required");
 
-    const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY)
+    const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
     // Load the task
     const { data: task, error: taskError } = await supabase
-      .from('agent_tasks')
-      .select('*')
-      .eq('id', task_id)
-      .maybeSingle()
+      .from("agent_tasks")
+      .select("*")
+      .eq("id", task_id)
+      .maybeSingle();
 
     if (taskError || !task) {
-      throw new Error(`Task not found: ${task_id}`)
+      throw new Error(`Task not found: ${task_id}`);
     }
 
-    if (task.status === 'completed' || task.status === 'failed') {
-      return new Response(JSON.stringify({ success: true, message: 'Task already finished' }), {
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      })
+    if (task.status === "completed" || task.status === "failed") {
+      return new Response(
+        JSON.stringify({ success: true, message: "Task already finished" }),
+        {
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        },
+      );
     }
 
     // Update task status to running
-    await supabase.from('agent_tasks').update({
-      status: 'running',
-      started_at: task.started_at || new Date().toISOString(),
-    }).eq('id', task_id)
+    await supabase
+      .from("agent_tasks")
+      .update({
+        status: "running",
+        started_at: task.started_at || new Date().toISOString(),
+      })
+      .eq("id", task_id);
 
     // Load checkpoint from result if resuming
-    const checkpoint = (task.result as any) || {}
-    const previousHistory = checkpoint.conversation_history || []
-    const runCount = (task.run_count || 0) + 1
-    const totalToolCalls = checkpoint.total_tool_calls || 0
+    const checkpoint = (task.result as any) || {};
+    const previousHistory = checkpoint.conversation_history || [];
+    const runCount = (task.run_count || 0) + 1;
+    const totalToolCalls = checkpoint.total_tool_calls || 0;
 
     // Update run count
-    await supabase.from('agent_tasks').update({
-      run_count: runCount,
-      last_run: new Date().toISOString(),
-    }).eq('id', task_id)
+    await supabase
+      .from("agent_tasks")
+      .update({
+        run_count: runCount,
+        last_run: new Date().toISOString(),
+      })
+      .eq("id", task_id);
 
     // WhatsApp reminders are delivery jobs, not open-ended AI tasks. The
     // originating chat (including a group chat id) is persisted when Carmen
     // creates the task. Deliver directly and only mark the task completed
     // after the provider action step confirms success.
-    const reminderDelivery = checkpoint?.reminder_delivery
-    const reminderNotify = checkpoint?.notify
-    if (reminderDelivery?.message && reminderNotify?.surface === 'whatsapp') {
+    const reminderDelivery = checkpoint?.reminder_delivery;
+    const reminderNotify = checkpoint?.notify;
+    if (reminderDelivery?.message && reminderNotify?.surface === "whatsapp") {
       if (!originatingNotifyIsValid(reminderNotify)) {
-        const error = 'WhatsApp reminder missing originating chat_id — refusing to send to a live session'
-        await supabase.from('agent_tasks').update({
-          status: 'pending',
-          last_run: null,
-          result: {
-            ...checkpoint,
-            last_error: error,
-            run_count: runCount,
+        const error =
+          "WhatsApp reminder missing originating chat_id — refusing to send to a live session";
+        await supabase
+          .from("agent_tasks")
+          .update({
+            status: "pending",
+            last_run: null,
+            result: {
+              ...checkpoint,
+              last_error: error,
+              run_count: runCount,
+            },
+          })
+          .eq("id", task_id);
+        return new Response(
+          JSON.stringify({ success: false, error, retrying: true }),
+          {
+            status: 502,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
           },
-        }).eq('id', task_id)
-        return new Response(JSON.stringify({ success: false, error, retrying: true }), {
-          status: 502,
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        })
+        );
       }
-      let automationId: string | null = reminderNotify.automation_id || null
+      let automationId: string | null = reminderNotify.automation_id || null;
       if (!automationId) {
         const auto = await findCarmenSessionAutomation(
           supabase,
@@ -208,11 +272,11 @@ Deno.serve(async (req) => {
             chatId: reminderNotify.chat_id,
             phoneNumber: reminderNotify.phone_number,
           },
-        )
-        automationId = auto?.id || null
+        );
+        automationId = auto?.id || null;
       }
 
-      let sent = false
+      let sent = false;
       if (automationId && reminderNotify.chat_id) {
         sent = await sendCarmenReplyViaActionStep({
           supabase,
@@ -220,56 +284,68 @@ Deno.serve(async (req) => {
           tenantId: reminderNotify.tenant_id || task.tenant_id,
           connectionUserId: reminderNotify.connection_user_id,
           chatId: reminderNotify.chat_id,
-          phoneNumber: reminderNotify.phone_number || '',
+          phoneNumber: reminderNotify.phone_number || "",
           isGroup: !!reminderNotify.is_group,
           message: String(reminderDelivery.message).slice(0, 1500),
-        })
+        });
       }
 
       if (!sent) {
         const error = automationId
-          ? 'WhatsApp reminder provider did not confirm delivery'
-          : 'No Carmen automation found for WhatsApp reminder destination'
-        await supabase.from('agent_tasks').update({
-          status: 'pending',
-          last_run: null,
-          result: {
-            ...checkpoint,
-            last_error: error,
-            run_count: runCount,
+          ? "WhatsApp reminder provider did not confirm delivery"
+          : "No Carmen automation found for WhatsApp reminder destination";
+        await supabase
+          .from("agent_tasks")
+          .update({
+            status: "pending",
+            last_run: null,
+            result: {
+              ...checkpoint,
+              last_error: error,
+              run_count: runCount,
+            },
+          })
+          .eq("id", task_id);
+        return new Response(
+          JSON.stringify({ success: false, error, retrying: true }),
+          {
+            status: 502,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
           },
-        }).eq('id', task_id)
-        return new Response(JSON.stringify({ success: false, error, retrying: true }), {
-          status: 502,
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        })
+        );
       }
 
-      const deliveredAt = new Date().toISOString()
-      await supabase.from('agent_tasks').update({
-        status: 'completed',
-        completed_at: deliveredAt,
-        result: {
-          ...checkpoint,
+      const deliveredAt = new Date().toISOString();
+      await supabase
+        .from("agent_tasks")
+        .update({
+          status: "completed",
+          completed_at: deliveredAt,
+          result: {
+            ...checkpoint,
+            delivered: true,
+            delivered_at: deliveredAt,
+            run_count: runCount,
+            completed: true,
+            final_output: reminderDelivery.message,
+          },
+        })
+        .eq("id", task_id);
+      await maybeAdvanceLane(supabase, task);
+      return new Response(
+        JSON.stringify({
+          success: true,
           delivered: true,
-          delivered_at: deliveredAt,
-          run_count: runCount,
-          completed: true,
-          final_output: reminderDelivery.message,
+          destination: reminderNotify.is_group ? "group" : "private",
+        }),
+        {
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
         },
-      }).eq('id', task_id)
-      await maybeAdvanceLane(supabase, task)
-      return new Response(JSON.stringify({
-        success: true,
-        delivered: true,
-        destination: reminderNotify.is_group ? 'group' : 'private',
-      }), {
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      })
+      );
     }
 
     // Deterministic client campaign verify/shutdown (e.g. daily 20:30 Binat job).
-    const shutdownJob = extractCampaignShutdownJob(task)
+    const shutdownJob = extractCampaignShutdownJob(task);
     if (shutdownJob) {
       try {
         const outcome = await runClientCampaignShutdownJob(supabase, {
@@ -277,111 +353,158 @@ Deno.serve(async (req) => {
           job: shutdownJob,
           supabaseUrl: SUPABASE_URL,
           serviceRoleKey: SUPABASE_SERVICE_ROLE_KEY,
-        })
+        });
         if (shutdownJob.notify_david !== false) {
-          await supabase.rpc('claude_notify_david', {
-            p_message: outcome.report,
-            p_tenant: task.tenant_id,
-          }).then(() => {}, (e: any) => console.error('[run-agent-task] shutdown notify failed:', e?.message))
+          await supabase
+            .rpc("claude_notify_david", {
+              p_message: outcome.report,
+              p_tenant: task.tenant_id,
+            })
+            .then(
+              () => {},
+              (e: any) =>
+                console.error(
+                  "[run-agent-task] shutdown notify failed:",
+                  e?.message,
+                ),
+            );
         }
-        const completedAt = new Date().toISOString()
-        await supabase.from('agent_tasks').update({
-          status: 'completed',
-          completed_at: completedAt,
-          result: {
-            ...checkpoint,
-            campaign_shutdown_job: shutdownJob,
-            campaign_shutdown_result: outcome,
-            final_output: outcome.report,
-            completed: true,
-            run_count: runCount,
-            notify_david_sent: shutdownJob.notify_david !== false,
-          },
-        }).eq('id', task_id)
-        await maybeAdvanceLane(supabase, task)
-        return new Response(JSON.stringify({ success: true, deterministic: 'campaign_shutdown', report: outcome.report }), {
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        })
-      } catch (e: any) {
-        const errMsg = e?.message || String(e)
-        console.error('[run-agent-task] campaign_shutdown failed:', errMsg)
-        if (runCount < 3) {
-          await supabase.from('agent_tasks').update({
-            status: 'pending',
-            last_run: null,
-            result: { ...checkpoint, last_error: errMsg, run_count: runCount, campaign_shutdown_job: shutdownJob },
-          }).eq('id', task_id)
-          return new Response(JSON.stringify({ success: false, error: errMsg, retrying: true }), {
-            status: 502,
-            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        const completedAt = new Date().toISOString();
+        await supabase
+          .from("agent_tasks")
+          .update({
+            status: "completed",
+            completed_at: completedAt,
+            result: {
+              ...checkpoint,
+              campaign_shutdown_job: shutdownJob,
+              campaign_shutdown_result: outcome,
+              final_output: outcome.report,
+              completed: true,
+              run_count: runCount,
+              notify_david_sent: shutdownJob.notify_david !== false,
+            },
           })
+          .eq("id", task_id);
+        await maybeAdvanceLane(supabase, task);
+        return new Response(
+          JSON.stringify({
+            success: true,
+            deterministic: "campaign_shutdown",
+            report: outcome.report,
+          }),
+          {
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          },
+        );
+      } catch (e: any) {
+        const errMsg = e?.message || String(e);
+        console.error("[run-agent-task] campaign_shutdown failed:", errMsg);
+        if (runCount < 3) {
+          await supabase
+            .from("agent_tasks")
+            .update({
+              status: "pending",
+              last_run: null,
+              result: {
+                ...checkpoint,
+                last_error: errMsg,
+                run_count: runCount,
+                campaign_shutdown_job: shutdownJob,
+              },
+            })
+            .eq("id", task_id);
+          return new Response(
+            JSON.stringify({ success: false, error: errMsg, retrying: true }),
+            {
+              status: 502,
+              headers: { ...corsHeaders, "Content-Type": "application/json" },
+            },
+          );
         }
-        await supabase.from('agent_tasks').update({
-          status: 'failed',
-          completed_at: new Date().toISOString(),
-          result: { ...checkpoint, error: errMsg, campaign_shutdown_job: shutdownJob },
-        }).eq('id', task_id)
-        await supabase.rpc('claude_notify_david', {
-          p_message: `❌ כיבוי קמפיינים מתוזמן נכשל: ${errMsg}`,
-          p_tenant: task.tenant_id,
-        }).then(() => {}, () => {})
-        await maybeAdvanceLane(supabase, task)
+        await supabase
+          .from("agent_tasks")
+          .update({
+            status: "failed",
+            completed_at: new Date().toISOString(),
+            result: {
+              ...checkpoint,
+              error: errMsg,
+              campaign_shutdown_job: shutdownJob,
+            },
+          })
+          .eq("id", task_id);
+        await supabase
+          .rpc("claude_notify_david", {
+            p_message: `❌ כיבוי קמפיינים מתוזמן נכשל: ${errMsg}`,
+            p_tenant: task.tenant_id,
+          })
+          .then(
+            () => {},
+            () => {},
+          );
+        await maybeAdvanceLane(supabase, task);
         return new Response(JSON.stringify({ success: false, error: errMsg }), {
           status: 500,
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        })
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
       }
     }
 
     // Find the agent
     // Find the agent - try task's agent_id first, then fallback
     let { data: agent } = await supabase
-      .from('ai_agents')
-      .select('*')
-      .eq('id', task.agent_id)
-      .maybeSingle()
-    
+      .from("ai_agents")
+      .select("*")
+      .eq("id", task.agent_id)
+      .maybeSingle();
+
     if (!agent) {
       // Fallback to any active agent
       const { data: fallback } = await supabase
-        .from('ai_agents')
-        .select('*')
-        .eq('active', true)
+        .from("ai_agents")
+        .select("*")
+        .eq("active", true)
         .limit(1)
-        .maybeSingle()
-      agent = fallback
+        .maybeSingle();
+      agent = fallback;
     }
 
     if (!agent) {
-      await supabase.from('agent_tasks').update({
-        status: 'failed',
-        result: { error: 'Agent not found' },
-        completed_at: new Date().toISOString(),
-      }).eq('id', task_id)
-      await maybeAdvanceLane(supabase, task)
-      throw new Error('Agent not found')
+      await supabase
+        .from("agent_tasks")
+        .update({
+          status: "failed",
+          result: { error: "Agent not found" },
+          completed_at: new Date().toISOString(),
+        })
+        .eq("id", task_id);
+      await maybeAdvanceLane(supabase, task);
+      throw new Error("Agent not found");
     }
 
     // Build the prompt for run-ai-agent
     // If resuming, include continuation instruction
-    let commandText = task.description || task.title
+    let commandText = task.description || task.title;
     if (previousHistory.length > 0) {
-      commandText = `המשך את המשימה שהתחלת. הנה ההקשר: ${task.description || task.title}\n\nאתה ממשיך ריצה קודמת (ריצה מספר ${runCount}). המשך מהנקודה שהפסקת — אל תתחיל מחדש.`
+      commandText = `המשך את המשימה שהתחלת. הנה ההקשר: ${task.description || task.title}\n\nאתה ממשיך ריצה קודמת (ריצה מספר ${runCount}). המשך מהנקודה שהפסקת — אל תתחיל מחדש.`;
     }
 
     // Get user context for the task
-    const userId = task.created_by || 'system'
+    const userId = task.created_by || "system";
 
-    console.log(`[run-agent-task] Starting task ${task_id}, run #${runCount}, history: ${previousHistory.length} msgs`)
+    console.log(
+      `[run-agent-task] Starting task ${task_id}, run #${runCount}, history: ${previousHistory.length} msgs`,
+    );
 
     // Call run-ai-agent to execute the task
     const response = await fetch(`${SUPABASE_URL}/functions/v1/run-ai-agent`, {
-      method: 'POST',
+      method: "POST",
       headers: {
-        'Content-Type': 'application/json',
+        "Content-Type": "application/json",
         // Internal service-to-service call: run-ai-agent's requireAuth accepts
         // the service-role key (or a user JWT) — the anon key is neither and 401s.
-        'Authorization': `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
+        Authorization: `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
       },
       body: JSON.stringify({
         tenant_id: task.tenant_id,
@@ -389,202 +512,263 @@ Deno.serve(async (req) => {
         command_text: commandText,
         user_id: userId,
         conversation_history: previousHistory,
-        surface: 'task',
+        surface: "task",
       }),
-    })
+    });
 
-    const elapsed = Date.now() - startTime
+    const elapsed = Date.now() - startTime;
 
     if (!response.ok) {
-      const errText = await response.text()
-      console.error(`[run-agent-task] run-ai-agent failed: ${response.status}`, errText.substring(0, 500))
+      const errText = await response.text();
+      console.error(
+        `[run-agent-task] run-ai-agent failed: ${response.status}`,
+        errText.substring(0, 500),
+      );
 
       // Check if we should retry
       if (runCount < 5) {
-        await supabase.from('agent_tasks').update({
-          status: 'pending',
-          result: {
-            ...checkpoint,
-            last_error: errText.substring(0, 500),
-            run_count: runCount,
-          },
-        }).eq('id', task_id)
+        await supabase
+          .from("agent_tasks")
+          .update({
+            status: "pending",
+            result: {
+              ...checkpoint,
+              last_error: errText.substring(0, 500),
+              run_count: runCount,
+            },
+          })
+          .eq("id", task_id);
 
         // Self-invoke to retry after a delay
-        await selfInvoke(task_id)
-        return new Response(JSON.stringify({ success: true, message: 'Retrying...' }), {
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        })
+        await selfInvoke(task_id);
+        return new Response(
+          JSON.stringify({ success: true, message: "Retrying..." }),
+          {
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          },
+        );
       }
 
-      await supabase.from('agent_tasks').update({
-        status: 'failed',
-        result: { error: errText.substring(0, 1000), run_count: runCount },
-        completed_at: new Date().toISOString(),
-      }).eq('id', task_id)
+      await supabase
+        .from("agent_tasks")
+        .update({
+          status: "failed",
+          result: { error: errText.substring(0, 1000), run_count: runCount },
+          completed_at: new Date().toISOString(),
+        })
+        .eq("id", task_id);
 
-      await maybeAdvanceLane(supabase, task)
+      await maybeAdvanceLane(supabase, task);
       // If this failed subtask was the LAST of a delegate_parallel batch, still
       // send the aggregated report (notify target survives on task.result/checkpoint).
-      await maybeSendBatchReport(supabase, task, (checkpoint as any)?.notify || (task.result as any)?.notify || null)
-      return new Response(JSON.stringify({ success: false, error: 'Max retries exceeded' }), {
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500,
-      })
+      await maybeSendBatchReport(
+        supabase,
+        task,
+        (checkpoint as any)?.notify || (task.result as any)?.notify || null,
+      );
+      return new Response(
+        JSON.stringify({ success: false, error: "Max retries exceeded" }),
+        {
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+          status: 500,
+        },
+      );
     }
 
-    const result = await response.json()
-    console.log(`[run-agent-task] run-ai-agent completed in ${elapsed}ms, tools: ${result.tools_used?.length || 0}`)
+    const result = await response.json();
+    console.log(
+      `[run-agent-task] run-ai-agent completed in ${elapsed}ms, tools: ${result.tools_used?.length || 0}`,
+    );
 
-    const newTotalToolCalls = totalToolCalls + (result.tools_used?.length || 0)
+    const newTotalToolCalls = totalToolCalls + (result.tools_used?.length || 0);
 
     // Check if the AI output indicates incomplete work
-    const output = result.output || ''
-    const isIncomplete = 
-      output.includes('הופסקה') ||
-      output.includes('לא הספקתי') ||
-      output.includes('ממשיכה') ||
-      output.includes('נותרו עוד') ||
-      (result.tools_used?.length >= 20 && !output.includes('סיימתי') && !output.includes('הושלם'))
+    const output = result.output || "";
+    const isIncomplete =
+      output.includes("הופסקה") ||
+      output.includes("לא הספקתי") ||
+      output.includes("ממשיכה") ||
+      output.includes("נותרו עוד") ||
+      (result.tools_used?.length >= 20 &&
+        !output.includes("סיימתי") &&
+        !output.includes("הושלם"));
 
     // Build updated checkpoint
     // Preserve `notify` (set by spawnSubagent on the initial result row) so we
     // can dispatch the final output back to the originating WhatsApp chat once
     // the subagent finishes — without this, every per-run update overwrites it.
-    const preservedNotify = (checkpoint as any)?.notify || (task.result as any)?.notify || null
+    const preservedNotify =
+      (checkpoint as any)?.notify || (task.result as any)?.notify || null;
     const updatedCheckpoint: any = {
       conversation_history: [
         ...previousHistory,
-        { role: 'user', content: commandText },
-        { role: 'assistant', content: output },
+        { role: "user", content: commandText },
+        { role: "assistant", content: output },
       ],
       total_tool_calls: newTotalToolCalls,
       tool_log: [...(checkpoint.tool_log || []), ...(result.tool_log || [])],
       run_count: runCount,
       last_output: output,
       execution_time_ms: elapsed,
-    }
-    if (preservedNotify) updatedCheckpoint.notify = preservedNotify
+    };
+    if (preservedNotify) updatedCheckpoint.notify = preservedNotify;
 
     if (isIncomplete && runCount < 10) {
       // Save checkpoint and self-invoke to continue
-      console.log(`[run-agent-task] Task ${task_id} incomplete after run ${runCount}, self-invoking...`)
-      
-      await supabase.from('agent_tasks').update({
-        status: 'running',
-        result: updatedCheckpoint,
-      }).eq('id', task_id)
+      console.log(
+        `[run-agent-task] Task ${task_id} incomplete after run ${runCount}, self-invoking...`,
+      );
 
-      await selfInvoke(task_id)
+      await supabase
+        .from("agent_tasks")
+        .update({
+          status: "running",
+          result: updatedCheckpoint,
+        })
+        .eq("id", task_id);
 
-      return new Response(JSON.stringify({
-        success: true,
-        message: `Run ${runCount} complete, continuing...`,
-        tools_used: newTotalToolCalls,
-      }), {
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      })
+      await selfInvoke(task_id);
+
+      return new Response(
+        JSON.stringify({
+          success: true,
+          message: `Run ${runCount} complete, continuing...`,
+          tools_used: newTotalToolCalls,
+        }),
+        {
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        },
+      );
     }
 
     // Task completed
-    console.log(`[run-agent-task] Task ${task_id} COMPLETED after ${runCount} runs, ${newTotalToolCalls} tool calls`)
-    
-    await supabase.from('agent_tasks').update({
-      status: 'completed',
-      result: {
-        ...updatedCheckpoint,
-        final_output: output,
-        completed: true,
-      },
-      completed_at: new Date().toISOString(),
-    }).eq('id', task_id)
+    console.log(
+      `[run-agent-task] Task ${task_id} COMPLETED after ${runCount} runs, ${newTotalToolCalls} tool calls`,
+    );
+
+    await supabase
+      .from("agent_tasks")
+      .update({
+        status: "completed",
+        result: {
+          ...updatedCheckpoint,
+          final_output: output,
+          completed: true,
+        },
+        completed_at: new Date().toISOString(),
+      })
+      .eq("id", task_id);
 
     // Serial lane: let the next queued dangerous subtask run.
-    await maybeAdvanceLane(supabase, task)
+    await maybeAdvanceLane(supabase, task);
 
     // Push the final output back to the user's WhatsApp chat if this subagent
     // was spawned from a WA conversation. Best-effort — failures are logged
     // but never fail the task.
-    if (preservedNotify && preservedNotify.surface === 'whatsapp') {
+    if (preservedNotify && preservedNotify.surface === "whatsapp") {
       if (!originatingNotifyIsValid(preservedNotify)) {
-        console.error('[run-agent-task] refusing WA notify — not pinned to originating chat', {
-          task_id, chat_id: preservedNotify.chat_id, is_group: preservedNotify.is_group,
-        })
+        console.error(
+          "[run-agent-task] refusing WA notify — not pinned to originating chat",
+          {
+            task_id,
+            chat_id: preservedNotify.chat_id,
+            is_group: preservedNotify.is_group,
+          },
+        );
       } else if (task.batch_id) {
         // delegate_parallel: DON'T fire one (truncated) WA message per subtask.
         // Only the finisher sends ONE aggregated report (see maybeSendBatchReport).
-        await maybeSendBatchReport(supabase, task, preservedNotify)
+        await maybeSendBatchReport(supabase, task, preservedNotify);
       } else if (output) {
         // Single (non-batch) task → send its own output, as before. Best-effort.
         try {
-          let automationId: string | null = preservedNotify.automation_id || null
+          let automationId: string | null =
+            preservedNotify.automation_id || null;
           if (!automationId) {
             const auto = await findCarmenSessionAutomation(
               supabase,
               preservedNotify.tenant_id,
               null,
-              { isGroup: !!preservedNotify.is_group, chatId: preservedNotify.chat_id, phoneNumber: preservedNotify.phone_number },
-            )
-            automationId = auto?.id || null
+              {
+                isGroup: !!preservedNotify.is_group,
+                chatId: preservedNotify.chat_id,
+                phoneNumber: preservedNotify.phone_number,
+              },
+            );
+            automationId = auto?.id || null;
           }
           if (automationId) {
-            const trimmed = output.length > 1500 ? output.slice(0, 1497) + '…' : output
+            const trimmed =
+              output.length > 1500 ? output.slice(0, 1497) + "…" : output;
             const ok = await sendCarmenReplyViaActionStep({
               supabase,
               automationId,
               tenantId: preservedNotify.tenant_id,
               connectionUserId: preservedNotify.connection_user_id,
               chatId: preservedNotify.chat_id,
-              phoneNumber: preservedNotify.phone_number || '',
+              phoneNumber: preservedNotify.phone_number || "",
               isGroup: !!preservedNotify.is_group,
               message: trimmed,
-            })
-            console.log(`[run-agent-task] WA notify dispatched=${ok} for task ${task_id}`)
+            });
+            console.log(
+              `[run-agent-task] WA notify dispatched=${ok} for task ${task_id}`,
+            );
           } else {
-            console.warn(`[run-agent-task] No automation found for WA notify on task ${task_id}`)
+            console.warn(
+              `[run-agent-task] No automation found for WA notify on task ${task_id}`,
+            );
           }
         } catch (e: any) {
-          console.error(`[run-agent-task] WA notify failed for task ${task_id}:`, e?.message)
+          console.error(
+            `[run-agent-task] WA notify failed for task ${task_id}:`,
+            e?.message,
+          );
         }
       }
     }
 
-
-    return new Response(JSON.stringify({
-      success: true,
-      output: output,
-      total_runs: runCount,
-      total_tool_calls: newTotalToolCalls,
-    }), {
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-    })
-
+    return new Response(
+      JSON.stringify({
+        success: true,
+        output: output,
+        total_runs: runCount,
+        total_tool_calls: newTotalToolCalls,
+      }),
+      {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      },
+    );
   } catch (error: any) {
-    console.error('[run-agent-task] Error:', error)
-    return new Response(JSON.stringify({ success: false, error: error.message }), {
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500,
-    })
+    console.error("[run-agent-task] Error:", error);
+    return new Response(
+      JSON.stringify({ success: false, error: error.message }),
+      {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+        status: 500,
+      },
+    );
   }
-})
+});
 
 async function selfInvoke(taskId: string) {
   try {
     // Use pg_net via supabase to self-invoke
-    const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY)
-    
+    const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
+
     // Use direct HTTP call to self-invoke with a small delay
     await fetch(`${SUPABASE_URL}/functions/v1/run-agent-task`, {
-      method: 'POST',
+      method: "POST",
       headers: {
-        'Content-Type': 'application/json',
+        "Content-Type": "application/json",
         // Self-invoke is service-to-service — requireAuth rejects the anon key.
-        'Authorization': `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
+        Authorization: `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
       },
       body: JSON.stringify({ task_id: taskId }),
     }).catch(() => {
       // Fire and forget - don't wait for response
-      console.log(`[run-agent-task] Self-invoke fired for task ${taskId}`)
-    })
+      console.log(`[run-agent-task] Self-invoke fired for task ${taskId}`);
+    });
   } catch (e) {
-    console.error('[run-agent-task] Self-invoke failed:', e)
+    console.error("[run-agent-task] Self-invoke failed:", e);
   }
 }

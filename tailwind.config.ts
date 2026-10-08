@@ -2,7 +2,12 @@ import type { Config } from "tailwindcss";
 
 export default {
   darkMode: ["class"],
-  content: ["./pages/**/*.{ts,tsx}", "./components/**/*.{ts,tsx}", "./app/**/*.{ts,tsx}", "./src/**/*.{ts,tsx}"],
+  content: [
+    "./pages/**/*.{ts,tsx}",
+    "./components/**/*.{ts,tsx}",
+    "./app/**/*.{ts,tsx}",
+    "./src/**/*.{ts,tsx}",
+  ],
   prefix: "",
   theme: {
     container: {
@@ -14,9 +19,9 @@ export default {
     },
     extend: {
       fontFamily: {
-        sans: ['Heebo', 'sans-serif'],
-        heebo: ['Heebo', 'sans-serif'],
-        mono: ['JetBrains Mono', 'ui-monospace', 'monospace'],
+        sans: ["Heebo", "sans-serif"],
+        heebo: ["Heebo", "sans-serif"],
+        mono: ["JetBrains Mono", "ui-monospace", "monospace"],
       },
       colors: {
         border: "hsl(var(--border))",
@@ -98,10 +103,12 @@ export default {
         },
         "carmen-glow": {
           "0%, 100%": {
-            boxShadow: "0 0 8px 4px rgba(52, 211, 153, 0.5), 0 0 16px 8px rgba(52, 211, 153, 0.3), inset 0 0 4px 1px rgba(52, 211, 153, 0.1)",
+            boxShadow:
+              "0 0 8px 4px rgba(52, 211, 153, 0.5), 0 0 16px 8px rgba(52, 211, 153, 0.3), inset 0 0 4px 1px rgba(52, 211, 153, 0.1)",
           },
           "50%": {
-            boxShadow: "0 0 14px 7px rgba(52, 211, 153, 0.7), 0 0 28px 14px rgba(52, 211, 153, 0.4), inset 0 0 6px 2px rgba(52, 211, 153, 0.15)",
+            boxShadow:
+              "0 0 14px 7px rgba(52, 211, 153, 0.7), 0 0 28px 14px rgba(52, 211, 153, 0.4), inset 0 0 6px 2px rgba(52, 211, 153, 0.15)",
           },
         },
         // Short blend, not a hard cut: the pose layer only covers the hands, so a
@@ -145,7 +152,8 @@ export default {
         "carmen-keystroke": "carmen-keystroke 0.8s ease-in-out infinite",
         "carmen-glance": "carmen-glance 9s ease-in-out infinite",
         "carmen-breathe": "carmen-breathe 6s ease-in-out infinite",
-        "carmen-screen-flicker": "carmen-screen-flicker 3.2s ease-in-out infinite",
+        "carmen-screen-flicker":
+          "carmen-screen-flicker 3.2s ease-in-out infinite",
         "carmen-track": "carmen-track 2.4s ease-in-out infinite",
         "carmen-typing-dot": "carmen-typing-dot 1.3s ease-in-out infinite",
         "carmen-data-rise": "carmen-data-rise 3.2s ease-out infinite",

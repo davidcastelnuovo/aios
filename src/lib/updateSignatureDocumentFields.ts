@@ -19,9 +19,12 @@ export async function updateSignatureDocumentFields(
     title?: string;
     template_name?: string | null;
   } = {
-    document_fields: fields as unknown as import("@/integrations/supabase/types").Json,
+    document_fields:
+      fields as unknown as import("@/integrations/supabase/types").Json,
     updated_at: new Date().toISOString(),
-    ...(title ? { title, template_name: meta?.isTemplate ? title : undefined } : {}),
+    ...(title
+      ? { title, template_name: meta?.isTemplate ? title : undefined }
+      : {}),
   };
 
   const { error } = await supabase
@@ -31,15 +34,24 @@ export async function updateSignatureDocumentFields(
 
   if (error?.message?.includes("template_name")) {
     const { template_name: _name, ...withoutName } = withFields;
-    const retry = await supabase.from("signature_documents").update(withoutName).eq("id", docId);
+    const retry = await supabase
+      .from("signature_documents")
+      .update(withoutName)
+      .eq("id", docId);
     if (retry.error) throw retry.error;
-    const savedRecipientPosition = await syncSignatureRecipientPosition(docId, fields);
+    const savedRecipientPosition = await syncSignatureRecipientPosition(
+      docId,
+      fields,
+    );
     return { savedDocumentFields: true, savedRecipientPosition };
   }
 
   if (error?.message?.includes("document_fields")) {
     // Column missing — still try recipient signature_position so send/sign works
-    const savedRecipientPosition = await syncSignatureRecipientPosition(docId, fields);
+    const savedRecipientPosition = await syncSignatureRecipientPosition(
+      docId,
+      fields,
+    );
     if (!savedRecipientPosition) {
       throw new Error("עמודת שדות לא זמינה — יש להריץ migration על Staging");
     }
@@ -48,7 +60,10 @@ export async function updateSignatureDocumentFields(
 
   if (error) throw error;
 
-  const savedRecipientPosition = await syncSignatureRecipientPosition(docId, fields);
+  const savedRecipientPosition = await syncSignatureRecipientPosition(
+    docId,
+    fields,
+  );
   return { savedDocumentFields: true, savedRecipientPosition };
 }
 
@@ -58,15 +73,26 @@ export async function syncSignatureRecipientPosition(
   fields: DocumentField[],
 ): Promise<boolean> {
   const { data: recipients, error: readError } = await supabase
-    .from("signature_recipients").select("id, sign_order").eq("document_id", docId);
+    .from("signature_recipients")
+    .select("id, sign_order")
+    .eq("document_id", docId);
   if (readError) throw readError;
   let saved = false;
   for (const recipient of recipients ?? []) {
-    const sigField = fields.find((field) => (field.type === "signature" || field.type === "signature_stamp")
-      && (field.recipient_index ?? 0) === Math.max(0, recipient.sign_order - 1));
-    const { error } = await supabase.from("signature_recipients")
-      .update({ signature_position: sigField?.position as unknown as import("@/integrations/supabase/types").Json ?? null })
-      .eq("id", recipient.id).eq("document_id", docId);
+    const sigField = fields.find(
+      (field) =>
+        (field.type === "signature" || field.type === "signature_stamp") &&
+        (field.recipient_index ?? 0) === Math.max(0, recipient.sign_order - 1),
+    );
+    const { error } = await supabase
+      .from("signature_recipients")
+      .update({
+        signature_position:
+          (sigField?.position as unknown as import("@/integrations/supabase/types").Json) ??
+          null,
+      })
+      .eq("id", recipient.id)
+      .eq("document_id", docId);
     if (error?.message?.includes("signature_position")) return false;
     if (error) throw error;
     saved = true;

@@ -14,9 +14,7 @@ import {
 test("buildSeoReportTenantIds includes client home + agency access + table tenant", () => {
   const ids = buildSeoReportTenantIds(
     { tenant_id: "home", agency_id: "a1" },
-    [
-      { accessing_tenant_id: "mc", source_tenant_id: "dmm" },
-    ],
+    [{ accessing_tenant_id: "mc", source_tenant_id: "dmm" }],
     ["table-tenant"],
   );
   assert.deepEqual(ids.sort(), ["dmm", "home", "mc", "table-tenant"].sort());
@@ -51,11 +49,15 @@ test("pickSeoSyncDomain prefers linkedGscSiteUrl and ahrefs_reports over empty c
 });
 
 test("resolveLinkedCrmTableId ignores stale saved ids", () => {
-  const candidates = [
-    { id: "ga-live", client_id: "client-1" },
-  ];
-  assert.equal(resolveLinkedCrmTableId("ga-deleted", candidates, "client-1"), "ga-live");
-  assert.equal(resolveLinkedCrmTableId("ga-live", candidates, "client-1"), "ga-live");
+  const candidates = [{ id: "ga-live", client_id: "client-1" }];
+  assert.equal(
+    resolveLinkedCrmTableId("ga-deleted", candidates, "client-1"),
+    "ga-live",
+  );
+  assert.equal(
+    resolveLinkedCrmTableId("ga-live", candidates, "client-1"),
+    "ga-live",
+  );
 });
 
 test("resolveLinkedCrmTableId prefers this client's table over another client's saved link", () => {
@@ -63,9 +65,16 @@ test("resolveLinkedCrmTableId prefers this client's table over another client's 
     { id: "ga-other", client_id: "other-client" },
     { id: "ga-own", client_id: "client-1" },
   ];
-  assert.equal(resolveLinkedCrmTableId("ga-other", candidates, "client-1"), "ga-own");
   assert.equal(
-    resolveLinkedCrmTableId("ga-other", [{ id: "ga-other", client_id: "other-client" }], "client-1"),
+    resolveLinkedCrmTableId("ga-other", candidates, "client-1"),
+    "ga-own",
+  );
+  assert.equal(
+    resolveLinkedCrmTableId(
+      "ga-other",
+      [{ id: "ga-other", client_id: "other-client" }],
+      "client-1",
+    ),
     "ga-other",
   );
 });

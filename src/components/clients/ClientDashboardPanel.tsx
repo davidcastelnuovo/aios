@@ -15,13 +15,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { toast } from "sonner";
-import {
-  Send,
-  Loader2,
-  Camera,
-  RefreshCw,
-  Download,
-} from "lucide-react";
+import { Send, Loader2, Camera, RefreshCw, Download } from "lucide-react";
 import { useTenantPath } from "@/hooks/useTenantPath";
 import { toPng, toJpeg } from "html-to-image";
 import { buildBrandedEmailHtml } from "@/lib/emailTemplate";
@@ -33,7 +27,10 @@ import {
 import { ClientDashboardSnapshot } from "./ClientDashboardSnapshot";
 import { WhatsAppGroupSelect } from "./WhatsAppGroupSelect";
 import { ReportWhatsAppSenderSelect } from "./ReportWhatsAppSenderSelect";
-import { ReportEmailSenderSelect, type ReportEmailSender } from "./ReportEmailSenderSelect";
+import {
+  ReportEmailSenderSelect,
+  type ReportEmailSender,
+} from "./ReportEmailSenderSelect";
 import { syncReportTables, waitForSnapshotReady } from "@/lib/reportSync";
 import { downloadReportPdf } from "@/lib/reportPdf";
 import { buildSharedDashboardUrl } from "@/lib/appEnv";
@@ -48,19 +45,52 @@ const CACHE_KEY_PREFIX = "dashboard-screenshot-";
 
 function generateReadableToken(name: string): string {
   const hebrewMap: Record<string, string> = {
-    'א': 'a', 'ב': 'b', 'ג': 'g', 'ד': 'd', 'ה': 'h', 'ו': 'v', 'ז': 'z',
-    'ח': 'ch', 'ט': 't', 'י': 'y', 'כ': 'k', 'ך': 'k', 'ל': 'l', 'מ': 'm',
-    'ם': 'm', 'נ': 'n', 'ן': 'n', 'ס': 's', 'ע': 'a', 'פ': 'p', 'ף': 'f',
-    'צ': 'ts', 'ץ': 'ts', 'ק': 'k', 'ר': 'r', 'ש': 'sh', 'ת': 't',
+    א: "a",
+    ב: "b",
+    ג: "g",
+    ד: "d",
+    ה: "h",
+    ו: "v",
+    ז: "z",
+    ח: "ch",
+    ט: "t",
+    י: "y",
+    כ: "k",
+    ך: "k",
+    ל: "l",
+    מ: "m",
+    ם: "m",
+    נ: "n",
+    ן: "n",
+    ס: "s",
+    ע: "a",
+    פ: "p",
+    ף: "f",
+    צ: "ts",
+    ץ: "ts",
+    ק: "k",
+    ר: "r",
+    ש: "sh",
+    ת: "t",
   };
-  const firstWord = (name || 'dashboard').trim().split(/\s+/)[0] || 'dashboard';
-  const transliterated = firstWord.split('').map((ch) => hebrewMap[ch] || ch).join('');
-  const slug = transliterated.toLowerCase().replace(/[^a-z0-9]/g, '').slice(0, 8);
+  const firstWord = (name || "dashboard").trim().split(/\s+/)[0] || "dashboard";
+  const transliterated = firstWord
+    .split("")
+    .map((ch) => hebrewMap[ch] || ch)
+    .join("");
+  const slug = transliterated
+    .toLowerCase()
+    .replace(/[^a-z0-9]/g, "")
+    .slice(0, 8);
   const shortId = Math.random().toString(36).slice(2, 6);
-  return `${slug || 'dashboard'}-${shortId}`;
+  return `${slug || "dashboard"}-${shortId}`;
 }
 
-export function ClientDashboardPanel({ dashboard, clientId, tenantId }: ClientDashboardPanelProps) {
+export function ClientDashboardPanel({
+  dashboard,
+  clientId,
+  tenantId,
+}: ClientDashboardPanelProps) {
   const { buildPath } = useTenantPath();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
@@ -81,7 +111,9 @@ export function ClientDashboardPanel({ dashboard, clientId, tenantId }: ClientDa
   const [waSenderId, setWaSenderId] = useState("");
   const [directPhone, setDirectPhone] = useState("");
   const [emailRecipients, setEmailRecipients] = useState<string[]>([]);
-  const [emailSender, setEmailSender] = useState<ReportEmailSender | null>(null);
+  const [emailSender, setEmailSender] = useState<ReportEmailSender | null>(
+    null,
+  );
   const [messageText, setMessageText] = useState("");
   const [isSending, setIsSending] = useState(false);
   const [screenshotBlob, setScreenshotBlob] = useState<Blob | null>(null);
@@ -110,19 +142,20 @@ export function ClientDashboardPanel({ dashboard, clientId, tenantId }: ClientDa
     enabled: !!clientId,
   });
 
-  const { data: dashboardTables = [], isLoading: dashboardTablesLoading } = useQuery({
-    queryKey: ["client-dashboard-tables", clientId, tenantId],
-    queryFn: async () => {
-      const response = await supabase.functions.invoke(
-        `crm-tables?tenant_id=${tenantId}`,
-        { method: "GET" },
-      );
-      if (response.error) throw response.error;
-      const allTables = Array.isArray(response.data) ? response.data : [];
-      return allTables.filter((table: any) => table.client_id === clientId);
-    },
-    enabled: !!clientId && !!tenantId,
-  });
+  const { data: dashboardTables = [], isLoading: dashboardTablesLoading } =
+    useQuery({
+      queryKey: ["client-dashboard-tables", clientId, tenantId],
+      queryFn: async () => {
+        const response = await supabase.functions.invoke(
+          `crm-tables?tenant_id=${tenantId}`,
+          { method: "GET" },
+        );
+        if (response.error) throw response.error;
+        const allTables = Array.isArray(response.data) ? response.data : [];
+        return allTables.filter((table: any) => table.client_id === clientId);
+      },
+      enabled: !!clientId && !!tenantId,
+    });
 
   const { data: groups } = useQuery({
     queryKey: ["whatsapp-groups-for-dashboard", tenantId],
@@ -145,7 +178,9 @@ export function ClientDashboardPanel({ dashboard, clientId, tenantId }: ClientDa
     queryFn: async () => {
       const { data } = await supabase
         .from("client_team")
-        .select("role_on_account, campaigners:campaigner_id (id, full_name, email, active)")
+        .select(
+          "role_on_account, campaigners:campaigner_id (id, full_name, email, active)",
+        )
         .eq("client_id", clientId);
       return (data || [])
         .filter((t: any) => t.campaigners && t.campaigners.active !== false)
@@ -182,17 +217,22 @@ export function ClientDashboardPanel({ dashboard, clientId, tenantId }: ClientDa
   useEffect(() => {
     if (client) {
       if (client.phone) setDirectPhone(client.phone);
-      if (client.whatsapp_group_id) setSelectedGroupId(client.whatsapp_group_id);
+      if (client.whatsapp_group_id)
+        setSelectedGroupId(client.whatsapp_group_id);
     }
     setEmailRecipients((prev) =>
-      prev.length === 0 ? buildDefaultReportRecipientEmails(client?.email) : prev,
+      prev.length === 0
+        ? buildDefaultReportRecipientEmails(client?.email)
+        : prev,
     );
   }, [client]);
 
   const ensureShareToken = useCallback(async (): Promise<string | null> => {
     if (shareLink) return shareLink;
     try {
-      const { data: { user } } = await supabase.auth.getUser();
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
       if (!user) return null;
 
       // Check for ANY existing share row (active or inactive) to avoid duplicates
@@ -213,7 +253,9 @@ export function ClientDashboardPanel({ dashboard, clientId, tenantId }: ClientDa
             .eq("dashboard_id", dashboard.id)
             .eq("share_token", existingRow.share_token);
         }
-        queryClient.invalidateQueries({ queryKey: ["dashboard-share-link", dashboard.id] });
+        queryClient.invalidateQueries({
+          queryKey: ["dashboard-share-link", dashboard.id],
+        });
         return existingRow.share_token as string;
       }
 
@@ -241,7 +283,9 @@ export function ClientDashboardPanel({ dashboard, clientId, tenantId }: ClientDa
       if (error) throw error;
       const token = (data as any)?.share_token;
       if (!token) return null;
-      queryClient.invalidateQueries({ queryKey: ["dashboard-share-link", dashboard.id] });
+      queryClient.invalidateQueries({
+        queryKey: ["dashboard-share-link", dashboard.id],
+      });
       toast.success("נוצר קישור שיתוף חדש");
       return token;
     } catch (err) {
@@ -260,35 +304,49 @@ export function ClientDashboardPanel({ dashboard, clientId, tenantId }: ClientDa
     }
   }, [shareLink]);
 
-  const refreshDashboard = useCallback(async (showFeedback = false, syncSources = true) => {
-    setIsSyncing(true);
-    try {
-      const token = await ensureShareToken();
-      if (!token) throw new Error("לא ניתן ליצור קישור לדשבורד");
+  const refreshDashboard = useCallback(
+    async (showFeedback = false, syncSources = true) => {
+      setIsSyncing(true);
+      try {
+        const token = await ensureShareToken();
+        if (!token) throw new Error("לא ניתן ליצור קישור לדשבורד");
 
-      const results = syncSources ? await syncReportTables(dashboardTables) : [];
-      const failures = results.filter((result) => result.status === "failed");
-      if (failures.length > 0 && showFeedback) {
-        toast.warning(`${failures.length} מקורות לא הסתנכרנו; יוצגו הנתונים האחרונים`);
+        const results = syncSources
+          ? await syncReportTables(dashboardTables)
+          : [];
+        const failures = results.filter((result) => result.status === "failed");
+        if (failures.length > 0 && showFeedback) {
+          toast.warning(
+            `${failures.length} מקורות לא הסתנכרנו; יוצגו הנתונים האחרונים`,
+          );
+        }
+
+        setSnapshotToken(token);
+        setSnapshotMounted(true);
+        autoCapturedRef.current = null;
+        setSnapshotVersion((version) => version + 1);
+        await queryClient.invalidateQueries({
+          queryKey: ["dashboard-share-link", dashboard.id],
+        });
+        if (showFeedback && failures.length === 0)
+          toast.success("נתוני הדשבורד סונכרנו");
+      } catch (error: any) {
+        console.error("Dashboard refresh error:", error);
+        toast.error(error?.message || "סנכרון הדשבורד נכשל");
+      } finally {
+        setIsSyncing(false);
       }
-
-      setSnapshotToken(token);
-      setSnapshotMounted(true);
-      autoCapturedRef.current = null;
-      setSnapshotVersion((version) => version + 1);
-      await queryClient.invalidateQueries({ queryKey: ["dashboard-share-link", dashboard.id] });
-      if (showFeedback && failures.length === 0) toast.success("נתוני הדשבורד סונכרנו");
-    } catch (error: any) {
-      console.error("Dashboard refresh error:", error);
-      toast.error(error?.message || "סנכרון הדשבורד נכשל");
-    } finally {
-      setIsSyncing(false);
-    }
-  }, [dashboard.id, dashboardTables, ensureShareToken, queryClient]);
+    },
+    [dashboard.id, dashboardTables, ensureShareToken, queryClient],
+  );
 
   // A dashboard should work on first open even when it never had a share link.
   useEffect(() => {
-    if (dashboardTablesLoading || initializedDashboardRef.current === dashboard.id) return;
+    if (
+      dashboardTablesLoading ||
+      initializedDashboardRef.current === dashboard.id
+    )
+      return;
     initializedDashboardRef.current = dashboard.id;
     void refreshDashboard(false, false);
   }, [dashboard.id, dashboardTablesLoading, refreshDashboard]);
@@ -307,8 +365,9 @@ export function ClientDashboardPanel({ dashboard, clientId, tenantId }: ClientDa
       // Prefer the explicit snapshot frame (Header + KPIs + Platform Breakdown only).
       // Falls back to the entire node for SEO/WooCommerce/Analytics-only views.
       const frame =
-        (node.querySelector('[data-snapshot-frame="true"]') as HTMLElement | null) ||
-        node;
+        (node.querySelector(
+          '[data-snapshot-frame="true"]',
+        ) as HTMLElement | null) || node;
 
       // If a snapshot-end sentinel exists, clip height so we don't capture
       // the long charts section below the breakdown table.
@@ -443,7 +502,10 @@ export function ClientDashboardPanel({ dashboard, clientId, tenantId }: ClientDa
         blob = await r.blob();
         setScreenshotBlob(blob);
       } catch (e) {
-        console.error("[Dashboard] Failed to convert screenshotUrl to blob:", e);
+        console.error(
+          "[Dashboard] Failed to convert screenshotUrl to blob:",
+          e,
+        );
         blob = null;
       }
     }
@@ -466,17 +528,23 @@ export function ClientDashboardPanel({ dashboard, clientId, tenantId }: ClientDa
         formData.append("fileType", "image");
         const caption = `${messageText}\n\n📊 צפה בדשבורד המלא: ${effectiveShareUrl || ""}`;
         formData.append("caption", caption);
-        if (selectedGroupId && selectedGroupId !== "__none__") formData.append("groupId", selectedGroupId);
+        if (selectedGroupId && selectedGroupId !== "__none__")
+          formData.append("groupId", selectedGroupId);
         else if (directPhone) formData.append("phoneNumber", directPhone);
         if (waSenderId) formData.append("integrationId", waSenderId);
         if (clientId) formData.append("clientId", clientId);
 
-        const { data: { session } } = await supabase.auth.getSession();
-        const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/send-green-api-file`, {
-          method: "POST",
-          headers: { Authorization: `Bearer ${session?.access_token}` },
-          body: formData,
-        });
+        const {
+          data: { session },
+        } = await supabase.auth.getSession();
+        const response = await fetch(
+          `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/send-green-api-file`,
+          {
+            method: "POST",
+            headers: { Authorization: `Bearer ${session?.access_token}` },
+            body: formData,
+          },
+        );
         if (!response.ok) throw new Error("שגיאה בשליחת וואטסאפ");
         toast.success("הדשבורד נשלח בוואטסאפ");
       }
@@ -489,7 +557,8 @@ export function ClientDashboardPanel({ dashboard, clientId, tenantId }: ClientDa
         }
         const base64Data = await new Promise<string>((resolve) => {
           const reader = new FileReader();
-          reader.onloadend = () => resolve((reader.result as string).split(",")[1]);
+          reader.onloadend = () =>
+            resolve((reader.result as string).split(",")[1]);
           reader.readAsDataURL(blob!);
         });
 
@@ -507,44 +576,60 @@ export function ClientDashboardPanel({ dashboard, clientId, tenantId }: ClientDa
         const emailSubject = `דשבורד ${dashboard.name}${client?.name ? ` - ${client.name}` : ""}`;
         if (emailSender) {
           // Chosen a verified sending domain → send via Resend (same backend as broadcast).
-          const { data: resendData, error: resendError } = await supabase.functions.invoke("send-resend-email", {
-            body: {
-              to: emailRecipients,
-              subject: emailSubject,
-              html: bodyHtml,
-              fromEmail: emailSender.fromEmail,
-              fromName: emailSender.fromName || undefined,
-              attachments: [{
-                filename: "dashboard.jpg",
-                content: base64Data,
-                contentType: "image/jpeg",
-                content_id: "dashboard-snapshot",
-              }],
-            },
-          });
+          const { data: resendData, error: resendError } =
+            await supabase.functions.invoke("send-resend-email", {
+              body: {
+                to: emailRecipients,
+                subject: emailSubject,
+                html: bodyHtml,
+                fromEmail: emailSender.fromEmail,
+                fromName: emailSender.fromName || undefined,
+                attachments: [
+                  {
+                    filename: "dashboard.jpg",
+                    content: base64Data,
+                    contentType: "image/jpeg",
+                    content_id: "dashboard-snapshot",
+                  },
+                ],
+              },
+            });
           if (resendError) throw resendError;
-          if (resendData?.error) throw new Error(resendData.details ? JSON.stringify(resendData.details) : resendData.error);
+          if (resendData?.error)
+            throw new Error(
+              resendData.details
+                ? JSON.stringify(resendData.details)
+                : resendData.error,
+            );
           toast.success("הדשבורד נשלח באימייל");
         } else {
           // Default: send from the connected Gmail account (unchanged behavior).
-          const { error: gmailError } = await supabase.functions.invoke("gmail-api", {
-            body: {
-              action: "send",
-              to: emailRecipients.join(", "),
-              subject: emailSubject,
-              body: bodyHtml,
-              attachments: [{
-                filename: "dashboard.jpg",
-                mimeType: "image/jpeg",
-                data: base64Data,
-                disposition: "inline",
-                cid: "dashboard-snapshot",
-              }],
+          const { error: gmailError } = await supabase.functions.invoke(
+            "gmail-api",
+            {
+              body: {
+                action: "send",
+                to: emailRecipients.join(", "),
+                subject: emailSubject,
+                body: bodyHtml,
+                attachments: [
+                  {
+                    filename: "dashboard.jpg",
+                    mimeType: "image/jpeg",
+                    data: base64Data,
+                    disposition: "inline",
+                    cid: "dashboard-snapshot",
+                  },
+                ],
+              },
             },
-          });
+          );
           if (gmailError) {
             const msg = String(gmailError.message || "");
-            if (msg.includes("Token refresh failed") || msg.includes("invalid_grant")) {
+            if (
+              msg.includes("Token refresh failed") ||
+              msg.includes("invalid_grant")
+            ) {
               toast.error("חיבור Gmail פג - יש להתחבר מחדש בהגדרות");
             } else {
               throw gmailError;
@@ -555,23 +640,26 @@ export function ClientDashboardPanel({ dashboard, clientId, tenantId }: ClientDa
         }
       }
 
-      const { error: deliveryLogError } = await supabase.from("report_deliveries").insert({
-        tenant_id: tenantId,
-        client_id: clientId,
-        target_type: "dashboard",
-        target_id: dashboard.id,
-        channels: [
-          ...(sendWhatsApp ? ["whatsapp"] : []),
-          ...(sendEmail ? ["email"] : []),
-        ],
-        status: "sent",
-        details: {
-          source: "manual",
-          share_url: effectiveShareUrl,
-          email_recipients: sendEmail ? emailRecipients : [],
-        },
-      });
-      if (deliveryLogError) console.warn("Failed to log dashboard delivery:", deliveryLogError);
+      const { error: deliveryLogError } = await supabase
+        .from("report_deliveries")
+        .insert({
+          tenant_id: tenantId,
+          client_id: clientId,
+          target_type: "dashboard",
+          target_id: dashboard.id,
+          channels: [
+            ...(sendWhatsApp ? ["whatsapp"] : []),
+            ...(sendEmail ? ["email"] : []),
+          ],
+          status: "sent",
+          details: {
+            source: "manual",
+            share_url: effectiveShareUrl,
+            email_recipients: sendEmail ? emailRecipients : [],
+          },
+        });
+      if (deliveryLogError)
+        console.warn("Failed to log dashboard delivery:", deliveryLogError);
     } catch (e: any) {
       console.error("Send error:", e);
       toast.error(`שגיאה בשליחה: ${e?.message || "לא ידוע"}`);
@@ -603,7 +691,10 @@ export function ClientDashboardPanel({ dashboard, clientId, tenantId }: ClientDa
     }
     setIsExportingPdf(true);
     try {
-      await downloadReportPdf(screenshotBlob, `dashboard-${dashboard.name}.pdf`);
+      await downloadReportPdf(
+        screenshotBlob,
+        `dashboard-${dashboard.name}.pdf`,
+      );
       toast.success("קובץ ה-PDF נוצר");
     } catch (error) {
       console.error("Dashboard PDF export error:", error);
@@ -647,16 +738,31 @@ export function ClientDashboardPanel({ dashboard, clientId, tenantId }: ClientDa
           disabled={isSyncing || isCapturing}
         >
           {isSyncing ? (
-            <><Loader2 className="ml-2 h-3 w-3 animate-spin" /> מסנכרן...</>
+            <>
+              <Loader2 className="ml-2 h-3 w-3 animate-spin" /> מסנכרן...
+            </>
           ) : (
-            <><RefreshCw className="ml-2 h-3 w-3" /> סנכרן את כל המקורות</>
+            <>
+              <RefreshCw className="ml-2 h-3 w-3" /> סנכרן את כל המקורות
+            </>
           )}
         </Button>
-        <Button type="button" variant="outline" size="sm" onClick={handleManualCapture} disabled={isCapturing}>
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          onClick={handleManualCapture}
+          disabled={isCapturing}
+        >
           {isCapturing ? (
-            <><Loader2 className="ml-2 h-3 w-3 animate-spin" /> מצלם...</>
+            <>
+              <Loader2 className="ml-2 h-3 w-3 animate-spin" /> מצלם...
+            </>
           ) : (
-            <><Camera className="ml-2 h-3 w-3" /> {screenshotBlob ? "צלם מחדש" : "צלם דשבורד"}</>
+            <>
+              <Camera className="ml-2 h-3 w-3" />{" "}
+              {screenshotBlob ? "צלם מחדש" : "צלם דשבורד"}
+            </>
           )}
         </Button>
         <Button
@@ -666,24 +772,43 @@ export function ClientDashboardPanel({ dashboard, clientId, tenantId }: ClientDa
           onClick={exportPdf}
           disabled={!screenshotBlob || isExportingPdf}
         >
-          {isExportingPdf
-            ? <Loader2 className="ml-2 h-3 w-3 animate-spin" />
-            : <Download className="ml-2 h-3 w-3" />}
+          {isExportingPdf ? (
+            <Loader2 className="ml-2 h-3 w-3 animate-spin" />
+          ) : (
+            <Download className="ml-2 h-3 w-3" />
+          )}
           יצוא PDF
         </Button>
-        {screenshotBlob && <span className="text-primary">✓ צילום מוכן לשליחה</span>}
+        {screenshotBlob && (
+          <span className="text-primary">✓ צילום מוכן לשליחה</span>
+        )}
       </div>
 
       <div className="p-4 border rounded-lg bg-muted/20 space-y-4">
-
         <div className="flex gap-4">
-          <label className="flex items-center gap-2"><Checkbox checked={sendWhatsApp} onCheckedChange={(c) => setSendWhatsApp(!!c)} /> וואטסאפ</label>
-          <label className="flex items-center gap-2"><Checkbox checked={sendEmail} onCheckedChange={(c) => setSendEmail(!!c)} /> אימייל</label>
+          <label className="flex items-center gap-2">
+            <Checkbox
+              checked={sendWhatsApp}
+              onCheckedChange={(c) => setSendWhatsApp(!!c)}
+            />{" "}
+            וואטסאפ
+          </label>
+          <label className="flex items-center gap-2">
+            <Checkbox
+              checked={sendEmail}
+              onCheckedChange={(c) => setSendEmail(!!c)}
+            />{" "}
+            אימייל
+          </label>
         </div>
 
         {sendWhatsApp && (
           <div className="space-y-2">
-            <ReportWhatsAppSenderSelect tenantId={tenantId} value={waSenderId} onChange={setWaSenderId} />
+            <ReportWhatsAppSenderSelect
+              tenantId={tenantId}
+              value={waSenderId}
+              onChange={setWaSenderId}
+            />
             <WhatsAppGroupSelect
               groups={groups}
               value={selectedGroupId}
@@ -703,7 +828,10 @@ export function ClientDashboardPanel({ dashboard, clientId, tenantId }: ClientDa
 
         {sendEmail && (
           <div className="space-y-2">
-            <ReportEmailSenderSelect value={emailSender} onChange={setEmailSender} />
+            <ReportEmailSenderSelect
+              value={emailSender}
+              onChange={setEmailSender}
+            />
             <EmailRecipientsSelector
               options={buildReportEmailOptions({
                 clientEmail: client?.email,
@@ -716,34 +844,46 @@ export function ClientDashboardPanel({ dashboard, clientId, tenantId }: ClientDa
           </div>
         )}
 
-        <Textarea value={messageText} onChange={(e) => setMessageText(e.target.value)} placeholder="טקסט מלווה..." />
-        
+        <Textarea
+          value={messageText}
+          onChange={(e) => setMessageText(e.target.value)}
+          placeholder="טקסט מלווה..."
+        />
+
         <Button onClick={handleSend} disabled={isSending} className="w-full">
-          {isSending ? <Loader2 className="animate-spin" /> : <><Send className="ml-2" /> שלח סיכום</>}
+          {isSending ? (
+            <Loader2 className="animate-spin" />
+          ) : (
+            <>
+              <Send className="ml-2" /> שלח סיכום
+            </>
+          )}
         </Button>
       </div>
 
       {/* Hidden snapshot rendered via portal — mirrors ClientReportPanel pattern. */}
-      {snapshotMounted && snapshotToken && createPortal(
-        <div
-          style={{
-            position: "fixed",
-            left: -9999,
-            top: -9999,
-            zIndex: -9999,
-            pointerEvents: "none",
-            opacity: 0,
-          }}
-          aria-hidden="true"
-        >
-          <ClientDashboardSnapshot
-            key={`${dashboard.id}-${snapshotVersion}`}
-            ref={snapshotRef}
-            shareToken={snapshotToken}
-          />
-        </div>,
-        document.body
-      )}
+      {snapshotMounted &&
+        snapshotToken &&
+        createPortal(
+          <div
+            style={{
+              position: "fixed",
+              left: -9999,
+              top: -9999,
+              zIndex: -9999,
+              pointerEvents: "none",
+              opacity: 0,
+            }}
+            aria-hidden="true"
+          >
+            <ClientDashboardSnapshot
+              key={`${dashboard.id}-${snapshotVersion}`}
+              ref={snapshotRef}
+              shareToken={snapshotToken}
+            />
+          </div>,
+          document.body,
+        )}
     </div>
   );
 }

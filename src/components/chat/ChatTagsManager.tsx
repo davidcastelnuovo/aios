@@ -2,11 +2,21 @@ import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useCurrentTenant } from "@/hooks/useCurrentTenant";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
 import { Tags, Plus, Trash2, GripVertical, Search } from "lucide-react";
 import { toast } from "sonner";
 import {
@@ -35,8 +45,18 @@ interface ChatTag {
 }
 
 const PRESET_COLORS = [
-  "#ef4444", "#f97316", "#eab308", "#22c55e", "#14b8a6", "#3b82f6",
-  "#8b5cf6", "#ec4899", "#6b7280", "#1f2937", "#78716c", "#0ea5e9",
+  "#ef4444",
+  "#f97316",
+  "#eab308",
+  "#22c55e",
+  "#14b8a6",
+  "#3b82f6",
+  "#8b5cf6",
+  "#ec4899",
+  "#6b7280",
+  "#1f2937",
+  "#78716c",
+  "#0ea5e9",
 ];
 
 interface ColorPickerProps {
@@ -104,7 +124,13 @@ interface SortableTagRowProps {
   onDelete: (id: string) => void;
 }
 
-function SortableTagRow({ tag, selected, onToggleSelect, onUpdate, onDelete }: SortableTagRowProps) {
+function SortableTagRow({
+  tag,
+  selected,
+  onToggleSelect,
+  onUpdate,
+  onDelete,
+}: SortableTagRowProps) {
   const [isHovered, setIsHovered] = useState(false);
   const [editingName, setEditingName] = useState(tag.name);
 
@@ -194,7 +220,12 @@ interface ChatTagsManagerProps {
   showTrigger?: boolean;
 }
 
-export function ChatTagsManager({ trigger, open: controlledOpen, onOpenChange, showTrigger = true }: ChatTagsManagerProps) {
+export function ChatTagsManager({
+  trigger,
+  open: controlledOpen,
+  onOpenChange,
+  showTrigger = true,
+}: ChatTagsManagerProps) {
   const { tenantId } = useCurrentTenant();
   const queryClient = useQueryClient();
   const [internalOpen, setInternalOpen] = useState(false);
@@ -206,25 +237,25 @@ export function ChatTagsManager({ trigger, open: controlledOpen, onOpenChange, s
 
   const isControlled = controlledOpen !== undefined;
   const open = isControlled ? controlledOpen : internalOpen;
-  const setOpen = isControlled ? (onOpenChange || (() => {})) : setInternalOpen;
+  const setOpen = isControlled ? onOpenChange || (() => {}) : setInternalOpen;
 
   const sensors = useSensors(
     useSensor(PointerSensor),
     useSensor(KeyboardSensor, {
       coordinateGetter: sortableKeyboardCoordinates,
-    })
+    }),
   );
 
   const { data: tags = [], isLoading } = useQuery({
-    queryKey: ['chat-tags', tenantId],
+    queryKey: ["chat-tags", tenantId],
     queryFn: async () => {
       if (!tenantId) return [];
       const { data, error } = await supabase
-        .from('chat_tags')
-        .select('*')
-        .eq('tenant_id', tenantId)
-        .order('sort_order', { ascending: true });
-      
+        .from("chat_tags")
+        .select("*")
+        .eq("tenant_id", tenantId)
+        .order("sort_order", { ascending: true });
+
       if (error) throw error;
       return data as ChatTag[];
     },
@@ -232,88 +263,90 @@ export function ChatTagsManager({ trigger, open: controlledOpen, onOpenChange, s
   });
 
   const displayTags = localTags ?? tags;
-  const filteredTags = displayTags.filter(tag => 
-    tag.name.toLowerCase().includes(searchQuery.toLowerCase())
+  const filteredTags = displayTags.filter((tag) =>
+    tag.name.toLowerCase().includes(searchQuery.toLowerCase()),
   );
 
   const createTagMutation = useMutation({
     mutationFn: async () => {
-      if (!tenantId || !newTagName.trim()) throw new Error('Missing data');
-      
+      if (!tenantId || !newTagName.trim()) throw new Error("Missing data");
+
       const maxSortOrder = Math.max(0, ...displayTags.map((t) => t.sort_order));
-      const { error } = await supabase
-        .from('chat_tags')
-        .insert({
-          tenant_id: tenantId,
-          name: newTagName.trim(),
-          color: newTagColor,
-          sort_order: maxSortOrder + 1,
-        });
-      
+      const { error } = await supabase.from("chat_tags").insert({
+        tenant_id: tenantId,
+        name: newTagName.trim(),
+        color: newTagColor,
+        sort_order: maxSortOrder + 1,
+      });
+
       if (error) throw error;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['chat-tags', tenantId] });
+      queryClient.invalidateQueries({ queryKey: ["chat-tags", tenantId] });
       setNewTagName("");
-      toast.success('התגית נוצרה בהצלחה');
+      toast.success("התגית נוצרה בהצלחה");
     },
     onError: (error: any) => {
       const message = error?.message || "";
       if (message.includes("duplicate") || error?.code === "23505") {
         toast.error("תגית עם שם זה כבר קיימת");
       } else {
-        toast.error(message ? `שגיאה ביצירת התגית: ${message}` : "שגיאה ביצירת התגית");
+        toast.error(
+          message ? `שגיאה ביצירת התגית: ${message}` : "שגיאה ביצירת התגית",
+        );
       }
     },
   });
 
   const updateTagMutation = useMutation({
-    mutationFn: async ({ id, name, color }: { id: string; name: string; color: string }) => {
+    mutationFn: async ({
+      id,
+      name,
+      color,
+    }: {
+      id: string;
+      name: string;
+      color: string;
+    }) => {
       const { error } = await supabase
-        .from('chat_tags')
+        .from("chat_tags")
         .update({ name, color })
-        .eq('id', id);
-      
+        .eq("id", id);
+
       if (error) throw error;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['chat-tags', tenantId] });
+      queryClient.invalidateQueries({ queryKey: ["chat-tags", tenantId] });
     },
     onError: () => {
-      toast.error('שגיאה בעדכון התגית');
+      toast.error("שגיאה בעדכון התגית");
     },
   });
 
   const deleteTagMutation = useMutation({
     mutationFn: async (id: string) => {
-      const { error } = await supabase
-        .from('chat_tags')
-        .delete()
-        .eq('id', id);
-      
+      const { error } = await supabase.from("chat_tags").delete().eq("id", id);
+
       if (error) throw error;
     },
     onSuccess: (_data, id) => {
-      queryClient.invalidateQueries({ queryKey: ['chat-tags', tenantId] });
+      queryClient.invalidateQueries({ queryKey: ["chat-tags", tenantId] });
       setSelectedIds((prev) => prev.filter((selectedId) => selectedId !== id));
-      toast.success('התגית נמחקה');
+      toast.success("התגית נמחקה");
     },
     onError: () => {
-      toast.error('שגיאה במחיקת התגית');
+      toast.error("שגיאה במחיקת התגית");
     },
   });
 
   const bulkDeleteTagsMutation = useMutation({
     mutationFn: async (ids: string[]) => {
-      const { error } = await supabase
-        .from('chat_tags')
-        .delete()
-        .in('id', ids);
+      const { error } = await supabase.from("chat_tags").delete().in("id", ids);
       if (error) throw error;
       return ids.length;
     },
     onSuccess: (count) => {
-      queryClient.invalidateQueries({ queryKey: ['chat-tags', tenantId] });
+      queryClient.invalidateQueries({ queryKey: ["chat-tags", tenantId] });
       setSelectedIds([]);
       toast.success(count === 1 ? "תגית נמחקה" : `${count} תגיות נמחקו`);
     },
@@ -326,18 +359,18 @@ export function ChatTagsManager({ trigger, open: controlledOpen, onOpenChange, s
     mutationFn: async (orderedTags: ChatTag[]) => {
       for (let i = 0; i < orderedTags.length; i++) {
         const { error } = await supabase
-          .from('chat_tags')
+          .from("chat_tags")
           .update({ sort_order: i })
-          .eq('id', orderedTags[i].id);
+          .eq("id", orderedTags[i].id);
         if (error) throw error;
       }
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['chat-tags', tenantId] });
+      queryClient.invalidateQueries({ queryKey: ["chat-tags", tenantId] });
       setLocalTags(null);
     },
     onError: () => {
-      toast.error('שגיאה בשמירת הסדר');
+      toast.error("שגיאה בשמירת הסדר");
       setLocalTags(null);
     },
   });
@@ -354,11 +387,20 @@ export function ChatTagsManager({ trigger, open: controlledOpen, onOpenChange, s
     }
   };
 
-  const filteredSelectedCount = filteredTags.filter((tag) => selectedIds.includes(tag.id)).length;
-  const allFilteredSelected = filteredTags.length > 0 && filteredSelectedCount === filteredTags.length;
+  const filteredSelectedCount = filteredTags.filter((tag) =>
+    selectedIds.includes(tag.id),
+  ).length;
+  const allFilteredSelected =
+    filteredTags.length > 0 && filteredSelectedCount === filteredTags.length;
 
   const toggleSelect = (id: string, selected: boolean) => {
-    setSelectedIds((prev) => selected ? (prev.includes(id) ? prev : [...prev, id]) : prev.filter((item) => item !== id));
+    setSelectedIds((prev) =>
+      selected
+        ? prev.includes(id)
+          ? prev
+          : [...prev, id]
+        : prev.filter((item) => item !== id),
+    );
   };
 
   const toggleSelectAllFiltered = (selected: boolean) => {
@@ -373,7 +415,8 @@ export function ChatTagsManager({ trigger, open: controlledOpen, onOpenChange, s
 
   const handleBulkDelete = () => {
     if (selectedIds.length === 0) return;
-    const label = selectedIds.length === 1 ? "תגית אחת" : `${selectedIds.length} תגיות`;
+    const label =
+      selectedIds.length === 1 ? "תגית אחת" : `${selectedIds.length} תגיות`;
     if (!confirm(`למחוק ${label}?`)) return;
     bulkDeleteTagsMutation.mutate(selectedIds);
   };
@@ -386,7 +429,7 @@ export function ChatTagsManager({ trigger, open: controlledOpen, onOpenChange, s
           ניהול תגיות צ'אט
         </DialogTitle>
       </DialogHeader>
-      
+
       <div className="space-y-4">
         {/* Add new tag */}
         <div className="flex items-center gap-2 p-3 rounded-lg border border-dashed border-border">
@@ -396,7 +439,7 @@ export function ChatTagsManager({ trigger, open: controlledOpen, onOpenChange, s
             value={newTagName}
             onChange={(e) => setNewTagName(e.target.value)}
             onKeyDown={(e) => {
-              if (e.key === 'Enter' && newTagName.trim()) {
+              if (e.key === "Enter" && newTagName.trim()) {
                 createTagMutation.mutate();
               }
             }}
@@ -429,7 +472,9 @@ export function ChatTagsManager({ trigger, open: controlledOpen, onOpenChange, s
         {/* Existing tags */}
         <div className="space-y-2 max-h-[300px] overflow-y-auto">
           {isLoading ? (
-            <div className="text-center text-muted-foreground py-4">טוען...</div>
+            <div className="text-center text-muted-foreground py-4">
+              טוען...
+            </div>
           ) : displayTags.length === 0 ? (
             <div className="text-center text-muted-foreground py-4">
               אין תגיות עדיין. הוסף תגית חדשה למעלה.
@@ -443,11 +488,15 @@ export function ChatTagsManager({ trigger, open: controlledOpen, onOpenChange, s
               <div className="flex items-center gap-2 px-1">
                 <Checkbox
                   checked={allFilteredSelected}
-                  onCheckedChange={(checked) => toggleSelectAllFiltered(checked === true)}
+                  onCheckedChange={(checked) =>
+                    toggleSelectAllFiltered(checked === true)
+                  }
                   aria-label="בחר את כל התגיות"
                 />
                 <span className="text-xs text-muted-foreground flex-1">
-                  {selectedIds.length > 0 ? `${selectedIds.length} נבחרו` : "בחר הכל"}
+                  {selectedIds.length > 0
+                    ? `${selectedIds.length} נבחרו`
+                    : "בחר הכל"}
                 </span>
                 {selectedIds.length > 0 && (
                   <Button
@@ -462,29 +511,29 @@ export function ChatTagsManager({ trigger, open: controlledOpen, onOpenChange, s
                   </Button>
                 )}
               </div>
-            <DndContext
-              sensors={sensors}
-              collisionDetection={closestCenter}
-              onDragEnd={handleDragEnd}
-            >
-              <SortableContext
-                items={filteredTags.map((t) => t.id)}
-                strategy={verticalListSortingStrategy}
+              <DndContext
+                sensors={sensors}
+                collisionDetection={closestCenter}
+                onDragEnd={handleDragEnd}
               >
-                {filteredTags.map((tag) => (
-                  <SortableTagRow
-                    key={tag.id}
-                    tag={tag}
-                    selected={selectedIds.includes(tag.id)}
-                    onToggleSelect={toggleSelect}
-                    onUpdate={(id, name, color) =>
-                      updateTagMutation.mutate({ id, name, color })
-                    }
-                    onDelete={(id) => deleteTagMutation.mutate(id)}
-                  />
-                ))}
-              </SortableContext>
-            </DndContext>
+                <SortableContext
+                  items={filteredTags.map((t) => t.id)}
+                  strategy={verticalListSortingStrategy}
+                >
+                  {filteredTags.map((tag) => (
+                    <SortableTagRow
+                      key={tag.id}
+                      tag={tag}
+                      selected={selectedIds.includes(tag.id)}
+                      onToggleSelect={toggleSelect}
+                      onUpdate={(id, name, color) =>
+                        updateTagMutation.mutate({ id, name, color })
+                      }
+                      onDelete={(id) => deleteTagMutation.mutate(id)}
+                    />
+                  ))}
+                </SortableContext>
+              </DndContext>
             </>
           )}
         </div>

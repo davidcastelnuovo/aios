@@ -1,26 +1,47 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.75.0";
-import { articleFunction, homeFunction, themeForSite } from "../_shared/pbn-magazine.ts";
+import {
+  articleFunction,
+  homeFunction,
+  themeForSite,
+} from "../_shared/pbn-magazine.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+  "Access-Control-Allow-Headers":
+    "authorization, x-client-info, apikey, content-type",
 };
 
-const reply = (body: unknown, status = 200) => new Response(JSON.stringify(body), {
-  status,
-  headers: { ...corsHeaders, "Content-Type": "application/json", "Cache-Control": "no-store" },
-});
+const reply = (body: unknown, status = 200) =>
+  new Response(JSON.stringify(body), {
+    status,
+    headers: {
+      ...corsHeaders,
+      "Content-Type": "application/json",
+      "Cache-Control": "no-store",
+    },
+  });
 
-const flattenDeploymentFiles = (nodes: Array<Record<string, unknown>>, prefix = ""): Array<{ file: string; uid: string }> => nodes.flatMap((node) => {
-  const name = String(node.name ?? "");
-  const path = prefix ? `${prefix}/${name}` : name;
-  if (node.type === "directory" && Array.isArray(node.children)) return flattenDeploymentFiles(node.children as Array<Record<string, unknown>>, path);
-  return node.type === "file" && typeof node.uid === "string" ? [{ file: path, uid: node.uid }] : [];
-});
+const flattenDeploymentFiles = (
+  nodes: Array<Record<string, unknown>>,
+  prefix = "",
+): Array<{ file: string; uid: string }> =>
+  nodes.flatMap((node) => {
+    const name = String(node.name ?? "");
+    const path = prefix ? `${prefix}/${name}` : name;
+    if (node.type === "directory" && Array.isArray(node.children))
+      return flattenDeploymentFiles(
+        node.children as Array<Record<string, unknown>>,
+        path,
+      );
+    return node.type === "file" && typeof node.uid === "string"
+      ? [{ file: path, uid: node.uid }]
+      : [];
+  });
 
 const toBase64 = (bytes: Uint8Array) => {
   let binary = "";
-  for (let index = 0; index < bytes.length; index += 0x8000) binary += String.fromCharCode(...bytes.subarray(index, index + 0x8000));
+  for (let index = 0; index < bytes.length; index += 0x8000)
+    binary += String.fromCharCode(...bytes.subarray(index, index + 0x8000));
   return btoa(binary);
 };
 
@@ -33,284 +54,664 @@ const articleRouting = {
 
 Deno.serve(async (request) => {
   try {
-  if (request.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
-  if (request.method !== "POST") return reply({ error: "method_not_allowed" }, 405);
+    if (request.method === "OPTIONS")
+      return new Response(null, { headers: corsHeaders });
+    if (request.method !== "POST")
+      return reply({ error: "method_not_allowed" }, 405);
 
-  const authHeader = request.headers.get("Authorization") ?? "";
-  const token = authHeader.replace(/^Bearer\s+/i, "");
-  const supabaseUrl = Deno.env.get("SUPABASE_URL") ?? "";
-  const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
-  if (!token || !supabaseUrl || !serviceKey) return reply({ error: "unauthorized" }, 401);
+    const authHeader = request.headers.get("Authorization") ?? "";
+    const token = authHeader.replace(/^Bearer\s+/i, "");
+    const supabaseUrl = Deno.env.get("SUPABASE_URL") ?? "";
+    const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
+    if (!token || !supabaseUrl || !serviceKey)
+      return reply({ error: "unauthorized" }, 401);
 
-  const admin = createClient(supabaseUrl, serviceKey, { auth: { persistSession: false, autoRefreshToken: false } });
-  const { data: authData, error: authError } = await admin.auth.getUser(token);
-  if (authError || !authData.user) return reply({ error: "unauthorized" }, 401);
-
-  const body = await request.json().catch(() => ({}));
-  const tenantId = typeof body?.tenant_id === "string" ? body.tenant_id : "";
-  const action = typeof body?.action === "string" ? body.action : "test";
-  if (!tenantId) return reply({ error: "tenant_id_required" }, 400);
-
-  const [{ data: membership }, { data: superAdmin }] = await Promise.all([
-    admin.from("tenant_users").select("user_id").eq("tenant_id", tenantId).eq("user_id", authData.user.id).maybeSingle(),
-    admin.rpc("is_super_admin", { _user_id: authData.user.id }),
-  ]);
-  if (!membership && superAdmin !== true) return reply({ error: "forbidden" }, 403);
-
-  const ionosKey = (Deno.env.get("IONOS_API_KEY") ?? "").trim();
-  const vercelToken = (Deno.env.get("VERCEL_TOKEN") ?? "").trim();
-  const teamId = "team_anYCth1AhJ3ZrgT0tJGvv63t";
-  const templateProjectId = "prj_rNR7SGvwcSFTMDTauQQlNqabmZLD";
-  const result: Record<string, unknown> = {
-    ionos: { configured: Boolean(ionosKey), connected: false },
-    vercel: { configured: Boolean(vercelToken), connected: false, project_access: false },
-  };
-
-  if (ionosKey) {
-    const response = await fetch("https://api.hosting.ionos.com/dns/v1/zones", {
-      headers: { "X-API-Key": ionosKey, Accept: "application/json" },
+    const admin = createClient(supabaseUrl, serviceKey, {
+      auth: { persistSession: false, autoRefreshToken: false },
     });
-    const responseText = await response.text();
-    let zones: unknown = [];
-    if (response.ok && responseText.trim()) {
-      try {
-        zones = JSON.parse(responseText);
-      } catch {
-        zones = [];
-      }
-    }
-    result.ionos = {
-      configured: true,
-      connected: response.ok,
-      status: response.status,
-      error: response.ok ? null : responseText.slice(0, 300),
-      response_format: response.ok && responseText.trim() && !Array.isArray(zones) ? "unexpected" : "ok",
-      paperlief_found: Array.isArray(zones) && zones.some((zone) => String(zone?.zoneName ?? zone?.name ?? "").replace(/\.$/, "").toLowerCase() === "paperlief.com"),
-      zone_count: Array.isArray(zones) ? zones.length : 0,
-    };
-  }
+    const { data: authData, error: authError } =
+      await admin.auth.getUser(token);
+    if (authError || !authData.user)
+      return reply({ error: "unauthorized" }, 401);
 
-  if (vercelToken) {
-    const headers = { Authorization: `Bearer ${vercelToken}`, Accept: "application/json" };
-    const [accountResponse, projectResponse] = await Promise.all([
-      fetch("https://api.vercel.com/v2/user", { headers }),
-      fetch("https://api.vercel.com/v9/projects/prj_rNR7SGvwcSFTMDTauQQlNqabmZLD?teamId=team_anYCth1AhJ3ZrgT0tJGvv63t", { headers }),
+    const body = await request.json().catch(() => ({}));
+    const tenantId = typeof body?.tenant_id === "string" ? body.tenant_id : "";
+    const action = typeof body?.action === "string" ? body.action : "test";
+    if (!tenantId) return reply({ error: "tenant_id_required" }, 400);
+
+    const [{ data: membership }, { data: superAdmin }] = await Promise.all([
+      admin
+        .from("tenant_users")
+        .select("user_id")
+        .eq("tenant_id", tenantId)
+        .eq("user_id", authData.user.id)
+        .maybeSingle(),
+      admin.rpc("is_super_admin", { _user_id: authData.user.id }),
     ]);
-    result.vercel = {
-      configured: true,
-      connected: accountResponse.ok,
-      status: accountResponse.status,
-      project_access: projectResponse.ok,
-      project_status: projectResponse.status,
+    if (!membership && superAdmin !== true)
+      return reply({ error: "forbidden" }, 403);
+
+    const ionosKey = (Deno.env.get("IONOS_API_KEY") ?? "").trim();
+    const vercelToken = (Deno.env.get("VERCEL_TOKEN") ?? "").trim();
+    const teamId = "team_anYCth1AhJ3ZrgT0tJGvv63t";
+    const templateProjectId = "prj_rNR7SGvwcSFTMDTauQQlNqabmZLD";
+    const result: Record<string, unknown> = {
+      ionos: { configured: Boolean(ionosKey), connected: false },
+      vercel: {
+        configured: Boolean(vercelToken),
+        connected: false,
+        project_access: false,
+      },
     };
-  }
 
-  if (action === "list_projects") {
-    if (!vercelToken) return reply({ success: false, error: "vercel_credentials_missing" }, 400);
-    const response = await fetch(`https://api.vercel.com/v9/projects?teamId=${teamId}&limit=100`, { headers: { Authorization: `Bearer ${vercelToken}`, Accept: "application/json" } });
-    const payload = await response.json().catch(() => ({}));
-    if (!response.ok) return reply({ success: false, error: "vercel_projects_failed", status: response.status }, 400);
-    const projects = await Promise.all((payload?.projects ?? []).map(async (project: Record<string, unknown>) => {
-      const projectId = String(project.id ?? "");
-      const [domainsResponse, deploymentsResponse] = await Promise.all([
-        fetch(`https://api.vercel.com/v9/projects/${projectId}/domains?teamId=${teamId}&limit=100`, { headers: { Authorization: `Bearer ${vercelToken}`, Accept: "application/json" } }),
-        fetch(`https://api.vercel.com/v6/deployments?projectId=${projectId}&teamId=${teamId}&limit=1`, { headers: { Authorization: `Bearer ${vercelToken}`, Accept: "application/json" } }),
-      ]);
-      const domainsPayload = await domainsResponse.json().catch(() => ({}));
-      const deploymentsPayload = await deploymentsResponse.json().catch(() => ({}));
-      const deployment = deploymentsPayload?.deployments?.[0] ?? null;
-      return {
-        id: project.id,
-        name: project.name,
-        framework: project.framework,
-        updated_at: project.updatedAt,
-        domains: (domainsPayload?.domains ?? []).map((domain: Record<string, unknown>) => ({ name: domain.name, verified: domain.verified })),
-        deployment: deployment ? { id: deployment.uid, url: deployment.url, state: deployment.state, created_at: deployment.created } : null,
-      };
-    }));
-    return reply({ success: true, projects });
-  }
-
-  if (action === "create_site") {
-    if (!vercelToken) return reply({ success: false, error: "vercel_credentials_missing" }, 400);
-    const requestedName = String(body?.name ?? "").trim().toLowerCase().replace(/[^a-z0-9-]+/g, "-").replace(/^-+|-+$/g, "");
-    if (!requestedName) return reply({ success: false, error: "site_name_required" }, 400);
-    const headers = { Authorization: `Bearer ${vercelToken}`, Accept: "application/json", "Content-Type": "application/json" };
-    const existingResponse = await fetch(`https://api.vercel.com/v9/projects/${requestedName}?teamId=${teamId}`, { headers });
-    let project = existingResponse.ok ? await existingResponse.json().catch(() => ({})) : null;
-    if (!project) {
-      // The template deployment contains the already-built static output. These
-      // projects must not run Astro again: the deployment file API returns the
-      // template artifacts, not an installable Astro source checkout.
-      const projectResponse = await fetch(`https://api.vercel.com/v10/projects?teamId=${teamId}`, { method: "POST", headers, body: JSON.stringify({ name: requestedName, framework: null }) });
-      project = await projectResponse.json().catch(() => ({}));
-      if (!projectResponse.ok) return reply({ success: false, error: "vercel_create_project_failed", status: projectResponse.status, detail: project?.error?.message }, 400);
-    }
-    if (project.framework !== null) {
-      const updateProjectResponse = await fetch(`https://api.vercel.com/v9/projects/${project.id}?teamId=${teamId}`, {
-        method: "PATCH",
-        headers,
-        body: JSON.stringify({ framework: null }),
-      });
-      const updatedProject = await updateProjectResponse.json().catch(() => ({}));
-      if (!updateProjectResponse.ok) {
-        return reply({
-          success: false,
-          error: "vercel_update_project_failed",
-          status: updateProjectResponse.status,
-          detail: updatedProject?.error?.message,
-        }, 400);
-      }
-      project = updatedProject;
-    }
-    // Prefer the linked Vercel project id; fall back to aios-magazine-<site_key>
-    // so design refresh still works when correlation_id was never written.
-    let publishingSite: { id: string; site_key: string } | null = null;
-    const byConnection = await admin.from("publishing_sites")
-      .select("id,site_key").eq("tenant_id", tenantId).eq("connection_id", project.id).maybeSingle();
-    publishingSite = byConnection.data ?? null;
-    if (!publishingSite?.id) {
-      const siteKeyFromName = requestedName.match(/(site-\d+)$/i)?.[1]?.toLowerCase()
-        ?? requestedName.match(/(site-\d+)/i)?.[1]?.toLowerCase()
-        ?? "";
-      if (siteKeyFromName) {
-        const byKey = await admin.from("publishing_sites")
-          .select("id,site_key").eq("tenant_id", tenantId).eq("site_key", siteKeyFromName).maybeSingle();
-        publishingSite = byKey.data ?? null;
-        if (publishingSite?.id) {
-          await admin.from("publishing_sites")
-            .update({ connection_id: project.id })
-            .eq("id", publishingSite.id);
+    if (ionosKey) {
+      const response = await fetch(
+        "https://api.hosting.ionos.com/dns/v1/zones",
+        {
+          headers: { "X-API-Key": ionosKey, Accept: "application/json" },
+        },
+      );
+      const responseText = await response.text();
+      let zones: unknown = [];
+      if (response.ok && responseText.trim()) {
+        try {
+          zones = JSON.parse(responseText);
+        } catch {
+          zones = [];
         }
       }
+      result.ionos = {
+        configured: true,
+        connected: response.ok,
+        status: response.status,
+        error: response.ok ? null : responseText.slice(0, 300),
+        response_format:
+          response.ok && responseText.trim() && !Array.isArray(zones)
+            ? "unexpected"
+            : "ok",
+        paperlief_found:
+          Array.isArray(zones) &&
+          zones.some(
+            (zone) =>
+              String(zone?.zoneName ?? zone?.name ?? "")
+                .replace(/\.$/, "")
+                .toLowerCase() === "paperlief.com",
+          ),
+        zone_count: Array.isArray(zones) ? zones.length : 0,
+      };
     }
-    if (!publishingSite?.id) {
+
+    if (vercelToken) {
+      const headers = {
+        Authorization: `Bearer ${vercelToken}`,
+        Accept: "application/json",
+      };
+      const [accountResponse, projectResponse] = await Promise.all([
+        fetch("https://api.vercel.com/v2/user", { headers }),
+        fetch(
+          "https://api.vercel.com/v9/projects/prj_rNR7SGvwcSFTMDTauQQlNqabmZLD?teamId=team_anYCth1AhJ3ZrgT0tJGvv63t",
+          { headers },
+        ),
+      ]);
+      result.vercel = {
+        configured: true,
+        connected: accountResponse.ok,
+        status: accountResponse.status,
+        project_access: projectResponse.ok,
+        project_status: projectResponse.status,
+      };
+    }
+
+    if (action === "list_projects") {
+      if (!vercelToken)
+        return reply(
+          { success: false, error: "vercel_credentials_missing" },
+          400,
+        );
+      const response = await fetch(
+        `https://api.vercel.com/v9/projects?teamId=${teamId}&limit=100`,
+        {
+          headers: {
+            Authorization: `Bearer ${vercelToken}`,
+            Accept: "application/json",
+          },
+        },
+      );
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok)
+        return reply(
+          {
+            success: false,
+            error: "vercel_projects_failed",
+            status: response.status,
+          },
+          400,
+        );
+      const projects = await Promise.all(
+        (payload?.projects ?? []).map(
+          async (project: Record<string, unknown>) => {
+            const projectId = String(project.id ?? "");
+            const [domainsResponse, deploymentsResponse] = await Promise.all([
+              fetch(
+                `https://api.vercel.com/v9/projects/${projectId}/domains?teamId=${teamId}&limit=100`,
+                {
+                  headers: {
+                    Authorization: `Bearer ${vercelToken}`,
+                    Accept: "application/json",
+                  },
+                },
+              ),
+              fetch(
+                `https://api.vercel.com/v6/deployments?projectId=${projectId}&teamId=${teamId}&limit=1`,
+                {
+                  headers: {
+                    Authorization: `Bearer ${vercelToken}`,
+                    Accept: "application/json",
+                  },
+                },
+              ),
+            ]);
+            const domainsPayload = await domainsResponse
+              .json()
+              .catch(() => ({}));
+            const deploymentsPayload = await deploymentsResponse
+              .json()
+              .catch(() => ({}));
+            const deployment = deploymentsPayload?.deployments?.[0] ?? null;
+            return {
+              id: project.id,
+              name: project.name,
+              framework: project.framework,
+              updated_at: project.updatedAt,
+              domains: (domainsPayload?.domains ?? []).map(
+                (domain: Record<string, unknown>) => ({
+                  name: domain.name,
+                  verified: domain.verified,
+                }),
+              ),
+              deployment: deployment
+                ? {
+                    id: deployment.uid,
+                    url: deployment.url,
+                    state: deployment.state,
+                    created_at: deployment.created,
+                  }
+                : null,
+            };
+          },
+        ),
+      );
+      return reply({ success: true, projects });
+    }
+
+    if (action === "create_site") {
+      if (!vercelToken)
+        return reply(
+          { success: false, error: "vercel_credentials_missing" },
+          400,
+        );
+      const requestedName = String(body?.name ?? "")
+        .trim()
+        .toLowerCase()
+        .replace(/[^a-z0-9-]+/g, "-")
+        .replace(/^-+|-+$/g, "");
+      if (!requestedName)
+        return reply({ success: false, error: "site_name_required" }, 400);
+      const headers = {
+        Authorization: `Bearer ${vercelToken}`,
+        Accept: "application/json",
+        "Content-Type": "application/json",
+      };
+      const existingResponse = await fetch(
+        `https://api.vercel.com/v9/projects/${requestedName}?teamId=${teamId}`,
+        { headers },
+      );
+      let project = existingResponse.ok
+        ? await existingResponse.json().catch(() => ({}))
+        : null;
+      if (!project) {
+        // The template deployment contains the already-built static output. These
+        // projects must not run Astro again: the deployment file API returns the
+        // template artifacts, not an installable Astro source checkout.
+        const projectResponse = await fetch(
+          `https://api.vercel.com/v10/projects?teamId=${teamId}`,
+          {
+            method: "POST",
+            headers,
+            body: JSON.stringify({ name: requestedName, framework: null }),
+          },
+        );
+        project = await projectResponse.json().catch(() => ({}));
+        if (!projectResponse.ok)
+          return reply(
+            {
+              success: false,
+              error: "vercel_create_project_failed",
+              status: projectResponse.status,
+              detail: project?.error?.message,
+            },
+            400,
+          );
+      }
+      if (project.framework !== null) {
+        const updateProjectResponse = await fetch(
+          `https://api.vercel.com/v9/projects/${project.id}?teamId=${teamId}`,
+          {
+            method: "PATCH",
+            headers,
+            body: JSON.stringify({ framework: null }),
+          },
+        );
+        const updatedProject = await updateProjectResponse
+          .json()
+          .catch(() => ({}));
+        if (!updateProjectResponse.ok) {
+          return reply(
+            {
+              success: false,
+              error: "vercel_update_project_failed",
+              status: updateProjectResponse.status,
+              detail: updatedProject?.error?.message,
+            },
+            400,
+          );
+        }
+        project = updatedProject;
+      }
+      // Prefer the linked Vercel project id; fall back to aios-magazine-<site_key>
+      // so design refresh still works when correlation_id was never written.
+      let publishingSite: { id: string; site_key: string } | null = null;
+      const byConnection = await admin
+        .from("publishing_sites")
+        .select("id,site_key")
+        .eq("tenant_id", tenantId)
+        .eq("connection_id", project.id)
+        .maybeSingle();
+      publishingSite = byConnection.data ?? null;
+      if (!publishingSite?.id) {
+        const siteKeyFromName =
+          requestedName.match(/(site-\d+)$/i)?.[1]?.toLowerCase() ??
+          requestedName.match(/(site-\d+)/i)?.[1]?.toLowerCase() ??
+          "";
+        if (siteKeyFromName) {
+          const byKey = await admin
+            .from("publishing_sites")
+            .select("id,site_key")
+            .eq("tenant_id", tenantId)
+            .eq("site_key", siteKeyFromName)
+            .maybeSingle();
+          publishingSite = byKey.data ?? null;
+          if (publishingSite?.id) {
+            await admin
+              .from("publishing_sites")
+              .update({ connection_id: project.id })
+              .eq("id", publishingSite.id);
+          }
+        }
+      }
+      if (!publishingSite?.id) {
+        return reply(
+          {
+            success: false,
+            error: "publishing_site_not_found",
+            project_id: project.id,
+            project_name: requestedName,
+            hint: "Link the Vercel project in Publishing Studio, or ensure site_key matches aios-magazine-site-XX",
+          },
+          404,
+        );
+      }
+      const deploymentsResponse = await fetch(
+        `https://api.vercel.com/v6/deployments?projectId=${templateProjectId}&teamId=${teamId}&limit=1&state=READY`,
+        { headers },
+      );
+      const deployments = await deploymentsResponse.json().catch(() => ({}));
+      const templateDeploymentId = deployments?.deployments?.[0]?.uid;
+      if (!templateDeploymentId)
+        return reply(
+          { success: false, error: "template_deployment_missing", project },
+          400,
+        );
+      const filesResponse = await fetch(
+        `https://api.vercel.com/v6/deployments/${templateDeploymentId}/files?teamId=${teamId}`,
+        { headers },
+      );
+      const fileTree = await filesResponse.json().catch(() => []);
+      if (!filesResponse.ok || !Array.isArray(fileTree))
+        return reply(
+          {
+            success: false,
+            error: "template_files_failed",
+            status: filesResponse.status,
+          },
+          400,
+        );
+      const templateFiles = flattenDeploymentFiles(fileTree);
+      if (!templateFiles.length)
+        return reply({ success: false, error: "template_files_missing" }, 400);
+      const files = await Promise.all(
+        templateFiles
+          .filter(
+            ({ file }) =>
+              file !== "api/article.js" &&
+              file !== "api/home.js" &&
+              file !== "vercel.json",
+          )
+          .map(async ({ file, uid }) => {
+            const contentResponse = await fetch(
+              `https://api.vercel.com/v8/deployments/${templateDeploymentId}/files/${uid}?teamId=${teamId}`,
+              { headers },
+            );
+            if (!contentResponse.ok)
+              throw new Error(
+                `template_file_read_failed:${file}:${contentResponse.status}`,
+              );
+            return {
+              file,
+              data: toBase64(
+                new Uint8Array(await contentResponse.arrayBuffer()),
+              ),
+              encoding: "base64",
+            };
+          }),
+      );
+      const theme = themeForSite(
+        String(publishingSite.site_key ?? requestedName),
+      );
+      files.push(
+        {
+          file: "api/home.js",
+          data: btoa(
+            unescape(
+              encodeURIComponent(homeFunction(publishingSite.id, theme)),
+            ),
+          ),
+          encoding: "base64",
+        },
+        {
+          file: "api/article.js",
+          data: btoa(
+            unescape(
+              encodeURIComponent(articleFunction(publishingSite.id, theme)),
+            ),
+          ),
+          encoding: "base64",
+        },
+        {
+          file: "vercel.json",
+          data: btoa(JSON.stringify(articleRouting)),
+          encoding: "base64",
+        },
+      );
+      // Vercel associates a deployment to an existing project by `name`.
+      // Sending the response-only `project` field causes the API to retain the
+      // source/template project association even when `name` is different.
+      const deployResponse = await fetch(
+        `https://api.vercel.com/v13/deployments?teamId=${teamId}&forceNew=1`,
+        {
+          method: "POST",
+          headers,
+          body: JSON.stringify({
+            name: requestedName,
+            files,
+            target: "production",
+            projectSettings: { framework: null },
+          }),
+        },
+      );
+      const deployment = await deployResponse.json().catch(() => ({}));
+      if (!deployResponse.ok)
+        return reply(
+          {
+            success: false,
+            error: "vercel_deploy_site_failed",
+            status: deployResponse.status,
+            detail: deployment?.error?.message,
+            project,
+          },
+          400,
+        );
+      if (deployment?.projectId !== project.id) {
+        return reply(
+          {
+            success: false,
+            error: "vercel_deployment_project_mismatch",
+            expected_project_id: project.id,
+            actual_project_id: deployment?.projectId ?? null,
+            deployment_id: deployment?.id ?? null,
+          },
+          502,
+        );
+      }
       return reply({
-        success: false,
-        error: "publishing_site_not_found",
-        project_id: project.id,
-        project_name: requestedName,
-        hint: "Link the Vercel project in Publishing Studio, or ensure site_key matches aios-magazine-site-XX",
-      }, 404);
-    }
-    const deploymentsResponse = await fetch(`https://api.vercel.com/v6/deployments?projectId=${templateProjectId}&teamId=${teamId}&limit=1&state=READY`, { headers });
-    const deployments = await deploymentsResponse.json().catch(() => ({}));
-    const templateDeploymentId = deployments?.deployments?.[0]?.uid;
-    if (!templateDeploymentId) return reply({ success: false, error: "template_deployment_missing", project }, 400);
-    const filesResponse = await fetch(`https://api.vercel.com/v6/deployments/${templateDeploymentId}/files?teamId=${teamId}`, { headers });
-    const fileTree = await filesResponse.json().catch(() => []);
-    if (!filesResponse.ok || !Array.isArray(fileTree)) return reply({ success: false, error: "template_files_failed", status: filesResponse.status }, 400);
-    const templateFiles = flattenDeploymentFiles(fileTree);
-    if (!templateFiles.length) return reply({ success: false, error: "template_files_missing" }, 400);
-    const files = await Promise.all(templateFiles
-      .filter(({ file }) => file !== "api/article.js" && file !== "api/home.js" && file !== "vercel.json")
-      .map(async ({ file, uid }) => {
-      const contentResponse = await fetch(`https://api.vercel.com/v8/deployments/${templateDeploymentId}/files/${uid}?teamId=${teamId}`, { headers });
-      if (!contentResponse.ok) throw new Error(`template_file_read_failed:${file}:${contentResponse.status}`);
-      return { file, data: toBase64(new Uint8Array(await contentResponse.arrayBuffer())), encoding: "base64" };
-    }));
-    const theme = themeForSite(String(publishingSite.site_key ?? requestedName));
-    files.push(
-      { file: "api/home.js", data: btoa(unescape(encodeURIComponent(homeFunction(publishingSite.id, theme)))), encoding: "base64" },
-      { file: "api/article.js", data: btoa(unescape(encodeURIComponent(articleFunction(publishingSite.id, theme)))), encoding: "base64" },
-      { file: "vercel.json", data: btoa(JSON.stringify(articleRouting)), encoding: "base64" },
-    );
-    // Vercel associates a deployment to an existing project by `name`.
-    // Sending the response-only `project` field causes the API to retain the
-    // source/template project association even when `name` is different.
-    const deployResponse = await fetch(`https://api.vercel.com/v13/deployments?teamId=${teamId}&forceNew=1`, {
-      method: "POST",
-      headers,
-      body: JSON.stringify({
-        name: requestedName,
-        files,
-        target: "production",
-        projectSettings: { framework: null },
-      }),
-    });
-    const deployment = await deployResponse.json().catch(() => ({}));
-    if (!deployResponse.ok) return reply({ success: false, error: "vercel_deploy_site_failed", status: deployResponse.status, detail: deployment?.error?.message, project }, 400);
-    if (deployment?.projectId !== project.id) {
-      return reply({
-        success: false,
-        error: "vercel_deployment_project_mismatch",
-        expected_project_id: project.id,
-        actual_project_id: deployment?.projectId ?? null,
-        deployment_id: deployment?.id ?? null,
-      }, 502);
-    }
-    return reply({ success: true, existing: false, project: { id: project.id, name: project.name }, deployment: { id: deployment.id, url: deployment.url, status: deployment.status ?? deployment.readyState } });
-  }
-
-  if (action === "connect") {
-    if (!ionosKey || !vercelToken) return reply({ success: false, error: "provider_credentials_missing", ...result }, 400);
-
-    const domain = String(body?.domain ?? "paperlief.com").trim().replace(/^https?:\/\//, "").replace(/\/$/, "").toLowerCase();
-    const projectId = String(body?.project_id ?? templateProjectId);
-    if (!/^(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,}$/i.test(domain)) return reply({ success: false, error: "invalid_domain" }, 400);
-    const vercelHeaders = { Authorization: `Bearer ${vercelToken}`, Accept: "application/json", "Content-Type": "application/json" };
-    const addDomainResponse = await fetch(`https://api.vercel.com/v10/projects/${projectId}/domains?teamId=${teamId}`, {
-      method: "POST",
-      headers: vercelHeaders,
-      body: JSON.stringify({ name: domain }),
-    });
-    const addDomainText = await addDomainResponse.text();
-    if (!addDomainResponse.ok && addDomainResponse.status !== 409) {
-      return reply({ success: false, error: "vercel_add_domain_failed", status: addDomainResponse.status, detail: addDomainText.slice(0, 500), ...result }, 400);
-    }
-
-    const configResponse = await fetch(`https://api.vercel.com/v6/domains/${domain}/config?projectIdOrName=${projectId}&teamId=${teamId}`, {
-      headers: vercelHeaders,
-    });
-    const configText = await configResponse.text();
-    if (!configResponse.ok) return reply({ success: false, error: "vercel_domain_config_failed", status: configResponse.status, detail: configText.slice(0, 500), ...result }, 400);
-    const config = JSON.parse(configText);
-    const rankedIps = Array.isArray(config?.recommendedIPv4) ? [...config.recommendedIPv4].sort((a, b) => Number(a?.rank ?? 99) - Number(b?.rank ?? 99)) : [];
-    const ipValue = Array.isArray(rankedIps[0]?.value) ? rankedIps[0].value[0] : rankedIps[0]?.value;
-    if (typeof ipValue !== "string" || !/^\d{1,3}(\.\d{1,3}){3}$/.test(ipValue)) {
-      return reply({ success: false, error: "vercel_dns_recommendation_missing", detail: "No recommended IPv4 was returned", ...result }, 400);
-    }
-
-    const ionosHeaders = { "X-API-Key": ionosKey, Accept: "application/json", "Content-Type": "application/json" };
-    const zonesResponse = await fetch("https://api.hosting.ionos.com/dns/v1/zones", { headers: ionosHeaders });
-    const zonesText = await zonesResponse.text();
-    if (!zonesResponse.ok) return reply({ success: false, error: "ionos_zones_failed", status: zonesResponse.status, detail: zonesText.slice(0, 500), ...result }, 400);
-    const zones = JSON.parse(zonesText);
-    const zone = Array.isArray(zones) ? zones.find((item) => String(item?.name ?? item?.zoneName ?? "").replace(/\.$/, "").toLowerCase() === domain) : null;
-    if (!zone?.id) return reply({ success: false, error: "ionos_zone_not_found", detail: domain, ...result }, 404);
-
-    const record = { name: domain, type: "A", content: ipValue, ttl: 3600, prio: 0, disabled: false };
-    const recordsResponse = await fetch(`https://api.hosting.ionos.com/dns/v1/zones/${zone.id}?recordName=${encodeURIComponent(domain)}&recordType=A`, { headers: ionosHeaders });
-    const recordsText = await recordsResponse.text();
-    if (!recordsResponse.ok) return reply({ success: false, error: "ionos_records_read_failed", status: recordsResponse.status, detail: recordsText.slice(0, 500), ...result }, 400);
-    const zoneDetails = recordsText.trim() ? JSON.parse(recordsText) : {};
-    const currentRecords = Array.isArray(zoneDetails?.records) ? zoneDetails.records : [];
-    const alreadyConfigured = currentRecords.some((item) => String(item?.name ?? "").replace(/\.$/, "").toLowerCase() === domain && item?.type === "A" && item?.content === ipValue && item?.disabled !== true);
-
-    let dnsStatus = 200;
-    if (!alreadyConfigured) {
-      const hasApexA = currentRecords.some((item) => String(item?.name ?? "").replace(/\.$/, "").toLowerCase() === domain && item?.type === "A");
-      const dnsResponse = await fetch(`https://api.hosting.ionos.com/dns/v1/zones/${zone.id}${hasApexA ? "" : "/records"}`, {
-        method: hasApexA ? "PATCH" : "POST",
-        headers: ionosHeaders,
-        body: JSON.stringify([record]),
+        success: true,
+        existing: false,
+        project: { id: project.id, name: project.name },
+        deployment: {
+          id: deployment.id,
+          url: deployment.url,
+          status: deployment.status ?? deployment.readyState,
+        },
       });
-      dnsStatus = dnsResponse.status;
-      const dnsText = await dnsResponse.text();
-      if (!dnsResponse.ok) return reply({ success: false, error: "ionos_dns_write_failed", status: dnsResponse.status, detail: dnsText.slice(0, 500), ...result }, 400);
     }
 
-    return reply({
-      success: true,
-      connected: true,
-      domain,
-      vercel: { added: addDomainResponse.ok, already_added: addDomainResponse.status === 409, config_status: configResponse.status },
-      ionos: { zone_id: zone.id, record_type: "A", record_value: ipValue, already_configured: alreadyConfigured, write_status: dnsStatus },
-      propagation: "pending",
-    });
-  }
+    if (action === "connect") {
+      if (!ionosKey || !vercelToken)
+        return reply(
+          { success: false, error: "provider_credentials_missing", ...result },
+          400,
+        );
 
-  return reply({ success: true, ...result });
+      const domain = String(body?.domain ?? "paperlief.com")
+        .trim()
+        .replace(/^https?:\/\//, "")
+        .replace(/\/$/, "")
+        .toLowerCase();
+      const projectId = String(body?.project_id ?? templateProjectId);
+      if (
+        !/^(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,}$/i.test(domain)
+      )
+        return reply({ success: false, error: "invalid_domain" }, 400);
+      const vercelHeaders = {
+        Authorization: `Bearer ${vercelToken}`,
+        Accept: "application/json",
+        "Content-Type": "application/json",
+      };
+      const addDomainResponse = await fetch(
+        `https://api.vercel.com/v10/projects/${projectId}/domains?teamId=${teamId}`,
+        {
+          method: "POST",
+          headers: vercelHeaders,
+          body: JSON.stringify({ name: domain }),
+        },
+      );
+      const addDomainText = await addDomainResponse.text();
+      if (!addDomainResponse.ok && addDomainResponse.status !== 409) {
+        return reply(
+          {
+            success: false,
+            error: "vercel_add_domain_failed",
+            status: addDomainResponse.status,
+            detail: addDomainText.slice(0, 500),
+            ...result,
+          },
+          400,
+        );
+      }
+
+      const configResponse = await fetch(
+        `https://api.vercel.com/v6/domains/${domain}/config?projectIdOrName=${projectId}&teamId=${teamId}`,
+        {
+          headers: vercelHeaders,
+        },
+      );
+      const configText = await configResponse.text();
+      if (!configResponse.ok)
+        return reply(
+          {
+            success: false,
+            error: "vercel_domain_config_failed",
+            status: configResponse.status,
+            detail: configText.slice(0, 500),
+            ...result,
+          },
+          400,
+        );
+      const config = JSON.parse(configText);
+      const rankedIps = Array.isArray(config?.recommendedIPv4)
+        ? [...config.recommendedIPv4].sort(
+            (a, b) => Number(a?.rank ?? 99) - Number(b?.rank ?? 99),
+          )
+        : [];
+      const ipValue = Array.isArray(rankedIps[0]?.value)
+        ? rankedIps[0].value[0]
+        : rankedIps[0]?.value;
+      if (
+        typeof ipValue !== "string" ||
+        !/^\d{1,3}(\.\d{1,3}){3}$/.test(ipValue)
+      ) {
+        return reply(
+          {
+            success: false,
+            error: "vercel_dns_recommendation_missing",
+            detail: "No recommended IPv4 was returned",
+            ...result,
+          },
+          400,
+        );
+      }
+
+      const ionosHeaders = {
+        "X-API-Key": ionosKey,
+        Accept: "application/json",
+        "Content-Type": "application/json",
+      };
+      const zonesResponse = await fetch(
+        "https://api.hosting.ionos.com/dns/v1/zones",
+        { headers: ionosHeaders },
+      );
+      const zonesText = await zonesResponse.text();
+      if (!zonesResponse.ok)
+        return reply(
+          {
+            success: false,
+            error: "ionos_zones_failed",
+            status: zonesResponse.status,
+            detail: zonesText.slice(0, 500),
+            ...result,
+          },
+          400,
+        );
+      const zones = JSON.parse(zonesText);
+      const zone = Array.isArray(zones)
+        ? zones.find(
+            (item) =>
+              String(item?.name ?? item?.zoneName ?? "")
+                .replace(/\.$/, "")
+                .toLowerCase() === domain,
+          )
+        : null;
+      if (!zone?.id)
+        return reply(
+          {
+            success: false,
+            error: "ionos_zone_not_found",
+            detail: domain,
+            ...result,
+          },
+          404,
+        );
+
+      const record = {
+        name: domain,
+        type: "A",
+        content: ipValue,
+        ttl: 3600,
+        prio: 0,
+        disabled: false,
+      };
+      const recordsResponse = await fetch(
+        `https://api.hosting.ionos.com/dns/v1/zones/${zone.id}?recordName=${encodeURIComponent(domain)}&recordType=A`,
+        { headers: ionosHeaders },
+      );
+      const recordsText = await recordsResponse.text();
+      if (!recordsResponse.ok)
+        return reply(
+          {
+            success: false,
+            error: "ionos_records_read_failed",
+            status: recordsResponse.status,
+            detail: recordsText.slice(0, 500),
+            ...result,
+          },
+          400,
+        );
+      const zoneDetails = recordsText.trim() ? JSON.parse(recordsText) : {};
+      const currentRecords = Array.isArray(zoneDetails?.records)
+        ? zoneDetails.records
+        : [];
+      const alreadyConfigured = currentRecords.some(
+        (item) =>
+          String(item?.name ?? "")
+            .replace(/\.$/, "")
+            .toLowerCase() === domain &&
+          item?.type === "A" &&
+          item?.content === ipValue &&
+          item?.disabled !== true,
+      );
+
+      let dnsStatus = 200;
+      if (!alreadyConfigured) {
+        const hasApexA = currentRecords.some(
+          (item) =>
+            String(item?.name ?? "")
+              .replace(/\.$/, "")
+              .toLowerCase() === domain && item?.type === "A",
+        );
+        const dnsResponse = await fetch(
+          `https://api.hosting.ionos.com/dns/v1/zones/${zone.id}${hasApexA ? "" : "/records"}`,
+          {
+            method: hasApexA ? "PATCH" : "POST",
+            headers: ionosHeaders,
+            body: JSON.stringify([record]),
+          },
+        );
+        dnsStatus = dnsResponse.status;
+        const dnsText = await dnsResponse.text();
+        if (!dnsResponse.ok)
+          return reply(
+            {
+              success: false,
+              error: "ionos_dns_write_failed",
+              status: dnsResponse.status,
+              detail: dnsText.slice(0, 500),
+              ...result,
+            },
+            400,
+          );
+      }
+
+      return reply({
+        success: true,
+        connected: true,
+        domain,
+        vercel: {
+          added: addDomainResponse.ok,
+          already_added: addDomainResponse.status === 409,
+          config_status: configResponse.status,
+        },
+        ionos: {
+          zone_id: zone.id,
+          record_type: "A",
+          record_value: ipValue,
+          already_configured: alreadyConfigured,
+          write_status: dnsStatus,
+        },
+        propagation: "pending",
+      });
+    }
+
+    return reply({ success: true, ...result });
   } catch (error) {
     const detail = error instanceof Error ? error.message : "unknown_error";
     console.error("domain-connections failed", detail);
@@ -318,8 +719,16 @@ Deno.serve(async (request) => {
       success: false,
       error: "domain_connection_check_failed",
       detail,
-      ionos: { configured: Boolean((Deno.env.get("IONOS_API_KEY") ?? "").trim()), connected: false, error: detail },
-      vercel: { configured: Boolean((Deno.env.get("VERCEL_TOKEN") ?? "").trim()), connected: false, project_access: false },
+      ionos: {
+        configured: Boolean((Deno.env.get("IONOS_API_KEY") ?? "").trim()),
+        connected: false,
+        error: detail,
+      },
+      vercel: {
+        configured: Boolean((Deno.env.get("VERCEL_TOKEN") ?? "").trim()),
+        connected: false,
+        project_access: false,
+      },
     });
   }
 });

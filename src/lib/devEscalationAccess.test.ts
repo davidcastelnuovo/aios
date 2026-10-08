@@ -1,6 +1,9 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { canDispatchDevTask, getDevEscalationTier } from "./devEscalationAccess.ts";
+import {
+  canDispatchDevTask,
+  getDevEscalationTier,
+} from "./devEscalationAccess.ts";
 
 test("David user id gets full tier", () => {
   assert.equal(
@@ -11,6 +14,9 @@ test("David user id gets full tier", () => {
 });
 
 test("unknown user cannot dispatch dev tasks", () => {
-  assert.equal(getDevEscalationTier({ userId: "00000000-0000-0000-0000-000000000000" }), null);
+  assert.equal(
+    getDevEscalationTier({ userId: "00000000-0000-0000-0000-000000000000" }),
+    null,
+  );
   assert.equal(canDispatchDevTask(null), false);
 });

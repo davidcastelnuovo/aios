@@ -18,13 +18,23 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
 import { isEntryApproved } from "@/lib/seoGeoCalendar";
-import { seoGeoDb, type SeoGeoCalendarEntry, type SeoGeoKeyword } from "@/lib/seoGeoDb";
+import {
+  seoGeoDb,
+  type SeoGeoCalendarEntry,
+  type SeoGeoKeyword,
+} from "@/lib/seoGeoDb";
 import { toast } from "sonner";
 import {
   CalendarDays,
@@ -40,7 +50,12 @@ import {
 } from "lucide-react";
 import { SeoGeoArticlePreviewDialog } from "./SeoGeoArticlePreviewDialog";
 
-type WorkItem = { id: string; title: string | null; payload: Record<string, unknown> | null; client_id: string | null };
+type WorkItem = {
+  id: string;
+  title: string | null;
+  payload: Record<string, unknown> | null;
+  client_id: string | null;
+};
 
 export function SeoGeoWorkflowStudio({
   workItem,
@@ -57,9 +72,13 @@ export function SeoGeoWorkflowStudio({
 }) {
   const qc = useQueryClient();
   const [month, setMonth] = useState(startOfMonth(new Date()));
-  const [previewEntry, setPreviewEntry] = useState<SeoGeoCalendarEntry | null>(null);
+  const [previewEntry, setPreviewEntry] = useState<SeoGeoCalendarEntry | null>(
+    null,
+  );
   const [chatInput, setChatInput] = useState("");
-  const [chatLog, setChatLog] = useState<Array<{ role: "user" | "assistant"; text: string }>>([]);
+  const [chatLog, setChatLog] = useState<
+    Array<{ role: "user" | "assistant"; text: string }>
+  >([]);
   const [chatBusy, setChatBusy] = useState(false);
 
   const programKey = ["seo-geo-program", workItem.id];
@@ -69,16 +88,24 @@ export function SeoGeoWorkflowStudio({
   const { data: program, isLoading: loadingProgram } = useQuery({
     queryKey: programKey,
     queryFn: async () => {
-      const { data, error } = await seoGeoDb.from("seo_geo_programs").select("*").eq("work_item_id", workItem.id).maybeSingle();
+      const { data, error } = await seoGeoDb
+        .from("seo_geo_programs")
+        .select("*")
+        .eq("work_item_id", workItem.id)
+        .maybeSingle();
       if (error) throw error;
       if (data) return data;
-      const { data: created, error: insertError } = await seoGeoDb.from("seo_geo_programs").insert({
-        tenant_id: tenantId,
-        client_id: clientId,
-        work_item_id: workItem.id,
-        auto_approve: false,
-        horizon_months: 3,
-      }).select("*").single();
+      const { data: created, error: insertError } = await seoGeoDb
+        .from("seo_geo_programs")
+        .insert({
+          tenant_id: tenantId,
+          client_id: clientId,
+          work_item_id: workItem.id,
+          auto_approve: false,
+          horizon_months: 3,
+        })
+        .select("*")
+        .single();
       if (insertError) throw insertError;
       return created;
     },
@@ -87,7 +114,11 @@ export function SeoGeoWorkflowStudio({
   const { data: wpSites = [] } = useQuery({
     queryKey: ["seo-geo-wp-sites", tenantId],
     queryFn: async () => {
-      const { data } = await supabase.from("social_media_wordpress_sites").select("id,site_url,site_name").eq("tenant_id", tenantId).order("created_at", { ascending: false });
+      const { data } = await supabase
+        .from("social_media_wordpress_sites")
+        .select("id,site_url,site_name")
+        .eq("tenant_id", tenantId)
+        .order("created_at", { ascending: false });
       return data ?? [];
     },
   });
@@ -95,7 +126,11 @@ export function SeoGeoWorkflowStudio({
   const { data: keywords = [], isLoading: loadingKeywords } = useQuery({
     queryKey: keywordsKey,
     queryFn: async () => {
-      const { data, error } = await seoGeoDb.from("seo_geo_keywords").select("*").eq("work_item_id", workItem.id).order("sort_order");
+      const { data, error } = await seoGeoDb
+        .from("seo_geo_keywords")
+        .select("*")
+        .eq("work_item_id", workItem.id)
+        .order("sort_order");
       if (error) throw error;
       return (data ?? []) as SeoGeoKeyword[];
     },
@@ -104,7 +139,11 @@ export function SeoGeoWorkflowStudio({
   const { data: entries = [], isLoading: loadingEntries } = useQuery({
     queryKey: entriesKey,
     queryFn: async () => {
-      const { data, error } = await seoGeoDb.from("seo_geo_calendar_entries").select("*").eq("work_item_id", workItem.id).order("scheduled_date");
+      const { data, error } = await seoGeoDb
+        .from("seo_geo_calendar_entries")
+        .select("*")
+        .eq("work_item_id", workItem.id)
+        .order("scheduled_date");
       if (error) throw error;
       return (data ?? []) as SeoGeoCalendarEntry[];
     },
@@ -118,7 +157,10 @@ export function SeoGeoWorkflowStudio({
 
   const materialize = useMutation({
     mutationFn: async () => {
-      const { data, error } = await supabase.functions.invoke("marketing-seo-materialize", { body: { work_item_id: workItem.id } });
+      const { data, error } = await supabase.functions.invoke(
+        "marketing-seo-materialize",
+        { body: { work_item_id: workItem.id } },
+      );
       if (error) throw error;
       if (data?.error) throw new Error(data.error);
       return data;
@@ -132,29 +174,44 @@ export function SeoGeoWorkflowStudio({
   });
 
   const updateProgram = async (patch: Record<string, unknown>) => {
-    const { error } = await seoGeoDb.from("seo_geo_programs").update(patch).eq("work_item_id", workItem.id);
+    const { error } = await seoGeoDb
+      .from("seo_geo_programs")
+      .update(patch)
+      .eq("work_item_id", workItem.id);
     if (error) throw error;
     invalidate();
   };
 
   const toggleKeyword = async (row: SeoGeoKeyword, promoted: boolean) => {
-    const { error } = await seoGeoDb.from("seo_geo_keywords").update({ promoted }).eq("id", row.id);
+    const { error } = await seoGeoDb
+      .from("seo_geo_keywords")
+      .update({ promoted })
+      .eq("id", row.id);
     if (error) toast.error(error.message);
     else invalidate();
   };
 
-  const setApproval = async (entry: SeoGeoCalendarEntry, status: "pending" | "approved") => {
-    const { error } = await seoGeoDb.from("seo_geo_calendar_entries").update({
-      approval_status: status,
-      approved_at: status === "approved" ? new Date().toISOString() : null,
-      approved_by_carmen: false,
-    }).eq("id", entry.id);
+  const setApproval = async (
+    entry: SeoGeoCalendarEntry,
+    status: "pending" | "approved",
+  ) => {
+    const { error } = await seoGeoDb
+      .from("seo_geo_calendar_entries")
+      .update({
+        approval_status: status,
+        approved_at: status === "approved" ? new Date().toISOString() : null,
+        approved_by_carmen: false,
+      })
+      .eq("id", entry.id);
     if (error) toast.error(error.message);
     else invalidate();
   };
 
   const generateEntry = async (entryId: string) => {
-    const { data, error } = await supabase.functions.invoke("marketing-seo-generate-entry", { body: { entry_id: entryId } });
+    const { data, error } = await supabase.functions.invoke(
+      "marketing-seo-generate-entry",
+      { body: { entry_id: entryId } },
+    );
     if (error) throw error;
     if (data?.error) throw new Error(data.error);
     toast.success("כרמן כתבה טיוטה");
@@ -162,9 +219,12 @@ export function SeoGeoWorkflowStudio({
   };
 
   const publishDue = async (entryId?: string) => {
-    const { data, error } = await supabase.functions.invoke("marketing-seo-publish-due", {
-      body: entryId ? { entry_id: entryId } : { work_item_id: workItem.id },
-    });
+    const { data, error } = await supabase.functions.invoke(
+      "marketing-seo-publish-due",
+      {
+        body: entryId ? { entry_id: entryId } : { work_item_id: workItem.id },
+      },
+    );
     if (error) throw error;
     if (data?.error) throw new Error(data.error);
     toast.success(`פורסמו ${data.published ?? 0} מאמרים`);
@@ -173,10 +233,17 @@ export function SeoGeoWorkflowStudio({
 
   const monthKey = format(month, "yyyy-MM");
   const monthEntries = useMemo(
-    () => entries.filter((e) => e.scheduled_date.startsWith(monthKey)).sort((a, b) => a.scheduled_date.localeCompare(b.scheduled_date)),
+    () =>
+      entries
+        .filter((e) => e.scheduled_date.startsWith(monthKey))
+        .sort((a, b) => a.scheduled_date.localeCompare(b.scheduled_date)),
     [entries, monthKey],
   );
-  const days = useMemo(() => eachDayOfInterval({ start: startOfMonth(month), end: endOfMonth(month) }), [month]);
+  const days = useMemo(
+    () =>
+      eachDayOfInterval({ start: startOfMonth(month), end: endOfMonth(month) }),
+    [month],
+  );
   const byDay = useMemo(() => {
     const map = new Map<string, SeoGeoCalendarEntry[]>();
     for (const entry of entries) {
@@ -193,7 +260,10 @@ export function SeoGeoWorkflowStudio({
     setChatLog((prev) => [...prev, { role: "user", text: msg }]);
     setChatBusy(true);
     try {
-      const { data, error } = await supabase.functions.invoke("marketing-seo-chat", { body: { work_item_id: workItem.id, message: msg } });
+      const { data, error } = await supabase.functions.invoke(
+        "marketing-seo-chat",
+        { body: { work_item_id: workItem.id, message: msg } },
+      );
       if (error) throw error;
       if (data?.error) throw new Error(data.error);
       setChatLog((prev) => [...prev, { role: "assistant", text: data.reply }]);
@@ -205,8 +275,9 @@ export function SeoGeoWorkflowStudio({
     }
   };
 
-  const hasPlan = !!(workItem.payload?.seo_plan);
-  const planApproved = String(workItem.payload?.seo_plan_status ?? "") === "approved";
+  const hasPlan = !!workItem.payload?.seo_plan;
+  const planApproved =
+    String(workItem.payload?.seo_plan_status ?? "") === "approved";
 
   return (
     <div className="flex min-h-0 flex-1 flex-col lg:grid lg:grid-cols-[minmax(0,1fr)_minmax(0,280px)]">
@@ -216,12 +287,20 @@ export function SeoGeoWorkflowStudio({
             <Label className="text-xs shrink-0">אתר WordPress</Label>
             <Select
               value={program?.wordpress_site_id ?? ""}
-              onValueChange={(v) => updateProgram({ wordpress_site_id: v || null }).catch((e) => toast.error(String(e)))}
+              onValueChange={(v) =>
+                updateProgram({ wordpress_site_id: v || null }).catch((e) =>
+                  toast.error(String(e)),
+                )
+              }
             >
-              <SelectTrigger className="h-9 w-full min-w-0 sm:h-8 sm:w-52"><SelectValue placeholder="בחר אתר" /></SelectTrigger>
+              <SelectTrigger className="h-9 w-full min-w-0 sm:h-8 sm:w-52">
+                <SelectValue placeholder="בחר אתר" />
+              </SelectTrigger>
               <SelectContent>
                 {wpSites.map((s) => (
-                  <SelectItem key={s.id} value={s.id}>{s.site_name || s.site_url}</SelectItem>
+                  <SelectItem key={s.id} value={s.id}>
+                    {s.site_name || s.site_url}
+                  </SelectItem>
                 ))}
               </SelectContent>
             </Select>
@@ -230,68 +309,122 @@ export function SeoGeoWorkflowStudio({
             <Switch
               checked={!!program?.auto_approve}
               disabled={loadingProgram}
-              onCheckedChange={(checked) => updateProgram({ auto_approve: checked }).catch((e) => toast.error(String(e)))}
+              onCheckedChange={(checked) =>
+                updateProgram({ auto_approve: checked }).catch((e) =>
+                  toast.error(String(e)),
+                )
+              }
             />
             <Label className="text-xs">אישור אוטומטי (כרמן)</Label>
           </div>
           <div className="grid w-full grid-cols-1 gap-2 sm:flex sm:w-auto sm:flex-wrap">
-          <Button
-            size="sm"
-            variant="outline"
-            className="w-full sm:w-auto"
-            disabled={!hasPlan || !planApproved || materialize.isPending}
-            onClick={() => {
-              if (!planApproved) {
-                toast.error("אשר תוכנית תוכן בלשונית אסטרטגיה לפני הגאנט");
-                return;
-              }
-              materialize.mutate();
-            }}
-          >
-            {materialize.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <CalendarDays className="h-3.5 w-3.5" />}
-            הכנס תוכנית לגאנט
-          </Button>
-          <Button
-            size="sm"
-            variant="outline"
-            className="w-full sm:w-auto"
-            disabled={!entries.some((e) => isEntryApproved(e.approval_status) && e.generation_status === "planned")}
-            onClick={async () => {
-              const targets = entries.filter((e) => isEntryApproved(e.approval_status) && e.generation_status === "planned");
-              for (const row of targets) {
-                try {
-                  await generateEntry(row.id);
-                } catch (e: unknown) {
-                  toast.error(e instanceof Error ? e.message : "כתיבה נכשלה");
-                  break;
+            <Button
+              size="sm"
+              variant="outline"
+              className="w-full sm:w-auto"
+              disabled={!hasPlan || !planApproved || materialize.isPending}
+              onClick={() => {
+                if (!planApproved) {
+                  toast.error("אשר תוכנית תוכן בלשונית אסטרטגיה לפני הגאנט");
+                  return;
                 }
+                materialize.mutate();
+              }}
+            >
+              {materialize.isPending ? (
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              ) : (
+                <CalendarDays className="h-3.5 w-3.5" />
+              )}
+              הכנס תוכנית לגאנט
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              className="w-full sm:w-auto"
+              disabled={
+                !entries.some(
+                  (e) =>
+                    isEntryApproved(e.approval_status) &&
+                    e.generation_status === "planned",
+                )
               }
-            }}
-          >
-            <WandSparkles className="h-3.5 w-3.5" />כתבי כל המאושרים
-          </Button>
-          <Button size="sm" variant="outline" className="col-span-full w-full sm:col-span-1 sm:w-auto" onClick={() => publishDue()}><Rocket className="h-3.5 w-3.5" />פרסם מוכנים ל-WP</Button>
+              onClick={async () => {
+                const targets = entries.filter(
+                  (e) =>
+                    isEntryApproved(e.approval_status) &&
+                    e.generation_status === "planned",
+                );
+                for (const row of targets) {
+                  try {
+                    await generateEntry(row.id);
+                  } catch (e: unknown) {
+                    toast.error(e instanceof Error ? e.message : "כתיבה נכשלה");
+                    break;
+                  }
+                }
+              }}
+            >
+              <WandSparkles className="h-3.5 w-3.5" />
+              כתבי כל המאושרים
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              className="col-span-full w-full sm:col-span-1 sm:w-auto"
+              onClick={() => publishDue()}
+            >
+              <Rocket className="h-3.5 w-3.5" />
+              פרסם מוכנים ל-WP
+            </Button>
           </div>
         </div>
 
         <Tabs defaultValue="gantt" className="flex min-h-0 flex-1 flex-col">
           <TabsList className="mx-3 mt-2 flex h-auto w-[calc(100%-1.5rem)] flex-wrap gap-1 sm:mx-4 sm:w-fit">
-            <TabsTrigger value="gantt" className="flex-1 text-xs sm:flex-none sm:text-sm">גאנט תוכן</TabsTrigger>
-            <TabsTrigger value="keywords" className="flex-1 text-xs sm:flex-none sm:text-sm">ביטויים</TabsTrigger>
-            <TabsTrigger value="strategy" className="flex-1 text-xs sm:flex-none sm:text-sm">אסטרטגיה</TabsTrigger>
+            <TabsTrigger
+              value="gantt"
+              className="flex-1 text-xs sm:flex-none sm:text-sm"
+            >
+              גאנט תוכן
+            </TabsTrigger>
+            <TabsTrigger
+              value="keywords"
+              className="flex-1 text-xs sm:flex-none sm:text-sm"
+            >
+              ביטויים
+            </TabsTrigger>
+            <TabsTrigger
+              value="strategy"
+              className="flex-1 text-xs sm:flex-none sm:text-sm"
+            >
+              אסטרטגיה
+            </TabsTrigger>
           </TabsList>
 
           <TabsContent value="keywords" className="mt-0 flex-1 overflow-hidden">
             <ScrollArea className="h-full p-4">
-              {loadingKeywords ? <Loader2 className="mx-auto animate-spin" /> : (
+              {loadingKeywords ? (
+                <Loader2 className="mx-auto animate-spin" />
+              ) : (
                 <div className="space-y-2">
-                  {keywords.length === 0 ? <p className="text-sm text-muted-foreground">אין ביטויים — בנה תוכנית או סנכרן מ-Ahrefs/מעקב בצ&apos;אט.</p> : null}
+                  {keywords.length === 0 ? (
+                    <p className="text-sm text-muted-foreground">
+                      אין ביטויים — בנה תוכנית או סנכרן מ-Ahrefs/מעקב
+                      בצ&apos;אט.
+                    </p>
+                  ) : null}
                   {keywords.map((k) => (
                     <Card key={k.id} className="flex items-center gap-3 p-3">
-                      <Checkbox checked={k.promoted} onCheckedChange={(v) => toggleKeyword(k, !!v)} />
+                      <Checkbox
+                        checked={k.promoted}
+                        onCheckedChange={(v) => toggleKeyword(k, !!v)}
+                      />
                       <div className="min-w-0 flex-1">
                         <div className="text-sm font-semibold">{k.keyword}</div>
-                        <div className="text-[10px] text-muted-foreground">{k.source} · {k.intent ?? "—"} · {k.evidence ?? ""}</div>
+                        <div className="text-[10px] text-muted-foreground">
+                          {k.source} · {k.intent ?? "—"} · {k.evidence ?? ""}
+                        </div>
                       </div>
                       <Badge variant="outline">{k.priority ?? "medium"}</Badge>
                     </Card>
@@ -301,11 +434,28 @@ export function SeoGeoWorkflowStudio({
             </ScrollArea>
           </TabsContent>
 
-          <TabsContent value="gantt" className="mt-0 flex min-h-0 flex-1 flex-col">
+          <TabsContent
+            value="gantt"
+            className="mt-0 flex min-h-0 flex-1 flex-col"
+          >
             <div className="flex items-center justify-between border-b px-4 py-2">
-              <Button variant="ghost" size="icon" onClick={() => setMonth(subMonths(month, 1))}><ChevronRight className="h-4 w-4" /></Button>
-              <span className="text-sm font-bold">{format(month, "MMMM yyyy", { locale: he })}</span>
-              <Button variant="ghost" size="icon" onClick={() => setMonth(addMonths(month, 1))}><ChevronLeft className="h-4 w-4" /></Button>
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => setMonth(subMonths(month, 1))}
+              >
+                <ChevronRight className="h-4 w-4" />
+              </Button>
+              <span className="text-sm font-bold">
+                {format(month, "MMMM yyyy", { locale: he })}
+              </span>
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => setMonth(addMonths(month, 1))}
+              >
+                <ChevronLeft className="h-4 w-4" />
+              </Button>
             </div>
             {loadingEntries ? (
               <Loader2 className="m-auto animate-spin" />
@@ -313,19 +463,31 @@ export function SeoGeoWorkflowStudio({
               <>
                 <div className="space-y-2 p-3 lg:hidden">
                   {monthEntries.length === 0 ? (
-                    <p className="py-6 text-center text-sm text-muted-foreground">אין פריטים בחודש זה</p>
+                    <p className="py-6 text-center text-sm text-muted-foreground">
+                      אין פריטים בחודש זה
+                    </p>
                   ) : (
                     monthEntries.map((entry) => (
                       <Card key={entry.id} className="p-3">
-                        <div className="mb-2 text-xs font-medium text-muted-foreground">{entry.scheduled_date}</div>
+                        <div className="mb-2 text-xs font-medium text-muted-foreground">
+                          {entry.scheduled_date}
+                        </div>
                         <GanttChip
                           entry={entry}
                           compact={false}
                           onApprove={() => setApproval(entry, "approved")}
                           onRevoke={() => setApproval(entry, "pending")}
-                          onGenerate={() => generateEntry(entry.id).catch((e) => toast.error(e.message))}
+                          onGenerate={() =>
+                            generateEntry(entry.id).catch((e) =>
+                              toast.error(e.message),
+                            )
+                          }
                           onPreview={() => setPreviewEntry(entry)}
-                          onPublish={() => publishDue(entry.id).catch((e) => toast.error(e.message))}
+                          onPublish={() =>
+                            publishDue(entry.id).catch((e) =>
+                              toast.error(e.message),
+                            )
+                          }
                         />
                       </Card>
                     ))
@@ -337,8 +499,17 @@ export function SeoGeoWorkflowStudio({
                       const key = format(day, "yyyy-MM-dd");
                       const dayEntries = byDay.get(key) ?? [];
                       return (
-                        <div key={key} className={cn("min-h-24 rounded-lg border p-1", isSameDay(day, new Date()) && "border-emerald-400 bg-emerald-50/50 dark:bg-emerald-950/20")}>
-                          <div className="text-[10px] font-medium text-muted-foreground">{format(day, "d")}</div>
+                        <div
+                          key={key}
+                          className={cn(
+                            "min-h-24 rounded-lg border p-1",
+                            isSameDay(day, new Date()) &&
+                              "border-emerald-400 bg-emerald-50/50 dark:bg-emerald-950/20",
+                          )}
+                        >
+                          <div className="text-[10px] font-medium text-muted-foreground">
+                            {format(day, "d")}
+                          </div>
                           <div className="mt-1 space-y-1">
                             {dayEntries.map((entry) => (
                               <GanttChip
@@ -347,9 +518,17 @@ export function SeoGeoWorkflowStudio({
                                 compact
                                 onApprove={() => setApproval(entry, "approved")}
                                 onRevoke={() => setApproval(entry, "pending")}
-                                onGenerate={() => generateEntry(entry.id).catch((e) => toast.error(e.message))}
+                                onGenerate={() =>
+                                  generateEntry(entry.id).catch((e) =>
+                                    toast.error(e.message),
+                                  )
+                                }
                                 onPreview={() => setPreviewEntry(entry)}
-                                onPublish={() => publishDue(entry.id).catch((e) => toast.error(e.message))}
+                                onPublish={() =>
+                                  publishDue(entry.id).catch((e) =>
+                                    toast.error(e.message),
+                                  )
+                                }
                               />
                             ))}
                           </div>
@@ -362,33 +541,74 @@ export function SeoGeoWorkflowStudio({
             )}
           </TabsContent>
 
-          <TabsContent value="strategy" className="mt-0 flex-1 overflow-auto p-2">
-            {strategyPanel ?? <p className="p-4 text-sm text-muted-foreground">בנה תוכנית עם כרמן מהכפתור למעלה.</p>}
+          <TabsContent
+            value="strategy"
+            className="mt-0 flex-1 overflow-auto p-2"
+          >
+            {strategyPanel ?? (
+              <p className="p-4 text-sm text-muted-foreground">
+                בנה תוכנית עם כרמן מהכפתור למעלה.
+              </p>
+            )}
           </TabsContent>
         </Tabs>
       </div>
 
       <aside className="flex max-h-[min(420px,50dvh)] min-h-0 flex-col border-t bg-card/80 lg:max-h-none lg:border-r lg:border-t-0">
         <div className="border-b p-3">
-          <div className="flex items-center gap-2 text-sm font-bold"><MessageSquare className="h-4 w-4 text-emerald-600" />כרמן SEO/GEO</div>
-          <p className="text-[10px] text-muted-foreground">אישור, גאנט, מחקר, שכתוב — כמו ידני</p>
+          <div className="flex items-center gap-2 text-sm font-bold">
+            <MessageSquare className="h-4 w-4 text-emerald-600" />
+            כרמן SEO/GEO
+          </div>
+          <p className="text-[10px] text-muted-foreground">
+            אישור, גאנט, מחקר, שכתוב — כמו ידני
+          </p>
         </div>
         <ScrollArea className="flex-1 p-3">
           <div className="space-y-2">
             {chatLog.map((line, i) => (
-              <div key={i} className={cn("rounded-lg p-2 text-xs", line.role === "user" ? "bg-muted ml-4" : "bg-emerald-50 dark:bg-emerald-950/30 mr-4")}>{line.text}</div>
+              <div
+                key={i}
+                className={cn(
+                  "rounded-lg p-2 text-xs",
+                  line.role === "user"
+                    ? "bg-muted ml-4"
+                    : "bg-emerald-50 dark:bg-emerald-950/30 mr-4",
+                )}
+              >
+                {line.text}
+              </div>
             ))}
           </div>
         </ScrollArea>
         <div className="border-t p-3">
-          <Textarea value={chatInput} onChange={(e) => setChatInput(e.target.value)} placeholder="לדוגמה: סנכרן ביטויים ממעקב, אשרי הכל, הכנס לגאנט..." className="min-h-20 text-sm" />
-          <Button className="mt-2 w-full gap-2 bg-emerald-600" disabled={chatBusy} onClick={sendChat}>
-            {chatBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}שלח
+          <Textarea
+            value={chatInput}
+            onChange={(e) => setChatInput(e.target.value)}
+            placeholder="לדוגמה: סנכרן ביטויים ממעקב, אשרי הכל, הכנס לגאנט..."
+            className="min-h-20 text-sm"
+          />
+          <Button
+            className="mt-2 w-full gap-2 bg-emerald-600"
+            disabled={chatBusy}
+            onClick={sendChat}
+          >
+            {chatBusy ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <Sparkles className="h-4 w-4" />
+            )}
+            שלח
           </Button>
         </div>
       </aside>
 
-      <SeoGeoArticlePreviewDialog entry={previewEntry} open={!!previewEntry} onClose={() => setPreviewEntry(null)} onSaved={invalidate} />
+      <SeoGeoArticlePreviewDialog
+        entry={previewEntry}
+        open={!!previewEntry}
+        onClose={() => setPreviewEntry(null)}
+        onSaved={invalidate}
+      />
     </div>
   );
 }
@@ -412,29 +632,87 @@ function GanttChip({
 }) {
   const approved = isEntryApproved(entry.approval_status);
   return (
-    <div className={cn("rounded border bg-background leading-tight", compact ? "p-1 text-[9px]" : "p-2 text-xs")}>
-      <div className={cn("font-semibold", compact ? "truncate" : "")}>{entry.title}</div>
+    <div
+      className={cn(
+        "rounded border bg-background leading-tight",
+        compact ? "p-1 text-[9px]" : "p-2 text-xs",
+      )}
+    >
+      <div className={cn("font-semibold", compact ? "truncate" : "")}>
+        {entry.title}
+      </div>
       <div className="mt-1 flex flex-wrap gap-1">
-        <Badge variant="outline" className={cn(compact ? "h-4 px-1 text-[8px]" : "text-[10px]", approved ? "border-emerald-500 text-emerald-700" : "border-amber-400 text-amber-700")}>
-          {entry.approval_status === "auto_approved" ? "אושר (כרמן)" : approved ? "אושר" : "לא אושר"}
+        <Badge
+          variant="outline"
+          className={cn(
+            compact ? "h-4 px-1 text-[8px]" : "text-[10px]",
+            approved
+              ? "border-emerald-500 text-emerald-700"
+              : "border-amber-400 text-amber-700",
+          )}
+        >
+          {entry.approval_status === "auto_approved"
+            ? "אושר (כרמן)"
+            : approved
+              ? "אושר"
+              : "לא אושר"}
         </Badge>
-        <Badge variant="secondary" className={compact ? "h-4 px-1 text-[8px]" : "text-[10px]"}>{entry.generation_status}</Badge>
+        <Badge
+          variant="secondary"
+          className={compact ? "h-4 px-1 text-[8px]" : "text-[10px]"}
+        >
+          {entry.generation_status}
+        </Badge>
       </div>
       <div className={cn("mt-1 flex flex-wrap gap-2", compact && "gap-0.5")}>
         {!approved ? (
-          <button type="button" className="text-emerald-600 underline" onClick={onApprove}>אשר</button>
+          <button
+            type="button"
+            className="text-emerald-600 underline"
+            onClick={onApprove}
+          >
+            אשר
+          </button>
         ) : (
-          <button type="button" className="text-muted-foreground underline" onClick={onRevoke}>בטל</button>
+          <button
+            type="button"
+            className="text-muted-foreground underline"
+            onClick={onRevoke}
+          >
+            בטל
+          </button>
         )}
-        <button type="button" className="underline" onClick={onPreview}>פריוויו</button>
+        <button type="button" className="underline" onClick={onPreview}>
+          פריוויו
+        </button>
         {approved && entry.generation_status === "planned" ? (
-          <button type="button" className="text-violet-600 underline" onClick={onGenerate}><WandSparkles className="inline h-2.5 w-2.5" />כתוב</button>
+          <button
+            type="button"
+            className="text-violet-600 underline"
+            onClick={onGenerate}
+          >
+            <WandSparkles className="inline h-2.5 w-2.5" />
+            כתוב
+          </button>
         ) : null}
         {entry.generation_status === "draft" ? (
-          <button type="button" className="text-blue-600 underline" onClick={onPublish}>פרסם</button>
+          <button
+            type="button"
+            className="text-blue-600 underline"
+            onClick={onPublish}
+          >
+            פרסם
+          </button>
         ) : null}
         {entry.live_url ? (
-          <a href={entry.live_url} target="_blank" rel="noreferrer" className="text-emerald-700 underline"><CheckCircle2 className="inline h-2.5 w-2.5" /></a>
+          <a
+            href={entry.live_url}
+            target="_blank"
+            rel="noreferrer"
+            className="text-emerald-700 underline"
+          >
+            <CheckCircle2 className="inline h-2.5 w-2.5" />
+          </a>
         ) : null}
       </div>
     </div>

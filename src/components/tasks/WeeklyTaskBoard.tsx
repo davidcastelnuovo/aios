@@ -16,14 +16,44 @@ import {
   closestCenter,
 } from "@dnd-kit/core";
 import { arrayMove } from "@dnd-kit/sortable";
-import { addDays, addMonths, format, parseISO, isToday, startOfDay, startOfMonth, endOfDay } from "date-fns";
+import {
+  addDays,
+  addMonths,
+  format,
+  parseISO,
+  isToday,
+  startOfDay,
+  startOfMonth,
+  endOfDay,
+} from "date-fns";
 import { he } from "date-fns/locale";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
-import { ChevronRight, ChevronLeft, CalendarDays, Filter, LayoutGrid, Calendar, List, Plus, RefreshCw, MessageSquare } from "lucide-react";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import {
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+} from "@/components/ui/sheet";
+import {
+  ChevronRight,
+  ChevronLeft,
+  CalendarDays,
+  Filter,
+  LayoutGrid,
+  Calendar,
+  List,
+  Plus,
+  RefreshCw,
+  MessageSquare,
+} from "lucide-react";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { DayColumn } from "./DayColumn";
 import { DailyView } from "./DailyView";
@@ -31,7 +61,11 @@ import { MonthlyView } from "./MonthlyView";
 import { TaskDetailDialog } from "./TaskDetailDialog";
 import { TasksChatView, TasksChatSearchInput } from "./TasksChatView";
 import { TasksToolbarFilters } from "./TasksToolbarFilters";
-import { TaskFiltersDialog, TaskFilterState, defaultTaskFilters } from "./TaskFiltersDialog";
+import {
+  TaskFiltersDialog,
+  TaskFilterState,
+  defaultTaskFilters,
+} from "./TaskFiltersDialog";
 import { TaskBacklogPanel } from "./OverdueTasksPanel";
 import type { QuickTaskPayload } from "./QuickTaskInput";
 import { CalendarEventEditDialog } from "./CalendarEventEditDialog";
@@ -66,7 +100,10 @@ import {
   type RecurrenceFrequency,
 } from "@/lib/taskRecurrence";
 import { fetchActiveCampaigners } from "@/lib/taskCampaigners";
-import { buildMineQueueOrFilter, fetchMineTaskIdentity } from "@/lib/mineTaskIdentity";
+import {
+  buildMineQueueOrFilter,
+  fetchMineTaskIdentity,
+} from "@/lib/mineTaskIdentity";
 import {
   chunkIds,
   filterTasksByCampaignerBoardFilter,
@@ -79,7 +116,11 @@ import {
   taskMatchesActivityPeriod,
   writeTasksFilterPreset,
 } from "@/lib/taskFilters";
-import { buildChatTaskOrFilter, buildTaskDueDateOrFilter, taskAppearsOnTimeGrid } from "@/lib/taskBoardQuery";
+import {
+  buildChatTaskOrFilter,
+  buildTaskDueDateOrFilter,
+  taskAppearsOnTimeGrid,
+} from "@/lib/taskBoardQuery";
 import { isTaskOverdue } from "@/lib/taskDeadline";
 import {
   checkCalendarConnection,
@@ -137,7 +178,12 @@ const TASKS_VIEW_MODE_KEY = "aios-tasks-view-mode";
 function readTasksViewMode(): ViewMode {
   try {
     const saved = localStorage.getItem(TASKS_VIEW_MODE_KEY);
-    if (saved === "chat" || saved === "daily" || saved === "weekly" || saved === "monthly") {
+    if (
+      saved === "chat" ||
+      saved === "daily" ||
+      saved === "weekly" ||
+      saved === "monthly"
+    ) {
       return saved;
     }
   } catch {
@@ -152,7 +198,8 @@ export function WeeklyTaskBoard() {
   const { tenantId } = useCurrentTenant();
   const { user } = useCurrentUser();
   const { isViewingAs, viewAsUserId, viewAsUserName } = useViewAs();
-  const boardUserId = isViewingAs && viewAsUserId ? viewAsUserId : user?.id ?? null;
+  const boardUserId =
+    isViewingAs && viewAsUserId ? viewAsUserId : (user?.id ?? null);
   const { isOwner, isSuperAdmin, userId: authenticatedUserId } = useUserRole();
   const { state: sidebarState } = useSidebar();
 
@@ -161,7 +208,11 @@ export function WeeklyTaskBoard() {
 
   // Fetch campaigners for quick filter (include cross-tenant via shared agencies)
   const { data: campaignersList = [] } = useQuery({
-    queryKey: ["campaigners-for-task-filter", tenantId, crossTenantAgencyIds.join(",")],
+    queryKey: [
+      "campaigners-for-task-filter",
+      tenantId,
+      crossTenantAgencyIds.join(","),
+    ],
     queryFn: () => fetchActiveCampaigners(tenantId!, crossTenantAgencyIds),
     enabled: !!tenantId,
   });
@@ -172,7 +223,9 @@ export function WeeklyTaskBoard() {
     queryFn: async () => {
       let query = supabase.from("clients").select("id, name, agency_id");
       if (crossTenantAgencyIds.length > 0) {
-        query = query.or(`tenant_id.eq.${tenantId},agency_id.in.(${crossTenantAgencyIds.join(",")})`);
+        query = query.or(
+          `tenant_id.eq.${tenantId},agency_id.in.(${crossTenantAgencyIds.join(",")})`,
+        );
       } else {
         query = query.eq("tenant_id", tenantId!);
       }
@@ -190,11 +243,15 @@ export function WeeklyTaskBoard() {
         .from("leads")
         .select("id, company_name, contact_name, created_at");
       if (crossTenantAgencyIds.length > 0) {
-        query = query.or(`tenant_id.eq.${tenantId},agency_id.in.(${crossTenantAgencyIds.join(",")})`);
+        query = query.or(
+          `tenant_id.eq.${tenantId},agency_id.in.(${crossTenantAgencyIds.join(",")})`,
+        );
       } else {
         query = query.eq("tenant_id", tenantId!);
       }
-      const { data, error } = await query.order("created_at", { ascending: false }).limit(400);
+      const { data, error } = await query
+        .order("created_at", { ascending: false })
+        .limit(400);
       if (error) throw error;
       return data || [];
     },
@@ -242,9 +299,13 @@ export function WeeklyTaskBoard() {
 
   const [filtersDialogOpen, setFiltersDialogOpen] = useState(false);
   const [filtersIncludeToolbar, setFiltersIncludeToolbar] = useState(false);
-  const [selectedCalendarEvent, setSelectedCalendarEvent] = useState<CalendarEvent | null>(null);
+  const [selectedCalendarEvent, setSelectedCalendarEvent] =
+    useState<CalendarEvent | null>(null);
   const [calendarEventDialogOpen, setCalendarEventDialogOpen] = useState(false);
-  const [quickAddSlot, setQuickAddSlot] = useState<{ date: Date; time: string } | null>(null);
+  const [quickAddSlot, setQuickAddSlot] = useState<{
+    date: Date;
+    time: string;
+  } | null>(null);
   const [quickAddTitle, setQuickAddTitle] = useState("");
   // Mobile: full task list by default; calendar opens only via the calendar icon.
   const [mobileCalendarOpen, setMobileCalendarOpen] = useState(false);
@@ -265,13 +326,15 @@ export function WeeklyTaskBoard() {
     const openLinkedTask = async () => {
       const { data, error } = await supabase
         .from("tasks")
-        .select(`
+        .select(
+          `
           *,
           clients (name, agency_id),
           campaigners (full_name),
           task_updates (count),
           task_collaborators (count)
-        `)
+        `,
+        )
         .eq("id", linkedTaskId)
         .maybeSingle();
 
@@ -297,7 +360,7 @@ export function WeeklyTaskBoard() {
     }),
     useSensor(TouchSensor, {
       activationConstraint: { delay: 300, tolerance: 8 },
-    })
+    }),
   );
 
   // Generate 7 days starting from today
@@ -321,7 +384,14 @@ export function WeeklyTaskBoard() {
 
   // Resolve every campaigner row + sales person that represents this user for "mine".
   const { data: mineIdentity, isSuccess: mineIdentityReady } = useQuery({
-    queryKey: ["mine-task-identity", boardUserId, tenantId, crossTenantAgencyIds.join(","), isViewingAs, viewAsUserId],
+    queryKey: [
+      "mine-task-identity",
+      boardUserId,
+      tenantId,
+      crossTenantAgencyIds.join(","),
+      isViewingAs,
+      viewAsUserId,
+    ],
     queryFn: () =>
       fetchMineTaskIdentity({
         userId: boardUserId!,
@@ -336,13 +406,20 @@ export function WeeklyTaskBoard() {
     (mineIdentity?.kind === "assigned" ? mineIdentity.campaignerId : null) ??
     null;
   const mySalesPersonId =
-    mineIdentity?.kind === "assigned" ? mineIdentity.salesPersonId ?? null : null;
+    mineIdentity?.kind === "assigned"
+      ? (mineIdentity.salesPersonId ?? null)
+      : null;
 
   // Owners without a linked staff row: "mine" only matches created_by and looks empty.
   // Apply once on entry — do not override when the user explicitly picks "שלי בלבד".
   useLayoutEffect(() => {
     if (isViewingAs) return;
-    if (!mineIdentityReady || !mineIdentity || appliedOwnerBoardDefaultRef.current) return;
+    if (
+      !mineIdentityReady ||
+      !mineIdentity ||
+      appliedOwnerBoardDefaultRef.current
+    )
+      return;
     if (
       effectiveCampaignerFilter === "mine" &&
       mineIdentity.kind === "created_by" &&
@@ -351,20 +428,33 @@ export function WeeklyTaskBoard() {
       appliedOwnerBoardDefaultRef.current = true;
       setFilters((prev) => ({ ...prev, campaignerId: "all" }));
     }
-  }, [mineIdentityReady, mineIdentity, isOwner, isSuperAdmin, effectiveCampaignerFilter, isViewingAs]);
+  }, [
+    mineIdentityReady,
+    mineIdentity,
+    isOwner,
+    isSuperAdmin,
+    effectiveCampaignerFilter,
+    isViewingAs,
+  ]);
 
   // Fetch Google Calendar events
   const { data: calendarEvents = [] } = useQuery({
-    queryKey: ["calendar-events-weekly", format(dateRange.start, "yyyy-MM-dd"), format(dateRange.end, "yyyy-MM-dd"), tenantId],
+    queryKey: [
+      "calendar-events-weekly",
+      format(dateRange.start, "yyyy-MM-dd"),
+      format(dateRange.end, "yyyy-MM-dd"),
+      tenantId,
+    ],
     queryFn: async () => {
       try {
-        const { getCalendarEvents, getStoredCalendarProvider } = await import("@/lib/calendarApi");
+        const { getCalendarEvents, getStoredCalendarProvider } =
+          await import("@/lib/calendarApi");
         const data = await getCalendarEvents(
           dateRange.start.toISOString(),
           endOfDay(addDays(dateRange.end, 1)).toISOString(),
-          { tenantId: tenantId!, provider: getStoredCalendarProvider() }
+          { tenantId: tenantId!, provider: getStoredCalendarProvider() },
         );
-        
+
         // Transform to our CalendarEvent format
         // Only include timed events (with dateTime), skip all-day events (with date only)
         const events = (data?.events || [])
@@ -377,21 +467,26 @@ export function WeeklyTaskBoard() {
             colorId: event.colorId,
             calendarId: event.calendarId,
           }));
-        
+
         return events as CalendarEvent[];
       } catch {
         // User might not have connected calendar - that's ok
         return [];
       }
     },
-    enabled: !!user?.id && !!tenantId && viewMode !== "monthly" && viewMode !== "chat",
+    enabled:
+      !!user?.id && !!tenantId && viewMode !== "monthly" && viewMode !== "chat",
     staleTime: 1000 * 60 * 5, // 5 minutes
   });
 
   const calendarProvider = getStoredCalendarProvider();
   const { data: calendarStatus } = useQuery({
     queryKey: ["calendar-status", tenantId, calendarProvider],
-    queryFn: () => checkCalendarConnection({ tenantId: tenantId!, provider: calendarProvider }),
+    queryFn: () =>
+      checkCalendarConnection({
+        tenantId: tenantId!,
+        provider: calendarProvider,
+      }),
     enabled: !!tenantId && viewMode !== "chat",
     staleTime: 1000 * 60,
   });
@@ -404,7 +499,9 @@ export function WeeklyTaskBoard() {
     try {
       await startCalendarOAuth(tenantId, calendarProvider);
       await queryClient.invalidateQueries({ queryKey: ["calendar-status"] });
-      await queryClient.invalidateQueries({ queryKey: ["calendar-events-weekly"] });
+      await queryClient.invalidateQueries({
+        queryKey: ["calendar-events-weekly"],
+      });
       toast.success("היומן חובר");
     } catch (error) {
       console.error("[connectCalendar] failed", error);
@@ -415,8 +512,30 @@ export function WeeklyTaskBoard() {
   };
 
   // Fetch tasks for the current view + overdue tasks
-  const { data: fetchedTasks = [], isLoading, isFetching, isSuccess, isError, error: tasksError } = useQuery({
-    queryKey: ["tasks", tenantId, crossTenantAgencyIds, (agencies || []).map((agency) => agency.id).join(","), viewMode === "chat" ? "chat" : format(dateRange.start, "yyyy-MM-dd"), viewMode === "chat" ? "chat" : format(dateRange.end, "yyyy-MM-dd"), filters, effectiveCampaignerFilter, viewMode, mineIdentity?.campaignerIds.join(","), selectedAgency, isViewingAs, viewAsUserId, boardUserId],
+  const {
+    data: fetchedTasks = [],
+    isLoading,
+    isFetching,
+    isSuccess,
+    isError,
+    error: tasksError,
+  } = useQuery({
+    queryKey: [
+      "tasks",
+      tenantId,
+      crossTenantAgencyIds,
+      (agencies || []).map((agency) => agency.id).join(","),
+      viewMode === "chat" ? "chat" : format(dateRange.start, "yyyy-MM-dd"),
+      viewMode === "chat" ? "chat" : format(dateRange.end, "yyyy-MM-dd"),
+      filters,
+      effectiveCampaignerFilter,
+      viewMode,
+      mineIdentity?.campaignerIds.join(","),
+      selectedAgency,
+      isViewingAs,
+      viewAsUserId,
+      boardUserId,
+    ],
     enabled:
       !!tenantId &&
       !!boardUserId &&
@@ -425,7 +544,7 @@ export function WeeklyTaskBoard() {
       const today = format(startOfDay(new Date()), "yyyy-MM-dd");
       const rangeStartStr = format(dateRange.start, "yyyy-MM-dd");
       const rangeEndStr = format(dateRange.end, "yyyy-MM-dd");
-      
+
       const TASK_BOARD_SELECT = `
           *,
           clients (name, agency_id),
@@ -448,8 +567,9 @@ export function WeeklyTaskBoard() {
 
       let collaboratorTaskIds: string[] = [];
       const collaboratorScopeIds = isMineQueueFilter(effectiveCampaignerFilter)
-        ? mineIdentity?.campaignerIds ?? []
-        : effectiveCampaignerFilter !== "all" && effectiveCampaignerFilter !== "none"
+        ? (mineIdentity?.campaignerIds ?? [])
+        : effectiveCampaignerFilter !== "all" &&
+            effectiveCampaignerFilter !== "none"
           ? [effectiveCampaignerFilter]
           : [];
       if (collaboratorScopeIds.length > 0) {
@@ -457,7 +577,9 @@ export function WeeklyTaskBoard() {
           .from("task_collaborators")
           .select("task_id")
           .in("campaigner_id", collaboratorScopeIds);
-        collaboratorTaskIds = Array.from(new Set((collabRows || []).map((row) => row.task_id)));
+        collaboratorTaskIds = Array.from(
+          new Set((collabRows || []).map((row) => row.task_id)),
+        );
       }
 
       query = query.or(buildTasksBoardScopeOrFilter(boardScope));
@@ -465,13 +587,20 @@ export function WeeklyTaskBoard() {
       // Include: current range OR overdue open OR unscheduled open (no due_date).
       // Do not fetch historical done-undated / all-time untimed rows — that
       // flooded the board after the target_date 400-fix made the query succeed.
-      const periodStart = viewMode === "chat" ? resolveTaskPeriodStart(filters.period) : undefined;
-      const activitySince = periodStart ? format(periodStart, "yyyy-MM-dd") : undefined;
+      const periodStart =
+        viewMode === "chat"
+          ? resolveTaskPeriodStart(filters.period)
+          : undefined;
+      const activitySince = periodStart
+        ? format(periodStart, "yyyy-MM-dd")
+        : undefined;
       query = query.or(
         viewMode === "chat"
           ? buildChatTaskOrFilter({
               today,
-              doneSince: activitySince ?? format(addDays(startOfDay(new Date()), -14), "yyyy-MM-dd"),
+              doneSince:
+                activitySince ??
+                format(addDays(startOfDay(new Date()), -14), "yyyy-MM-dd"),
               activitySince,
             })
           : buildTaskDueDateOrFilter({
@@ -487,7 +616,10 @@ export function WeeklyTaskBoard() {
       let skipAssignedQuery = false;
       if (isMineQueueFilter(effectiveCampaignerFilter)) {
         const mine = mineIdentity!;
-        const mode = effectiveCampaignerFilter === "mine_assigned" ? "mine_assigned" : "mine";
+        const mode =
+          effectiveCampaignerFilter === "mine_assigned"
+            ? "mine_assigned"
+            : "mine";
         const queueOr = buildMineQueueOrFilter(mine, mode);
         if (queueOr) {
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -508,7 +640,11 @@ export function WeeklyTaskBoard() {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const applyBoardFilters = (q: any) => {
         if (filters.taskType !== "all") {
-          q = q.eq("task_type", filters.taskType as "campaign" | "collection" | "creative" | "other");
+          q = q.eq(
+            "task_type",
+            filters.taskType as
+              "campaign" | "collection" | "creative" | "other",
+          );
         }
         if (filters.relatedKind === "client" && filters.relatedId) {
           q = q.eq("client_id", filters.relatedId);
@@ -544,17 +680,20 @@ export function WeeklyTaskBoard() {
       if (collaboratorTaskIds.length > 0) {
         const have = new Set(taskRows.map((task) => task.id));
         const missing = collaboratorTaskIds.filter((id) => !have.has(id));
-        const dueOr = viewMode === "chat"
-          ? buildChatTaskOrFilter({
-              today,
-              doneSince: activitySince ?? format(addDays(startOfDay(new Date()), -14), "yyyy-MM-dd"),
-              activitySince,
-            })
-          : buildTaskDueDateOrFilter({
-              rangeStart: rangeStartStr,
-              rangeEnd: rangeEndStr,
-              today,
-            });
+        const dueOr =
+          viewMode === "chat"
+            ? buildChatTaskOrFilter({
+                today,
+                doneSince:
+                  activitySince ??
+                  format(addDays(startOfDay(new Date()), -14), "yyyy-MM-dd"),
+                activitySince,
+              })
+            : buildTaskDueDateOrFilter({
+                rangeStart: rangeStartStr,
+                rangeEnd: rangeEndStr,
+                today,
+              });
         for (const chunk of chunkIds(missing)) {
           const extraQuery = applyBoardFilters(
             supabase
@@ -572,13 +711,17 @@ export function WeeklyTaskBoard() {
 
       const seen = new Set<string>();
       const collabSet = new Set(collaboratorTaskIds);
-      taskRows = taskRows.filter((task) => {
-        if (seen.has(task.id)) return false;
-        seen.add(task.id);
-        return true;
-      }).map((task) => (
-        collabSet.has(task.id) ? { ...task, collaborator_for_me: true } : task
-      ));
+      taskRows = taskRows
+        .filter((task) => {
+          if (seen.has(task.id)) return false;
+          seen.add(task.id);
+          return true;
+        })
+        .map((task) =>
+          collabSet.has(task.id)
+            ? { ...task, collaborator_for_me: true }
+            : task,
+        );
 
       if (filters.showAllRecurring) {
         let recurringQuery = supabase
@@ -590,7 +733,10 @@ export function WeeklyTaskBoard() {
         recurringQuery = applyBoardFilters(recurringQuery);
         if (isMineQueueFilter(effectiveCampaignerFilter)) {
           const mine = mineIdentity!;
-          const mode = effectiveCampaignerFilter === "mine_assigned" ? "mine_assigned" : "mine";
+          const mode =
+            effectiveCampaignerFilter === "mine_assigned"
+              ? "mine_assigned"
+              : "mine";
           const queueOr = buildMineQueueOrFilter(mine, mode);
           if (queueOr) {
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -601,9 +747,13 @@ export function WeeklyTaskBoard() {
           recurringQuery = (recurringQuery as any).is("campaigner_id", null);
         } else if (effectiveCampaignerFilter !== "all") {
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          recurringQuery = (recurringQuery as any).eq("campaigner_id", effectiveCampaignerFilter);
+          recurringQuery = (recurringQuery as any).eq(
+            "campaigner_id",
+            effectiveCampaignerFilter,
+          );
         }
-        const { data: recurringExtra, error: recurringError } = await recurringQuery;
+        const { data: recurringExtra, error: recurringError } =
+          await recurringQuery;
         if (recurringError) throw recurringError;
         taskRows = taskRows.concat((recurringExtra || []) as FullTask[]);
         const seenRecurring = new Set<string>();
@@ -614,19 +764,27 @@ export function WeeklyTaskBoard() {
         });
       }
 
-      const creatorIds = Array.from(new Set(
-        taskRows.map((task) => task.created_by).filter((id): id is string => Boolean(id))
-      ));
+      const creatorIds = Array.from(
+        new Set(
+          taskRows
+            .map((task) => task.created_by)
+            .filter((id): id is string => Boolean(id)),
+        ),
+      );
       if (creatorIds.length === 0) return taskRows;
 
       const { data: creators } = await supabase
         .from("profiles")
         .select("id, full_name")
         .in("id", creatorIds);
-      const creatorNames = new Map((creators || []).map((creator) => [creator.id, creator.full_name]));
+      const creatorNames = new Map(
+        (creators || []).map((creator) => [creator.id, creator.full_name]),
+      );
       return taskRows.map((task) => ({
         ...task,
-        creator_name: task.created_by ? creatorNames.get(task.created_by) || null : null,
+        creator_name: task.created_by
+          ? creatorNames.get(task.created_by) || null
+          : null,
       }));
     },
     staleTime: 1000 * 60,
@@ -645,11 +803,15 @@ export function WeeklyTaskBoard() {
     queryClient.removeQueries({ queryKey: ["tasks", tenantId] });
     queryClient.removeQueries({ queryKey: ["mine-task-identity"] });
   }, [isViewingAs, viewAsUserId, tenantId, queryClient]);
-  
+
   const applyBoardViewFilters = useMemo(
     () => (rows: FullTask[]) => {
       let filtered = filterTasksByBoardTenantScope(
-        filterTasksForBoardView(rows, selectedAgency, effectiveCampaignerFilter),
+        filterTasksForBoardView(
+          rows,
+          selectedAgency,
+          effectiveCampaignerFilter,
+        ),
         tenantId!,
         crossTenantAgencyIds,
       );
@@ -658,15 +820,25 @@ export function WeeklyTaskBoard() {
         effectiveCampaignerFilter,
         mineIdentity ?? null,
       );
-      filtered = filterTasksByRelatedEntity(filtered, filters.relatedKind, filters.relatedId);
+      filtered = filterTasksByRelatedEntity(
+        filtered,
+        filters.relatedKind,
+        filters.relatedId,
+      );
       if (viewMode === "chat") {
         const periodStart = resolveTaskPeriodStart(filters.period);
         if (periodStart) {
-          filtered = filtered.filter((task) => taskMatchesActivityPeriod(task, periodStart));
+          filtered = filtered.filter((task) =>
+            taskMatchesActivityPeriod(task, periodStart),
+          );
         }
       }
       if (isViewingAs && boardUserId) {
-        filtered = filterTasksForBoardUserPreview(filtered, boardUserId, mineIdentity ?? null);
+        filtered = filterTasksForBoardUserPreview(
+          filtered,
+          boardUserId,
+          mineIdentity ?? null,
+        );
       }
       filtered = filtered.filter((task) =>
         shouldShowRecurringTaskOnBoard(task, {
@@ -710,7 +882,22 @@ export function WeeklyTaskBoard() {
     // Intentionally depend on the fingerprint of fetched rows + agency + fetching, not
     // localTasks (that would loop). Same fingerprint style as before, plus agency_id.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isFetching, isSuccess, isError, selectedAgency, effectiveCampaignerFilter, isViewingAs, boardUserId, applyBoardViewFilters, JSON.stringify(fetchedTasks?.map(t => `${t.id}_${t.agency_id}_${t.duration_minutes}_${t.status}_${t.campaigner_id}_${t.client_id}`))]);
+  }, [
+    isFetching,
+    isSuccess,
+    isError,
+    selectedAgency,
+    effectiveCampaignerFilter,
+    isViewingAs,
+    boardUserId,
+    applyBoardViewFilters,
+    JSON.stringify(
+      fetchedTasks?.map(
+        (t) =>
+          `${t.id}_${t.agency_id}_${t.duration_minutes}_${t.status}_${t.campaigner_id}_${t.client_id}`,
+      ),
+    ),
+  ]);
 
   useEffect(() => {
     if (!isError || !tasksError) return;
@@ -752,7 +939,13 @@ export function WeeklyTaskBoard() {
         .map((t) => t.google_calendar_event_id as string),
     );
     return calendarEvents.filter((event) => !syncedEventIds.has(event.id));
-  }, [calendarEvents, tasks, effectiveCampaignerFilter, dateRange, primaryCampaignerId]);
+  }, [
+    calendarEvents,
+    tasks,
+    effectiveCampaignerFilter,
+    dateRange,
+    primaryCampaignerId,
+  ]);
 
   const { data: firstAgency } = useQuery({
     queryKey: ["first-agency", tenantId],
@@ -815,8 +1008,9 @@ export function WeeklyTaskBoard() {
       const assignedCampaignerId = campaignerId ?? myCampaignerId;
 
       // Validate date is a valid Date object
-      const validDate = date instanceof Date && !isNaN(date.getTime()) ? date : null;
-      
+      const validDate =
+        date instanceof Date && !isNaN(date.getTime()) ? date : null;
+
       const insertData: any = {
         title,
         status: "open",
@@ -837,9 +1031,11 @@ export function WeeklyTaskBoard() {
         insertData.recurrence_frequency = recurrenceFrequency;
         insertData.recurrence_interval = 1;
         insertData.recurrence_weekday =
-          recurrenceFrequency === "weekly" ? recurrenceWeekday ?? null : null;
+          recurrenceFrequency === "weekly" ? (recurrenceWeekday ?? null) : null;
         insertData.recurrence_monthday =
-          recurrenceFrequency === "monthly" ? recurrenceMonthday ?? null : null;
+          recurrenceFrequency === "monthly"
+            ? (recurrenceMonthday ?? null)
+            : null;
       }
       if (selfReminderAt) {
         insertData.self_reminder_at = selfReminderAt;
@@ -863,8 +1059,14 @@ export function WeeklyTaskBoard() {
         }
       }
       // Note: time without date is not saved to prevent orphaned times
-      const assigneeIds = collectTaskAssigneeIds(assignedCampaignerId, collaboratorIds);
-      const fanOut = shouldFanOutRecurringTasks(recurrenceFrequency, assigneeIds);
+      const assigneeIds = collectTaskAssigneeIds(
+        assignedCampaignerId,
+        collaboratorIds,
+      );
+      const fanOut = shouldFanOutRecurringTasks(
+        recurrenceFrequency,
+        assigneeIds,
+      );
 
       let newTask: { id: string } | null = null;
       if (fanOut) {
@@ -889,17 +1091,23 @@ export function WeeklyTaskBoard() {
         newTask = created;
 
         const uniqueCollaborators = Array.from(
-          new Set((collaboratorIds || []).filter((id) => id && id !== assignedCampaignerId)),
+          new Set(
+            (collaboratorIds || []).filter(
+              (id) => id && id !== assignedCampaignerId,
+            ),
+          ),
         );
         if (uniqueCollaborators.length > 0) {
-          const { error: collabError } = await supabase.from("task_collaborators").insert(
-            uniqueCollaborators.map((campaignerCollaboratorId) => ({
-              task_id: newTask!.id,
-              campaigner_id: campaignerCollaboratorId,
-              tenant_id: tenantId,
-              added_by: boardUserId,
-            })),
-          );
+          const { error: collabError } = await supabase
+            .from("task_collaborators")
+            .insert(
+              uniqueCollaborators.map((campaignerCollaboratorId) => ({
+                task_id: newTask!.id,
+                campaigner_id: campaignerCollaboratorId,
+                tenant_id: tenantId,
+                added_by: boardUserId,
+              })),
+            );
           if (collabError) throw collabError;
         }
       }
@@ -907,9 +1115,11 @@ export function WeeklyTaskBoard() {
       // אם יש תאריך ושעה - יצור גם אירוע ביומן גוגל ושמור את ה-eventId
       if (!fanOut && validDate && time && newTask) {
         try {
-          const startDateTime = new Date(`${format(validDate, "yyyy-MM-dd")}T${time}:00`);
+          const startDateTime = new Date(
+            `${format(validDate, "yyyy-MM-dd")}T${time}:00`,
+          );
           const endDateTime = new Date(startDateTime.getTime() + 30 * 60000); // 30 דקות
-          
+
           const { addCalendarEvent } = await import("@/lib/calendarApi");
           const calendarResult = await addCalendarEvent(
             {
@@ -918,12 +1128,13 @@ export function WeeklyTaskBoard() {
               start: startDateTime.toISOString(),
               end: endDateTime.toISOString(),
             },
-            { tenantId: tenantId! }
+            { tenantId: tenantId! },
           );
-          
+
           // שמור את ה-eventId במשימה לסנכרון עתידי
           if (calendarResult?.eventId) {
-            await supabase.from("tasks")
+            await supabase
+              .from("tasks")
               .update({ google_calendar_event_id: calendarResult.eventId })
               .eq("id", newTask.id);
           }
@@ -932,7 +1143,7 @@ export function WeeklyTaskBoard() {
           // לא נזרוק שגיאה - המשימה כבר נוספה
         }
       }
-      
+
       return fanOut ? { fanOutCount: assigneeIds.length, newTask } : newTask;
     },
     onSuccess: (result) => {
@@ -949,14 +1160,20 @@ export function WeeklyTaskBoard() {
       if (newTask && typeof newTask === "object" && "id" in newTask) {
         setLocalTasks((prev) => {
           if (!newTask) return prev;
-          return prev.some((t) => t.id === (newTask as any).id) ? prev : [newTask as any, ...prev];
+          return prev.some((t) => t.id === (newTask as any).id)
+            ? prev
+            : [newTask as any, ...prev];
         });
       }
 
       queryClient.invalidateQueries({ queryKey: ["tasks", tenantId] });
-      queryClient.invalidateQueries({ queryKey: ["calendar-events-weekly", tenantId] });
+      queryClient.invalidateQueries({
+        queryKey: ["calendar-events-weekly", tenantId],
+      });
       toast.success(
-        fanOutCount ? `נוצרו ${fanOutCount} משימות חוזרות — אחת לכל איש צוות` : "משימה נוספה",
+        fanOutCount
+          ? `נוצרו ${fanOutCount} משימות חוזרות — אחת לכל איש צוות`
+          : "משימה נוספה",
       );
     },
     onError: (error) => {
@@ -971,7 +1188,9 @@ export function WeeklyTaskBoard() {
         return;
       }
       if (msg && /recurrence_/i.test(msg)) {
-        toast.error("עמודות משימה חוזרת עדיין לא זמינות בדאטהבייס — אפשר להוסיף משימה רגילה בינתיים");
+        toast.error(
+          "עמודות משימה חוזרת עדיין לא זמינות בדאטהבייס — אפשר להוסיף משימה רגילה בינתיים",
+        );
         return;
       }
       toast.error(msg ? `שגיאה בהוספת משימה: ${msg}` : "שגיאה בהוספת משימה");
@@ -985,7 +1204,9 @@ export function WeeklyTaskBoard() {
       return await syncTasksToCalendar({ tenantId: tenantId! });
     },
     onSuccess: (data) => {
-      queryClient.invalidateQueries({ queryKey: ["calendar-events", tenantId] });
+      queryClient.invalidateQueries({
+        queryKey: ["calendar-events", tenantId],
+      });
       if (data.synced === 0) {
         toast.info(data.message || "סנכרון משימות אינו נתמך כרגע.");
         return;
@@ -1042,12 +1263,12 @@ export function WeeklyTaskBoard() {
     },
     onMutate: async ({ taskId, completed }) => {
       // Optimistic update - עדכון מיידי של הממשק
-      setLocalTasks(prev =>
-        prev.map(task =>
+      setLocalTasks((prev) =>
+        prev.map((task) =>
           task.id === taskId
             ? { ...task, status: completed ? "done" : "open" }
-            : task
-        )
+            : task,
+        ),
       );
     },
     onSuccess: ({ completed }) => {
@@ -1110,7 +1331,8 @@ export function WeeklyTaskBoard() {
         const calendarChanged =
           (eventId ?? null) !== (googleCalendarEventId ?? null);
         if (calendarChanged) {
-          await supabase.from("tasks")
+          await supabase
+            .from("tasks")
             .update({ google_calendar_event_id: eventId })
             .eq("id", taskId);
         }
@@ -1120,8 +1342,12 @@ export function WeeklyTaskBoard() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["tasks", tenantId] });
-      queryClient.invalidateQueries({ queryKey: ["calendar-events", tenantId] });
-      queryClient.invalidateQueries({ queryKey: ["calendar-events-weekly", tenantId] });
+      queryClient.invalidateQueries({
+        queryKey: ["calendar-events", tenantId],
+      });
+      queryClient.invalidateQueries({
+        queryKey: ["calendar-events-weekly", tenantId],
+      });
       toast.success("תאריך המשימה עודכן");
     },
     onError: (error: Error) => {
@@ -1131,13 +1357,22 @@ export function WeeklyTaskBoard() {
 
   // Update client assignment
   const updateTaskClient = useMutation({
-    mutationFn: async ({ taskId, clientId }: { taskId: string; clientId: string | null }) => {
+    mutationFn: async ({
+      taskId,
+      clientId,
+    }: {
+      taskId: string;
+      clientId: string | null;
+    }) => {
       // Re-stamp the agency with the new client's, so the task follows its
       // client instead of staying under the agency it was created in.
       const clientAgencyId = clientId
-        ? clientsList?.find((client) => client.id === clientId)?.agency_id ?? null
+        ? (clientsList?.find((client) => client.id === clientId)?.agency_id ??
+          null)
         : null;
-      const update: { client_id: string | null; agency_id?: string } = { client_id: clientId };
+      const update: { client_id: string | null; agency_id?: string } = {
+        client_id: clientId,
+      };
       if (clientAgencyId) update.agency_id = clientAgencyId;
 
       const { error } = await supabase
@@ -1155,7 +1390,9 @@ export function WeeklyTaskBoard() {
               ...t,
               client_id: clientId,
               agency_id: client?.agency_id ?? t.agency_id,
-              clients: client ? { name: client.name, agency_id: client.agency_id } : null,
+              clients: client
+                ? { name: client.name, agency_id: client.agency_id }
+                : null,
             }
           : t;
       queryClient.setQueriesData<any[]>({ queryKey: ["tasks"] }, (old) => {
@@ -1176,7 +1413,13 @@ export function WeeklyTaskBoard() {
 
   // Update campaigner assignment
   const updateTaskCampaigner = useMutation({
-    mutationFn: async ({ taskId, campaignerId }: { taskId: string; campaignerId: string | null }) => {
+    mutationFn: async ({
+      taskId,
+      campaignerId,
+    }: {
+      taskId: string;
+      campaignerId: string | null;
+    }) => {
       const { error } = await supabase
         .from("tasks")
         .update({ campaigner_id: campaignerId })
@@ -1185,10 +1428,17 @@ export function WeeklyTaskBoard() {
     },
     onMutate: async ({ taskId, campaignerId }) => {
       await queryClient.cancelQueries({ queryKey: ["tasks"] });
-      const campaignerName = campaignersList?.find((c) => c.id === campaignerId)?.full_name ?? null;
+      const campaignerName =
+        campaignersList?.find((c) => c.id === campaignerId)?.full_name ?? null;
       const patch = (t: any) =>
         t?.id === taskId
-          ? { ...t, campaigner_id: campaignerId, campaigners: campaignerName ? { full_name: campaignerName } : null }
+          ? {
+              ...t,
+              campaigner_id: campaignerId,
+              campaigners: campaignerName
+                ? { full_name: campaignerName }
+                : null,
+            }
           : t;
       queryClient.setQueriesData<any[]>({ queryKey: ["tasks"] }, (old) => {
         if (!Array.isArray(old)) return old;
@@ -1228,13 +1478,20 @@ export function WeeklyTaskBoard() {
 
   // Delete task mutation - עם מחיקה מגוגל קלנדר
   const deleteTask = useMutation({
-    mutationFn: async ({ taskId, googleCalendarEventId }: { taskId: string; googleCalendarEventId?: string | null }) => {
+    mutationFn: async ({
+      taskId,
+      googleCalendarEventId,
+    }: {
+      taskId: string;
+      googleCalendarEventId?: string | null;
+    }) => {
       const { error } = await supabase.from("tasks").delete().eq("id", taskId);
       if (error) throw error;
 
       if (googleCalendarEventId) {
         try {
-          const { deleteCalendarEvent: delCalEvent } = await import("@/lib/calendarApi");
+          const { deleteCalendarEvent: delCalEvent } =
+            await import("@/lib/calendarApi");
           await delCalEvent(googleCalendarEventId, { tenantId: tenantId! });
         } catch (calendarError) {
           console.warn("לא הצלחנו למחוק מיומן גוגל:", calendarError);
@@ -1243,7 +1500,9 @@ export function WeeklyTaskBoard() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["tasks", tenantId] });
-      queryClient.invalidateQueries({ queryKey: ["calendar-events-weekly", tenantId] });
+      queryClient.invalidateQueries({
+        queryKey: ["calendar-events-weekly", tenantId],
+      });
       toast.success("המשימה נמחקה");
     },
     onError: () => {
@@ -1253,7 +1512,13 @@ export function WeeklyTaskBoard() {
 
   // Update task duration mutation (for resize)
   const updateDuration = useMutation({
-    mutationFn: async ({ taskId, duration }: { taskId: string; duration: number }) => {
+    mutationFn: async ({
+      taskId,
+      duration,
+    }: {
+      taskId: string;
+      duration: number;
+    }) => {
       const { error } = await supabase
         .from("tasks")
         .update({ duration_minutes: duration })
@@ -1263,9 +1528,11 @@ export function WeeklyTaskBoard() {
     },
     onSuccess: ({ taskId, duration }) => {
       // Optimistic update for immediate UI feedback
-      setLocalTasks(prev => prev.map(t => 
-        t.id === taskId ? { ...t, duration_minutes: duration } : t
-      ));
+      setLocalTasks((prev) =>
+        prev.map((t) =>
+          t.id === taskId ? { ...t, duration_minutes: duration } : t,
+        ),
+      );
       queryClient.invalidateQueries({ queryKey: ["tasks", tenantId] });
       toast.success("משך המשימה עודכן");
     },
@@ -1276,24 +1543,30 @@ export function WeeklyTaskBoard() {
 
   // Update calendar event mutation
   const updateCalendarEvent = useMutation({
-    mutationFn: async ({ 
-      eventId, 
-      summary, 
-      description, 
-      start, 
-      end 
-    }: { 
-      eventId: string; 
-      summary?: string; 
-      description?: string; 
-      start: string; 
+    mutationFn: async ({
+      eventId,
+      summary,
+      description,
+      start,
+      end,
+    }: {
+      eventId: string;
+      summary?: string;
+      description?: string;
+      start: string;
       end: string;
     }) => {
-      const { updateCalendarEvent: updateCalEvent } = await import("@/lib/calendarApi");
-      return await updateCalEvent({ eventId, summary, description, start, end }, { tenantId: tenantId! });
+      const { updateCalendarEvent: updateCalEvent } =
+        await import("@/lib/calendarApi");
+      return await updateCalEvent(
+        { eventId, summary, description, start, end },
+        { tenantId: tenantId! },
+      );
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["calendar-events-weekly", tenantId] });
+      queryClient.invalidateQueries({
+        queryKey: ["calendar-events-weekly", tenantId],
+      });
       toast.success("האירוע עודכן בהצלחה");
       setCalendarEventDialogOpen(false);
       setSelectedCalendarEvent(null);
@@ -1307,12 +1580,15 @@ export function WeeklyTaskBoard() {
   const deleteCalendarEvent = useMutation({
     mutationFn: async (eventId: string) => {
       await markLinkedTaskDoneForCalendarEvent(eventId);
-      const { deleteCalendarEvent: delCalEvent } = await import("@/lib/calendarApi");
+      const { deleteCalendarEvent: delCalEvent } =
+        await import("@/lib/calendarApi");
       return await delCalEvent(eventId, { tenantId: tenantId! });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["tasks", tenantId] });
-      queryClient.invalidateQueries({ queryKey: ["calendar-events-weekly", tenantId] });
+      queryClient.invalidateQueries({
+        queryKey: ["calendar-events-weekly", tenantId],
+      });
       toast.success("האירוע נמחק בהצלחה");
       setCalendarEventDialogOpen(false);
       setSelectedCalendarEvent(null);
@@ -1331,7 +1607,7 @@ export function WeeklyTaskBoard() {
   const handleDragEnd = (event: DragEndEvent) => {
     const { active, over } = event;
     setActiveTaskId(null);
-    
+
     if (!over || active.id === over.id) return;
 
     const activeId = active.id as string;
@@ -1342,12 +1618,14 @@ export function WeeklyTaskBoard() {
       const taskId = activeId;
       const draggedTask = localTasks.find((t) => t.id === taskId);
       if (!draggedTask) return;
-      
+
       // Optimistic update - clear date and time
-      setLocalTasks(prev => prev.map(t => 
-        t.id === taskId ? { ...t, due_date: null, due_time: null } : t
-      ));
-      
+      setLocalTasks((prev) =>
+        prev.map((t) =>
+          t.id === taskId ? { ...t, due_date: null, due_time: null } : t,
+        ),
+      );
+
       updateDueDate.mutate({
         taskId,
         newDate: null,
@@ -1360,10 +1638,10 @@ export function WeeklyTaskBoard() {
     }
 
     // Check if this is a calendar event drag
-    if (activeId.startsWith('calendar-event-')) {
-      const eventId = activeId.replace('calendar-event-', '');
+    if (activeId.startsWith("calendar-event-")) {
+      const eventId = activeId.replace("calendar-event-", "");
       const draggedEvent = calendarEvents.find((e) => e.id === eventId);
-      
+
       if (!draggedEvent) return;
 
       // Check if drop target includes time (format: ISO_DATE_TIME)
@@ -1372,20 +1650,20 @@ export function WeeklyTaskBoard() {
         try {
           const parsedDate = parseISO(dateStr);
           const newDateStr = format(parsedDate, "yyyy-MM-dd");
-          
+
           // Calculate duration from original event
           const originalStart = new Date(draggedEvent.start);
           const originalEnd = new Date(draggedEvent.end);
           const durationMs = originalEnd.getTime() - originalStart.getTime();
-          
+
           // Create new start time
           const [hours, minutes] = time.split(":").map(Number);
           const newStart = new Date(parsedDate);
           newStart.setHours(hours, minutes, 0, 0);
-          
+
           // Create new end time based on original duration
           const newEnd = new Date(newStart.getTime() + durationMs);
-          
+
           updateCalendarEvent.mutate({
             eventId,
             start: newStart.toISOString(),
@@ -1401,7 +1679,7 @@ export function WeeklyTaskBoard() {
     // Regular task drag
     const taskId = activeId;
     const draggedTask = localTasks.find((t) => t.id === taskId);
-    
+
     if (!draggedTask) return;
 
     // Check if dropped on another task (reordering within same container)
@@ -1417,7 +1695,7 @@ export function WeeklyTaskBoard() {
           .filter(
             (t) =>
               t.due_date === draggedTask.due_date &&
-              t.due_time === draggedTask.due_time
+              t.due_time === draggedTask.due_time,
           )
           .sort((a, b) => (a.sort_order || 0) - (b.sort_order || 0));
 
@@ -1430,19 +1708,19 @@ export function WeeklyTaskBoard() {
             id: t.id,
             sort_order: idx,
           }));
-          
+
           // Optimistic update for reordering
-          setLocalTasks(prev => {
+          setLocalTasks((prev) => {
             const updated = [...prev];
-            updates.forEach(u => {
-              const idx = updated.findIndex(t => t.id === u.id);
+            updates.forEach((u) => {
+              const idx = updated.findIndex((t) => t.id === u.id);
               if (idx !== -1) {
                 updated[idx] = { ...updated[idx], sort_order: u.sort_order };
               }
             });
             return updated;
           });
-          
+
           updateSortOrder.mutate(updates);
         }
       }
@@ -1456,12 +1734,16 @@ export function WeeklyTaskBoard() {
         const parsedDate = parseISO(dateStr);
         const newDate = format(parsedDate, "yyyy-MM-dd");
         const newTime = time + ":00";
-        
+
         // Optimistic update
-        setLocalTasks(prev => prev.map(t => 
-          t.id === taskId ? { ...t, due_date: newDate, due_time: newTime } : t
-        ));
-        
+        setLocalTasks((prev) =>
+          prev.map((t) =>
+            t.id === taskId
+              ? { ...t, due_date: newDate, due_time: newTime }
+              : t,
+          ),
+        );
+
         updateDueDate.mutate({
           taskId,
           newDate,
@@ -1478,12 +1760,14 @@ export function WeeklyTaskBoard() {
       try {
         const parsedDate = parseISO(dropTarget);
         const newDate = format(parsedDate, "yyyy-MM-dd");
-        
+
         // Optimistic update
-        setLocalTasks(prev => prev.map(t => 
-          t.id === taskId ? { ...t, due_date: newDate, due_time: null } : t
-        ));
-        
+        setLocalTasks((prev) =>
+          prev.map((t) =>
+            t.id === taskId ? { ...t, due_date: newDate, due_time: null } : t,
+          ),
+        );
+
         updateDueDate.mutate({
           taskId,
           newDate,
@@ -1501,7 +1785,7 @@ export function WeeklyTaskBoard() {
 
   // Split tasks: backlog (overdue + unscheduled + untimed) vs scheduled in range
   const today = startOfDay(new Date());
-  
+
   // Backlog includes: overdue, no due_date, or has due_date but no due_time.
   // Recurring tasks only appear here on their due day (not all week).
   const backlogTasks = tasks.filter((t) => {
@@ -1517,7 +1801,12 @@ export function WeeklyTaskBoard() {
 
   // Current range tasks: only those with both due_date AND due_time in range
   const currentRangeTasks = tasks.filter((t) => {
-    if (!shouldShowRecurringTaskOnBoard(t, { showAllRecurring: filters.showAllRecurring, asOf: today })) {
+    if (
+      !shouldShowRecurringTaskOnBoard(t, {
+        showAllRecurring: filters.showAllRecurring,
+        asOf: today,
+      })
+    ) {
       return false;
     }
     if (t.due_date === null) return false;
@@ -1540,7 +1829,8 @@ export function WeeklyTaskBoard() {
       return false;
     }
     const dueDate = new Date(t.due_date);
-    const isToday = format(dueDate, "yyyy-MM-dd") === format(currentDate, "yyyy-MM-dd");
+    const isToday =
+      format(dueDate, "yyyy-MM-dd") === format(currentDate, "yyyy-MM-dd");
     // For daily view, include all tasks for that day regardless of time
     return isToday;
   });
@@ -1614,10 +1904,10 @@ export function WeeklyTaskBoard() {
   const handleQuickAddSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (quickAddTitle.trim() && quickAddSlot) {
-      addTask.mutate({ 
-        title: quickAddTitle.trim(), 
-        date: quickAddSlot.date, 
-        time: quickAddSlot.time 
+      addTask.mutate({
+        title: quickAddTitle.trim(),
+        date: quickAddSlot.date,
+        time: quickAddSlot.time,
       });
       setQuickAddSlot(null);
       setQuickAddTitle("");
@@ -1628,13 +1918,17 @@ export function WeeklyTaskBoard() {
     <TasksToolbarFilters
       layout={layout}
       campaignerFilter={effectiveCampaignerFilter}
-      onCampaignerFilterChange={(val) => setFilters((prev) => ({ ...prev, campaignerId: val }))}
+      onCampaignerFilterChange={(val) =>
+        setFilters((prev) => ({ ...prev, campaignerId: val }))
+      }
       campaignerFilterDisabled={isViewingAs}
       campaignersList={campaignersList}
       relatedKind={filters.relatedKind}
       relatedId={filters.relatedId}
       relatedLabel={filters.relatedLabel}
-      onRelatedChange={(related) => setFilters((prev) => ({ ...prev, ...related }))}
+      onRelatedChange={(related) =>
+        setFilters((prev) => ({ ...prev, ...related }))
+      }
       clientsList={clientsList ?? []}
       leadsList={leadsList ?? []}
       period={filters.period}
@@ -1661,28 +1955,47 @@ export function WeeklyTaskBoard() {
             onValueChange={handleViewModeChange}
             className="border rounded-lg"
           >
-            <ToggleGroupItem value="chat" aria-label="תצוגת צ'אט" className="gap-1 px-3">
+            <ToggleGroupItem
+              value="chat"
+              aria-label="תצוגת צ'אט"
+              className="gap-1 px-3"
+            >
               <MessageSquare className="h-4 w-4" />
               <span>צ'אט</span>
             </ToggleGroupItem>
-            <ToggleGroupItem value="daily" aria-label="תצוגה יומית" className="gap-1 px-3">
+            <ToggleGroupItem
+              value="daily"
+              aria-label="תצוגה יומית"
+              className="gap-1 px-3"
+            >
               <List className="h-4 w-4" />
               <span>יומי</span>
             </ToggleGroupItem>
-            <ToggleGroupItem value="weekly" aria-label="תצוגה שבועית" className="gap-1 px-3">
+            <ToggleGroupItem
+              value="weekly"
+              aria-label="תצוגה שבועית"
+              className="gap-1 px-3"
+            >
               <LayoutGrid className="h-4 w-4" />
               <span>שבועי</span>
             </ToggleGroupItem>
-            <ToggleGroupItem value="monthly" aria-label="תצוגה חודשית" className="gap-1 px-3">
+            <ToggleGroupItem
+              value="monthly"
+              aria-label="תצוגה חודשית"
+              className="gap-1 px-3"
+            >
               <Calendar className="h-4 w-4" />
               <span>חודשי</span>
             </ToggleGroupItem>
           </ToggleGroup>
           <h2 className="text-lg font-semibold">
             {viewMode === "chat" && "משימות"}
-            {viewMode === "daily" && format(currentDate, "EEEE, dd MMMM yyyy", { locale: he })}
-            {viewMode === "weekly" && format(currentDate, "MMMM yyyy", { locale: he })}
-            {viewMode === "monthly" && format(currentDate, "MMMM yyyy", { locale: he })}
+            {viewMode === "daily" &&
+              format(currentDate, "EEEE, dd MMMM yyyy", { locale: he })}
+            {viewMode === "weekly" &&
+              format(currentDate, "MMMM yyyy", { locale: he })}
+            {viewMode === "monthly" &&
+              format(currentDate, "MMMM yyyy", { locale: he })}
           </h2>
           {viewMode === "chat" && (
             <TasksChatSearchInput
@@ -1696,16 +2009,30 @@ export function WeeklyTaskBoard() {
         <div className="flex items-center gap-1.5 flex-nowrap min-w-0 overflow-x-auto">
           {viewMode !== "chat" && (
             <>
-          <Button variant="outline" size="icon" className="h-8 w-8 shrink-0" onClick={goToNext}>
-            <ChevronLeft className="h-4 w-4" />
-          </Button>
-          <Button variant="outline" size="icon" className="h-8 w-8 shrink-0" onClick={goToPrev}>
-            <ChevronRight className="h-4 w-4" />
-          </Button>
-          <Button variant="outline" onClick={goToToday} className="h-8 gap-1.5 px-2 text-xs shrink-0">
-            <CalendarDays className="h-3.5 w-3.5" />
-            היום
-          </Button>
+              <Button
+                variant="outline"
+                size="icon"
+                className="h-8 w-8 shrink-0"
+                onClick={goToNext}
+              >
+                <ChevronLeft className="h-4 w-4" />
+              </Button>
+              <Button
+                variant="outline"
+                size="icon"
+                className="h-8 w-8 shrink-0"
+                onClick={goToPrev}
+              >
+                <ChevronRight className="h-4 w-4" />
+              </Button>
+              <Button
+                variant="outline"
+                onClick={goToToday}
+                className="h-8 gap-1.5 px-2 text-xs shrink-0"
+              >
+                <CalendarDays className="h-3.5 w-3.5" />
+                היום
+              </Button>
             </>
           )}
           {toolbarFilters}
@@ -1717,40 +2044,47 @@ export function WeeklyTaskBoard() {
             <Filter className="h-3.5 w-3.5" />
             מתקדם
             {activeFiltersCount > 0 && (
-              <Badge variant="secondary" className="h-4 w-4 p-0 justify-center text-[10px]">
+              <Badge
+                variant="secondary"
+                className="h-4 w-4 p-0 justify-center text-[10px]"
+              >
                 {activeFiltersCount}
               </Badge>
             )}
           </Button>
-          {viewMode !== "chat" && (
-            calendarConnected ? (
-            <Button
-              variant="outline"
-              className="h-8 gap-1.5 px-2 text-xs shrink-0"
-              onClick={() => syncToCalendar.mutate()}
-              disabled={syncToCalendar.isPending}
-            >
-              <RefreshCw className={`h-3.5 w-3.5 ${syncToCalendar.isPending ? "animate-spin" : ""}`} />
-              סנכרן
-            </Button>
+          {viewMode !== "chat" &&
+            (calendarConnected ? (
+              <Button
+                variant="outline"
+                className="h-8 gap-1.5 px-2 text-xs shrink-0"
+                onClick={() => syncToCalendar.mutate()}
+                disabled={syncToCalendar.isPending}
+              >
+                <RefreshCw
+                  className={`h-3.5 w-3.5 ${syncToCalendar.isPending ? "animate-spin" : ""}`}
+                />
+                סנכרן
+              </Button>
             ) : (
-            <Button
-              className="h-8 gap-1.5 px-2 text-xs shrink-0 bg-emerald-600 text-white hover:bg-emerald-500"
-              onClick={() => void handleConnectCalendar()}
-              disabled={connectingCalendar}
-            >
-              <CalendarDays className={`h-3.5 w-3.5 ${connectingCalendar ? "animate-pulse" : ""}`} />
-              {connectingCalendar ? "מתחבר..." : "חבר יומן"}
-            </Button>
-            )
-          )}
+              <Button
+                className="h-8 gap-1.5 px-2 text-xs shrink-0 bg-emerald-600 text-white hover:bg-emerald-500"
+                onClick={() => void handleConnectCalendar()}
+                disabled={connectingCalendar}
+              >
+                <CalendarDays
+                  className={`h-3.5 w-3.5 ${connectingCalendar ? "animate-pulse" : ""}`}
+                />
+                {connectingCalendar ? "מתחבר..." : "חבר יומן"}
+              </Button>
+            ))}
         </div>
       </div>
 
       {viewMode !== "chat" && calendarStatus && !calendarConnected && (
         <div className="mb-2 rounded-md border border-emerald-500/30 bg-emerald-50 px-3 py-2 text-sm flex items-center justify-between gap-3 flex-wrap">
           <span className="text-emerald-950">
-            היומן לא מחובר. חבר Google Calendar מכאן כדי לראות אירועים ליד המשימות.
+            היומן לא מחובר. חבר Google Calendar מכאן כדי לראות אירועים ליד
+            המשימות.
           </span>
           <Button
             size="sm"
@@ -1766,218 +2100,367 @@ export function WeeklyTaskBoard() {
 
       {/* Board with Overdue Panel */}
       <div className="flex-1 min-h-0 flex flex-col overflow-hidden">
-      {viewMode === "chat" ? (
-        <>
-          <div className="flex flex-col md:hidden gap-2 shrink-0">
-            <div className="flex items-center gap-2 justify-between">
-              <div className="flex items-center gap-2 min-w-0">
-                <h1 className="text-xl font-bold shrink-0">משימות</h1>
-                <TasksChatSearchInput
-                  value={chatListSearch}
-                  onChange={setChatListSearch}
-                  className="w-[140px] min-w-0 flex-1"
+        {viewMode === "chat" ? (
+          <>
+            <div className="flex flex-col md:hidden gap-2 shrink-0">
+              <div className="flex items-center gap-2 justify-between">
+                <div className="flex items-center gap-2 min-w-0">
+                  <h1 className="text-xl font-bold shrink-0">משימות</h1>
+                  <TasksChatSearchInput
+                    value={chatListSearch}
+                    onChange={setChatListSearch}
+                    className="w-[140px] min-w-0 flex-1"
+                  />
+                </div>
+                <div className="flex items-center gap-1.5 shrink-0">
+                  <Button
+                    variant="outline"
+                    size="icon"
+                    onClick={() => openFiltersDialog(true)}
+                    className="relative h-9 w-9"
+                    aria-label="פילטרים"
+                  >
+                    <Filter className="h-4 w-4" />
+                    {activeFiltersCount > 0 && (
+                      <Badge
+                        variant="secondary"
+                        className="absolute -top-1 -right-1 h-4 w-4 p-0 justify-center text-[10px]"
+                      >
+                        {activeFiltersCount}
+                      </Badge>
+                    )}
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="icon"
+                    className="h-9 w-9"
+                    onClick={() => setViewMode("weekly")}
+                    aria-label="תצוגת יומן"
+                    title="יומן"
+                  >
+                    <CalendarDays className="h-5 w-5" />
+                  </Button>
+                </div>
+              </div>
+            </div>
+            <div className="flex-1 min-h-0 h-full">
+              <TasksChatView
+                tasks={tasks}
+                selectedTaskId={selectedTask?.id ?? null}
+                onSelectTask={(task) => {
+                  setSelectedTask(task);
+                  if (!task && linkedTaskId) {
+                    const next = new URLSearchParams(searchParams);
+                    next.delete("task");
+                    setSearchParams(next, { replace: true });
+                  }
+                }}
+                onToggleComplete={(taskId, completed) =>
+                  toggleComplete.mutate({ taskId, completed })
+                }
+                onDelete={(taskId, googleCalendarEventId) =>
+                  deleteTask.mutate({ taskId, googleCalendarEventId })
+                }
+                onMoveToBacklog={(taskId) => {
+                  setLocalTasks((prev) =>
+                    prev.map((t) =>
+                      t.id === taskId
+                        ? { ...t, due_date: null, due_time: null }
+                        : t,
+                    ),
+                  );
+                  updateDueDate.mutate({
+                    taskId,
+                    newDate: null,
+                    newTime: null,
+                    title: selectedTask?.title,
+                    googleCalendarEventId:
+                      selectedTask?.google_calendar_event_id,
+                  });
+                  toast.success("המשימה הועברה לרשימת המשימות");
+                }}
+                onAddTask={handleBacklogAddTask}
+                isLoading={isLoading || addTask.isPending || !canQuickAddTask}
+                clientsList={clientsList}
+                campaignersList={campaignersList}
+                defaultCampaignerId={primaryCampaignerId}
+                openClosedFilter={filters.openClosed}
+                onOpenClosedFilterChange={(openClosed) =>
+                  setFilters((prev) => ({ ...prev, openClosed }))
+                }
+                showAllRecurring={filters.showAllRecurring}
+                onShowAllRecurringChange={(showAllRecurring) =>
+                  setFilters((prev) => ({ ...prev, showAllRecurring }))
+                }
+                listSearch={chatListSearch}
+                onListSearchChange={setChatListSearch}
+                hideListSearch
+              />
+            </div>
+          </>
+        ) : (
+          <DndContext
+            sensors={sensors}
+            onDragStart={handleDragStart}
+            onDragEnd={handleDragEnd}
+          >
+            {/* Mobile Layout — full task list by default; calendar opens from icon only */}
+            <div className="flex flex-col md:hidden gap-2 flex-1 min-h-0 overflow-hidden">
+              <div className="flex items-center gap-2 justify-between shrink-0">
+                <h1 className="text-xl font-bold">משימות</h1>
+                <div className="flex items-center gap-2">
+                  <Button
+                    variant="outline"
+                    size="icon"
+                    onClick={() => setViewMode("chat")}
+                    aria-label="תצוגת צ'אט"
+                    title="תצוגת צ'אט"
+                    className="shrink-0"
+                  >
+                    <MessageSquare className="h-5 w-5" />
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="icon"
+                    onClick={() => openFiltersDialog(true)}
+                    className="relative"
+                    aria-label="פילטרים"
+                  >
+                    <Filter className="h-4 w-4" />
+                    {activeFiltersCount > 0 && (
+                      <Badge
+                        variant="secondary"
+                        className="absolute -top-1 -right-1 h-4 w-4 p-0 justify-center text-xs"
+                      >
+                        {activeFiltersCount}
+                      </Badge>
+                    )}
+                  </Button>
+                  <Button
+                    variant={mobileCalendarOpen ? "default" : "outline"}
+                    size="icon"
+                    onClick={() => setMobileCalendarOpen((open) => !open)}
+                    aria-label={mobileCalendarOpen ? "סגור יומן" : "פתח יומן"}
+                    aria-pressed={mobileCalendarOpen}
+                    title="יומן"
+                    className="shrink-0"
+                  >
+                    <CalendarDays className="h-5 w-5" />
+                  </Button>
+                </div>
+              </div>
+
+              {/* Full-height task list (default mobile view) */}
+              <div className="flex-1 min-h-0 overflow-hidden">
+                <TaskBacklogPanel
+                  variant="mobileFull"
+                  tasks={backlogTasks}
+                  onToggleComplete={(taskId, completed) =>
+                    toggleComplete.mutate({ taskId, completed })
+                  }
+                  onTaskClick={(task) => {
+                    setSelectedTask(task);
+                    setDialogOpen(true);
+                  }}
+                  onAddTask={handleBacklogAddTask}
+                  isLoading={isLoading || addTask.isPending || !canQuickAddTask}
+                  clientsList={clientsList}
+                  campaignersList={campaignersList}
+                  onUpdateClient={(taskId, clientId) =>
+                    updateTaskClient.mutate({ taskId, clientId })
+                  }
+                  onUpdateCampaigner={(taskId, campaignerId) =>
+                    updateTaskCampaigner.mutate({ taskId, campaignerId })
+                  }
+                  defaultCampaignerId={primaryCampaignerId}
                 />
               </div>
-              <div className="flex items-center gap-1.5 shrink-0">
-                <Button
-                  variant="outline"
-                  size="icon"
-                  onClick={() => openFiltersDialog(true)}
-                  className="relative h-9 w-9"
-                  aria-label="פילטרים"
-                >
-                  <Filter className="h-4 w-4" />
-                  {activeFiltersCount > 0 && (
-                    <Badge variant="secondary" className="absolute -top-1 -right-1 h-4 w-4 p-0 justify-center text-[10px]">
-                      {activeFiltersCount}
-                    </Badge>
-                  )}
-                </Button>
-                <Button
-                  variant="outline"
-                  size="icon"
-                  className="h-9 w-9"
-                  onClick={() => setViewMode("weekly")}
-                  aria-label="תצוגת יומן"
-                  title="יומן"
-                >
-                  <CalendarDays className="h-5 w-5" />
-                </Button>
-              </div>
-            </div>
-          </div>
-          <div className="flex-1 min-h-0 h-full">
-            <TasksChatView
-              tasks={tasks}
-              selectedTaskId={selectedTask?.id ?? null}
-              onSelectTask={(task) => {
-                setSelectedTask(task);
-                if (!task && linkedTaskId) {
-                  const next = new URLSearchParams(searchParams);
-                  next.delete("task");
-                  setSearchParams(next, { replace: true });
-                }
-              }}
-              onToggleComplete={(taskId, completed) =>
-                toggleComplete.mutate({ taskId, completed })
-              }
-              onDelete={(taskId, googleCalendarEventId) =>
-                deleteTask.mutate({ taskId, googleCalendarEventId })
-              }
-              onMoveToBacklog={(taskId) => {
-                setLocalTasks((prev) =>
-                  prev.map((t) =>
-                    t.id === taskId ? { ...t, due_date: null, due_time: null } : t
-                  )
-                );
-                updateDueDate.mutate({
-                  taskId,
-                  newDate: null,
-                  newTime: null,
-                  title: selectedTask?.title,
-                  googleCalendarEventId: selectedTask?.google_calendar_event_id,
-                });
-                toast.success("המשימה הועברה לרשימת המשימות");
-              }}
-              onAddTask={handleBacklogAddTask}
-              isLoading={isLoading || addTask.isPending || !canQuickAddTask}
-              clientsList={clientsList}
-              campaignersList={campaignersList}
-              defaultCampaignerId={primaryCampaignerId}
-              openClosedFilter={filters.openClosed}
-              onOpenClosedFilterChange={(openClosed) =>
-                setFilters((prev) => ({ ...prev, openClosed }))
-              }
-              showAllRecurring={filters.showAllRecurring}
-              onShowAllRecurringChange={(showAllRecurring) =>
-                setFilters((prev) => ({ ...prev, showAllRecurring }))
-              }
-              listSearch={chatListSearch}
-              onListSearchChange={setChatListSearch}
-              hideListSearch
-            />
-          </div>
-        </>
-      ) : (
-      <DndContext sensors={sensors} onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
-        {/* Mobile Layout — full task list by default; calendar opens from icon only */}
-        <div className="flex flex-col md:hidden gap-2 flex-1 min-h-0 overflow-hidden">
-          <div className="flex items-center gap-2 justify-between shrink-0">
-            <h1 className="text-xl font-bold">משימות</h1>
-            <div className="flex items-center gap-2">
-              <Button
-                variant="outline"
-                size="icon"
-                onClick={() => setViewMode("chat")}
-                aria-label="תצוגת צ'אט"
-                title="תצוגת צ'אט"
-                className="shrink-0"
-              >
-                <MessageSquare className="h-5 w-5" />
-              </Button>
-              <Button
-                variant="outline"
-                size="icon"
-                onClick={() => openFiltersDialog(true)}
-                className="relative"
-                aria-label="פילטרים"
-              >
-                <Filter className="h-4 w-4" />
-                {activeFiltersCount > 0 && (
-                  <Badge variant="secondary" className="absolute -top-1 -right-1 h-4 w-4 p-0 justify-center text-xs">
-                    {activeFiltersCount}
-                  </Badge>
-                )}
-              </Button>
-              <Button
-                variant={mobileCalendarOpen ? "default" : "outline"}
-                size="icon"
-                onClick={() => setMobileCalendarOpen((open) => !open)}
-                aria-label={mobileCalendarOpen ? "סגור יומן" : "פתח יומן"}
-                aria-pressed={mobileCalendarOpen}
-                title="יומן"
-                className="shrink-0"
-              >
-                <CalendarDays className="h-5 w-5" />
-              </Button>
-            </div>
-          </div>
 
-          {/* Full-height task list (default mobile view) */}
-          <div className="flex-1 min-h-0 overflow-hidden">
-            <TaskBacklogPanel
-              variant="mobileFull"
-              tasks={backlogTasks}
-              onToggleComplete={(taskId, completed) =>
-                toggleComplete.mutate({ taskId, completed })
-              }
-              onTaskClick={(task) => {
-                setSelectedTask(task);
-                setDialogOpen(true);
-              }}
-              onAddTask={handleBacklogAddTask}
-              isLoading={isLoading || addTask.isPending || !canQuickAddTask}
-              clientsList={clientsList}
-              campaignersList={campaignersList}
-              onUpdateClient={(taskId, clientId) => updateTaskClient.mutate({ taskId, clientId })}
-              onUpdateCampaigner={(taskId, campaignerId) => updateTaskCampaigner.mutate({ taskId, campaignerId })}
-              defaultCampaignerId={primaryCampaignerId}
-            />
-          </div>
+              <Sheet
+                open={mobileCalendarOpen}
+                onOpenChange={setMobileCalendarOpen}
+              >
+                <SheetContent
+                  side="bottom"
+                  className="h-[92dvh] max-h-[92dvh] p-3 flex flex-col gap-2 rounded-t-2xl md:hidden"
+                >
+                  <SheetHeader className="space-y-2 text-right shrink-0 pr-8">
+                    <SheetTitle className="flex items-center gap-2 justify-start">
+                      <CalendarDays className="h-5 w-5" />
+                      יומן משימות
+                    </SheetTitle>
+                    <div className="flex flex-wrap items-center gap-2 justify-between">
+                      <div className="flex items-center gap-1">
+                        <Button
+                          variant="outline"
+                          size="icon"
+                          onClick={goToPrev}
+                          aria-label="הקודם"
+                        >
+                          <ChevronRight className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          variant="outline"
+                          size="icon"
+                          onClick={goToNext}
+                          aria-label="הבא"
+                        >
+                          <ChevronLeft className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={goToToday}
+                          className="gap-1"
+                        >
+                          <CalendarDays className="h-4 w-4" />
+                          היום
+                        </Button>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm font-semibold truncate">
+                          {viewMode === "daily" &&
+                            format(currentDate, "EEEE, dd/MM", { locale: he })}
+                          {viewMode === "weekly" &&
+                            format(currentDate, "MMMM yyyy", { locale: he })}
+                          {viewMode === "monthly" &&
+                            format(currentDate, "MMMM yyyy", { locale: he })}
+                        </span>
+                        <ToggleGroup
+                          type="single"
+                          value={viewMode}
+                          onValueChange={handleViewModeChange}
+                          className="border rounded-lg"
+                        >
+                          <ToggleGroupItem
+                            value="chat"
+                            aria-label="תצוגת צ'אט"
+                            className="px-2"
+                          >
+                            <MessageSquare className="h-4 w-4" />
+                          </ToggleGroupItem>
+                          <ToggleGroupItem
+                            value="daily"
+                            aria-label="תצוגה יומית"
+                            className="px-2"
+                          >
+                            <List className="h-4 w-4" />
+                          </ToggleGroupItem>
+                          <ToggleGroupItem
+                            value="weekly"
+                            aria-label="תצוגה שבועית"
+                            className="px-2"
+                          >
+                            <LayoutGrid className="h-4 w-4" />
+                          </ToggleGroupItem>
+                          <ToggleGroupItem
+                            value="monthly"
+                            aria-label="תצוגה חודשית"
+                            className="px-2"
+                          >
+                            <Calendar className="h-4 w-4" />
+                          </ToggleGroupItem>
+                        </ToggleGroup>
+                      </div>
+                    </div>
+                  </SheetHeader>
 
-          <Sheet open={mobileCalendarOpen} onOpenChange={setMobileCalendarOpen}>
-            <SheetContent
-              side="bottom"
-              className="h-[92dvh] max-h-[92dvh] p-3 flex flex-col gap-2 rounded-t-2xl md:hidden"
-            >
-              <SheetHeader className="space-y-2 text-right shrink-0 pr-8">
-                <SheetTitle className="flex items-center gap-2 justify-start">
-                  <CalendarDays className="h-5 w-5" />
-                  יומן משימות
-                </SheetTitle>
-                <div className="flex flex-wrap items-center gap-2 justify-between">
-                  <div className="flex items-center gap-1">
-                    <Button variant="outline" size="icon" onClick={goToPrev} aria-label="הקודם">
-                      <ChevronRight className="h-4 w-4" />
-                    </Button>
-                    <Button variant="outline" size="icon" onClick={goToNext} aria-label="הבא">
-                      <ChevronLeft className="h-4 w-4" />
-                    </Button>
-                    <Button variant="outline" size="sm" onClick={goToToday} className="gap-1">
-                      <CalendarDays className="h-4 w-4" />
-                      היום
-                    </Button>
+                  <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain">
+                    {viewMode === "daily" && (
+                      <DailyView
+                        date={currentDate}
+                        tasks={dailyTasks}
+                        onToggleComplete={(taskId, completed) =>
+                          toggleComplete.mutate({ taskId, completed })
+                        }
+                        onTaskClick={(task) => {
+                          setSelectedTask(task);
+                          setDialogOpen(true);
+                        }}
+                        onDropOnSlot={(taskId, time) => {
+                          updateDueDate.mutate({
+                            taskId,
+                            newDate: format(currentDate, "yyyy-MM-dd"),
+                            newTime: time + ":00",
+                          });
+                        }}
+                      />
+                    )}
+
+                    {viewMode === "weekly" && (
+                      <DayColumn
+                        date={currentDate}
+                        tasks={currentRangeTasks}
+                        onAddTask={(title, date) =>
+                          addTask.mutate({ title, date })
+                        }
+                        onToggleComplete={(taskId, completed) =>
+                          toggleComplete.mutate({ taskId, completed })
+                        }
+                        onTaskClick={(task) => {
+                          setSelectedTask(task);
+                          setDialogOpen(true);
+                        }}
+                        onDurationChange={(taskId, duration) =>
+                          updateDuration.mutate({ taskId, duration })
+                        }
+                        onCalendarEventClick={(event) => {
+                          setSelectedCalendarEvent(event);
+                          setCalendarEventDialogOpen(true);
+                        }}
+                        onSlotDoubleClick={handleSlotDoubleClick}
+                        isLoading={isLoading || addTask.isPending}
+                        isCurrentDay={isToday(currentDate)}
+                        calendarEvents={filteredCalendarEvents}
+                      />
+                    )}
+
+                    {viewMode === "monthly" && (
+                      <MonthlyView
+                        currentDate={currentDate}
+                        tasks={currentRangeTasks}
+                        onDayClick={handleDayClick}
+                        onTaskClick={(task) => {
+                          setSelectedTask(task);
+                          setDialogOpen(true);
+                        }}
+                      />
+                    )}
                   </div>
-                  <div className="flex items-center gap-2">
-                    <span className="text-sm font-semibold truncate">
-                      {viewMode === "daily" && format(currentDate, "EEEE, dd/MM", { locale: he })}
-                      {viewMode === "weekly" && format(currentDate, "MMMM yyyy", { locale: he })}
-                      {viewMode === "monthly" && format(currentDate, "MMMM yyyy", { locale: he })}
-                    </span>
-                    <ToggleGroup
-                      type="single"
-                      value={viewMode}
-                      onValueChange={handleViewModeChange}
-                      className="border rounded-lg"
-                    >
-                      <ToggleGroupItem value="chat" aria-label="תצוגת צ'אט" className="px-2">
-                        <MessageSquare className="h-4 w-4" />
-                      </ToggleGroupItem>
-                      <ToggleGroupItem value="daily" aria-label="תצוגה יומית" className="px-2">
-                        <List className="h-4 w-4" />
-                      </ToggleGroupItem>
-                      <ToggleGroupItem value="weekly" aria-label="תצוגה שבועית" className="px-2">
-                        <LayoutGrid className="h-4 w-4" />
-                      </ToggleGroupItem>
-                      <ToggleGroupItem value="monthly" aria-label="תצוגה חודשית" className="px-2">
-                        <Calendar className="h-4 w-4" />
-                      </ToggleGroupItem>
-                    </ToggleGroup>
-                  </div>
+                </SheetContent>
+              </Sheet>
+            </div>
+
+            {/* Desktop: Side by side with sticky panel */}
+            <div className="hidden md:flex md:flex-col flex-1 relative min-h-0 overflow-x-auto overflow-y-auto overscroll-contain">
+              <div className="flex gap-2 pb-4 min-h-0 w-fit">
+                {/* Task Backlog Panel - Sticky on desktop, first in DOM for RTL (appears on right) */}
+                <div className="sticky right-0 top-0 z-20 shrink-0 self-start bg-background">
+                  <TaskBacklogPanel
+                    tasks={backlogTasks}
+                    onToggleComplete={(taskId, completed) =>
+                      toggleComplete.mutate({ taskId, completed })
+                    }
+                    onTaskClick={(task) => {
+                      setSelectedTask(task);
+                      setDialogOpen(true);
+                    }}
+                    onAddTask={handleBacklogAddTask}
+                    isLoading={
+                      isLoading || addTask.isPending || !canQuickAddTask
+                    }
+                    clientsList={clientsList}
+                    campaignersList={campaignersList}
+                    onUpdateClient={(taskId, clientId) =>
+                      updateTaskClient.mutate({ taskId, clientId })
+                    }
+                    onUpdateCampaigner={(taskId, campaignerId) =>
+                      updateTaskCampaigner.mutate({ taskId, campaignerId })
+                    }
+                    defaultCampaignerId={primaryCampaignerId}
+                  />
                 </div>
-              </SheetHeader>
 
-              <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain">
                 {viewMode === "daily" && (
                   <DailyView
                     date={currentDate}
@@ -1999,31 +2482,35 @@ export function WeeklyTaskBoard() {
                   />
                 )}
 
-                {viewMode === "weekly" && (
-                  <DayColumn
-                    date={currentDate}
-                    tasks={currentRangeTasks}
-                    onAddTask={(title, date) => addTask.mutate({ title, date })}
-                    onToggleComplete={(taskId, completed) =>
-                      toggleComplete.mutate({ taskId, completed })
-                    }
-                    onTaskClick={(task) => {
-                      setSelectedTask(task);
-                      setDialogOpen(true);
-                    }}
-                    onDurationChange={(taskId, duration) =>
-                      updateDuration.mutate({ taskId, duration })
-                    }
-                    onCalendarEventClick={(event) => {
-                      setSelectedCalendarEvent(event);
-                      setCalendarEventDialogOpen(true);
-                    }}
-                    onSlotDoubleClick={handleSlotDoubleClick}
-                    isLoading={isLoading || addTask.isPending}
-                    isCurrentDay={isToday(currentDate)}
-                    calendarEvents={filteredCalendarEvents}
-                  />
-                )}
+                {viewMode === "weekly" &&
+                  weekDays.map((date) => (
+                    <DayColumn
+                      key={date.toISOString()}
+                      date={date}
+                      tasks={currentRangeTasks}
+                      onAddTask={(title, date) =>
+                        addTask.mutate({ title, date })
+                      }
+                      onToggleComplete={(taskId, completed) =>
+                        toggleComplete.mutate({ taskId, completed })
+                      }
+                      onTaskClick={(task) => {
+                        setSelectedTask(task);
+                        setDialogOpen(true);
+                      }}
+                      onDurationChange={(taskId, duration) =>
+                        updateDuration.mutate({ taskId, duration })
+                      }
+                      onCalendarEventClick={(event) => {
+                        setSelectedCalendarEvent(event);
+                        setCalendarEventDialogOpen(true);
+                      }}
+                      onSlotDoubleClick={handleSlotDoubleClick}
+                      isLoading={isLoading || addTask.isPending}
+                      isCurrentDay={isToday(date)}
+                      calendarEvents={filteredCalendarEvents}
+                    />
+                  ))}
 
                 {viewMode === "monthly" && (
                   <MonthlyView
@@ -2037,138 +2524,54 @@ export function WeeklyTaskBoard() {
                   />
                 )}
               </div>
-            </SheetContent>
-          </Sheet>
-        </div>
-
-        {/* Desktop: Side by side with sticky panel */}
-        <div className="hidden md:flex md:flex-col flex-1 relative min-h-0 overflow-x-auto overflow-y-auto overscroll-contain">
-          <div className="flex gap-2 pb-4 min-h-0 w-fit">
-            {/* Task Backlog Panel - Sticky on desktop, first in DOM for RTL (appears on right) */}
-            <div className="sticky right-0 top-0 z-20 shrink-0 self-start bg-background">
-              <TaskBacklogPanel
-                tasks={backlogTasks}
-                onToggleComplete={(taskId, completed) =>
-                  toggleComplete.mutate({ taskId, completed })
-                }
-                onTaskClick={(task) => {
-                  setSelectedTask(task);
-                  setDialogOpen(true);
-                }}
-                onAddTask={handleBacklogAddTask}
-                isLoading={isLoading || addTask.isPending || !canQuickAddTask}
-                clientsList={clientsList}
-                campaignersList={campaignersList}
-                onUpdateClient={(taskId, clientId) => updateTaskClient.mutate({ taskId, clientId })}
-                onUpdateCampaigner={(taskId, campaignerId) => updateTaskCampaigner.mutate({ taskId, campaignerId })}
-                defaultCampaignerId={primaryCampaignerId}
-              />
             </div>
-
-            {viewMode === "daily" && (
-              <DailyView
-                date={currentDate}
-                tasks={dailyTasks}
-                onToggleComplete={(taskId, completed) =>
-                  toggleComplete.mutate({ taskId, completed })
-                }
-                onTaskClick={(task) => {
-                  setSelectedTask(task);
-                  setDialogOpen(true);
-                }}
-                onDropOnSlot={(taskId, time) => {
-                  updateDueDate.mutate({
-                    taskId,
-                    newDate: format(currentDate, "yyyy-MM-dd"),
-                    newTime: time + ":00",
-                  });
-                }}
-              />
-            )}
-
-            {viewMode === "weekly" && weekDays.map((date) => (
-              <DayColumn
-                key={date.toISOString()}
-                date={date}
-                tasks={currentRangeTasks}
-                onAddTask={(title, date) => addTask.mutate({ title, date })}
-                onToggleComplete={(taskId, completed) =>
-                  toggleComplete.mutate({ taskId, completed })
-                }
-                onTaskClick={(task) => {
-                  setSelectedTask(task);
-                  setDialogOpen(true);
-                }}
-                onDurationChange={(taskId, duration) =>
-                  updateDuration.mutate({ taskId, duration })
-                }
-                onCalendarEventClick={(event) => {
-                  setSelectedCalendarEvent(event);
-                  setCalendarEventDialogOpen(true);
-                }}
-                onSlotDoubleClick={handleSlotDoubleClick}
-                isLoading={isLoading || addTask.isPending}
-                isCurrentDay={isToday(date)}
-                calendarEvents={filteredCalendarEvents}
-              />
-            ))}
-
-            {viewMode === "monthly" && (
-              <MonthlyView
-                currentDate={currentDate}
-                tasks={currentRangeTasks}
-                onDayClick={handleDayClick}
-                onTaskClick={(task) => {
-                  setSelectedTask(task);
-                  setDialogOpen(true);
-                }}
-              />
-            )}
-          </div>
-        </div>
-        <DragOverlay>
-          {activeTask ? (
-            <div className="p-2 rounded-lg border bg-card shadow-lg">
-              <p className="text-sm font-medium">{activeTask.title}</p>
-            </div>
-          ) : null}
-        </DragOverlay>
-      </DndContext>
-      )}
+            <DragOverlay>
+              {activeTask ? (
+                <div className="p-2 rounded-lg border bg-card shadow-lg">
+                  <p className="text-sm font-medium">{activeTask.title}</p>
+                </div>
+              ) : null}
+            </DragOverlay>
+          </DndContext>
+        )}
       </div>
 
       {/* Task Detail Dialog — calendar views only; chat view embeds the panel */}
       {viewMode !== "chat" && (
-      <TaskDetailDialog
-        task={selectedTask}
-        open={dialogOpen}
-        onOpenChange={(open) => {
-          setDialogOpen(open);
-          if (!open && linkedTaskId) {
-            const next = new URLSearchParams(searchParams);
-            next.delete("task");
-            setSearchParams(next, { replace: true });
+        <TaskDetailDialog
+          task={selectedTask}
+          open={dialogOpen}
+          onOpenChange={(open) => {
+            setDialogOpen(open);
+            if (!open && linkedTaskId) {
+              const next = new URLSearchParams(searchParams);
+              next.delete("task");
+              setSearchParams(next, { replace: true });
+            }
+          }}
+          onDelete={(taskId) =>
+            deleteTask.mutate({
+              taskId,
+              googleCalendarEventId: selectedTask?.google_calendar_event_id,
+            })
           }
-        }}
-        onDelete={(taskId) => deleteTask.mutate({ 
-          taskId, 
-          googleCalendarEventId: selectedTask?.google_calendar_event_id 
-        })}
-        onMoveToBacklog={(taskId) => {
-          // Optimistic update - clear date and time
-          setLocalTasks(prev => prev.map(t => 
-            t.id === taskId ? { ...t, due_date: null, due_time: null } : t
-          ));
-          updateDueDate.mutate({
-            taskId,
-            newDate: null,
-            newTime: null,
-            title: selectedTask?.title,
-            googleCalendarEventId: selectedTask?.google_calendar_event_id,
-          });
-          toast.success("המשימה הועברה לרשימת המשימות");
-        }}
-      />
+          onMoveToBacklog={(taskId) => {
+            // Optimistic update - clear date and time
+            setLocalTasks((prev) =>
+              prev.map((t) =>
+                t.id === taskId ? { ...t, due_date: null, due_time: null } : t,
+              ),
+            );
+            updateDueDate.mutate({
+              taskId,
+              newDate: null,
+              newTime: null,
+              title: selectedTask?.title,
+              googleCalendarEventId: selectedTask?.google_calendar_event_id,
+            });
+            toast.success("המשימה הועברה לרשימת המשימות");
+          }}
+        />
       )}
 
       {/* Calendar Event Edit Dialog */}
@@ -2188,41 +2591,54 @@ export function WeeklyTaskBoard() {
         onDelete={(eventId) => deleteCalendarEvent.mutate(eventId)}
         onCreateTask={(data) => {
           // Create a new task from calendar event
-          const agencyId = resolveBoardTaskAgency(selectedAgency, firstAgency?.id);
+          const agencyId = resolveBoardTaskAgency(
+            selectedAgency,
+            firstAgency?.id,
+          );
           if (!tenantId || !agencyId) {
             toast.error("לא ניתן ליצור משימה כרגע");
             return;
           }
-          
+
           const myCampaignerId = primaryCampaignerId;
-          
-          supabase.from("tasks").insert({
-            title: data.title,
-            notes: data.notes || null,
-            status: "open",
-            priority: 5,
-            tenant_id: tenantId,
-            agency_id: agencyId,
-            created_by: boardUserId,
-        ...(isViewingAs && authenticatedUserId
-          ? { impersonated_by: authenticatedUserId }
-          : {}),
-            campaigner_id: myCampaignerId,
-            sales_person_id: myCampaignerId ? null : mySalesPersonId,
-            due_date: data.dueDate,
-            due_time: data.dueTime + ":00",
-            duration_minutes: data.durationMinutes,
-          }).select().single().then(({ data: newTask, error }) => {
-            if (error) {
-              toast.error("שגיאה ביצירת משימה");
-              console.error("Error creating task from calendar event:", error);
-              return;
-            }
-            queryClient.invalidateQueries({ queryKey: ["tasks", tenantId] });
-            toast.success("משימה נוצרה בהצלחה");
-          });
+
+          supabase
+            .from("tasks")
+            .insert({
+              title: data.title,
+              notes: data.notes || null,
+              status: "open",
+              priority: 5,
+              tenant_id: tenantId,
+              agency_id: agencyId,
+              created_by: boardUserId,
+              ...(isViewingAs && authenticatedUserId
+                ? { impersonated_by: authenticatedUserId }
+                : {}),
+              campaigner_id: myCampaignerId,
+              sales_person_id: myCampaignerId ? null : mySalesPersonId,
+              due_date: data.dueDate,
+              due_time: data.dueTime + ":00",
+              duration_minutes: data.durationMinutes,
+            })
+            .select()
+            .single()
+            .then(({ data: newTask, error }) => {
+              if (error) {
+                toast.error("שגיאה ביצירת משימה");
+                console.error(
+                  "Error creating task from calendar event:",
+                  error,
+                );
+                return;
+              }
+              queryClient.invalidateQueries({ queryKey: ["tasks", tenantId] });
+              toast.success("משימה נוצרה בהצלחה");
+            });
         }}
-        isLoading={updateCalendarEvent.isPending || deleteCalendarEvent.isPending}
+        isLoading={
+          updateCalendarEvent.isPending || deleteCalendarEvent.isPending
+        }
       />
 
       {/* Filters Dialog */}
@@ -2231,11 +2647,16 @@ export function WeeklyTaskBoard() {
         onOpenChange={setFiltersDialogOpen}
         currentFilters={filters}
         onApply={(next) => setFilters(next)}
-        toolbarFilters={filtersIncludeToolbar ? renderToolbarFilters("stacked") : undefined}
+        toolbarFilters={
+          filtersIncludeToolbar ? renderToolbarFilters("stacked") : undefined
+        }
       />
 
       {/* Quick Add Task Dialog (double-click on slot) */}
-      <Dialog open={!!quickAddSlot} onOpenChange={(open) => !open && setQuickAddSlot(null)}>
+      <Dialog
+        open={!!quickAddSlot}
+        onOpenChange={(open) => !open && setQuickAddSlot(null)}
+      >
         <DialogContent dir="rtl" className="sm:max-w-[400px]">
           <DialogHeader>
             <DialogTitle className="text-right">
@@ -2256,7 +2677,10 @@ export function WeeklyTaskBoard() {
               enterKeyHint="send"
               className="flex-1"
             />
-            <Button type="submit" disabled={!quickAddTitle.trim() || addTask.isPending}>
+            <Button
+              type="submit"
+              disabled={!quickAddTitle.trim() || addTask.isPending}
+            >
               <Plus className="h-4 w-4 ml-1" />
               הוסף
             </Button>

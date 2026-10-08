@@ -1,5 +1,14 @@
 import { GlassPanel } from "./GlassPanel";
-import { Sparkles, Users, ListTodo, Bot, AlertCircle, TrendingUp, ShieldAlert, Flame } from "lucide-react";
+import {
+  Sparkles,
+  Users,
+  ListTodo,
+  Bot,
+  AlertCircle,
+  TrendingUp,
+  ShieldAlert,
+  Flame,
+} from "lucide-react";
 
 interface Props {
   data: {
@@ -29,17 +38,48 @@ export function BusinessCore({ data, width, height }: Props) {
       <div className="relative flex flex-col h-full p-6">
         <div className="flex items-center gap-2 text-indigo-600">
           <Sparkles className="h-4 w-4" />
-          <span className="text-xs font-medium tracking-wide uppercase">Business Core</span>
+          <span className="text-xs font-medium tracking-wide uppercase">
+            Business Core
+          </span>
         </div>
-        <h2 className="mt-1 text-2xl font-bold text-slate-900 truncate">{data.businessName}</h2>
+        <h2 className="mt-1 text-2xl font-bold text-slate-900 truncate">
+          {data.businessName}
+        </h2>
 
         <div className="mt-4 grid grid-cols-2 gap-3 flex-1 text-sm">
-          <CoreStat icon={Users} label="לקוחות פעילים" value={data.clientsActive} />
-          <CoreStat icon={ListTodo} label="משימות פתוחות" value={data.tasksOpen} />
-          <CoreStat icon={Bot} label="אייג׳נטים פעילים" value={data.agentsActive} />
-          <CoreStat icon={AlertCircle} label="התראות" value={data.alerts} tone={data.alerts ? "warn" : undefined} />
-          <CoreStat icon={ShieldAlert} label="לקוחות בסיכון" value={data.clientsAtRisk} tone={data.clientsAtRisk ? "danger" : undefined} />
-          <CoreStat icon={Flame} label="משימות דחופות" value={data.tasksUrgent} tone={data.tasksUrgent ? "warn" : undefined} />
+          <CoreStat
+            icon={Users}
+            label="לקוחות פעילים"
+            value={data.clientsActive}
+          />
+          <CoreStat
+            icon={ListTodo}
+            label="משימות פתוחות"
+            value={data.tasksOpen}
+          />
+          <CoreStat
+            icon={Bot}
+            label="אייג׳נטים פעילים"
+            value={data.agentsActive}
+          />
+          <CoreStat
+            icon={AlertCircle}
+            label="התראות"
+            value={data.alerts}
+            tone={data.alerts ? "warn" : undefined}
+          />
+          <CoreStat
+            icon={ShieldAlert}
+            label="לקוחות בסיכון"
+            value={data.clientsAtRisk}
+            tone={data.clientsAtRisk ? "danger" : undefined}
+          />
+          <CoreStat
+            icon={Flame}
+            label="משימות דחופות"
+            value={data.tasksUrgent}
+            tone={data.tasksUrgent ? "warn" : undefined}
+          />
         </div>
 
         {data.incomeMonth > 0 && (
@@ -48,7 +88,9 @@ export function BusinessCore({ data, width, height }: Props) {
               <TrendingUp className="h-4 w-4" />
               <span className="text-xs font-medium">הכנסות החודש</span>
             </div>
-            <span className="text-sm font-bold text-emerald-800">₪{Math.round(data.incomeMonth).toLocaleString()}</span>
+            <span className="text-sm font-bold text-emerald-800">
+              ₪{Math.round(data.incomeMonth).toLocaleString()}
+            </span>
           </div>
         )}
       </div>
@@ -56,9 +98,23 @@ export function BusinessCore({ data, width, height }: Props) {
   );
 }
 
-function CoreStat({ icon: Icon, label, value, tone }: { icon: any; label: string; value: number; tone?: "warn" | "danger" }) {
+function CoreStat({
+  icon: Icon,
+  label,
+  value,
+  tone,
+}: {
+  icon: any;
+  label: string;
+  value: number;
+  tone?: "warn" | "danger";
+}) {
   const toneClass =
-    tone === "danger" ? "text-rose-600" : tone === "warn" ? "text-amber-600" : "text-slate-700";
+    tone === "danger"
+      ? "text-rose-600"
+      : tone === "warn"
+        ? "text-amber-600"
+        : "text-slate-700";
   return (
     <div className="flex items-center gap-2 rounded-xl bg-white/70 border border-white/80 px-3 py-2">
       <Icon className={`h-4 w-4 ${toneClass}`} />

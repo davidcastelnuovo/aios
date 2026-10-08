@@ -24,7 +24,7 @@ import { isReportTenantScopedIntegration } from "@/lib/reportIntegrationTypes";
 export function useUserIntegrations(
   tenantId: string | string[] | undefined,
   integrationType: string,
-  options?: { enabled?: boolean; returnAll?: boolean }
+  options?: { enabled?: boolean; returnAll?: boolean },
 ) {
   const { userId } = useCurrentUser();
 
@@ -34,13 +34,14 @@ export function useUserIntegrations(
     : tenantId
       ? [tenantId]
       : [];
-  const enabled = options?.enabled !== false && tenantIds.length > 0 && !!userId;
+  const enabled =
+    options?.enabled !== false && tenantIds.length > 0 && !!userId;
 
   // Stable cache key fragment
   const tenantsKey = tenantIds.slice().sort().join(",");
 
   return useQuery({
-    queryKey: ['user-integrations', tenantsKey, integrationType, userId],
+    queryKey: ["user-integrations", tenantsKey, integrationType, userId],
     queryFn: async () => {
       if (tenantIds.length === 0 || !userId) return [];
 
@@ -51,14 +52,14 @@ export function useUserIntegrations(
 
       // 1. Fetch user's own integrations (or all tenant integrations for tenant-scoped types)
       let ownQuery = supabase
-        .from('tenant_integrations')
+        .from("tenant_integrations")
         .select(selectColumns)
-        .in('tenant_id', tenantIds)
-        .eq('integration_type', integrationType)
-        .eq('is_active', true);
+        .in("tenant_id", tenantIds)
+        .eq("integration_type", integrationType)
+        .eq("is_active", true);
 
       if (!isTenantScoped) {
-        ownQuery = ownQuery.eq('user_id', userId);
+        ownQuery = ownQuery.eq("user_id", userId);
       }
 
       const { data: ownIntegrations, error: ownError } = await ownQuery;
@@ -68,47 +69,54 @@ export function useUserIntegrations(
       // For tenant-scoped types, mark _isOwn correctly based on actual ownership
       if (isTenantScoped) {
         const sharedOwnerIds = (ownIntegrations || [])
-          .map(i => i.user_id)
+          .map((i) => i.user_id)
           .filter((id): id is string => !!id && id !== userId);
 
         let ownerProfiles: Record<string, string> = {};
         if (sharedOwnerIds.length > 0) {
           const { data: profiles } = await supabase
-            .from('profiles')
-            .select('id, full_name')
-            .in('id', sharedOwnerIds);
+            .from("profiles")
+            .select("id, full_name")
+            .in("id", sharedOwnerIds);
           if (profiles) {
-            ownerProfiles = Object.fromEntries(profiles.map(p => [p.id, p.full_name || '']));
+            ownerProfiles = Object.fromEntries(
+              profiles.map((p) => [p.id, p.full_name || ""]),
+            );
           }
         }
 
         return (ownIntegrations || []).map((i) =>
           toClientIntegration(i, {
             _isOwn: i.user_id === userId,
-            _sharedByName: i.user_id && i.user_id !== userId ? (ownerProfiles[i.user_id] || null) : null,
+            _sharedByName:
+              i.user_id && i.user_id !== userId
+                ? ownerProfiles[i.user_id] || null
+                : null,
           }),
         );
       }
 
       // 2. Fetch shared integrations via permissions (for user-scoped types)
       const { data: permissions, error: permError } = await supabase
-        .from('integration_user_permissions')
-        .select('integration_id')
-        .eq('user_id', userId);
+        .from("integration_user_permissions")
+        .select("integration_id")
+        .eq("user_id", userId);
 
       if (permError) throw permError;
 
-      const sharedIntegrationIds = (permissions || []).map(p => p.integration_id);
+      const sharedIntegrationIds = (permissions || []).map(
+        (p) => p.integration_id,
+      );
 
       let sharedIntegrations: any[] = [];
       if (sharedIntegrationIds.length > 0) {
         const { data: shared, error: sharedError } = await supabase
-          .from('tenant_integrations')
+          .from("tenant_integrations")
           .select(selectColumns)
-          .in('tenant_id', tenantIds)
-          .eq('integration_type', integrationType)
-          .eq('is_active', true)
-          .in('id', sharedIntegrationIds);
+          .in("tenant_id", tenantIds)
+          .eq("integration_type", integrationType)
+          .eq("is_active", true)
+          .in("id", sharedIntegrationIds);
 
         if (sharedError) throw sharedError;
         sharedIntegrations = shared || [];
@@ -116,23 +124,25 @@ export function useUserIntegrations(
 
       // 3. Get owner profiles for shared integrations
       const sharedOwnerIds = sharedIntegrations
-        .map(i => i.user_id)
+        .map((i) => i.user_id)
         .filter((id): id is string => !!id && id !== userId);
-      
+
       let ownerProfiles: Record<string, string> = {};
       if (sharedOwnerIds.length > 0) {
         const { data: profiles } = await supabase
-          .from('profiles')
-          .select('id, full_name')
-          .in('id', sharedOwnerIds);
-        
+          .from("profiles")
+          .select("id, full_name")
+          .in("id", sharedOwnerIds);
+
         if (profiles) {
-          ownerProfiles = Object.fromEntries(profiles.map(p => [p.id, p.full_name || '']));
+          ownerProfiles = Object.fromEntries(
+            profiles.map((p) => [p.id, p.full_name || ""]),
+          );
         }
       }
 
       // 4. Combine and deduplicate
-      const ownIds = new Set((ownIntegrations || []).map(i => i.id));
+      const ownIds = new Set((ownIntegrations || []).map((i) => i.id));
       const combined: ClientIntegration[] = [
         ...(ownIntegrations || []).map((i) =>
           toClientIntegration(i, { _isOwn: true, _sharedByName: null }),
@@ -142,7 +152,9 @@ export function useUserIntegrations(
           .map((i) =>
             toClientIntegration(i, {
               _isOwn: false,
-              _sharedByName: i.user_id ? (ownerProfiles[i.user_id] || null) : null,
+              _sharedByName: i.user_id
+                ? ownerProfiles[i.user_id] || null
+                : null,
             }),
           ),
       ];
@@ -158,7 +170,7 @@ export function useUserIntegrations(
  */
 export function useHasIntegrationAccess(
   tenantId: string | string[] | undefined,
-  integrationType: string
+  integrationType: string,
 ) {
   const { data: integrations } = useUserIntegrations(tenantId, integrationType);
   return (integrations || []).length > 0;

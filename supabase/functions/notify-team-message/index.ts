@@ -1,116 +1,153 @@
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.75.0'
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2.75.0";
 
 const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-}
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Headers":
+    "authorization, x-client-info, apikey, content-type",
+};
 
 Deno.serve(async (req) => {
-  if (req.method === 'OPTIONS') {
-    return new Response(null, { headers: corsHeaders })
+  if (req.method === "OPTIONS") {
+    return new Response(null, { headers: corsHeaders });
   }
 
   try {
-    const authHeader = req.headers.get('Authorization')
+    const authHeader = req.headers.get("Authorization");
     if (!authHeader) {
-      return new Response(JSON.stringify({ error: 'Missing authorization' }), {
+      return new Response(JSON.stringify({ error: "Missing authorization" }), {
         status: 401,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      })
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
     }
 
     const supabaseClient = createClient(
-      Deno.env.get('SUPABASE_URL') ?? '',
-      Deno.env.get('SUPABASE_ANON_KEY') ?? '',
+      Deno.env.get("SUPABASE_URL") ?? "",
+      Deno.env.get("SUPABASE_ANON_KEY") ?? "",
       {
         global: { headers: { Authorization: authHeader } },
         auth: { persistSession: false, autoRefreshToken: false },
-      }
-    )
+      },
+    );
 
     const supabaseAdmin = createClient(
-      Deno.env.get('SUPABASE_URL') ?? '',
-      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '',
-      { auth: { persistSession: false, autoRefreshToken: false } }
-    )
+      Deno.env.get("SUPABASE_URL") ?? "",
+      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "",
+      { auth: { persistSession: false, autoRefreshToken: false } },
+    );
 
-    const token = authHeader.replace('Bearer ', '')
-    const { data: { user }, error: userError } = await supabaseClient.auth.getUser(token)
+    const token = authHeader.replace("Bearer ", "");
+    const {
+      data: { user },
+      error: userError,
+    } = await supabaseClient.auth.getUser(token);
     if (userError || !user) {
-      return new Response(JSON.stringify({ error: 'Unauthorized' }), {
+      return new Response(JSON.stringify({ error: "Unauthorized" }), {
         status: 401,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      })
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
     }
 
-    const { messageId, channelId, tenantId, messageContent, senderName, channelName, tenantSlug, targetOverride } = await req.json()
+    const {
+      messageId,
+      channelId,
+      tenantId,
+      messageContent,
+      senderName,
+      channelName,
+      tenantSlug,
+      targetOverride,
+    } = await req.json();
 
     if (!channelId || !tenantId || !messageContent) {
-      return new Response(JSON.stringify({ error: 'Missing required fields' }), {
-        status: 400,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      })
+      return new Response(
+        JSON.stringify({ error: "Missing required fields" }),
+        {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        },
+      );
     }
 
-    const baseUrl = Deno.env.get('SITE_URL') || 'https://aios.co.il'
-    const slug = tenantSlug || ''
-    const chatLink = slug ? `${baseUrl}/t/${slug}/team-chat` : `${baseUrl}/team-chat`
-
+    const baseUrl = Deno.env.get("SITE_URL") || "https://aios.co.il";
+    const slug = tenantSlug || "";
+    const chatLink = slug
+      ? `${baseUrl}/t/${slug}/team-chat`
+      : `${baseUrl}/team-chat`;
 
     // Get channel-level notification_group_link
     const { data: channelData } = await supabaseAdmin
-      .from('team_channels')
-      .select('notification_group_link')
-      .eq('id', channelId)
-      .single()
+      .from("team_channels")
+      .select("notification_group_link")
+      .eq("id", channelId)
+      .single();
 
-    const channelGroupLink = channelData?.notification_group_link || null
+    const channelGroupLink = channelData?.notification_group_link || null;
 
     // Get channel members with notification settings (exclude sender)
     const { data: members, error: membersError } = await supabaseAdmin
-      .from('team_channel_members')
-      .select('user_id, notify_enabled, notify_override_phone, notify_override_group')
-      .eq('channel_id', channelId)
-      .neq('user_id', user.id)
+      .from("team_channel_members")
+      .select(
+        "user_id, notify_enabled, notify_override_phone, notify_override_group",
+      )
+      .eq("channel_id", channelId)
+      .neq("user_id", user.id);
 
     if (membersError || !members?.length) {
       return new Response(JSON.stringify({ success: true, notified: 0 }), {
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      })
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
     }
 
     // Filter out disabled members
-    const enabledMembers = members.filter(m => m.notify_enabled !== false)
+    const enabledMembers = members.filter((m) => m.notify_enabled !== false);
     if (enabledMembers.length === 0) {
-      return new Response(JSON.stringify({ success: true, notified: 0, reason: 'All members have notifications disabled' }), {
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      })
+      return new Response(
+        JSON.stringify({
+          success: true,
+          notified: 0,
+          reason: "All members have notifications disabled",
+        }),
+        {
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        },
+      );
     }
 
-    const memberUserIds = enabledMembers.map(m => m.user_id)
+    const memberUserIds = enabledMembers.map((m) => m.user_id);
 
     // Get profiles
     const { data: profiles } = await supabaseAdmin
-      .from('profiles')
-      .select('id, full_name, phone, notification_group_link, campaigner_id')
-      .in('id', memberUserIds)
+      .from("profiles")
+      .select("id, full_name, phone, notification_group_link, campaigner_id")
+      .in("id", memberUserIds);
 
     if (!profiles?.length) {
-      return new Response(JSON.stringify({ success: true, notified: 0, reason: 'No profiles found' }), {
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      })
+      return new Response(
+        JSON.stringify({
+          success: true,
+          notified: 0,
+          reason: "No profiles found",
+        }),
+        {
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        },
+      );
     }
 
     // Get campaigner phones as fallback
-    const campaignerIds = profiles.filter(p => p.campaigner_id && !p.phone).map(p => p.campaigner_id!)
-    let campaignerPhoneMap: Record<string, string> = {}
+    const campaignerIds = profiles
+      .filter((p) => p.campaigner_id && !p.phone)
+      .map((p) => p.campaigner_id!);
+    let campaignerPhoneMap: Record<string, string> = {};
     if (campaignerIds.length > 0) {
       const { data: campaigners } = await supabaseAdmin
-        .from('campaigners')
-        .select('id, phone')
-        .in('id', campaignerIds)
+        .from("campaigners")
+        .select("id, phone")
+        .in("id", campaignerIds);
       if (campaigners) {
-        campaigners.forEach(c => { if (c.phone) campaignerPhoneMap[c.id] = c.phone })
+        campaigners.forEach((c) => {
+          if (c.phone) campaignerPhoneMap[c.id] = c.phone;
+        });
       }
     }
 
@@ -120,211 +157,247 @@ Deno.serve(async (req) => {
     // 3. member notify_override_phone → send to that phone
     // 4. profile notification_group_link → send to profile group
     // 5. profile phone / campaigner phone → send to phone
-    const groupsToNotify = new Set<string>()
-    const phonesToNotify: { phone: string; name: string }[] = []
+    const groupsToNotify = new Set<string>();
+    const phonesToNotify: { phone: string; name: string }[] = [];
 
     for (const member of enabledMembers) {
-      const profile = profiles.find(p => p.id === member.user_id)
-      if (!profile) continue
+      const profile = profiles.find((p) => p.id === member.user_id);
+      if (!profile) continue;
 
       // Priority 1: member-level group override
       if (member.notify_override_group) {
-        groupsToNotify.add(member.notify_override_group)
-        continue
+        groupsToNotify.add(member.notify_override_group);
+        continue;
       }
 
       // Priority 2: channel-level group
       if (channelGroupLink) {
-        groupsToNotify.add(channelGroupLink)
-        continue
+        groupsToNotify.add(channelGroupLink);
+        continue;
       }
 
       // Priority 3: member-level phone override
       if (member.notify_override_phone) {
-        phonesToNotify.push({ phone: member.notify_override_phone, name: profile.full_name || 'חבר צוות' })
-        continue
+        phonesToNotify.push({
+          phone: member.notify_override_phone,
+          name: profile.full_name || "חבר צוות",
+        });
+        continue;
       }
 
       // Priority 4: profile group
       if (profile.notification_group_link) {
-        groupsToNotify.add(profile.notification_group_link)
-        continue
+        groupsToNotify.add(profile.notification_group_link);
+        continue;
       }
 
       // Priority 5: profile phone / campaigner phone
-      const phone = profile.phone || (profile.campaigner_id ? campaignerPhoneMap[profile.campaigner_id] : null)
+      const phone =
+        profile.phone ||
+        (profile.campaigner_id
+          ? campaignerPhoneMap[profile.campaigner_id]
+          : null);
       if (phone) {
-        phonesToNotify.push({ phone, name: profile.full_name || 'חבר צוות' })
+        phonesToNotify.push({ phone, name: profile.full_name || "חבר צוות" });
       }
     }
 
     if (phonesToNotify.length === 0 && groupsToNotify.size === 0) {
-      return new Response(JSON.stringify({ success: true, notified: 0, reason: 'No phone numbers or groups found' }), {
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      })
+      return new Response(
+        JSON.stringify({
+          success: true,
+          notified: 0,
+          reason: "No phone numbers or groups found",
+        }),
+        {
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        },
+      );
     }
 
-
     // Find Green API integration
-    let integration: any = null
+    let integration: any = null;
     const { data: senderIntegration } = await supabaseAdmin
-      .from('tenant_integrations')
-      .select('*')
-      .eq('tenant_id', tenantId)
-      .eq('user_id', user.id)
-      .eq('integration_type', 'green_api')
-      .eq('is_active', true)
-      .maybeSingle()
+      .from("tenant_integrations")
+      .select("*")
+      .eq("tenant_id", tenantId)
+      .eq("user_id", user.id)
+      .eq("integration_type", "green_api")
+      .eq("is_active", true)
+      .maybeSingle();
 
-    if (senderIntegration?.api_key && senderIntegration?.settings?.instance_id) {
-      integration = senderIntegration
+    if (
+      senderIntegration?.api_key &&
+      senderIntegration?.settings?.instance_id
+    ) {
+      integration = senderIntegration;
     } else {
       const { data: anyIntegration } = await supabaseAdmin
-        .from('tenant_integrations')
-        .select('*')
-        .eq('tenant_id', tenantId)
-        .eq('integration_type', 'green_api')
-        .eq('is_active', true)
+        .from("tenant_integrations")
+        .select("*")
+        .eq("tenant_id", tenantId)
+        .eq("integration_type", "green_api")
+        .eq("is_active", true)
         .limit(1)
-        .maybeSingle()
+        .maybeSingle();
 
       if (anyIntegration?.api_key && anyIntegration?.settings?.instance_id) {
-        integration = anyIntegration
+        integration = anyIntegration;
       }
     }
 
     if (!integration) {
-      return new Response(JSON.stringify({ error: 'Green API not configured.' }), {
-        status: 400,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      })
+      return new Response(
+        JSON.stringify({ error: "Green API not configured." }),
+        {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        },
+      );
     }
 
-    const instanceId = integration.settings.instance_id
-    const apiToken = integration.api_key
-    const notificationMessage = `🔔 *התראה מצ'אט צוות*\n\n📢 *ערוץ:* ${channelName || 'ערוץ'}\n👤 *מאת:* ${senderName || 'חבר צוות'}\n\n💬 ${messageContent}\n\n🔗 ${chatLink}`
+    const instanceId = integration.settings.instance_id;
+    const apiToken = integration.api_key;
+    const notificationMessage = `🔔 *התראה מצ'אט צוות*\n\n📢 *ערוץ:* ${channelName || "ערוץ"}\n👤 *מאת:* ${senderName || "חבר צוות"}\n\n💬 ${messageContent}\n\n🔗 ${chatLink}`;
 
-    let sentCount = 0
-    const errors: string[] = []
+    let sentCount = 0;
+    const errors: string[] = [];
 
     const sendGreenApi = async (chatId: string, label: string) => {
       try {
         const response = await fetch(
           `https://api.green-api.com/waInstance${instanceId}/sendMessage/${apiToken}`,
           {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ chatId, message: notificationMessage }),
-          }
-        )
+          },
+        );
         if (response.ok) {
-          sentCount++
+          sentCount++;
         } else {
-          const errText = await response.text()
-          console.error(`❌ Failed ${label}: ${errText}`)
-          errors.push(`${label}: ${errText}`)
+          const errText = await response.text();
+          console.error(`❌ Failed ${label}: ${errText}`);
+          errors.push(`${label}: ${errText}`);
         }
       } catch (err) {
-        console.error(`❌ Error ${label}:`, err)
-        errors.push(`${label}: ${(err as Error).message}`)
+        console.error(`❌ Error ${label}:`, err);
+        errors.push(`${label}: ${(err as Error).message}`);
       }
-    }
+    };
 
     // If targetOverride is provided, skip normal priority logic and send only to specified target
     if (targetOverride) {
-      
-      if (targetOverride.type === 'group') {
+      if (targetOverride.type === "group") {
         // Find group link from all sources: channel > member override > profile
-        let resolvedGroupLink = channelGroupLink
+        let resolvedGroupLink = channelGroupLink;
         if (!resolvedGroupLink) {
           // Check member override groups
-          const memberOverride = enabledMembers.find(m => m.notify_override_group)
+          const memberOverride = enabledMembers.find(
+            (m) => m.notify_override_group,
+          );
           if (memberOverride) {
-            resolvedGroupLink = memberOverride.notify_override_group
+            resolvedGroupLink = memberOverride.notify_override_group;
           }
         }
         if (!resolvedGroupLink && profiles?.length) {
           // Check profile notification_group_link
-          const profileWithGroup = profiles.find(p => p.notification_group_link)
+          const profileWithGroup = profiles.find(
+            (p) => p.notification_group_link,
+          );
           if (profileWithGroup) {
-            resolvedGroupLink = profileWithGroup.notification_group_link
+            resolvedGroupLink = profileWithGroup.notification_group_link;
           }
         }
 
         if (resolvedGroupLink) {
-          let groupChatId = resolvedGroupLink.trim()
-          if (!groupChatId.endsWith('@g.us')) {
-            const match = groupChatId.match(/([0-9-]+@g\.us)/)
+          let groupChatId = resolvedGroupLink.trim();
+          if (!groupChatId.endsWith("@g.us")) {
+            const match = groupChatId.match(/([0-9-]+@g\.us)/);
             if (match) {
-              groupChatId = match[1]
+              groupChatId = match[1];
             } else {
-              const digits = groupChatId.replace(/[^0-9-]/g, '')
-              if (digits) groupChatId = digits + '@g.us'
+              const digits = groupChatId.replace(/[^0-9-]/g, "");
+              if (digits) groupChatId = digits + "@g.us";
             }
           }
-          await sendGreenApi(groupChatId, `קבוצה: ${groupChatId}`)
+          await sendGreenApi(groupChatId, `קבוצה: ${groupChatId}`);
         } else {
-          return new Response(JSON.stringify({ success: true, notified: 0, reason: 'אין קבוצה משויכת לערוץ' }), {
-            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-          })
+          return new Response(
+            JSON.stringify({
+              success: true,
+              notified: 0,
+              reason: "אין קבוצה משויכת לערוץ",
+            }),
+            {
+              headers: { ...corsHeaders, "Content-Type": "application/json" },
+            },
+          );
         }
-      } else if (targetOverride.type === 'contact' && targetOverride.phone) {
-        let digits = targetOverride.phone.replace(/[^0-9]/g, '')
-        if (digits.startsWith('00')) digits = digits.slice(2)
-        if (digits.startsWith('0') && digits.length <= 10) digits = '972' + digits.slice(1)
-        await sendGreenApi(digits + '@c.us', targetOverride.name || 'איש קשר')
+      } else if (targetOverride.type === "contact" && targetOverride.phone) {
+        let digits = targetOverride.phone.replace(/[^0-9]/g, "");
+        if (digits.startsWith("00")) digits = digits.slice(2);
+        if (digits.startsWith("0") && digits.length <= 10)
+          digits = "972" + digits.slice(1);
+        await sendGreenApi(digits + "@c.us", targetOverride.name || "איש קשר");
       }
 
-      return new Response(JSON.stringify({
-        success: true,
-        notified: sentCount,
-        total: 1,
-        errors: errors.length > 0 ? errors : undefined,
-      }), {
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      })
+      return new Response(
+        JSON.stringify({
+          success: true,
+          notified: sentCount,
+          total: 1,
+          errors: errors.length > 0 ? errors : undefined,
+        }),
+        {
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        },
+      );
     }
 
     // Send to groups
     for (const groupLink of groupsToNotify) {
-      let groupChatId = groupLink.trim()
-      if (!groupChatId.endsWith('@g.us')) {
-        const match = groupChatId.match(/([0-9-]+@g\.us)/)
+      let groupChatId = groupLink.trim();
+      if (!groupChatId.endsWith("@g.us")) {
+        const match = groupChatId.match(/([0-9-]+@g\.us)/);
         if (match) {
-          groupChatId = match[1]
+          groupChatId = match[1];
         } else {
-          const digits = groupChatId.replace(/[^0-9-]/g, '')
-          if (digits) groupChatId = digits + '@g.us'
+          const digits = groupChatId.replace(/[^0-9-]/g, "");
+          if (digits) groupChatId = digits + "@g.us";
         }
       }
-      await sendGreenApi(groupChatId, `קבוצה: ${groupChatId}`)
+      await sendGreenApi(groupChatId, `קבוצה: ${groupChatId}`);
     }
 
     // Send to individual phones
     for (const target of phonesToNotify) {
-      let digits = target.phone.replace(/[^0-9]/g, '')
-      if (digits.startsWith('00')) digits = digits.slice(2)
-      if (digits.startsWith('0') && digits.length <= 10) digits = '972' + digits.slice(1)
-      await sendGreenApi(digits + '@c.us', target.name)
+      let digits = target.phone.replace(/[^0-9]/g, "");
+      if (digits.startsWith("00")) digits = digits.slice(2);
+      if (digits.startsWith("0") && digits.length <= 10)
+        digits = "972" + digits.slice(1);
+      await sendGreenApi(digits + "@c.us", target.name);
     }
 
-    const totalTargets = phonesToNotify.length + groupsToNotify.size
+    const totalTargets = phonesToNotify.length + groupsToNotify.size;
 
-    return new Response(JSON.stringify({
-      success: true,
-      notified: sentCount,
-      total: totalTargets,
-      groups: groupsToNotify.size,
-      errors: errors.length > 0 ? errors : undefined,
-    }), {
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-    })
-
+    return new Response(
+      JSON.stringify({
+        success: true,
+        notified: sentCount,
+        total: totalTargets,
+        groups: groupsToNotify.size,
+        errors: errors.length > 0 ? errors : undefined,
+      }),
+      {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      },
+    );
   } catch (err) {
-    console.error('❌ Unexpected error:', err)
+    console.error("❌ Unexpected error:", err);
     return new Response(JSON.stringify({ error: (err as Error).message }), {
       status: 500,
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-    })
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
   }
-})
+});

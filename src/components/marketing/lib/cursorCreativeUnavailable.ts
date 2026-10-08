@@ -1,11 +1,14 @@
 /** Only a missing function should fall back to local gpt-image-1. Auth/key/job errors must surface. */
 export const isCursorCreativeUnavailable = (error: unknown): boolean => {
   const message = error instanceof Error ? error.message : String(error ?? "");
-  return /requested function was not found/i.test(message)
-    || /failed to send a request to the edge function/i.test(message);
+  return (
+    /requested function was not found/i.test(message) ||
+    /failed to send a request to the edge function/i.test(message)
+  );
 };
 
-const SPEND = /credit|קרדיט|קרדית|spend limit|spending limit|on-demand|on demand|usage limit|insufficient|billing|quota|payment required|\b402\b|out of credits|no credits/i;
+const SPEND =
+  /credit|קרדיט|קרדית|spend limit|spending limit|on-demand|on demand|usage limit|insufficient|billing|quota|payment required|\b402\b|out of credits|no credits/i;
 
 /** Cloud Agent spend/credits — not the same pool as Cursor Pro+ on the desktop. */
 export const isCursorCreativeSpendError = (error: unknown): boolean => {

@@ -52,17 +52,36 @@ export function ParliamentBoard({
         </p>
         <div className="flex flex-wrap gap-2">
           {debating && onContinue && (
-            <button onClick={onContinue} className="text-[10px] text-[var(--cc-accent)] hover:underline">המשך סבב</button>
+            <button
+              onClick={onContinue}
+              className="text-[10px] text-[var(--cc-accent)] hover:underline"
+            >
+              המשך סבב
+            </button>
           )}
           {debating && onSynthesize && (
-            <button onClick={onSynthesize} className="text-[10px] text-[var(--cc-ok)] hover:underline">סיים וסכם</button>
+            <button
+              onClick={onSynthesize}
+              className="text-[10px] text-[var(--cc-ok)] hover:underline"
+            >
+              סיים וסכם
+            </button>
           )}
           {onCancel && (
-            <button onClick={onCancel} className="text-[10px] text-[var(--cc-crit)] hover:underline">עצור</button>
+            <button
+              onClick={onCancel}
+              className="text-[10px] text-[var(--cc-crit)] hover:underline"
+            >
+              עצור
+            </button>
           )}
         </div>
       </div>
-      {topic && <p className="mb-2 line-clamp-2 text-xs text-[var(--cc-text)]">{topic}</p>}
+      {topic && (
+        <p className="mb-2 line-clamp-2 text-xs text-[var(--cc-text)]">
+          {topic}
+        </p>
+      )}
       <div className="flex items-center justify-center gap-3">
         <div className="flex h-14 w-14 flex-col items-center justify-center rounded-full border border-[var(--cc-line-strong)] bg-[rgba(76,195,255,0.12)] text-[10px] font-bold text-[var(--cc-accent)]">
           כרמן
@@ -74,17 +93,21 @@ export function ParliamentBoard({
             onClick={() => onSelectSeat?.(seat.provider)}
             title={seat.preview || seat.label}
             className={`flex h-14 w-14 flex-col items-center justify-center rounded-full border text-[10px] ${
-              selectedProvider === seat.provider ? "border-[var(--cc-accent)] bg-[rgba(76,195,255,0.12)]" : ""
+              selectedProvider === seat.provider
+                ? "border-[var(--cc-accent)] bg-[rgba(76,195,255,0.12)]"
+                : ""
             } ${
               seat.state === "failed"
                 ? "border-[var(--cc-crit)] text-[var(--cc-crit)]"
                 : seat.state === "thinking" || seat.state === "reviewing"
-                ? "border-[var(--cc-warn)] text-[var(--cc-warn)]"
-                : "border-[var(--cc-line)] text-[var(--cc-text)]"
+                  ? "border-[var(--cc-warn)] text-[var(--cc-warn)]"
+                  : "border-[var(--cc-line)] text-[var(--cc-text)]"
             }`}
           >
             <span className="font-semibold">{seat.label}</span>
-            <span className="opacity-70">{STATE_HE[seat.state] || seat.state}</span>
+            <span className="opacity-70">
+              {STATE_HE[seat.state] || seat.state}
+            </span>
           </button>
         ))}
       </div>
@@ -93,17 +116,24 @@ export function ParliamentBoard({
           <div className="mb-1 flex items-center justify-between">
             <span className="text-[var(--cc-accent)]">{selected.label}</span>
             {debating && onClarify && (
-              <button onClick={() => onClarify(selected.provider)} className="text-[10px] text-[var(--cc-accent)] hover:underline">
+              <button
+                onClick={() => onClarify(selected.provider)}
+                className="text-[10px] text-[var(--cc-accent)] hover:underline"
+              >
                 בקש הבהרה
               </button>
             )}
           </div>
-          <p className="whitespace-pre-wrap text-[var(--cc-text)]">{selected.preview}</p>
+          <p className="whitespace-pre-wrap text-[var(--cc-text)]">
+            {selected.preview}
+          </p>
         </div>
       )}
       {carmenSummary && (
         <div className="mt-2 rounded-md border border-[var(--cc-line-strong)] p-2 text-xs text-[var(--cc-text)]">
-          <p className="mb-1 text-[10px] tracking-wide text-[var(--cc-accent)]">סיכום כרמן</p>
+          <p className="mb-1 text-[10px] tracking-wide text-[var(--cc-accent)]">
+            סיכום כרמן
+          </p>
           <p className="line-clamp-6 whitespace-pre-wrap">{carmenSummary}</p>
         </div>
       )}

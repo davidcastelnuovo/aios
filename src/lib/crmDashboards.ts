@@ -110,14 +110,16 @@ export async function fetchAccessibleDashboards(
     .order("created_at", { ascending: false });
   if (ownedErr) throw ownedErr;
 
-  const [{ data: ownedAgencies, error: ownedAgenciesErr }, { data: sharedAccess, error: sharedErr }] =
-    await Promise.all([
-      supabase.from("agencies").select("id").eq("tenant_id", tenantId),
-      supabase
-        .from("agency_tenant_access")
-        .select("agency_id")
-        .eq("accessing_tenant_id", tenantId),
-    ]);
+  const [
+    { data: ownedAgencies, error: ownedAgenciesErr },
+    { data: sharedAccess, error: sharedErr },
+  ] = await Promise.all([
+    supabase.from("agencies").select("id").eq("tenant_id", tenantId),
+    supabase
+      .from("agency_tenant_access")
+      .select("agency_id")
+      .eq("accessing_tenant_id", tenantId),
+  ]);
   if (ownedAgenciesErr) throw ownedAgenciesErr;
   if (sharedErr) throw sharedErr;
 
@@ -127,7 +129,9 @@ export async function fetchAccessibleDashboards(
   const sharedAgencyIds = Array.from(
     new Set((sharedAccess || []).map((r) => r.agency_id).filter(Boolean)),
   ) as string[];
-  const accessibleAgencyIds = Array.from(new Set([...ownedAgencyIds, ...sharedAgencyIds]));
+  const accessibleAgencyIds = Array.from(
+    new Set([...ownedAgencyIds, ...sharedAgencyIds]),
+  );
 
   let foreignRows: CrmDashboardListRow[] = [];
   if (accessibleAgencyIds.length > 0) {

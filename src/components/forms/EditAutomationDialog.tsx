@@ -36,69 +36,89 @@ import { MessageTemplateBuilder } from "./MessageTemplateBuilder";
 import { useCurrentTenant } from "@/hooks/useCurrentTenant";
 import { WaProviderConnectionPicker } from "./WaProviderConnectionPicker";
 
-const formSchema = z.object({
-  name: z.string().min(1, "שם האוטומציה הוא שדה חובה"),
-  description: z.string().optional(),
-  trigger_type: z.enum([
-    "task_assigned",
-    "task_collaborator_added",
-    "task_update_added",
-    "task_status_changed",
-    "lead_status_changed",
-    "lead_created",
-    "client_created",
-    "client_status_changed",
-    "onboarding_status_changed",
-    "meeting_created",
-    "task_calendar_created",
-    "task_overdue",
-    "inbound_webhook_task",
-    "inbound_webhook_lead",
-    "report_alert_triggered",
-  ]),
-  action_type: z.enum(["webhook", "email", "notification", "update_status", "send_whatsapp", "create_manychat_subscriber", "send_greenapi_message", "send_greenapi_to_campaigner", "add_lead_update", "add_client_update", "create_task", "create_lead"]),
-  // Green API connection selection
-  green_api_integration_id: z.string().optional(),
-  campaigner_send_target: z.enum(["phone", "group"]).optional(),
-  // Green API manual target fields
-  greenapi_send_to_type: z.enum(["contact", "manual_phone", "manual_group"]).optional(),
-  greenapi_manual_phone: z.string().optional(),
-  greenapi_manual_group_id: z.string().optional(),
-  // Green API / update template fields
-  message_template: z.string().optional(),
-  update_template: z.string().optional(),
-  webhook_url: z.string().optional(),
-  webhook_method: z.enum(["POST", "GET", "PUT"]).optional(),
-  body_template: z.string().optional(),
-  conditions: z.string().optional(),
-  status_entity: z.enum(["lead", "task"]).optional(),
-  status_value: z.string().optional(),
-  trigger_status_value: z.string().optional(),
-  update_field_name: z.string().optional(),
-  update_field_value: z.string().optional(),
-  // ManyChat WhatsApp fields
-  manychat_tag_id: z.string().optional(),
-  field_mapping_date: z.string().optional(),
-  field_mapping_time: z.string().optional(),
-  field_mapping_location: z.string().optional(),
-  field_mapping_contact: z.string().optional(),
-  // Create task fields
-  task_title_template: z.string().optional(),
-  task_notes_template: z.string().optional(),
-  task_priority: z.number().optional(),
-  task_due_days: z.number().optional(),
-}).refine((data) => {
-  if (data.action_type === "webhook" && !data.webhook_url) {
-    return false;
-  }
-  if (data.action_type === "update_status" && !data.status_value) {
-    return false;
-  }
-  return true;
-}, {
-  message: "נא למלא את כל השדות הנדרשים",
-  path: ["action_type"],
-});
+const formSchema = z
+  .object({
+    name: z.string().min(1, "שם האוטומציה הוא שדה חובה"),
+    description: z.string().optional(),
+    trigger_type: z.enum([
+      "task_assigned",
+      "task_collaborator_added",
+      "task_update_added",
+      "task_status_changed",
+      "lead_status_changed",
+      "lead_created",
+      "client_created",
+      "client_status_changed",
+      "onboarding_status_changed",
+      "meeting_created",
+      "task_calendar_created",
+      "task_overdue",
+      "inbound_webhook_task",
+      "inbound_webhook_lead",
+      "report_alert_triggered",
+    ]),
+    action_type: z.enum([
+      "webhook",
+      "email",
+      "notification",
+      "update_status",
+      "send_whatsapp",
+      "create_manychat_subscriber",
+      "send_greenapi_message",
+      "send_greenapi_to_campaigner",
+      "add_lead_update",
+      "add_client_update",
+      "create_task",
+      "create_lead",
+    ]),
+    // Green API connection selection
+    green_api_integration_id: z.string().optional(),
+    campaigner_send_target: z.enum(["phone", "group"]).optional(),
+    // Green API manual target fields
+    greenapi_send_to_type: z
+      .enum(["contact", "manual_phone", "manual_group"])
+      .optional(),
+    greenapi_manual_phone: z.string().optional(),
+    greenapi_manual_group_id: z.string().optional(),
+    // Green API / update template fields
+    message_template: z.string().optional(),
+    update_template: z.string().optional(),
+    webhook_url: z.string().optional(),
+    webhook_method: z.enum(["POST", "GET", "PUT"]).optional(),
+    body_template: z.string().optional(),
+    conditions: z.string().optional(),
+    status_entity: z.enum(["lead", "task"]).optional(),
+    status_value: z.string().optional(),
+    trigger_status_value: z.string().optional(),
+    update_field_name: z.string().optional(),
+    update_field_value: z.string().optional(),
+    // ManyChat WhatsApp fields
+    manychat_tag_id: z.string().optional(),
+    field_mapping_date: z.string().optional(),
+    field_mapping_time: z.string().optional(),
+    field_mapping_location: z.string().optional(),
+    field_mapping_contact: z.string().optional(),
+    // Create task fields
+    task_title_template: z.string().optional(),
+    task_notes_template: z.string().optional(),
+    task_priority: z.number().optional(),
+    task_due_days: z.number().optional(),
+  })
+  .refine(
+    (data) => {
+      if (data.action_type === "webhook" && !data.webhook_url) {
+        return false;
+      }
+      if (data.action_type === "update_status" && !data.status_value) {
+        return false;
+      }
+      return true;
+    },
+    {
+      message: "נא למלא את כל השדות הנדרשים",
+      path: ["action_type"],
+    },
+  );
 
 type FormValues = z.infer<typeof formSchema>;
 
@@ -117,9 +137,7 @@ const LEAD_DATE_FIELDS = [
   { value: "itai_meeting_date", label: "תאריך פגישה עם איתי" },
 ];
 
-const TASK_DATE_FIELDS = [
-  { value: "due_date", label: "תאריך יעד" },
-];
+const TASK_DATE_FIELDS = [{ value: "due_date", label: "תאריך יעד" }];
 
 interface EditAutomationDialogProps {
   automation: any;
@@ -127,7 +145,11 @@ interface EditAutomationDialogProps {
   onOpenChange: (open: boolean) => void;
 }
 
-export function EditAutomationDialog({ automation, open, onOpenChange }: EditAutomationDialogProps) {
+export function EditAutomationDialog({
+  automation,
+  open,
+  onOpenChange,
+}: EditAutomationDialogProps) {
   const queryClient = useQueryClient();
   const { activeStatuses: leadStatuses } = useLeadStatuses();
   const { tenantId } = useCurrentTenant();
@@ -142,25 +164,35 @@ export function EditAutomationDialog({ automation, open, onOpenChange }: EditAut
       webhook_method: automation.configuration?.method || "POST",
       webhook_url: automation.configuration?.url || "",
       body_template: automation.configuration?.body_template || "",
-      conditions: automation.conditions ? JSON.stringify(automation.conditions, null, 2) : "",
+      conditions: automation.conditions
+        ? JSON.stringify(automation.conditions, null, 2)
+        : "",
       status_entity: automation.configuration?.entity || "lead",
       status_value: automation.configuration?.status || "",
       trigger_status_value: automation.conditions?.new_status || "any",
       update_field_name: automation.configuration?.update_field || "none",
-      update_field_value: automation.configuration?.update_field_value || "today",
+      update_field_value:
+        automation.configuration?.update_field_value || "today",
       manychat_tag_id: automation.configuration?.manychat_tag_id || "",
       field_mapping_date: automation.configuration?.field_mapping?.date || "",
       field_mapping_time: automation.configuration?.field_mapping?.time || "",
-      field_mapping_location: automation.configuration?.field_mapping?.location || "",
-      field_mapping_contact: automation.configuration?.field_mapping?.contact || "",
+      field_mapping_location:
+        automation.configuration?.field_mapping?.location || "",
+      field_mapping_contact:
+        automation.configuration?.field_mapping?.contact || "",
       message_template: automation.configuration?.message_template || "",
-      update_template: automation.configuration?.update_template || "אין מענה בתאריך {{date}} בשעה {{time}}",
+      update_template:
+        automation.configuration?.update_template ||
+        "אין מענה בתאריך {{date}} בשעה {{time}}",
       campaigner_send_target: automation.configuration?.send_target || "phone",
       green_api_integration_id: automation.configuration?.integration_id || "",
-      greenapi_send_to_type: automation.configuration?.send_to_type || "contact",
+      greenapi_send_to_type:
+        automation.configuration?.send_to_type || "contact",
       greenapi_manual_phone: automation.configuration?.manual_phone || "",
       greenapi_manual_group_id: automation.configuration?.manual_group_id || "",
-      task_title_template: automation.configuration?.task_title_template || "{{company_name}} - משימה חדשה",
+      task_title_template:
+        automation.configuration?.task_title_template ||
+        "{{company_name}} - משימה חדשה",
       task_notes_template: automation.configuration?.task_notes_template || "",
       task_priority: automation.configuration?.task_priority || 5,
       task_due_days: automation.configuration?.task_due_days || 0,
@@ -169,88 +201,102 @@ export function EditAutomationDialog({ automation, open, onOpenChange }: EditAut
 
   // Fetch ManyChat tags
   const { data: manychatTags, isLoading: isLoadingTags } = useQuery({
-    queryKey: ['manychat-tags', automation.tenant_id],
+    queryKey: ["manychat-tags", automation.tenant_id],
     queryFn: async () => {
       if (!automation.tenant_id) return [];
-      const { data, error } = await supabase.functions.invoke('get-manychat-tags', {
-        body: { tenantId: automation.tenant_id }
-      });
+      const { data, error } = await supabase.functions.invoke(
+        "get-manychat-tags",
+        {
+          body: { tenantId: automation.tenant_id },
+        },
+      );
       if (error) throw error;
       return Array.isArray(data?.tags) ? data.tags : [];
     },
-    enabled: !!automation.tenant_id && (form.watch("action_type") === "send_whatsapp" || form.watch("action_type") === "create_manychat_subscriber"),
+    enabled:
+      !!automation.tenant_id &&
+      (form.watch("action_type") === "send_whatsapp" ||
+        form.watch("action_type") === "create_manychat_subscriber"),
   });
 
   // Fetch Green API integrations - include both tenant integrations AND permitted integrations
   const { data: greenApiIntegrations } = useQuery({
-    queryKey: ['green-api-integrations-for-automation', automation.tenant_id],
+    queryKey: ["green-api-integrations-for-automation", automation.tenant_id],
     queryFn: async () => {
       if (!automation.tenant_id) return [];
-      
+
       // Get current user
-      const { data: { user } } = await supabase.auth.getUser();
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
       if (!user) return [];
-      
+
       // Get tenant integrations
       const { data: tenantIntegrations, error: tenantError } = await supabase
-        .from('tenant_integrations')
-        .select('id, settings, user_id, integration_type')
-        .eq('tenant_id', automation.tenant_id)
-        .in('integration_type', ['green_api', 'manus_wa'])
-        .eq('is_active', true);
-      
+        .from("tenant_integrations")
+        .select("id, settings, user_id, integration_type")
+        .eq("tenant_id", automation.tenant_id)
+        .in("integration_type", ["green_api", "manus_wa"])
+        .eq("is_active", true);
+
       if (tenantError) throw tenantError;
-      
+
       // Get integrations the user has permission to use
       const { data: permissions } = await supabase
-        .from('integration_user_permissions')
-        .select('integration_id')
-        .eq('user_id', user.id);
-      
-      const permittedIds = permissions?.map(p => p.integration_id) || [];
-      
+        .from("integration_user_permissions")
+        .select("integration_id")
+        .eq("user_id", user.id);
+
+      const permittedIds = permissions?.map((p) => p.integration_id) || [];
+
       let allIntegrations = [...(tenantIntegrations || [])];
-      
+
       if (permittedIds.length > 0) {
         // Fetch permitted integrations from other tenants
         const { data: permittedIntegrations } = await supabase
-          .from('tenant_integrations')
-          .select('id, settings, user_id, integration_type')
-          .in('id', permittedIds)
-          .in('integration_type', ['green_api', 'manus_wa'])
-          .eq('is_active', true);
+          .from("tenant_integrations")
+          .select("id, settings, user_id, integration_type")
+          .in("id", permittedIds)
+          .in("integration_type", ["green_api", "manus_wa"])
+          .eq("is_active", true);
 
-        
         // Merge and deduplicate
-        const existingIds = new Set(allIntegrations.map(i => i.id));
-        
-        permittedIntegrations?.forEach(integration => {
+        const existingIds = new Set(allIntegrations.map((i) => i.id));
+
+        permittedIntegrations?.forEach((integration) => {
           if (!existingIds.has(integration.id)) {
             allIntegrations.push(integration);
           }
         });
       }
-      
+
       // Fetch owner names for all integrations
       if (allIntegrations.length > 0) {
-        const userIds = [...new Set(allIntegrations.map(i => i.user_id).filter(Boolean))];
+        const userIds = [
+          ...new Set(allIntegrations.map((i) => i.user_id).filter(Boolean)),
+        ];
         if (userIds.length > 0) {
           const { data: profiles } = await supabase
-            .from('profiles')
-            .select('id, full_name')
-            .in('id', userIds);
-          
-          const profileMap = new Map(profiles?.map(p => [p.id, p.full_name]) || []);
-          allIntegrations = allIntegrations.map(i => ({
+            .from("profiles")
+            .select("id, full_name")
+            .in("id", userIds);
+
+          const profileMap = new Map(
+            profiles?.map((p) => [p.id, p.full_name]) || [],
+          );
+          allIntegrations = allIntegrations.map((i) => ({
             ...i,
-            owner_name: profileMap.get(i.user_id) || null
+            owner_name: profileMap.get(i.user_id) || null,
           }));
         }
       }
-      
+
       return allIntegrations;
     },
-    enabled: !!automation.tenant_id && (form.watch("action_type") === "send_greenapi_message" || form.watch("action_type") === "send_greenapi_to_campaigner"),
+    enabled:
+      !!automation.tenant_id &&
+      (form.watch("action_type") === "send_greenapi_message" ||
+        form.watch("action_type") === "send_greenapi_to_campaigner"),
   });
 
   const updateAutomationMutation = useMutation({
@@ -265,9 +311,12 @@ export function EditAutomationDialog({ automation, open, onOpenChange }: EditAut
       } else {
         conditions = {};
       }
-      
+
       // Add trigger status condition if specified
-      if (values.trigger_status_value && values.trigger_status_value !== 'any') {
+      if (
+        values.trigger_status_value &&
+        values.trigger_status_value !== "any"
+      ) {
         conditions.new_status = values.trigger_status_value;
       }
 
@@ -284,9 +333,9 @@ export function EditAutomationDialog({ automation, open, onOpenChange }: EditAut
           entity: values.status_entity,
           status: values.status_value,
         };
-        if (values.update_field_name && values.update_field_name !== 'none') {
+        if (values.update_field_name && values.update_field_name !== "none") {
           cfg.update_field = values.update_field_name;
-          cfg.update_field_value = values.update_field_value || 'today';
+          cfg.update_field_value = values.update_field_value || "today";
         }
         configuration = cfg;
       } else if (values.action_type === "send_whatsapp") {
@@ -317,13 +366,17 @@ export function EditAutomationDialog({ automation, open, onOpenChange }: EditAut
           send_target: values.campaigner_send_target || "phone",
           integration_id: values.green_api_integration_id || null,
         };
-      } else if (values.action_type === "add_lead_update" || values.action_type === "add_client_update") {
+      } else if (
+        values.action_type === "add_lead_update" ||
+        values.action_type === "add_client_update"
+      ) {
         configuration = {
           update_template: values.update_template || "",
         };
       } else if (values.action_type === "create_task") {
         configuration = {
-          task_title_template: values.task_title_template || "{{company_name}} - משימה חדשה",
+          task_title_template:
+            values.task_title_template || "{{company_name}} - משימה חדשה",
           task_notes_template: values.task_notes_template || "",
           task_priority: values.task_priority || 5,
           task_due_days: values.task_due_days || 0,
@@ -365,7 +418,10 @@ export function EditAutomationDialog({ automation, open, onOpenChange }: EditAut
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent dir="rtl" className="max-w-2xl max-h-[90vh] overflow-y-auto">
+      <DialogContent
+        dir="rtl"
+        className="max-w-2xl max-h-[90vh] overflow-y-auto"
+      >
         <DialogHeader>
           <DialogTitle>עריכת אוטומציה</DialogTitle>
         </DialogHeader>
@@ -392,7 +448,11 @@ export function EditAutomationDialog({ automation, open, onOpenChange }: EditAut
                 <FormItem>
                   <FormLabel>תיאור (אופציונלי)</FormLabel>
                   <FormControl>
-                    <Textarea {...field} rows={2} placeholder="תיאור קצר של מה האוטומציה עושה" />
+                    <Textarea
+                      {...field}
+                      rows={2}
+                      placeholder="תיאור קצר של מה האוטומציה עושה"
+                    />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -405,28 +465,57 @@ export function EditAutomationDialog({ automation, open, onOpenChange }: EditAut
               render={({ field }) => (
                 <FormItem>
                   <FormLabel>מתי להפעיל? *</FormLabel>
-                  <Select onValueChange={field.onChange} defaultValue={field.value}>
+                  <Select
+                    onValueChange={field.onChange}
+                    defaultValue={field.value}
+                  >
                     <FormControl>
                       <SelectTrigger>
                         <SelectValue />
                       </SelectTrigger>
                     </FormControl>
                     <SelectContent className="bg-background">
-                      <SelectItem value="task_assigned">משימה שוייכה</SelectItem>
-                      <SelectItem value="task_collaborator_added">קמפיינר נוסף למשימה</SelectItem>
-                      <SelectItem value="task_update_added">עדכון נוסף למשימה</SelectItem>
-                      <SelectItem value="task_status_changed">סטטוס משימה השתנה</SelectItem>
-                      <SelectItem value="lead_status_changed">סטטוס ליד השתנה</SelectItem>
+                      <SelectItem value="task_assigned">
+                        משימה שוייכה
+                      </SelectItem>
+                      <SelectItem value="task_collaborator_added">
+                        קמפיינר נוסף למשימה
+                      </SelectItem>
+                      <SelectItem value="task_update_added">
+                        עדכון נוסף למשימה
+                      </SelectItem>
+                      <SelectItem value="task_status_changed">
+                        סטטוס משימה השתנה
+                      </SelectItem>
+                      <SelectItem value="lead_status_changed">
+                        סטטוס ליד השתנה
+                      </SelectItem>
                       <SelectItem value="lead_created">ליד נוצר</SelectItem>
                       <SelectItem value="client_created">לקוח נוצר</SelectItem>
-                      <SelectItem value="client_status_changed">סטטוס לקוח השתנה</SelectItem>
-                      <SelectItem value="onboarding_status_changed">סטטוס קליטה השתנה</SelectItem>
-                      <SelectItem value="meeting_created">נוצרה פגישה</SelectItem>
-                      <SelectItem value="task_calendar_created">משימה נוספה ליומן</SelectItem>
-                      <SelectItem value="task_overdue">משימה לא הושלמה בזמן</SelectItem>
-                      <SelectItem value="inbound_webhook_task">קבלת משימה מ-Webhook</SelectItem>
-                      <SelectItem value="inbound_webhook_lead">קליטת ליד מ-Webhook</SelectItem>
-                      <SelectItem value="report_alert_triggered">התראת דוח פייסבוק</SelectItem>
+                      <SelectItem value="client_status_changed">
+                        סטטוס לקוח השתנה
+                      </SelectItem>
+                      <SelectItem value="onboarding_status_changed">
+                        סטטוס קליטה השתנה
+                      </SelectItem>
+                      <SelectItem value="meeting_created">
+                        נוצרה פגישה
+                      </SelectItem>
+                      <SelectItem value="task_calendar_created">
+                        משימה נוספה ליומן
+                      </SelectItem>
+                      <SelectItem value="task_overdue">
+                        משימה לא הושלמה בזמן
+                      </SelectItem>
+                      <SelectItem value="inbound_webhook_task">
+                        קבלת משימה מ-Webhook
+                      </SelectItem>
+                      <SelectItem value="inbound_webhook_lead">
+                        קליטת ליד מ-Webhook
+                      </SelectItem>
+                      <SelectItem value="report_alert_triggered">
+                        התראת דוח פייסבוק
+                      </SelectItem>
                     </SelectContent>
                   </Select>
                   <FormMessage />
@@ -434,7 +523,8 @@ export function EditAutomationDialog({ automation, open, onOpenChange }: EditAut
               )}
             />
 
-            {(triggerType === "lead_status_changed" || triggerType === "task_status_changed") && (
+            {(triggerType === "lead_status_changed" ||
+              triggerType === "task_status_changed") && (
               <FormField
                 control={form.control}
                 name="trigger_status_value"
@@ -449,16 +539,21 @@ export function EditAutomationDialog({ automation, open, onOpenChange }: EditAut
                       </FormControl>
                       <SelectContent className="bg-background z-[100]">
                         <SelectItem value="any">כל סטטוס</SelectItem>
-                        {triggerType === "lead_status_changed" && leadStatuses.map((status) => (
-                          <SelectItem key={status.status_key} value={status.status_key}>
-                            {status.label}
-                          </SelectItem>
-                        ))}
-                        {triggerType === "task_status_changed" && TASK_STATUS_OPTIONS.map((option) => (
-                          <SelectItem key={option.value} value={option.value}>
-                            {option.label}
-                          </SelectItem>
-                        ))}
+                        {triggerType === "lead_status_changed" &&
+                          leadStatuses.map((status) => (
+                            <SelectItem
+                              key={status.status_key}
+                              value={status.status_key}
+                            >
+                              {status.label}
+                            </SelectItem>
+                          ))}
+                        {triggerType === "task_status_changed" &&
+                          TASK_STATUS_OPTIONS.map((option) => (
+                            <SelectItem key={option.value} value={option.value}>
+                              {option.label}
+                            </SelectItem>
+                          ))}
                       </SelectContent>
                     </Select>
                     <FormDescription className="text-xs">
@@ -477,8 +572,8 @@ export function EditAutomationDialog({ automation, open, onOpenChange }: EditAut
                   <span>Webhook URL לקליטת משימות</span>
                 </div>
                 <div className="flex gap-2">
-                  <Input 
-                    readOnly 
+                  <Input
+                    readOnly
                     value={`https://zvoijyneresvkadpprel.supabase.co/functions/v1/webhook-task-intake`}
                     className="font-mono text-xs bg-background"
                   />
@@ -487,7 +582,9 @@ export function EditAutomationDialog({ automation, open, onOpenChange }: EditAut
                     variant="outline"
                     size="icon"
                     onClick={() => {
-                      navigator.clipboard.writeText(`https://zvoijyneresvkadpprel.supabase.co/functions/v1/webhook-task-intake`);
+                      navigator.clipboard.writeText(
+                        `https://zvoijyneresvkadpprel.supabase.co/functions/v1/webhook-task-intake`,
+                      );
                       toast.success("הועתק!");
                     }}
                   >
@@ -495,7 +592,8 @@ export function EditAutomationDialog({ automation, open, onOpenChange }: EditAut
                   </Button>
                 </div>
                 <p className="text-xs text-muted-foreground">
-                  שלח POST request עם JSON לכתובת זו. חובה לכלול tenant_slug ו-title.
+                  שלח POST request עם JSON לכתובת זו. חובה לכלול tenant_slug
+                  ו-title.
                 </p>
               </div>
             )}
@@ -506,14 +604,16 @@ export function EditAutomationDialog({ automation, open, onOpenChange }: EditAut
                   <ExternalLink className="h-4 w-4" />
                   <span>Webhook URL לקליטת לידים מ-Maskyoo</span>
                 </div>
-                
+
                 {/* Maskyoo URL */}
                 <div className="space-y-2">
-                  <p className="text-xs font-medium text-foreground">כתובת ה-Webhook למסקיו:</p>
+                  <p className="text-xs font-medium text-foreground">
+                    כתובת ה-Webhook למסקיו:
+                  </p>
                   <div className="flex gap-2">
-                    <Input 
-                      readOnly 
-                      value={`https://zvoijyneresvkadpprel.supabase.co/functions/v1/webhook-maskyoo-intake?tenant_id=${automation.tenant_id || 'YOUR_TENANT_ID'}`}
+                    <Input
+                      readOnly
+                      value={`https://zvoijyneresvkadpprel.supabase.co/functions/v1/webhook-maskyoo-intake?tenant_id=${automation.tenant_id || "YOUR_TENANT_ID"}`}
                       className="font-mono text-xs bg-background"
                     />
                     <Button
@@ -521,7 +621,9 @@ export function EditAutomationDialog({ automation, open, onOpenChange }: EditAut
                       variant="outline"
                       size="icon"
                       onClick={() => {
-                        navigator.clipboard.writeText(`https://zvoijyneresvkadpprel.supabase.co/functions/v1/webhook-maskyoo-intake?tenant_id=${automation.tenant_id || ''}`);
+                        navigator.clipboard.writeText(
+                          `https://zvoijyneresvkadpprel.supabase.co/functions/v1/webhook-maskyoo-intake?tenant_id=${automation.tenant_id || ""}`,
+                        );
                         toast.success("הועתק!");
                       }}
                     >
@@ -532,19 +634,24 @@ export function EditAutomationDialog({ automation, open, onOpenChange }: EditAut
 
                 {/* Instructions for Maskyoo */}
                 <div className="p-3 bg-primary/5 border border-primary/20 rounded-lg space-y-2">
-                  <p className="text-sm font-medium text-primary">📞 הוראות הגדרה במסקיו:</p>
+                  <p className="text-sm font-medium text-primary">
+                    📞 הוראות הגדרה במסקיו:
+                  </p>
                   <ol className="text-xs text-muted-foreground space-y-1 list-decimal list-inside mr-2">
                     <li>העתק את הכתובת למעלה</li>
                     <li>גש להגדרות האוטומציה במסקיו</li>
                     <li>בחר "פתיחת קישור" כסוג הפעולה</li>
                     <li>הדבק את הכתובת</li>
-                    <li>בחר שיטת שליחה: <strong>POST</strong></li>
+                    <li>
+                      בחר שיטת שליחה: <strong>POST</strong>
+                    </li>
                     <li>סמן ✓ "הוסף פרמטרים מברירת מחדל לקישור"</li>
                   </ol>
                 </div>
 
                 <p className="text-xs text-muted-foreground">
-                  💡 <strong>מה יקרה:</strong> כשמישהו יתקשר למספר המסקיו ולא יענו לו, ייווצר ליד חדש אוטומטית עם מספר הטלפון שלו.
+                  💡 <strong>מה יקרה:</strong> כשמישהו יתקשר למספר המסקיו ולא
+                  יענו לו, ייווצר ליד חדש אוטומטית עם מספר הטלפון שלו.
                 </p>
               </div>
             )}
@@ -555,24 +662,43 @@ export function EditAutomationDialog({ automation, open, onOpenChange }: EditAut
               render={({ field }) => (
                 <FormItem>
                   <FormLabel>סוג פעולה *</FormLabel>
-                  <Select onValueChange={field.onChange} defaultValue={field.value}>
+                  <Select
+                    onValueChange={field.onChange}
+                    defaultValue={field.value}
+                  >
                     <FormControl>
                       <SelectTrigger>
                         <SelectValue />
                       </SelectTrigger>
                     </FormControl>
                     <SelectContent className="bg-background">
-                      <SelectItem value="webhook">Webhook (Make.com, Zapier וכו')</SelectItem>
+                      <SelectItem value="webhook">
+                        Webhook (Make.com, Zapier וכו')
+                      </SelectItem>
                       <SelectItem value="update_status">שינוי סטטוס</SelectItem>
-                      <SelectItem value="send_whatsapp">שלח WhatsApp (ManyChat)</SelectItem>
-                      <SelectItem value="create_manychat_subscriber">צור subscriber ב-ManyChat</SelectItem>
-                      <SelectItem value="send_greenapi_message">שלח WhatsApp (Green API / Manus)</SelectItem>
-                      <SelectItem value="send_greenapi_to_campaigner">שלח WhatsApp לקמפיינר (Green API / Manus)</SelectItem>
-                      <SelectItem value="add_lead_update">הוסף עדכון לליד</SelectItem>
-                      <SelectItem value="add_client_update">הוסף עדכון ללקוח</SelectItem>
+                      <SelectItem value="send_whatsapp">
+                        שלח WhatsApp (ManyChat)
+                      </SelectItem>
+                      <SelectItem value="create_manychat_subscriber">
+                        צור subscriber ב-ManyChat
+                      </SelectItem>
+                      <SelectItem value="send_greenapi_message">
+                        שלח WhatsApp (Green API / Manus)
+                      </SelectItem>
+                      <SelectItem value="send_greenapi_to_campaigner">
+                        שלח WhatsApp לקמפיינר (Green API / Manus)
+                      </SelectItem>
+                      <SelectItem value="add_lead_update">
+                        הוסף עדכון לליד
+                      </SelectItem>
+                      <SelectItem value="add_client_update">
+                        הוסף עדכון ללקוח
+                      </SelectItem>
                       <SelectItem value="create_task">צור משימה</SelectItem>
                       <SelectItem value="email">אימייל (בקרוב)</SelectItem>
-                      <SelectItem value="notification">התראה (בקרוב)</SelectItem>
+                      <SelectItem value="notification">
+                        התראה (בקרוב)
+                      </SelectItem>
                     </SelectContent>
                   </Select>
                   <FormMessage />
@@ -589,7 +715,10 @@ export function EditAutomationDialog({ automation, open, onOpenChange }: EditAut
                     <FormItem>
                       <FormLabel>Webhook URL *</FormLabel>
                       <FormControl>
-                        <Input {...field} placeholder="https://hook.eu2.make.com/..." />
+                        <Input
+                          {...field}
+                          placeholder="https://hook.eu2.make.com/..."
+                        />
                       </FormControl>
                       <FormDescription className="text-xs">
                         כתובת ה-Webhook של Make.com, Zapier או שירות אחר
@@ -605,7 +734,10 @@ export function EditAutomationDialog({ automation, open, onOpenChange }: EditAut
                   render={({ field }) => (
                     <FormItem>
                       <FormLabel>HTTP Method</FormLabel>
-                      <Select onValueChange={field.onChange} defaultValue={field.value}>
+                      <Select
+                        onValueChange={field.onChange}
+                        defaultValue={field.value}
+                      >
                         <FormControl>
                           <SelectTrigger>
                             <SelectValue />
@@ -639,8 +771,9 @@ export function EditAutomationDialog({ automation, open, onOpenChange }: EditAut
                       <FormDescription className="text-xs flex items-start gap-1">
                         <Info className="h-3 w-3 mt-0.5 shrink-0" />
                         <span>
-                          השתמש ב-{`{{variable}}`} כדי להחליף ערכים דינמיים. 
-                          לדוגמה: {`{{task_title}}`}, {`{{campaigner_name}}`}, {`{{client_name}}`}, {`{{priority}}`}
+                          השתמש ב-{`{{variable}}`} כדי להחליף ערכים דינמיים.
+                          לדוגמה: {`{{task_title}}`}, {`{{campaigner_name}}`},{" "}
+                          {`{{client_name}}`}, {`{{priority}}`}
                         </span>
                       </FormDescription>
                       <FormMessage />
@@ -658,7 +791,10 @@ export function EditAutomationDialog({ automation, open, onOpenChange }: EditAut
                   render={({ field }) => (
                     <FormItem>
                       <FormLabel>סוג רשומה *</FormLabel>
-                      <Select onValueChange={field.onChange} value={field.value}>
+                      <Select
+                        onValueChange={field.onChange}
+                        value={field.value}
+                      >
                         <FormControl>
                           <SelectTrigger>
                             <SelectValue placeholder="בחר סוג רשומה" />
@@ -680,23 +816,34 @@ export function EditAutomationDialog({ automation, open, onOpenChange }: EditAut
                   render={({ field }) => (
                     <FormItem>
                       <FormLabel>סטטוס חדש *</FormLabel>
-                      <Select onValueChange={field.onChange} value={field.value}>
+                      <Select
+                        onValueChange={field.onChange}
+                        value={field.value}
+                      >
                         <FormControl>
                           <SelectTrigger>
                             <SelectValue placeholder="בחר סטטוס" />
                           </SelectTrigger>
                         </FormControl>
                         <SelectContent className="bg-background z-[100]">
-                          {statusEntity === "lead" && leadStatuses.map((status) => (
-                            <SelectItem key={status.status_key} value={status.status_key}>
-                              {status.label}
-                            </SelectItem>
-                          ))}
-                          {statusEntity === "task" && TASK_STATUS_OPTIONS.map((option) => (
-                            <SelectItem key={option.value} value={option.value}>
-                              {option.label}
-                            </SelectItem>
-                          ))}
+                          {statusEntity === "lead" &&
+                            leadStatuses.map((status) => (
+                              <SelectItem
+                                key={status.status_key}
+                                value={status.status_key}
+                              >
+                                {status.label}
+                              </SelectItem>
+                            ))}
+                          {statusEntity === "task" &&
+                            TASK_STATUS_OPTIONS.map((option) => (
+                              <SelectItem
+                                key={option.value}
+                                value={option.value}
+                              >
+                                {option.label}
+                              </SelectItem>
+                            ))}
                         </SelectContent>
                       </Select>
                       <FormDescription className="text-xs">
@@ -713,7 +860,10 @@ export function EditAutomationDialog({ automation, open, onOpenChange }: EditAut
                   render={({ field }) => (
                     <FormItem>
                       <FormLabel>עדכון שדה תאריך נוסף (אופציונלי)</FormLabel>
-                      <Select onValueChange={field.onChange} value={field.value}>
+                      <Select
+                        onValueChange={field.onChange}
+                        value={field.value}
+                      >
                         <FormControl>
                           <SelectTrigger>
                             <SelectValue placeholder="אל תעדכן שדה נוסף" />
@@ -721,16 +871,24 @@ export function EditAutomationDialog({ automation, open, onOpenChange }: EditAut
                         </FormControl>
                         <SelectContent className="bg-background z-[100]">
                           <SelectItem value="none">ללא</SelectItem>
-                          {statusEntity === "lead" && LEAD_DATE_FIELDS.map((option) => (
-                            <SelectItem key={option.value} value={option.value}>
-                              {option.label}
-                            </SelectItem>
-                          ))}
-                          {statusEntity === "task" && TASK_DATE_FIELDS.map((option) => (
-                            <SelectItem key={option.value} value={option.value}>
-                              {option.label}
-                            </SelectItem>
-                          ))}
+                          {statusEntity === "lead" &&
+                            LEAD_DATE_FIELDS.map((option) => (
+                              <SelectItem
+                                key={option.value}
+                                value={option.value}
+                              >
+                                {option.label}
+                              </SelectItem>
+                            ))}
+                          {statusEntity === "task" &&
+                            TASK_DATE_FIELDS.map((option) => (
+                              <SelectItem
+                                key={option.value}
+                                value={option.value}
+                              >
+                                {option.label}
+                              </SelectItem>
+                            ))}
                         </SelectContent>
                       </Select>
                       <FormDescription className="text-xs">
@@ -751,18 +909,27 @@ export function EditAutomationDialog({ automation, open, onOpenChange }: EditAut
                   render={({ field }) => (
                     <FormItem>
                       <FormLabel>בחר טאג להפעלה ב-ManyChat *</FormLabel>
-                      <Select onValueChange={field.onChange} value={field.value}>
+                      <Select
+                        onValueChange={field.onChange}
+                        value={field.value}
+                      >
                         <FormControl>
                           <SelectTrigger>
-                            <SelectValue placeholder={isLoadingTags ? "טוען טאגים..." : "בחר טאג"} />
+                            <SelectValue
+                              placeholder={
+                                isLoadingTags ? "טוען טאגים..." : "בחר טאג"
+                              }
+                            />
                           </SelectTrigger>
                         </FormControl>
                         <SelectContent className="bg-background z-[100]">
-                          {manychatTags?.map((tag: { id: number; name: string }) => (
-                            <SelectItem key={tag.id} value={String(tag.id)}>
-                              {tag.name}
-                            </SelectItem>
-                          ))}
+                          {manychatTags?.map(
+                            (tag: { id: number; name: string }) => (
+                              <SelectItem key={tag.id} value={String(tag.id)}>
+                                {tag.name}
+                              </SelectItem>
+                            ),
+                          )}
                         </SelectContent>
                       </Select>
                       <FormDescription className="text-xs">
@@ -774,7 +941,9 @@ export function EditAutomationDialog({ automation, open, onOpenChange }: EditAut
                 />
 
                 <div className="space-y-3 border rounded-lg p-3 bg-muted/30">
-                  <p className="text-sm font-medium">מיפוי שדות ל-ManyChat Custom Fields</p>
+                  <p className="text-sm font-medium">
+                    מיפוי שדות ל-ManyChat Custom Fields
+                  </p>
                   <p className="text-xs text-muted-foreground">
                     העתק את ה-Field ID מ-ManyChat עבור כל שדה
                   </p>
@@ -784,9 +953,15 @@ export function EditAutomationDialog({ automation, open, onOpenChange }: EditAut
                     name="field_mapping_date"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel className="text-xs">תאריך הפגישה (Field ID)</FormLabel>
+                        <FormLabel className="text-xs">
+                          תאריך הפגישה (Field ID)
+                        </FormLabel>
                         <FormControl>
-                          <Input {...field} placeholder="לדוגמה: 123456" className="h-8 text-sm" />
+                          <Input
+                            {...field}
+                            placeholder="לדוגמה: 123456"
+                            className="h-8 text-sm"
+                          />
                         </FormControl>
                         <FormMessage />
                       </FormItem>
@@ -798,9 +973,15 @@ export function EditAutomationDialog({ automation, open, onOpenChange }: EditAut
                     name="field_mapping_time"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel className="text-xs">שעת הפגישה (Field ID)</FormLabel>
+                        <FormLabel className="text-xs">
+                          שעת הפגישה (Field ID)
+                        </FormLabel>
                         <FormControl>
-                          <Input {...field} placeholder="לדוגמה: 123457" className="h-8 text-sm" />
+                          <Input
+                            {...field}
+                            placeholder="לדוגמה: 123457"
+                            className="h-8 text-sm"
+                          />
                         </FormControl>
                         <FormMessage />
                       </FormItem>
@@ -812,9 +993,15 @@ export function EditAutomationDialog({ automation, open, onOpenChange }: EditAut
                     name="field_mapping_location"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel className="text-xs">מיקום/נושא הפגישה (Field ID)</FormLabel>
+                        <FormLabel className="text-xs">
+                          מיקום/נושא הפגישה (Field ID)
+                        </FormLabel>
                         <FormControl>
-                          <Input {...field} placeholder="לדוגמה: 123458" className="h-8 text-sm" />
+                          <Input
+                            {...field}
+                            placeholder="לדוגמה: 123458"
+                            className="h-8 text-sm"
+                          />
                         </FormControl>
                         <FormMessage />
                       </FormItem>
@@ -826,9 +1013,15 @@ export function EditAutomationDialog({ automation, open, onOpenChange }: EditAut
                     name="field_mapping_contact"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel className="text-xs">שם איש הקשר (Field ID)</FormLabel>
+                        <FormLabel className="text-xs">
+                          שם איש הקשר (Field ID)
+                        </FormLabel>
                         <FormControl>
-                          <Input {...field} placeholder="לדוגמה: 123459" className="h-8 text-sm" />
+                          <Input
+                            {...field}
+                            placeholder="לדוגמה: 123459"
+                            className="h-8 text-sm"
+                          />
                         </FormControl>
                         <FormMessage />
                       </FormItem>
@@ -846,7 +1039,10 @@ export function EditAutomationDialog({ automation, open, onOpenChange }: EditAut
                   render={({ field }) => (
                     <FormItem>
                       <FormLabel>טאג להוספה (אופציונלי)</FormLabel>
-                      <Select onValueChange={field.onChange} value={field.value}>
+                      <Select
+                        onValueChange={field.onChange}
+                        value={field.value}
+                      >
                         <FormControl>
                           <SelectTrigger>
                             <SelectValue placeholder="בחר טאג להוספה אחרי יצירת ה-subscriber" />
@@ -855,12 +1051,19 @@ export function EditAutomationDialog({ automation, open, onOpenChange }: EditAut
                         <SelectContent className="bg-background z-[100]">
                           <SelectItem value="none">ללא טאג</SelectItem>
                           {isLoadingTags ? (
-                            <SelectItem value="loading" disabled>טוען...</SelectItem>
-                          ) : manychatTags?.map((tag: any) => (
-                            <SelectItem key={tag.id} value={tag.id.toString()}>
-                              {tag.name}
+                            <SelectItem value="loading" disabled>
+                              טוען...
                             </SelectItem>
-                          ))}
+                          ) : (
+                            manychatTags?.map((tag: any) => (
+                              <SelectItem
+                                key={tag.id}
+                                value={tag.id.toString()}
+                              >
+                                {tag.name}
+                              </SelectItem>
+                            ))
+                          )}
                         </SelectContent>
                       </Select>
                       <FormDescription className="text-xs">
@@ -872,9 +1075,13 @@ export function EditAutomationDialog({ automation, open, onOpenChange }: EditAut
                 />
 
                 <div className="bg-blue-500/10 border border-blue-500/20 rounded-lg p-3 text-sm">
-                  <p className="font-medium text-blue-600 dark:text-blue-400">כיצד זה עובד?</p>
+                  <p className="font-medium text-blue-600 dark:text-blue-400">
+                    כיצד זה עובד?
+                  </p>
                   <ul className="text-muted-foreground text-xs mt-1 space-y-1">
-                    <li>• כשליד נוצר, המערכת יוצרת subscriber חדש ב-ManyChat</li>
+                    <li>
+                      • כשליד נוצר, המערכת יוצרת subscriber חדש ב-ManyChat
+                    </li>
                     <li>• מספר הטלפון והשם של הליד יועברו ל-ManyChat</li>
                     <li>• ה-Subscriber ID יישמר בליד לשימוש עתידי</li>
                     <li>• אם נבחר טאג, הוא יתווסף אוטומטית ל-subscriber</li>
@@ -891,52 +1098,82 @@ export function EditAutomationDialog({ automation, open, onOpenChange }: EditAut
                   render={({ field }) => (
                     <FormItem>
                       <FormLabel>בחר חיבור WhatsApp *</FormLabel>
-                      <Select onValueChange={field.onChange} value={field.value}>
+                      <Select
+                        onValueChange={field.onChange}
+                        value={field.value}
+                      >
                         <FormControl>
                           <SelectTrigger>
                             <SelectValue placeholder="בחר חיבור" />
                           </SelectTrigger>
                         </FormControl>
                         <SelectContent className="bg-background z-[100]">
-                          {greenApiIntegrations && greenApiIntegrations.length > 0 ? (
+                          {greenApiIntegrations &&
+                          greenApiIntegrations.length > 0 ? (
                             greenApiIntegrations.map((integration: any) => {
-                              const providerLabel = integration.integration_type === 'manus_wa' ? 'Manus WA' : 'Green API';
+                              const providerLabel =
+                                integration.integration_type === "manus_wa"
+                                  ? "Manus WA"
+                                  : "Green API";
                               return (
-                                <SelectItem key={integration.id} value={integration.id}>
-                                  [{providerLabel}] {integration.owner_name || 'חיבור'} ({integration.settings?.idInstance?.slice(-4) || integration.settings?.instanceId?.slice(-4) || 'לא ידוע'})
+                                <SelectItem
+                                  key={integration.id}
+                                  value={integration.id}
+                                >
+                                  [{providerLabel}]{" "}
+                                  {integration.owner_name || "חיבור"} (
+                                  {integration.settings?.idInstance?.slice(
+                                    -4,
+                                  ) ||
+                                    integration.settings?.instanceId?.slice(
+                                      -4,
+                                    ) ||
+                                    "לא ידוע"}
+                                  )
                                 </SelectItem>
                               );
                             })
                           ) : (
-                            <div className="py-2 px-3 text-sm text-muted-foreground">לא נמצאו חיבורי WhatsApp</div>
+                            <div className="py-2 px-3 text-sm text-muted-foreground">
+                              לא נמצאו חיבורי WhatsApp
+                            </div>
                           )}
                         </SelectContent>
                       </Select>
                       <FormDescription className="text-xs">
-                        בחר באיזה חיבור WhatsApp (Green API או Manus) להשתמש לשליחת ההודעה
+                        בחר באיזה חיבור WhatsApp (Green API או Manus) להשתמש
+                        לשליחת ההודעה
                       </FormDescription>
                       <FormMessage />
                     </FormItem>
                   )}
                 />
 
-                
                 <FormField
                   control={form.control}
                   name="greenapi_send_to_type"
                   render={({ field }) => (
                     <FormItem>
                       <FormLabel>שלח ל *</FormLabel>
-                      <Select onValueChange={field.onChange} value={field.value || "contact"}>
+                      <Select
+                        onValueChange={field.onChange}
+                        value={field.value || "contact"}
+                      >
                         <FormControl>
                           <SelectTrigger>
                             <SelectValue placeholder="בחר יעד" />
                           </SelectTrigger>
                         </FormControl>
                         <SelectContent className="bg-background z-[100]">
-                          <SelectItem value="contact">איש קשר (ליד/לקוח)</SelectItem>
-                          <SelectItem value="manual_phone">מספר טלפון ידני</SelectItem>
-                          <SelectItem value="manual_group">קבוצת WhatsApp</SelectItem>
+                          <SelectItem value="contact">
+                            איש קשר (ליד/לקוח)
+                          </SelectItem>
+                          <SelectItem value="manual_phone">
+                            מספר טלפון ידני
+                          </SelectItem>
+                          <SelectItem value="manual_group">
+                            קבוצת WhatsApp
+                          </SelectItem>
                         </SelectContent>
                       </Select>
                       <FormDescription className="text-xs">
@@ -977,21 +1214,22 @@ export function EditAutomationDialog({ automation, open, onOpenChange }: EditAut
                           <Input {...field} placeholder="120363..." />
                         </FormControl>
                         <FormDescription className="text-xs">
-                          הזן את מזהה הקבוצה (ניתן למצוא בהגדרות הקבוצה או מ-WhatsApp Web)
+                          הזן את מזהה הקבוצה (ניתן למצוא בהגדרות הקבוצה או
+                          מ-WhatsApp Web)
                         </FormDescription>
                         <FormMessage />
                       </FormItem>
                     )}
                   />
                 )}
-                
+
                 <FormField
                   control={form.control}
                   name="message_template"
                   render={({ field }) => (
                     <FormItem>
                       <FormControl>
-                        <MessageTemplateBuilder 
+                        <MessageTemplateBuilder
                           value={field.value || ""}
                           onChange={field.onChange}
                           label="תבנית הודעה *"
@@ -1021,13 +1259,13 @@ export function EditAutomationDialog({ automation, open, onOpenChange }: EditAut
                         />
                       </FormControl>
                       <FormDescription className="text-xs">
-                        בחר ספק (Green API / Manus) ואז את החיבור. אם יש חיבור אחד הוא ייבחר אוטומטית.
+                        בחר ספק (Green API / Manus) ואז את החיבור. אם יש חיבור
+                        אחד הוא ייבחר אוטומטית.
                       </FormDescription>
                       <FormMessage />
                     </FormItem>
                   )}
                 />
-
 
                 <FormField
                   control={form.control}
@@ -1035,7 +1273,10 @@ export function EditAutomationDialog({ automation, open, onOpenChange }: EditAut
                   render={({ field }) => (
                     <FormItem>
                       <FormLabel>שלח ל *</FormLabel>
-                      <Select onValueChange={field.onChange} value={field.value || "phone"}>
+                      <Select
+                        onValueChange={field.onChange}
+                        value={field.value || "phone"}
+                      >
                         <FormControl>
                           <SelectTrigger>
                             <SelectValue placeholder="בחר יעד" />
@@ -1043,7 +1284,9 @@ export function EditAutomationDialog({ automation, open, onOpenChange }: EditAut
                         </FormControl>
                         <SelectContent className="bg-background z-[100]">
                           <SelectItem value="phone">טלפון הקמפיינר</SelectItem>
-                          <SelectItem value="group">קבוצת WhatsApp של הקמפיינר</SelectItem>
+                          <SelectItem value="group">
+                            קבוצת WhatsApp של הקמפיינר
+                          </SelectItem>
                         </SelectContent>
                       </Select>
                       <FormDescription className="text-xs">
@@ -1059,7 +1302,7 @@ export function EditAutomationDialog({ automation, open, onOpenChange }: EditAut
                   render={({ field }) => (
                     <FormItem>
                       <FormControl>
-                        <MessageTemplateBuilder 
+                        <MessageTemplateBuilder
                           value={field.value || ""}
                           onChange={field.onChange}
                           label="תבנית הודעה *"
@@ -1073,14 +1316,15 @@ export function EditAutomationDialog({ automation, open, onOpenChange }: EditAut
               </>
             )}
 
-            {(actionType === "add_lead_update" || actionType === "add_client_update") && (
+            {(actionType === "add_lead_update" ||
+              actionType === "add_client_update") && (
               <FormField
                 control={form.control}
                 name="update_template"
                 render={({ field }) => (
                   <FormItem>
                     <FormControl>
-                      <MessageTemplateBuilder 
+                      <MessageTemplateBuilder
                         value={field.value || ""}
                         onChange={field.onChange}
                         label="תבנית עדכון *"
@@ -1116,10 +1360,20 @@ export function EditAutomationDialog({ automation, open, onOpenChange }: EditAut
             />
 
             <div className="flex gap-2 pt-2">
-              <Button type="submit" disabled={updateAutomationMutation.isPending} className="flex-1">
-                {updateAutomationMutation.isPending ? "שומר..." : "שמור שינויים"}
+              <Button
+                type="submit"
+                disabled={updateAutomationMutation.isPending}
+                className="flex-1"
+              >
+                {updateAutomationMutation.isPending
+                  ? "שומר..."
+                  : "שמור שינויים"}
               </Button>
-              <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => onOpenChange(false)}
+              >
                 ביטול
               </Button>
             </div>

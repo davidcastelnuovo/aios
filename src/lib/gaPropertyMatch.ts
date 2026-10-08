@@ -19,7 +19,10 @@ function fieldScore(value: string | undefined, host: string): number {
   return 0;
 }
 
-export function scoreGaProperty(property: GaPropertyRef, domain: string): number {
+export function scoreGaProperty(
+  property: GaPropertyRef,
+  domain: string,
+): number {
   const host = normalizeSeoDomain(domain);
   if (!host || !String(property.id || "").trim()) return 0;
   return Math.max(
@@ -61,7 +64,11 @@ export function bestGaPropertyMatch(
   groups: GaPropertyGroup[],
   domain: string,
   preferredIntegrationId?: string,
-): { integrationId: string; propertyId: string; property: GaPropertyRef } | null {
+): {
+  integrationId: string;
+  propertyId: string;
+  property: GaPropertyRef;
+} | null {
   const host = normalizeSeoDomain(domain);
   if (!host) return null;
 
@@ -73,7 +80,9 @@ export function bestGaPropertyMatch(
   } | null = null;
 
   for (const group of groups) {
-    const preferred = !!preferredIntegrationId && group.integrationId === preferredIntegrationId;
+    const preferred =
+      !!preferredIntegrationId &&
+      group.integrationId === preferredIntegrationId;
     for (const property of group.properties || []) {
       const propertyId = String(property.id || "").trim();
       const score = scoreGaProperty(property, host);
@@ -82,13 +91,22 @@ export function bestGaPropertyMatch(
       // wins over a shared login. A higher domain score always wins.
       const rank = score * 4 + (preferred ? 2 : 0) + (group.own ? 1 : 0);
       if (!best || rank > best.rank) {
-        best = { integrationId: group.integrationId, propertyId, property, rank };
+        best = {
+          integrationId: group.integrationId,
+          propertyId,
+          property,
+          rank,
+        };
       }
     }
   }
 
   return best
-    ? { integrationId: best.integrationId, propertyId: best.propertyId, property: best.property }
+    ? {
+        integrationId: best.integrationId,
+        propertyId: best.propertyId,
+        property: best.property,
+      }
     : null;
 }
 
@@ -99,9 +117,16 @@ export function bestGaPropertyMatch(
 export async function findGaIntegrationForDomain(
   integrations: Array<{ id: string; own?: boolean }>,
   domain: string,
-  loadProperties: (integrationId: string, matchDomain: string | null) => Promise<GaPropertyRef[] | null>,
+  loadProperties: (
+    integrationId: string,
+    matchDomain: string | null,
+  ) => Promise<GaPropertyRef[] | null>,
   preferredIntegrationId?: string,
-): Promise<{ integrationId: string; propertyId: string; property: GaPropertyRef } | null> {
+): Promise<{
+  integrationId: string;
+  propertyId: string;
+  property: GaPropertyRef;
+} | null> {
   const host = normalizeSeoDomain(domain);
   if (!host || !integrations.length) return null;
 
@@ -113,8 +138,13 @@ export async function findGaIntegrationForDomain(
     })),
   );
   const reachable = loaded.filter(
-    (group): group is { integrationId: string; own?: boolean; properties: GaPropertyRef[] } =>
-      Array.isArray(group.properties),
+    (
+      group,
+    ): group is {
+      integrationId: string;
+      own?: boolean;
+      properties: GaPropertyRef[];
+    } => Array.isArray(group.properties),
   );
 
   const named = bestGaPropertyMatch(reachable, host, preferredIntegrationId);
@@ -125,7 +155,11 @@ export async function findGaIntegrationForDomain(
     if (group.properties.length === 0) continue;
     const properties = await loadProperties(group.integrationId, host);
     if (!properties?.length) continue;
-    withUrls.push({ integrationId: group.integrationId, own: group.own, properties });
+    withUrls.push({
+      integrationId: group.integrationId,
+      own: group.own,
+      properties,
+    });
     const found = bestGaPropertyMatch(withUrls, host, preferredIntegrationId);
     if (found && scoreGaProperty(found.property, host) >= 4) return found;
   }

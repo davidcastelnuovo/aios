@@ -18,19 +18,26 @@ export default function Suppliers() {
   const queryClient = useQueryClient();
   const { tenantId } = useCurrentTenant();
   const { t } = useTerminology();
-  
-  const { data: suppliers, isLoading, isPending, isFetching } = useQuery({
+
+  const {
+    data: suppliers,
+    isLoading,
+    isPending,
+    isFetching,
+  } = useQuery({
     queryKey: ["suppliers", tenantId],
     queryFn: async () => {
       if (!tenantId) return [];
       const { data, error } = await supabase
         .from("suppliers")
-        .select(`
+        .select(
+          `
           *,
           agency_1:agencies!suppliers_agency_id_1_fkey(name),
           agency_2:agencies!suppliers_agency_id_2_fkey(name),
           agency_3:agencies!suppliers_agency_id_3_fkey(name)
-        `)
+        `,
+        )
         .eq("tenant_id", tenantId)
         .order("created_at", { ascending: false });
       if (error) throw error;
@@ -39,7 +46,8 @@ export default function Suppliers() {
     enabled: !!tenantId,
   });
 
-  const suppliersResolving = !suppliers && isQueryResolving(isPending, isLoading, isFetching);
+  const suppliersResolving =
+    !suppliers && isQueryResolving(isPending, isLoading, isFetching);
 
   const deleteSupplierMutation = useMutation({
     mutationFn: async (supplierId: string) => {
@@ -57,7 +65,6 @@ export default function Suppliers() {
       toast.error("שגיאה במחיקת ספק: " + error.message);
     },
   });
-
 
   const getTypeColor = (type: string) => {
     switch (type) {
@@ -78,7 +85,7 @@ export default function Suppliers() {
 
   const getTypeText = (type: string) => {
     const types: Record<string, string> = {
-      campaigner: t('role_campaigner'),
+      campaigner: t("role_campaigner"),
       media: "מדיה",
       design: "עיצוב",
       creative: "קריאייטיב",
@@ -98,12 +105,18 @@ export default function Suppliers() {
       </div>
 
       {suppliersResolving && (
-        <CarmenLoadingScreen variant="card" messages={["כרמן אוספת את הספקים…"]} />
+        <CarmenLoadingScreen
+          variant="card"
+          messages={["כרמן אוספת את הספקים…"]}
+        />
       )}
 
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
         {suppliers?.map((supplier) => (
-          <Card key={supplier.id} className="shadow-card hover:shadow-lg transition-all hover:scale-[1.02]">
+          <Card
+            key={supplier.id}
+            className="shadow-card hover:shadow-lg transition-all hover:scale-[1.02]"
+          >
             <CardHeader>
               <div className="flex items-start justify-between">
                 <div className="flex items-center gap-3">
@@ -113,7 +126,10 @@ export default function Suppliers() {
                   <CardTitle className="text-lg">{supplier.name}</CardTitle>
                 </div>
                 <div className="flex items-center gap-2">
-                  <Badge variant="outline" className={getTypeColor(supplier.type)}>
+                  <Badge
+                    variant="outline"
+                    className={getTypeColor(supplier.type)}
+                  >
                     {getTypeText(supplier.type)}
                   </Badge>
                   <Button
@@ -127,7 +143,11 @@ export default function Suppliers() {
                     variant="ghost"
                     size="icon"
                     onClick={() => {
-                      if (confirm(`האם אתה בטוח שברצונך למחוק את הספק "${supplier.name}"?`)) {
+                      if (
+                        confirm(
+                          `האם אתה בטוח שברצונך למחוק את הספק "${supplier.name}"?`,
+                        )
+                      ) {
                         deleteSupplierMutation.mutate(supplier.id);
                       }
                     }}
@@ -151,43 +171,60 @@ export default function Suppliers() {
                   <span>{supplier.email}</span>
                 </div>
               )}
-              
+
               {/* תשלומים */}
-              {(supplier.payment_1 || supplier.payment_2 || supplier.payment_3) && (
+              {(supplier.payment_1 ||
+                supplier.payment_2 ||
+                supplier.payment_3) && (
                 <div className="pt-2 border-t space-y-1">
                   <p className="text-sm font-semibold mb-2">תשלומים:</p>
-                  
+
                   {/* תשלומים ידניים */}
                   {supplier.payment_1 && (
                     <div className="flex items-center justify-between text-sm">
-                      <span className="text-muted-foreground">{supplier.agency_1?.name || 'ללא סוכנות'} (ידני)</span>
-                      <span className="font-medium">₪{Number(supplier.payment_1).toLocaleString()}</span>
+                      <span className="text-muted-foreground">
+                        {supplier.agency_1?.name || "ללא סוכנות"} (ידני)
+                      </span>
+                      <span className="font-medium">
+                        ₪{Number(supplier.payment_1).toLocaleString()}
+                      </span>
                     </div>
                   )}
                   {supplier.payment_2 && (
                     <div className="flex items-center justify-between text-sm">
-                      <span className="text-muted-foreground">{supplier.agency_2?.name || 'ללא סוכנות'} (ידני)</span>
-                      <span className="font-medium">₪{Number(supplier.payment_2).toLocaleString()}</span>
+                      <span className="text-muted-foreground">
+                        {supplier.agency_2?.name || "ללא סוכנות"} (ידני)
+                      </span>
+                      <span className="font-medium">
+                        ₪{Number(supplier.payment_2).toLocaleString()}
+                      </span>
                     </div>
                   )}
                   {supplier.payment_3 && (
                     <div className="flex items-center justify-between text-sm">
-                      <span className="text-muted-foreground">{supplier.agency_3?.name || 'ללא סוכנות'} (ידני)</span>
-                      <span className="font-medium">₪{Number(supplier.payment_3).toLocaleString()}</span>
+                      <span className="text-muted-foreground">
+                        {supplier.agency_3?.name || "ללא סוכנות"} (ידני)
+                      </span>
+                      <span className="font-medium">
+                        ₪{Number(supplier.payment_3).toLocaleString()}
+                      </span>
                     </div>
                   )}
-                  
+
                   <div className="flex items-center justify-between text-sm pt-2 border-t font-semibold">
                     <span>סה"כ</span>
-                    <span>₪{(
-                      (Number(supplier.payment_1) || 0) + 
-                      (Number(supplier.payment_2) || 0) + 
-                      (Number(supplier.payment_3) || 0)
-                    ).toLocaleString()}</span>
+                    <span>
+                      ₪
+                      {(
+                        (Number(supplier.payment_1) || 0) +
+                        (Number(supplier.payment_2) || 0) +
+                        (Number(supplier.payment_3) || 0)
+                      ).toLocaleString()}
+                    </span>
                   </div>
                 </div>
               )}
-              
+
               {supplier.notes && (
                 <p className="text-sm text-muted-foreground mt-2 pt-2 border-t">
                   {supplier.notes}
@@ -203,7 +240,9 @@ export default function Suppliers() {
           <CardContent className="flex flex-col items-center justify-center py-12">
             <Truck className="h-12 w-12 text-muted-foreground mb-4" />
             <h3 className="text-lg font-semibold mb-1">אין ספקים</h3>
-            <p className="text-sm text-muted-foreground">התחל בהוספת ספק ראשון</p>
+            <p className="text-sm text-muted-foreground">
+              התחל בהוספת ספק ראשון
+            </p>
           </CardContent>
         </Card>
       )}

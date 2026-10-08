@@ -9,14 +9,34 @@ import { Switch } from "@/components/ui/switch";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { BrainSelector } from "../BrainSelector";
 import { useAgentGoals } from "@/hooks/useAgentGoals";
 import { useAgentKnowledge } from "@/hooks/useAgentKnowledge";
-import { useAgentMemoryTree, useCarmenMemoryTree } from "@/hooks/useAgentMemory";
 import {
-  IdCard, Sparkles, Heart, Wrench, Settings, Save, Target,
-  BookOpen, Brain, Crown, AlertCircle, Smile, Volume2,
+  useAgentMemoryTree,
+  useCarmenMemoryTree,
+} from "@/hooks/useAgentMemory";
+import {
+  IdCard,
+  Sparkles,
+  Heart,
+  Wrench,
+  Settings,
+  Save,
+  Target,
+  BookOpen,
+  Brain,
+  Crown,
+  AlertCircle,
+  Smile,
+  Volume2,
 } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
@@ -40,13 +60,16 @@ export function ProfileTab({ agent }: { agent: any }) {
   }, [agent.id]);
 
   const update = (patch: Partial<typeof form>) => {
-    setForm(p => ({ ...p, ...patch }));
+    setForm((p) => ({ ...p, ...patch }));
     setDirty(true);
   };
 
   const save = useMutation({
     mutationFn: async () => {
-      const { error } = await supabase.from("ai_agents").update(form).eq("id", agent.id);
+      const { error } = await supabase
+        .from("ai_agents")
+        .update(form)
+        .eq("id", agent.id);
       if (error) throw error;
     },
     onSuccess: () => {
@@ -61,20 +84,30 @@ export function ProfileTab({ agent }: { agent: any }) {
     <div className="max-w-4xl space-y-4 pb-24">
       {/* ===== Identity card ===== */}
       <Card className="p-5">
-        <SectionHeader icon={IdCard} title="זהות" subtitle="מי הסוכן הזה ומה התפקיד שלו" />
+        <SectionHeader
+          icon={IdCard}
+          title="זהות"
+          subtitle="מי הסוכן הזה ומה התפקיד שלו"
+        />
         <div className="grid grid-cols-1 md:grid-cols-[2fr_3fr_auto] gap-4 items-end">
           <Field label="שם הסוכן">
-            <Input value={form.name} onChange={e => update({ name: e.target.value })} />
+            <Input
+              value={form.name}
+              onChange={(e) => update({ name: e.target.value })}
+            />
           </Field>
           <Field label="תפקיד / מומחיות (talent)">
             <Input
               value={form.talent}
-              onChange={e => update({ talent: e.target.value })}
+              onChange={(e) => update({ talent: e.target.value })}
               placeholder="לדוגמה: יועצת CRM בכירה לסוכנויות שיווק"
             />
           </Field>
           <div className="flex items-center gap-2 pb-2">
-            <Switch checked={form.active} onCheckedChange={v => update({ active: v })} />
+            <Switch
+              checked={form.active}
+              onCheckedChange={(v) => update({ active: v })}
+            />
             <Label className="text-sm">פעיל</Label>
           </div>
         </div>
@@ -82,30 +115,47 @@ export function ProfileTab({ agent }: { agent: any }) {
 
       {/* ===== Personality + Soul ===== */}
       <Card className="p-5">
-        <SectionHeader icon={Heart} title="אישיות ונשמה" subtitle="האופי, הטון, ומה מניע את הסוכן" />
+        <SectionHeader
+          icon={Heart}
+          title="אישיות ונשמה"
+          subtitle="האופי, הטון, ומה מניע את הסוכן"
+        />
         <div className="space-y-4">
-          <Field label="אישיות" hint="איך הסוכן מתנהל בשיחה — מה הטון, ההומור, רמת הפורמליות, כיצד מגיב ללחץ">
+          <Field
+            label="אישיות"
+            hint="איך הסוכן מתנהל בשיחה — מה הטון, ההומור, רמת הפורמליות, כיצד מגיב ללחץ"
+          >
             <Textarea
               rows={6}
               value={form.personality}
-              onChange={e => update({ personality: e.target.value })}
+              onChange={(e) => update({ personality: e.target.value })}
               placeholder="לדוגמה: רגועה, מקצועית, אסרטיבית כשצריך. שואלת שאלות חדות ולא נכנעת לחצי-תשובות..."
             />
           </Field>
 
-          <Field label="נשמה / מטרת קיום" hint="למה הסוכן קיים — המטרה העל-זמנית שלו במערכת">
+          <Field
+            label="נשמה / מטרת קיום"
+            hint="למה הסוכן קיים — המטרה העל-זמנית שלו במערכת"
+          >
             <Textarea
               rows={5}
               value={form.soul}
-              onChange={e => update({ soul: e.target.value })}
+              onChange={(e) => update({ soul: e.target.value })}
               placeholder="לדוגמה: לוודא שאף לקוח לא נופל בין הכיסאות, ולתת לצוות ראייה בזמן אמת על בריאות תיק הלקוחות..."
             />
           </Field>
 
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <Field label="סגנון כתיבה">
-              <Select value={form.writing_style || "none"} onValueChange={v => update({ writing_style: v === "none" ? "" : v })}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
+              <Select
+                value={form.writing_style || "none"}
+                onValueChange={(v) =>
+                  update({ writing_style: v === "none" ? "" : v })
+                }
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="none">ברירת מחדל</SelectItem>
                   <SelectItem value="formal">רשמי</SelectItem>
@@ -116,8 +166,15 @@ export function ProfileTab({ agent }: { agent: any }) {
               </Select>
             </Field>
             <Field label="אורך תשובה">
-              <Select value={form.response_length || "none"} onValueChange={v => update({ response_length: v === "none" ? "" : v })}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
+              <Select
+                value={form.response_length || "none"}
+                onValueChange={(v) =>
+                  update({ response_length: v === "none" ? "" : v })
+                }
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="none">ברירת מחדל</SelectItem>
                   <SelectItem value="short">קצר (2-3 משפטים)</SelectItem>
@@ -127,8 +184,13 @@ export function ProfileTab({ agent }: { agent: any }) {
               </Select>
             </Field>
             <Field label="שפה">
-              <Select value={form.language} onValueChange={v => update({ language: v })}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
+              <Select
+                value={form.language}
+                onValueChange={(v) => update({ language: v })}
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="he">עברית</SelectItem>
                   <SelectItem value="en">English</SelectItem>
@@ -181,7 +243,7 @@ export function ProfileTab({ agent }: { agent: any }) {
           <Textarea
             rows={12}
             value={form.system_prompt}
-            onChange={e => update({ system_prompt: e.target.value })}
+            onChange={(e) => update({ system_prompt: e.target.value })}
             placeholder="ריק = שימוש בהנחיות המובנות. מלא = החלפת ההנחיות המובנות בטקסט הזה (או הוספה אם תעתיק את המובנות לעיל ותוסיף בסוף)."
             className="font-mono text-xs"
           />
@@ -189,47 +251,71 @@ export function ProfileTab({ agent }: { agent: any }) {
         {form.system_prompt && (
           <div className="mt-2 flex items-start gap-2 text-xs text-amber-600 dark:text-amber-400">
             <AlertCircle className="h-3.5 w-3.5 mt-0.5 shrink-0" />
-            <span>שדה זה דורס את ההנחיות המובנות. אם רוצים להוסיף עליהן — לחצי "העתק לעריכה" למעלה.</span>
+            <span>
+              שדה זה דורס את ההנחיות המובנות. אם רוצים להוסיף עליהן — לחצי "העתק
+              לעריכה" למעלה.
+            </span>
           </div>
         )}
       </Card>
-
 
       {/* ===== Capabilities summary ===== */}
       <CapabilitiesCard agent={agent} carmen={carmen} />
 
       {/* ===== Runtime ===== */}
       <Card className="p-5">
-        <SectionHeader icon={Settings} title="הגדרות ריצה" subtitle="המוח שבו הסוכן ישתמש ומגבלות תפעוליות" />
+        <SectionHeader
+          icon={Settings}
+          title="הגדרות ריצה"
+          subtitle="המוח שבו הסוכן ישתמש ומגבלות תפעוליות"
+        />
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-end">
           <Field label="המוח (LLM)" hint="ניתן לעדכן כאן או בכותרת">
-            <BrainSelector value={agent.engine} onChange={async (engine) => {
-              await supabase.from("ai_agents").update({ engine }).eq("id", agent.id);
-              qc.invalidateQueries({ queryKey: ["ai-agents", tenantId] });
-              toast.success("המוח עודכן");
-            }} />
+            <BrainSelector
+              value={agent.engine}
+              onChange={async (engine) => {
+                await supabase
+                  .from("ai_agents")
+                  .update({ engine })
+                  .eq("id", agent.id);
+                qc.invalidateQueries({ queryKey: ["ai-agents", tenantId] });
+                toast.success("המוח עודכן");
+              }}
+            />
           </Field>
-          <Field label="מקסימום סבבי כלים (tool rounds)" hint="כמה פעמים הסוכן יכול לקרוא לכלים ברצף">
+          <Field
+            label="מקסימום סבבי כלים (tool rounds)"
+            hint="כמה פעמים הסוכן יכול לקרוא לכלים ברצף"
+          >
             <Input
               type="number"
               min={1}
               max={50}
               value={form.max_tool_rounds}
-              onChange={e => update({ max_tool_rounds: Number(e.target.value) })}
+              onChange={(e) =>
+                update({ max_tool_rounds: Number(e.target.value) })
+              }
               className="w-32"
             />
           </Field>
-          <Field label="גרסת Prompt" hint="V2 מוסיף חשיבה מובנית, תכנון, ואימות פעולות. V1 = התנהגות נוכחית">
+          <Field
+            label="גרסת Prompt"
+            hint="V2 מוסיף חשיבה מובנית, תכנון, ואימות פעולות. V1 = התנהגות נוכחית"
+          >
             <Select
               value={form.metadata?.prompt_version || "v1"}
-              onValueChange={v => update({ metadata: { ...form.metadata, prompt_version: v } })}
+              onValueChange={(v) =>
+                update({ metadata: { ...form.metadata, prompt_version: v } })
+              }
             >
               <SelectTrigger className="w-full">
                 <SelectValue placeholder="בחר גרסה" />
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="v1">V1 — נוכחי (יציב)</SelectItem>
-                <SelectItem value="v2">V2 — חדש (ReAct, חשיבה, אימות)</SelectItem>
+                <SelectItem value="v2">
+                  V2 — חדש (ReAct, חשיבה, אימות)
+                </SelectItem>
               </SelectContent>
             </Select>
           </Field>
@@ -242,7 +328,11 @@ export function ProfileTab({ agent }: { agent: any }) {
             >
               <Select
                 value={form.metadata?.escalation_agent || "all"}
-                onValueChange={v => update({ metadata: { ...form.metadata, escalation_agent: v } })}
+                onValueChange={(v) =>
+                  update({
+                    metadata: { ...form.metadata, escalation_agent: v },
+                  })
+                }
               >
                 <SelectTrigger className="w-full max-w-xs">
                   <SelectValue placeholder="בחר סוכן escalation" />
@@ -265,15 +355,30 @@ export function ProfileTab({ agent }: { agent: any }) {
       <div
         className={cn(
           "fixed bottom-6 left-1/2 -translate-x-1/2 z-30 transition-all",
-          dirty ? "opacity-100 translate-y-0" : "opacity-0 translate-y-4 pointer-events-none"
+          dirty
+            ? "opacity-100 translate-y-0"
+            : "opacity-0 translate-y-4 pointer-events-none",
         )}
       >
         <Card className="px-4 py-3 shadow-lg border-primary/30 flex items-center gap-3">
-          <span className="text-sm text-muted-foreground">יש שינויים שלא נשמרו</span>
-          <Button size="sm" variant="ghost" onClick={() => { setForm(initialForm(agent)); setDirty(false); }}>
+          <span className="text-sm text-muted-foreground">
+            יש שינויים שלא נשמרו
+          </span>
+          <Button
+            size="sm"
+            variant="ghost"
+            onClick={() => {
+              setForm(initialForm(agent));
+              setDirty(false);
+            }}
+          >
             ביטול
           </Button>
-          <Button size="sm" onClick={() => save.mutate()} disabled={save.isPending}>
+          <Button
+            size="sm"
+            onClick={() => save.mutate()}
+            disabled={save.isPending}
+          >
             <Save className="h-4 w-4 me-1" />
             {save.isPending ? "שומר..." : "שמור פרופיל"}
           </Button>
@@ -287,13 +392,48 @@ export function ProfileTab({ agent }: { agent: any }) {
 // Mood selector — swappable persona tone. Self-contained save (its own
 // mutation), so it persists independently of the main profile form.
 // =========================================================================
-const MOOD_OPTIONS: { value: string; label: string; emoji: string; desc: string }[] = [
-  { value: "none", label: "ברירת מחדל", emoji: "🙂", desc: "ללא מצב רוח — האישיות הבסיסית." },
-  { value: "fun", label: "כיפי ומצחיק", emoji: "😄", desc: "אנרגטית, הומור קליל, בדיחות ואימוג׳ים." },
-  { value: "focused", label: "רציני ויעיל", emoji: "🎯", desc: "ישר לעניין, בלי הומור, ממוקדת תוצאה." },
-  { value: "tired", label: "עייף ואין כוח", emoji: "😴", desc: "אנרגיה נמוכה, קצר וחסכוני — עדיין מבצעת הכול." },
-  { value: "angry", label: "כועס", emoji: "😤", desc: "בוטה, חסר סבלנות וישיר — בלי להעליב או לרדת בדיוק." },
-  { value: "random", label: "רנדומלי", emoji: "🎲", desc: "מתחלף לבד כל כמה ימים בין כל מצבי הרוח." },
+const MOOD_OPTIONS: {
+  value: string;
+  label: string;
+  emoji: string;
+  desc: string;
+}[] = [
+  {
+    value: "none",
+    label: "ברירת מחדל",
+    emoji: "🙂",
+    desc: "ללא מצב רוח — האישיות הבסיסית.",
+  },
+  {
+    value: "fun",
+    label: "כיפי ומצחיק",
+    emoji: "😄",
+    desc: "אנרגטית, הומור קליל, בדיחות ואימוג׳ים.",
+  },
+  {
+    value: "focused",
+    label: "רציני ויעיל",
+    emoji: "🎯",
+    desc: "ישר לעניין, בלי הומור, ממוקדת תוצאה.",
+  },
+  {
+    value: "tired",
+    label: "עייף ואין כוח",
+    emoji: "😴",
+    desc: "אנרגיה נמוכה, קצר וחסכוני — עדיין מבצעת הכול.",
+  },
+  {
+    value: "angry",
+    label: "כועס",
+    emoji: "😤",
+    desc: "בוטה, חסר סבלנות וישיר — בלי להעליב או לרדת בדיוק.",
+  },
+  {
+    value: "random",
+    label: "רנדומלי",
+    emoji: "🎲",
+    desc: "מתחלף לבד כל כמה ימים בין כל מצבי הרוח.",
+  },
 ];
 
 function MoodCard({ agent }: { agent: any }) {
@@ -308,13 +448,17 @@ function MoodCard({ agent }: { agent: any }) {
       .update({ mood: v === "none" ? null : v } as any)
       .eq("id", agent.id);
     setSaving(false);
-    if (error) { toast.error(error.message); return; }
+    if (error) {
+      toast.error(error.message);
+      return;
+    }
     qc.invalidateQueries({ queryKey: ["ai-agents", tenantId] });
-    const opt = MOOD_OPTIONS.find(o => o.value === v);
+    const opt = MOOD_OPTIONS.find((o) => o.value === v);
     toast.success(`מצב הרוח עודכן: ${opt?.emoji} ${opt?.label}`);
   };
 
-  const active = MOOD_OPTIONS.find(o => o.value === current) ?? MOOD_OPTIONS[0];
+  const active =
+    MOOD_OPTIONS.find((o) => o.value === current) ?? MOOD_OPTIONS[0];
 
   return (
     <Card className="p-5">
@@ -324,21 +468,32 @@ function MoodCard({ agent }: { agent: any }) {
         subtitle="טון מתחלף — משנה איך הסוכן מדבר, בלי לפגוע בדיוק או בביצוע המשימה"
       />
       <div className="grid grid-cols-1 sm:grid-cols-[2fr_3fr] gap-4 items-start">
-        <Field label="מצב הרוח הנוכחי" hint={saving ? "שומר..." : "נשמר מיד עם הבחירה"}>
+        <Field
+          label="מצב הרוח הנוכחי"
+          hint={saving ? "שומר..." : "נשמר מיד עם הבחירה"}
+        >
           <Select value={current} onValueChange={onChange}>
-            <SelectTrigger><SelectValue /></SelectTrigger>
+            <SelectTrigger>
+              <SelectValue />
+            </SelectTrigger>
             <SelectContent>
-              {MOOD_OPTIONS.map(o => (
-                <SelectItem key={o.value} value={o.value}>{o.emoji} {o.label}</SelectItem>
+              {MOOD_OPTIONS.map((o) => (
+                <SelectItem key={o.value} value={o.value}>
+                  {o.emoji} {o.label}
+                </SelectItem>
               ))}
             </SelectContent>
           </Select>
         </Field>
         <div className="rounded-lg border bg-muted/30 p-3">
-          <div className="font-medium text-sm mb-1">{active.emoji} {active.label}</div>
+          <div className="font-medium text-sm mb-1">
+            {active.emoji} {active.label}
+          </div>
           <p className="text-xs text-muted-foreground">{active.desc}</p>
           {current === "random" && (
-            <p className="text-[11px] text-muted-foreground mt-2">🎲 המצב מתחלף אוטומטית כל 3 ימים.</p>
+            <p className="text-[11px] text-muted-foreground mt-2">
+              🎲 המצב מתחלף אוטומטית כל 3 ימים.
+            </p>
           )}
         </div>
       </div>
@@ -374,7 +529,10 @@ function VoiceCard({ agent }: { agent: any }) {
       .update({ voice: v === "none" ? null : v } as any)
       .eq("id", agent.id);
     setSaving(false);
-    if (error) { toast.error(error.message); return; }
+    if (error) {
+      toast.error(error.message);
+      return;
+    }
     qc.invalidateQueries({ queryKey: ["ai-agents", tenantId] });
     toast.success(v === "none" ? "קול כובה — תשובות בטקסט בלבד" : "הקול עודכן");
   };
@@ -387,19 +545,27 @@ function VoiceCard({ agent }: { agent: any }) {
         subtitle="הקול שבו כרמן תשיב בהודעות קוליות (TTS). דורש הפעלת מענה קולי בערוץ."
       />
       <div className="grid grid-cols-1 sm:grid-cols-[2fr_3fr] gap-4 items-start">
-        <Field label="קול הסוכן" hint={saving ? "שומר..." : "נשמר מיד עם הבחירה"}>
+        <Field
+          label="קול הסוכן"
+          hint={saving ? "שומר..." : "נשמר מיד עם הבחירה"}
+        >
           <Select value={current} onValueChange={onChange}>
-            <SelectTrigger><SelectValue /></SelectTrigger>
+            <SelectTrigger>
+              <SelectValue />
+            </SelectTrigger>
             <SelectContent>
-              {VOICE_OPTIONS.map(o => (
-                <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
+              {VOICE_OPTIONS.map((o) => (
+                <SelectItem key={o.value} value={o.value}>
+                  {o.label}
+                </SelectItem>
               ))}
             </SelectContent>
           </Select>
         </Field>
         <div className="rounded-lg border bg-muted/30 p-3 text-xs text-muted-foreground">
-          כרמן יכולה גם <strong>להבין</strong> הודעות קוליות שתשלח לה (תמלול אוטומטי).
-          מענה קולי מופעל פר-ערוץ; כשהוא פעיל, כרמן תשיב בהקלטה בקול שנבחר.
+          כרמן יכולה גם <strong>להבין</strong> הודעות קוליות שתשלח לה (תמלול
+          אוטומטי). מענה קולי מופעל פר-ערוץ; כשהוא פעיל, כרמן תשיב בהקלטה בקול
+          שנבחר.
         </div>
       </div>
     </Card>
@@ -415,12 +581,17 @@ function CapabilitiesCard({ agent, carmen }: { agent: any; carmen: boolean }) {
   const carmenTree = useCarmenMemoryTree();
   const agentTree = useAgentMemoryTree(carmen ? null : agent.id);
 
-  const toolsCount = Array.isArray(agent.allowed_tools) ? agent.allowed_tools.length : 0;
-  const activeGoals = (goals.data ?? []).filter(g => g.status === "active").length;
+  const toolsCount = Array.isArray(agent.allowed_tools)
+    ? agent.allowed_tools.length
+    : 0;
+  const activeGoals = (goals.data ?? []).filter(
+    (g) => g.status === "active",
+  ).length;
   const folderCount = (knowledge.folders.data ?? []).length;
   const knowledgeItems = (knowledge.items.data ?? []).length;
   const memoryCount = carmen
-    ? (carmenTree.data?.tree ?? []).reduce((s, n) => s + n.count, 0) + (carmenTree.data?.episodesCount ?? 0)
+    ? (carmenTree.data?.tree ?? []).reduce((s, n) => s + n.count, 0) +
+      (carmenTree.data?.episodesCount ?? 0)
     : (agentTree.data ?? []).reduce((s, n) => s + n.count, 0);
 
   return (
@@ -431,9 +602,19 @@ function CapabilitiesCard({ agent, carmen }: { agent: any; carmen: boolean }) {
         subtitle="מבט מהיר על המטרות, הכלים, הידע והזיכרון של הסוכן"
       />
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-        <StatTile icon={Target} label="מטרות פעילות" value={activeGoals} hint={`מתוך ${goals.data?.length ?? 0}`} />
+        <StatTile
+          icon={Target}
+          label="מטרות פעילות"
+          value={activeGoals}
+          hint={`מתוך ${goals.data?.length ?? 0}`}
+        />
         <StatTile icon={Wrench} label="כלים פעילים" value={toolsCount} />
-        <StatTile icon={BookOpen} label="ידע" value={knowledgeItems} hint={`${folderCount} תיקיות`} />
+        <StatTile
+          icon={BookOpen}
+          label="ידע"
+          value={knowledgeItems}
+          hint={`${folderCount} תיקיות`}
+        />
         <StatTile icon={Brain} label="פריטי זיכרון" value={memoryCount} />
       </div>
       {carmen && (
@@ -446,14 +627,26 @@ function CapabilitiesCard({ agent, carmen }: { agent: any; carmen: boolean }) {
   );
 }
 
-function StatTile({ icon: Icon, label, value, hint }: { icon: any; label: string; value: number; hint?: string }) {
+function StatTile({
+  icon: Icon,
+  label,
+  value,
+  hint,
+}: {
+  icon: any;
+  label: string;
+  value: number;
+  hint?: string;
+}) {
   return (
     <div className="border rounded-lg p-3 bg-muted/30">
       <div className="flex items-center gap-2 mb-1">
         <Icon className="h-3.5 w-3.5 text-muted-foreground" />
         <span className="text-xs text-muted-foreground">{label}</span>
       </div>
-      <p className="text-2xl font-bold leading-none">{value.toLocaleString()}</p>
+      <p className="text-2xl font-bold leading-none">
+        {value.toLocaleString()}
+      </p>
       {hint && <p className="text-[10px] text-muted-foreground mt-1">{hint}</p>}
     </div>
   );
@@ -464,17 +657,17 @@ function StatTile({ icon: Icon, label, value, hint }: { icon: any; label: string
 // supabase/functions/run-ai-agent/index.ts so users can see & extend them.
 // =========================================================================
 const CARMEN_BUILTIN_INSTRUCTIONS = [
-  'אתה כרמן, מנהלת AI ראשית של הארגון. את עוזרת אישית חכמה, יעילה ומקצועית.',
-  'יש לך גישה מלאה לכל מודולי המערכת: לידים, לקוחות, משימות, קמפיינרים, אנשי מכירות, סוכנויות, ספקים, מוצרים, אוטומציות, ועוד.',
-  'את יכולה לבצע כל פעולה שמשתמש יכול לבצע ידנית במערכת.',
-  'חשוב מאוד: לפני יצירת משימה חדשה, תמיד חפשי קודם עם search_tasks כדי לוודא שהמשימה לא קיימת כבר. אם היא קיימת - עדכני אותה במקום ליצור חדשה.',
-  'הבדל בין סוגי משימות: create_task = משימה לצוות (קמפיינרים). create_agent_task = משימה לכרמן עצמה. כשמבקשים ממך ליצור משימה לעצמך, סריקה תקופתית, או משימה חוזרת — השתמשי ב-create_agent_task.',
-  'ענה בעברית. היי תמציתית, מקצועית, ויעילה. כשמבצעים פעולה — אשרי את הביצוע בקצרה (2-3 משפטים מקסימום).',
+  "אתה כרמן, מנהלת AI ראשית של הארגון. את עוזרת אישית חכמה, יעילה ומקצועית.",
+  "יש לך גישה מלאה לכל מודולי המערכת: לידים, לקוחות, משימות, קמפיינרים, אנשי מכירות, סוכנויות, ספקים, מוצרים, אוטומציות, ועוד.",
+  "את יכולה לבצע כל פעולה שמשתמש יכול לבצע ידנית במערכת.",
+  "חשוב מאוד: לפני יצירת משימה חדשה, תמיד חפשי קודם עם search_tasks כדי לוודא שהמשימה לא קיימת כבר. אם היא קיימת - עדכני אותה במקום ליצור חדשה.",
+  "הבדל בין סוגי משימות: create_task = משימה לצוות (קמפיינרים). create_agent_task = משימה לכרמן עצמה. כשמבקשים ממך ליצור משימה לעצמך, סריקה תקופתית, או משימה חוזרת — השתמשי ב-create_agent_task.",
+  "ענה בעברית. היי תמציתית, מקצועית, ויעילה. כשמבצעים פעולה — אשרי את הביצוע בקצרה (2-3 משפטים מקסימום).",
   'כשמדברים על "דשבורד CRM" — הכוונה לדשבורד CRM הסוכנות שמציג Health Score, דגלים, סטטוס תקשורת. השתמשי ב-update_client_health כדי לעדכן את המצב.',
-  'כלל למידה עצמית: כשמשתמש מסביר/מתקן/מלמד אותך — שמרי מיד בזיכרון עם save_memory בקטגוריה instructions עם מפתח תיאורי. בתחילת כל עבודה בדקי עם recall_memory אם יש הנחיות רלוונטיות שנשמרו.',
+  "כלל למידה עצמית: כשמשתמש מסביר/מתקן/מלמד אותך — שמרי מיד בזיכרון עם save_memory בקטגוריה instructions עם מפתח תיאורי. בתחילת כל עבודה בדקי עם recall_memory אם יש הנחיות רלוונטיות שנשמרו.",
   '🚫 איסור בלוף מוחלט: אסור לכתוב "נוצרה/עודכנה/בוצע" אלא אם באמת קראת לכלי המתאים והוא החזיר success. כל אישור פעולה ללא קריאת כלי = שקר חמור.',
-  'כשמתבקשת לשייך/לעדכן/למחוק משימה קיימת: קודם search_tasks למצוא אותה, ואז update_task עם ה-id.',
-].join('\n\n');
+  "כשמתבקשת לשייך/לעדכן/למחוק משימה קיימת: קודם search_tasks למצוא אותה, ואז update_task עם ה-id.",
+].join("\n\n");
 
 function BuiltInInstructions({
   carmen,
@@ -494,18 +687,24 @@ function BuiltInInstructions({
     <div className="mb-4 border rounded-lg bg-muted/30">
       <button
         type="button"
-        onClick={() => setOpen(o => !o)}
+        onClick={() => setOpen((o) => !o)}
         className="w-full flex items-center justify-between gap-2 px-3 py-2 text-sm hover:bg-muted/50 transition"
       >
         <span className="flex items-center gap-2 font-medium">
           <BookOpen className="h-4 w-4 text-primary" />
-          הנחיות מובנות {carmen ? "של כרמן" : "ברירת מחדל"} ({text.length.toLocaleString()} תווים)
+          הנחיות מובנות {carmen ? "של כרמן" : "ברירת מחדל"} (
+          {text.length.toLocaleString()} תווים)
         </span>
-        <span className="text-xs text-muted-foreground">{open ? "הסתר" : "הצג"}</span>
+        <span className="text-xs text-muted-foreground">
+          {open ? "הסתר" : "הצג"}
+        </span>
       </button>
       {open && (
         <div className="border-t p-3 space-y-2">
-          <pre className="whitespace-pre-wrap text-[11px] font-mono bg-background border rounded p-2 max-h-72 overflow-auto text-right" dir="rtl">
+          <pre
+            className="whitespace-pre-wrap text-[11px] font-mono bg-background border rounded p-2 max-h-72 overflow-auto text-right"
+            dir="rtl"
+          >
             {text}
           </pre>
           <div className="flex items-center gap-2 justify-end">
@@ -514,7 +713,8 @@ function BuiltInInstructions({
             </Button>
           </div>
           <p className="text-[11px] text-muted-foreground text-right">
-            ההנחיות הללו מוטמעות במנוע ופעילות תמיד גם אם השדה למטה ריק. לעריכה — העתיקי לעריכה והוסיפי את ההנחיות שלך בהמשך הטקסט.
+            ההנחיות הללו מוטמעות במנוע ופעילות תמיד גם אם השדה למטה ריק. לעריכה
+            — העתיקי לעריכה והוסיפי את ההנחיות שלך בהמשך הטקסט.
           </p>
         </div>
       )}
@@ -525,7 +725,15 @@ function BuiltInInstructions({
 // =========================================================================
 // Helpers
 // =========================================================================
-function SectionHeader({ icon: Icon, title, subtitle }: { icon: any; title: string; subtitle?: string }) {
+function SectionHeader({
+  icon: Icon,
+  title,
+  subtitle,
+}: {
+  icon: any;
+  title: string;
+  subtitle?: string;
+}) {
   return (
     <div className="flex items-start gap-3 mb-4">
       <div className="h-8 w-8 rounded-md bg-primary/10 text-primary flex items-center justify-center shrink-0">
@@ -533,13 +741,23 @@ function SectionHeader({ icon: Icon, title, subtitle }: { icon: any; title: stri
       </div>
       <div className="flex-1">
         <h3 className="font-semibold">{title}</h3>
-        {subtitle && <p className="text-xs text-muted-foreground">{subtitle}</p>}
+        {subtitle && (
+          <p className="text-xs text-muted-foreground">{subtitle}</p>
+        )}
       </div>
     </div>
   );
 }
 
-function Field({ label, hint, children }: { label: React.ReactNode; hint?: string; children: React.ReactNode }) {
+function Field({
+  label,
+  hint,
+  children,
+}: {
+  label: React.ReactNode;
+  hint?: string;
+  children: React.ReactNode;
+}) {
   return (
     <div className="space-y-1.5">
       <Label className="text-sm">{label}</Label>

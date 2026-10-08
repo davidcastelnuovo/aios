@@ -3,7 +3,11 @@
 
 export type CurrencyCode = "ILS" | "USD" | "EUR";
 
-export const CURRENCY_OPTIONS: { value: CurrencyCode; label: string; symbol: string }[] = [
+export const CURRENCY_OPTIONS: {
+  value: CurrencyCode;
+  label: string;
+  symbol: string;
+}[] = [
   { value: "ILS", label: "שקל (₪)", symbol: "₪" },
   { value: "USD", label: "דולר ($)", symbol: "$" },
   { value: "EUR", label: "אירו (€)", symbol: "€" },
@@ -77,7 +81,9 @@ export function resolveDashboardCurrency(
   }> = [],
 ): CurrencyCode {
   const adsCurrencies = tables
-    .filter((table) => ADS_INTEGRATION_TYPES.has(String(table.integration_type || "")))
+    .filter((table) =>
+      ADS_INTEGRATION_TYPES.has(String(table.integration_type || "")),
+    )
     .map((table) => normalizeCurrencyCode(table.integration_settings?.currency))
     .filter(Boolean);
 

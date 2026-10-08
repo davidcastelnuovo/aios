@@ -44,7 +44,9 @@ export function LinkTableToClientDialog({
   const open = controlledOpen !== undefined ? controlledOpen : internalOpen;
   const setOpen = onOpenChange || setInternalOpen;
 
-  const [selectedClientId, setSelectedClientId] = useState<string>(currentClientId || "");
+  const [selectedClientId, setSelectedClientId] = useState<string>(
+    currentClientId || "",
+  );
   const [search, setSearch] = useState("");
   const queryClient = useQueryClient();
 
@@ -65,7 +67,9 @@ export function LinkTableToClientDialog({
         .select("agency_id")
         .eq("accessing_tenant_id", tenantId);
 
-      const sharedAgencyIds = (sharedAccess || []).map((s: any) => s.agency_id).filter(Boolean);
+      const sharedAgencyIds = (sharedAccess || [])
+        .map((s: any) => s.agency_id)
+        .filter(Boolean);
 
       let sharedClients: any[] = [];
       if (sharedAgencyIds.length > 0) {
@@ -82,14 +86,14 @@ export function LinkTableToClientDialog({
         if (!map.has(c.id)) map.set(c.id, c);
       }
       return Array.from(map.values()).sort((a, b) =>
-        (a.name || "").localeCompare(b.name || "", "he")
+        (a.name || "").localeCompare(b.name || "", "he"),
       );
     },
     enabled: open && !!tenantId,
   });
 
   const filteredClients = clients.filter((c) =>
-    c.name.toLowerCase().includes(search.toLowerCase())
+    c.name.toLowerCase().includes(search.toLowerCase()),
   );
 
   const linkMutation = useMutation({
@@ -105,7 +109,9 @@ export function LinkTableToClientDialog({
         try {
           const details = await (error as any).context?.json();
           if (details?.error) message = details.error;
-        } catch { /* keep generic message */ }
+        } catch {
+          /* keep generic message */
+        }
         throw new Error(message);
       }
     },
@@ -113,8 +119,14 @@ export function LinkTableToClientDialog({
       toast.success("הטבלה שויכה ללקוח בהצלחה");
       queryClient.invalidateQueries({ queryKey: ["crm-table", tenantId] });
       queryClient.invalidateQueries({ queryKey: ["crm-tables", tenantId] });
-      queryClient.invalidateQueries({ queryKey: ["client-dashboard-tables", tenantId] });
-      invalidateClientCrmTablesQueries(queryClient, tenantId, clientId || currentClientId || null);
+      queryClient.invalidateQueries({
+        queryKey: ["client-dashboard-tables", tenantId],
+      });
+      invalidateClientCrmTablesQueries(
+        queryClient,
+        tenantId,
+        clientId || currentClientId || null,
+      );
       setOpen(false);
     },
     onError: (e: Error) => {
@@ -132,7 +144,8 @@ export function LinkTableToClientDialog({
             שיוך טבלה ללקוח
           </DialogTitle>
           <DialogDescription>
-            בחר את הלקוח שאליו ברצונך לשייך את הטבלה. הנתונים יופיעו בדשבורד של אותו לקוח.
+            בחר את הלקוח שאליו ברצונך לשייך את הטבלה. הנתונים יופיעו בדשבורד של
+            אותו לקוח.
           </DialogDescription>
         </DialogHeader>
 
@@ -152,7 +165,10 @@ export function LinkTableToClientDialog({
 
           <div className="space-y-2">
             <Label>בחר לקוח</Label>
-            <Select value={selectedClientId} onValueChange={setSelectedClientId}>
+            <Select
+              value={selectedClientId}
+              onValueChange={setSelectedClientId}
+            >
               <SelectTrigger>
                 <SelectValue placeholder={isLoading ? "טוען..." : "בחר לקוח"} />
               </SelectTrigger>
@@ -194,7 +210,9 @@ export function LinkTableToClientDialog({
             onClick={() => linkMutation.mutate(selectedClientId)}
             disabled={!selectedClientId || linkMutation.isPending}
           >
-            {linkMutation.isPending && <Loader2 className="ml-2 h-4 w-4 animate-spin" />}
+            {linkMutation.isPending && (
+              <Loader2 className="ml-2 h-4 w-4 animate-spin" />
+            )}
             שייך ללקוח
           </Button>
         </DialogFooter>

@@ -66,14 +66,17 @@ export function EntityAssignmentDialog({
     if (!open) return;
     const initialType = currentSelection?.type || groups[0]?.type || "";
     setActiveType(initialType);
-    setSelectedIds(currentSelection?.type === initialType ? currentSelection.ids : []);
+    setSelectedIds(
+      currentSelection?.type === initialType ? currentSelection.ids : [],
+    );
     setSearch("");
     // Fingerprints avoid resetting a user's in-dialog choices when a parent
     // rebuilds equivalent group/selection objects.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, currentFingerprint, groupTypes]);
 
-  const activeGroup = groups.find((group) => group.type === activeType) || groups[0];
+  const activeGroup =
+    groups.find((group) => group.type === activeType) || groups[0];
   const visibleOptions = useMemo(
     () => filterEntityAssignmentOptions(activeGroup?.options || [], search),
     [activeGroup, search],
@@ -105,12 +108,18 @@ export function EntityAssignmentDialog({
         <Tabs value={activeType} onValueChange={switchType}>
           <TabsList
             className="grid w-full"
-            style={{ gridTemplateColumns: `repeat(${Math.max(groups.length, 1)}, minmax(0, 1fr))` }}
+            style={{
+              gridTemplateColumns: `repeat(${Math.max(groups.length, 1)}, minmax(0, 1fr))`,
+            }}
           >
             {groups.map((group) => {
               const Icon = group.icon;
               return (
-                <TabsTrigger key={group.type} value={group.type} className="gap-1.5">
+                <TabsTrigger
+                  key={group.type}
+                  value={group.type}
+                  className="gap-1.5"
+                >
                   <Icon className="h-4 w-4" />
                   {group.label}
                 </TabsTrigger>
@@ -145,7 +154,11 @@ export function EntityAssignmentDialog({
                   disabled={saving}
                   onClick={() =>
                     setSelectedIds((previous) =>
-                      toggleEntityAssignmentId(previous, option.id, Boolean(activeGroup?.multiple))
+                      toggleEntityAssignmentId(
+                        previous,
+                        option.id,
+                        Boolean(activeGroup?.multiple),
+                      ),
                     )
                   }
                   className={cn(
@@ -154,7 +167,9 @@ export function EntityAssignmentDialog({
                   )}
                 >
                   <span className="min-w-0">
-                    <span className="block truncate font-medium">{option.label}</span>
+                    <span className="block truncate font-medium">
+                      {option.label}
+                    </span>
                     {option.description && (
                       <span className="block truncate text-xs text-muted-foreground">
                         {option.description}
@@ -164,7 +179,8 @@ export function EntityAssignmentDialog({
                   <span
                     className={cn(
                       "mr-3 flex h-5 w-5 shrink-0 items-center justify-center rounded-full border",
-                      selected && "border-primary bg-primary text-primary-foreground",
+                      selected &&
+                        "border-primary bg-primary text-primary-foreground",
                     )}
                   >
                     {selected && <Check className="h-3.5 w-3.5" />}
@@ -187,13 +203,20 @@ export function EntityAssignmentDialog({
             הסר שיוך
           </Button>
           <div className="flex gap-2">
-            <Button type="button" variant="outline" disabled={saving} onClick={() => onOpenChange(false)}>
+            <Button
+              type="button"
+              variant="outline"
+              disabled={saving}
+              onClick={() => onOpenChange(false)}
+            >
               ביטול
             </Button>
             <Button
               type="button"
               disabled={saving || !activeGroup || selectedIds.length === 0}
-              onClick={() => submit({ type: activeGroup.type, ids: selectedIds })}
+              onClick={() =>
+                submit({ type: activeGroup.type, ids: selectedIds })
+              }
             >
               {saving && <Loader2 className="ml-1 h-4 w-4 animate-spin" />}
               שמור שיוך
@@ -204,4 +227,3 @@ export function EntityAssignmentDialog({
     </Dialog>
   );
 }
-

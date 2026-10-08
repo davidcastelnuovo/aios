@@ -1,6 +1,8 @@
 import { forwardRef, Suspense } from "react";
 import { lazyWithRetry } from "@/lib/lazyWithRetry";
-const DynamicTableView = lazyWithRetry(() => import("@/pages/DynamicTableView"));
+const DynamicTableView = lazyWithRetry(
+  () => import("@/pages/DynamicTableView"),
+);
 
 interface Props {
   tableSlug: string;
@@ -24,8 +26,14 @@ export const ClientTableSnapshot = forwardRef<HTMLDivElement, Props>(
           display: "block",
         }}
       >
-        <Suspense fallback={<div aria-busy="true" style={{ minHeight: 500 }} />}>
-          <DynamicTableView embedTableSlug={tableSlug} embedMode summaryOnly={summaryOnly} />
+        <Suspense
+          fallback={<div aria-busy="true" style={{ minHeight: 500 }} />}
+        >
+          <DynamicTableView
+            embedTableSlug={tableSlug}
+            embedMode
+            summaryOnly={summaryOnly}
+          />
         </Suspense>
       </div>
     );

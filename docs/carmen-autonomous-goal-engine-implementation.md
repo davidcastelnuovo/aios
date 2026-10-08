@@ -4,44 +4,44 @@ Spec: [`carmen-autonomous-goal-engine.md`](./carmen-autonomous-goal-engine.md) (
 
 ## Relationship to existing Goal Execution Mode
 
-| Existing (`goal-execution-mode`) | Autonomous Goal Engine |
-| --- | --- |
-| `goals.execution_mode` — human-managed milestones/blockers | `goals.autonomous_mode` — server-side loop until evidence-based completion |
-| Carmen tools create/update goals on demand | Worker runs iterations on schedule; survives restarts |
-| `completion_criteria` free text | Structured `goal_success_criteria` rows + `goal_evidence` |
-| `dev_tasks` for Cursor | `goal_plan_steps` with `action_type=cursor` + Technical Job protocol (Phase 2) |
+| Existing (`goal-execution-mode`)                           | Autonomous Goal Engine                                                         |
+| ---------------------------------------------------------- | ------------------------------------------------------------------------------ |
+| `goals.execution_mode` — human-managed milestones/blockers | `goals.autonomous_mode` — server-side loop until evidence-based completion     |
+| Carmen tools create/update goals on demand                 | Worker runs iterations on schedule; survives restarts                          |
+| `completion_criteria` free text                            | Structured `goal_success_criteria` rows + `goal_evidence`                      |
+| `dev_tasks` for Cursor                                     | `goal_plan_steps` with `action_type=cursor` + Technical Job protocol (Phase 2) |
 
 Both can coexist on the same `goals` row (`execution_mode` + `autonomous_mode`).
 
 ## Phase status
 
-| Phase | Scope | Status |
-| --- | --- | --- |
-| **1 — Core Goal Engine** | DB, Goal Contract, worker loop, scheduler, persistence | ✅ Done |
-| **1b — Unify with Execution Mode** | Single `createUnifiedGoal`, extended GoalsPanel | ✅ This PR |
-| **2 — Cursor Execution** | Per-goal sticky agent (`goals.cursor_agent_id`), follow-ups not new agents | ✅ Partial |
-| **2b — Resource efficiency** | Post-iteration review → Cursor optimize instruction | ✅ Done |
-| **2c — Parallel sub-projects** | One Cursor agent per department/track, parallel dispatch | ✅ Done |
-| **2d — Cursor Direct brain** | Planning/management via Carmen↔Cursor Direct sticky chat (not Model API) | ✅ This PR |
-| **3 — Model Router** | Profiles, provider adapters, failover metrics | Partial — FAST_CHAT only; brain uses Cursor Direct |
-| **4 — Verifier** | Criteria engine + completion gate | Partial (gate in engine; HTTP/SQL checks Phase 4) |
-| **5 — Tool Builder** | Missing capability → Cursor sub-goal → registry | Planned |
-| **6 — Safety/Observability** | Risk policy, stuck detection, audit | Partial (stuck detection + `goal_model_events`) |
-| **7 — Carmen UX** | Goals panel: engine status, criteria, evidence | Planned |
+| Phase                              | Scope                                                                      | Status                                             |
+| ---------------------------------- | -------------------------------------------------------------------------- | -------------------------------------------------- |
+| **1 — Core Goal Engine**           | DB, Goal Contract, worker loop, scheduler, persistence                     | ✅ Done                                            |
+| **1b — Unify with Execution Mode** | Single `createUnifiedGoal`, extended GoalsPanel                            | ✅ This PR                                         |
+| **2 — Cursor Execution**           | Per-goal sticky agent (`goals.cursor_agent_id`), follow-ups not new agents | ✅ Partial                                         |
+| **2b — Resource efficiency**       | Post-iteration review → Cursor optimize instruction                        | ✅ Done                                            |
+| **2c — Parallel sub-projects**     | One Cursor agent per department/track, parallel dispatch                   | ✅ Done                                            |
+| **2d — Cursor Direct brain**       | Planning/management via Carmen↔Cursor Direct sticky chat (not Model API)   | ✅ This PR                                         |
+| **3 — Model Router**               | Profiles, provider adapters, failover metrics                              | Partial — FAST_CHAT only; brain uses Cursor Direct |
+| **4 — Verifier**                   | Criteria engine + completion gate                                          | Partial (gate in engine; HTTP/SQL checks Phase 4)  |
+| **5 — Tool Builder**               | Missing capability → Cursor sub-goal → registry                            | Planned                                            |
+| **6 — Safety/Observability**       | Risk policy, stuck detection, audit                                        | Partial (stuck detection + `goal_model_events`)    |
+| **7 — Carmen UX**                  | Goals panel: engine status, criteria, evidence                             | Planned                                            |
 
 ## Code locations
 
-| Component | Path |
-| --- | --- |
-| Migration | `supabase/migrations/20260917180000_carmen_autonomous_goal_engine_phase1.sql` |
-| Engine core | `supabase/functions/_shared/autonomous-goal-engine.ts` |
-| Model router | `supabase/functions/_shared/model-router.ts` |
-| Worker (cron) | `supabase/functions/autonomous-goal-worker/index.ts` |
-| Orchestrator brain | `supabase/functions/_shared/goal-cursor-brain.ts` |
-| Brain callback | `supabase/functions/goal-brain-callback/index.ts` |
-| Brain apply | `supabase/functions/_shared/goal-brain-apply.ts` |
-| API | `supabase/functions/goal-execution-center/index.ts` (`autonomous_*` actions) |
-| Carmen tools | `create_execution_goal` (`autonomous: true`), `get_execution_goal_report` / `get_autonomous_goal_status` |
+| Component          | Path                                                                                                     |
+| ------------------ | -------------------------------------------------------------------------------------------------------- |
+| Migration          | `supabase/migrations/20260917180000_carmen_autonomous_goal_engine_phase1.sql`                            |
+| Engine core        | `supabase/functions/_shared/autonomous-goal-engine.ts`                                                   |
+| Model router       | `supabase/functions/_shared/model-router.ts`                                                             |
+| Worker (cron)      | `supabase/functions/autonomous-goal-worker/index.ts`                                                     |
+| Orchestrator brain | `supabase/functions/_shared/goal-cursor-brain.ts`                                                        |
+| Brain callback     | `supabase/functions/goal-brain-callback/index.ts`                                                        |
+| Brain apply        | `supabase/functions/_shared/goal-brain-apply.ts`                                                         |
+| API                | `supabase/functions/goal-execution-center/index.ts` (`autonomous_*` actions)                             |
+| Carmen tools       | `create_execution_goal` (`autonomous: true`), `get_execution_goal_report` / `get_autonomous_goal_status` |
 
 ## Worker schedule
 

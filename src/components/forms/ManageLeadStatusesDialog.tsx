@@ -1,10 +1,24 @@
 import { useState, useEffect } from "react";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Settings2, Plus, Trash2, GripVertical, Search } from "lucide-react";
-import { useLeadStatuses, useLeadStatusMutations, LeadStatus } from "@/hooks/useLeadStatuses";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import {
+  useLeadStatuses,
+  useLeadStatusMutations,
+  LeadStatus,
+} from "@/hooks/useLeadStatuses";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
 import { cn } from "@/lib/utils";
 import {
   DndContext,
@@ -62,7 +76,9 @@ function ColorPicker({ color, onChange }: ColorPickerProps) {
               key={presetColor}
               className={cn(
                 "w-8 h-8 rounded-md border-2 transition-transform hover:scale-110",
-                color === presetColor ? "border-primary ring-2 ring-primary/30" : "border-border"
+                color === presetColor
+                  ? "border-primary ring-2 ring-primary/30"
+                  : "border-border",
               )}
               style={{ backgroundColor: presetColor }}
               onClick={() => {
@@ -92,7 +108,11 @@ interface SortableStatusRowProps {
   onDelete: (id: string) => void;
 }
 
-function SortableStatusRow({ status, onUpdate, onDelete }: SortableStatusRowProps) {
+function SortableStatusRow({
+  status,
+  onUpdate,
+  onDelete,
+}: SortableStatusRowProps) {
   const [label, setLabel] = useState(status.label);
   const [color, setColor] = useState(status.color);
   const [isEditing, setIsEditing] = useState(false);
@@ -130,7 +150,7 @@ function SortableStatusRow({ status, onUpdate, onDelete }: SortableStatusRowProp
       style={style}
       className={cn(
         "flex items-center gap-3 py-2 px-2 rounded-lg hover:bg-muted/50 group bg-background",
-        isDragging && "shadow-lg ring-2 ring-primary/20"
+        isDragging && "shadow-lg ring-2 ring-primary/20",
       )}
     >
       <button
@@ -140,9 +160,9 @@ function SortableStatusRow({ status, onUpdate, onDelete }: SortableStatusRowProp
       >
         <GripVertical className="h-4 w-4 text-muted-foreground" />
       </button>
-      
+
       <ColorPicker color={color} onChange={handleColorChange} />
-      
+
       <div className="flex-1">
         {isEditing ? (
           <Input
@@ -162,7 +182,7 @@ function SortableStatusRow({ status, onUpdate, onDelete }: SortableStatusRowProp
           </button>
         )}
       </div>
-      
+
       <Button
         variant="ghost"
         size="icon"
@@ -204,7 +224,8 @@ export function ManageLeadStatusesDialog({
   const [newColor, setNewColor] = useState("#3b82f6");
   const [searchQuery, setSearchQuery] = useState("");
   const { statuses } = useLeadStatuses();
-  const { updateStatus, createStatus, deleteStatus, updateSortOrders } = useLeadStatusMutations();
+  const { updateStatus, createStatus, deleteStatus, updateSortOrders } =
+    useLeadStatusMutations();
 
   // Local state for immediate UI updates during drag
   const [localStatuses, setLocalStatuses] = useState<LeadStatus[]>([]);
@@ -218,7 +239,7 @@ export function ManageLeadStatusesDialog({
     useSensor(PointerSensor),
     useSensor(KeyboardSensor, {
       coordinateGetter: sortableKeyboardCoordinates,
-    })
+    }),
   );
 
   const handleDragEnd = (event: DragEndEvent) => {
@@ -227,17 +248,17 @@ export function ManageLeadStatusesDialog({
     if (over && active.id !== over.id) {
       const oldIndex = localStatuses.findIndex((s) => s.id === active.id);
       const newIndex = localStatuses.findIndex((s) => s.id === over.id);
-      
+
       // Update local state immediately for smooth UI
       const newOrder = arrayMove(localStatuses, oldIndex, newIndex);
       setLocalStatuses(newOrder);
-      
+
       // Sync with server
       const updates = newOrder.map((status, index) => ({
         id: status.id,
         sort_order: index,
       }));
-      
+
       updateSortOrders.mutate(updates);
     }
   };
@@ -278,7 +299,7 @@ export function ManageLeadStatusesDialog({
         <DialogHeader>
           <DialogTitle>ניהול סטטוסי תגובה</DialogTitle>
         </DialogHeader>
-        
+
         {localStatuses.length > 3 && (
           <div className="relative">
             <Search className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
@@ -291,7 +312,7 @@ export function ManageLeadStatusesDialog({
             />
           </div>
         )}
-        
+
         <div className="space-y-1 max-h-[400px] overflow-y-auto">
           <DndContext
             sensors={sensors}
@@ -299,11 +320,19 @@ export function ManageLeadStatusesDialog({
             onDragEnd={handleDragEnd}
           >
             <SortableContext
-              items={localStatuses.filter(s => s.label.toLowerCase().includes(searchQuery.toLowerCase())).map((s) => s.id)}
+              items={localStatuses
+                .filter((s) =>
+                  s.label.toLowerCase().includes(searchQuery.toLowerCase()),
+                )
+                .map((s) => s.id)}
               strategy={verticalListSortingStrategy}
             >
               {localStatuses
-                .filter(status => status.label.toLowerCase().includes(searchQuery.toLowerCase()))
+                .filter((status) =>
+                  status.label
+                    .toLowerCase()
+                    .includes(searchQuery.toLowerCase()),
+                )
                 .map((status) => (
                   <SortableStatusRow
                     key={status.id}
@@ -325,7 +354,12 @@ export function ManageLeadStatusesDialog({
             className="flex-1"
             onKeyDown={(e) => e.key === "Enter" && handleAdd()}
           />
-          <Button onClick={handleAdd} size="sm" className="gap-2" disabled={!newLabel.trim()}>
+          <Button
+            onClick={handleAdd}
+            size="sm"
+            className="gap-2"
+            disabled={!newLabel.trim()}
+          >
             <Plus className="h-4 w-4" />
             הוסף
           </Button>

@@ -1,5 +1,11 @@
 import { useState, useMemo } from "react";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
@@ -8,12 +14,18 @@ import { useToast } from "@/hooks/use-toast";
 import { useCurrentTenant } from "@/hooks/useCurrentTenant";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { getLeadJsonIntakeFields, LEAD_JSON_INTAKE_ALWAYS_SHOWN } from "@/lib/leadJsonFields";
+import {
+  getLeadJsonIntakeFields,
+  LEAD_JSON_INTAKE_ALWAYS_SHOWN,
+} from "@/lib/leadJsonFields";
 
 export default function JsonLeadBuilder() {
   const { toast } = useToast();
   const { tenant } = useCurrentTenant();
-  const [selectedFields, setSelectedFields] = useState<string[]>(["tenant_slug", "company_name"]);
+  const [selectedFields, setSelectedFields] = useState<string[]>([
+    "tenant_slug",
+    "company_name",
+  ]);
 
   const baseFields = useMemo(
     () => getLeadJsonIntakeFields(tenant?.slug || ""),
@@ -50,7 +62,8 @@ export default function JsonLeadBuilder() {
   const availableFields = useMemo(() => {
     return baseFields
       .filter((field) => {
-        if (LEAD_JSON_INTAKE_ALWAYS_SHOWN.has(field.key) || field.required) return true;
+        if (LEAD_JSON_INTAKE_ALWAYS_SHOWN.has(field.key) || field.required)
+          return true;
         const override = customByKey[field.key];
         return override ? override.visible : true;
       })
@@ -63,7 +76,9 @@ export default function JsonLeadBuilder() {
   const toggleField = (fieldKey: string) => {
     if (fieldKey === "tenant_slug") return;
     setSelectedFields((prev) =>
-      prev.includes(fieldKey) ? prev.filter((k) => k !== fieldKey) : [...prev, fieldKey],
+      prev.includes(fieldKey)
+        ? prev.filter((k) => k !== fieldKey)
+        : [...prev, fieldKey],
     );
   };
 
@@ -93,13 +108,17 @@ export default function JsonLeadBuilder() {
       <CardHeader>
         <CardTitle>בונה JSON מותאם אישית</CardTitle>
         <CardDescription>
-          בחר את השדות שאתה רוצה לכלול ב-JSON שלך. התוויות מתעדכנות לפי ניהול השדות של הארגון.
+          בחר את השדות שאתה רוצה לכלול ב-JSON שלך. התוויות מתעדכנות לפי ניהול
+          השדות של הארגון.
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-6">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           {availableFields.map((field) => (
-            <div key={field.key} className="flex items-start space-x-3 space-x-reverse">
+            <div
+              key={field.key}
+              className="flex items-start space-x-3 space-x-reverse"
+            >
               <Checkbox
                 id={field.key}
                 checked={selectedFields.includes(field.key)}
@@ -124,11 +143,7 @@ export default function JsonLeadBuilder() {
         <div className="space-y-2">
           <div className="flex items-center justify-between">
             <Label>ה-JSON שנוצר:</Label>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={copyToClipboard}
-            >
+            <Button variant="outline" size="sm" onClick={copyToClipboard}>
               <Copy className="h-4 w-4 ml-2" />
               העתק
             </Button>

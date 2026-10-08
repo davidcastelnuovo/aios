@@ -5,9 +5,15 @@ async function invokeTaskPeerNotification(body: {
   trigger_type: "task_collaborator_added" | "task_update_added";
   data: Record<string, unknown>;
 }): Promise<void> {
-  const { error } = await supabase.functions.invoke("trigger-automation", { body });
+  const { error } = await supabase.functions.invoke("trigger-automation", {
+    body,
+  });
   if (error) {
-    console.warn("[notify-task-peers]", body.trigger_type, error.message || error);
+    console.warn(
+      "[notify-task-peers]",
+      body.trigger_type,
+      error.message || error,
+    );
   }
 }
 

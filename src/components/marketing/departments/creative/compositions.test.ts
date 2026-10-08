@@ -14,7 +14,9 @@ import {
 test("seven graphic architectures are available and structurally different", () => {
   assert.equal(CREATIVE_COMPOSITIONS.length, 7);
   assert.equal(CREATIVE_COMPOSITIONS[0].id, "offer");
-  const signatures = CREATIVE_COMPOSITIONS.map((item) => `${item.type.x}:${item.type.y}:${item.logo.x}`);
+  const signatures = CREATIVE_COMPOSITIONS.map(
+    (item) => `${item.type.x}:${item.type.y}:${item.logo.x}`,
+  );
   assert.equal(new Set(signatures).size, signatures.length);
 });
 
@@ -42,13 +44,21 @@ test("pickCompositionId prefers an unused structure", () => {
 test("auto generation never picks the Promo lead-gen offer board", () => {
   for (const seed of ["a", "b", "copy-1", "וריאציה 3", "seo / geo"]) {
     assert.notEqual(pickVariationComposition({ seed }), "offer");
-    assert.notEqual(pickCompositionId(seed, [], { exclude: ["offer"] }), "offer");
+    assert.notEqual(
+      pickCompositionId(seed, [], { exclude: ["offer"] }),
+      "offer",
+    );
   }
-  assert.equal(pickVariationComposition({ seed: "x", lockedId: "offer" }), "offer");
+  assert.equal(
+    pickVariationComposition({ seed: "x", lockedId: "offer" }),
+    "offer",
+  );
 });
 
 test("auto generation rotates poster layouts across a grid", () => {
-  const used: Array<"offer" | "flush" | "rail" | "slash" | "badge" | "flag" | "split"> = [];
+  const used: Array<
+    "offer" | "flush" | "rail" | "slash" | "badge" | "flag" | "split"
+  > = [];
   const picked = ["1", "2", "3", "4"].map((seed) => {
     const id = pickVariationComposition({ seed, used });
     used.push(id);
@@ -73,13 +83,24 @@ test("flush logo is not bottom-left and does not sit under type or CTA", () => {
 
 test("no composition parks the logo on top of type or CTA", () => {
   for (const item of CREATIVE_COMPOSITIONS) {
-    assert.equal(layoutRectsOverlap(item.logo, item.type), false, `${item.id} logo vs type`);
-    assert.equal(layoutRectsOverlap(item.logo, item.cta), false, `${item.id} logo vs cta`);
+    assert.equal(
+      layoutRectsOverlap(item.logo, item.type),
+      false,
+      `${item.id} logo vs type`,
+    );
+    assert.equal(
+      layoutRectsOverlap(item.logo, item.cta),
+      false,
+      `${item.id} logo vs cta`,
+    );
   }
 });
 
 test("image generation lock no longer reserves the old caption template", () => {
-  const source = readFileSync(new URL("../../lib/creativeImagePrompt.ts", import.meta.url), "utf8");
+  const source = readFileSync(
+    new URL("../../lib/creativeImagePrompt.ts", import.meta.url),
+    "utf8",
+  );
   assert.match(source, /Do NOT reserve a top headline strip/);
   assert.match(source, /garbles Hebrew/);
   assert.match(source, /quiet atmospheric pocket/);

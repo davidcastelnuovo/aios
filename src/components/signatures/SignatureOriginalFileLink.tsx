@@ -26,7 +26,12 @@ export function SignatureOriginalFileLink({
   }
 
   return (
-    <a href={href} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 text-primary hover:underline">
+    <a
+      href={href}
+      target="_blank"
+      rel="noopener noreferrer"
+      className="flex items-center gap-2 text-primary hover:underline"
+    >
       <ExternalLink className="h-4 w-4" />
       {label}
     </a>

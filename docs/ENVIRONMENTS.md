@@ -28,11 +28,11 @@ When a task finishes, **always send David the development environment link**: th
 
 ## Canonical URLs
 
-| Environment | Git | Frontend URL | When it updates |
-| --- | --- | --- | --- |
-| **Production** | `main` | `https://aios.co.il` | merge to `main` |
-| **Staging (persistent dev)** | `develop` | `https://after-lead-git-develop-aios-crm.vercel.app` (custom domain `https://staging.aios.co.il` requires verification) | merge to `develop` |
-| **Feature Preview** | `feature/*`, `cursor/*`, etc. | `https://after-lead-git-{branch}-aios-crm.vercel.app` | push to that branch only |
+| Environment                  | Git                           | Frontend URL                                                                                                            | When it updates          |
+| ---------------------------- | ----------------------------- | ----------------------------------------------------------------------------------------------------------------------- | ------------------------ |
+| **Production**               | `main`                        | `https://aios.co.il`                                                                                                    | merge to `main`          |
+| **Staging (persistent dev)** | `develop`                     | `https://after-lead-git-develop-aios-crm.vercel.app` (custom domain `https://staging.aios.co.il` requires verification) | merge to `develop`       |
+| **Feature Preview**          | `feature/*`, `cursor/*`, etc. | `https://after-lead-git-{branch}-aios-crm.vercel.app`                                                                   | push to that branch only |
 
 ### Staging domain
 
@@ -62,12 +62,12 @@ feature/* or fix/*
 
 **Staging stays current:** on every push to `main`, workflow `Sync develop from main` merges `main` → `develop` to bring Staging code up to date with Production hotfixes; conflicts or failed runs require attention. Manual `workflow_dispatch` remains available.
 
-| Git | Deploy | Data |
-| --- | --- | --- |
-| local | `pnpm dev` | [Local development](#local-development) uses AIOS Staging |
-| `feature/*` | Vercel Preview | AIOS Staging (every Preview deploy) |
-| `develop` | Persistent Staging | AIOS Staging Supabase |
-| `main` | Production | Production Supabase |
+| Git         | Deploy             | Data                                                      |
+| ----------- | ------------------ | --------------------------------------------------------- |
+| local       | `pnpm dev`         | [Local development](#local-development) uses AIOS Staging |
+| `feature/*` | Vercel Preview     | AIOS Staging (every Preview deploy)                       |
+| `develop`   | Persistent Staging | AIOS Staging Supabase                                     |
+| `main`      | Production         | Production Supabase                                       |
 
 ### Local development
 
@@ -144,12 +144,12 @@ Branch protection on `main` / `develop` is a GitHub settings change; the freshne
 
 Vercel Preview is the development environment. It talks to **AIOS Staging**, never Production. Do not “fix” Preview by pointing it at Production.
 
-| Seat | Works on Preview today? | Why |
-| --- | --- | --- |
-| Carmen (internal / `run-ai-agent`) | Yes | Staging has the tenant, agent, and OpenAI path |
-| Cursor / Grok Cloud seats | Only if Staging `CURSOR_API_KEY` is a **valid Cursor User key** | Launch via `api.cursor.com` |
-| Codex Direct | Only if Staging has **ChatGPT Workspace** secrets | `CHATGPT_WORK_AGENT_TRIGGER_ID` + `CHATGPT_WORK_AGENT_TOKEN` (or `CODEX_WORK_AGENT_*`) — `api.chatgpt.com/v1/workspace_agents/.../trigger` |
-| Knights Round Table | Cursor + Grok (Cloud) + Codex (Workspace) | Parliament fans out to configured seats |
+| Seat                               | Works on Preview today?                                         | Why                                                                                                                                        |
+| ---------------------------------- | --------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
+| Carmen (internal / `run-ai-agent`) | Yes                                                             | Staging has the tenant, agent, and OpenAI path                                                                                             |
+| Cursor / Grok Cloud seats          | Only if Staging `CURSOR_API_KEY` is a **valid Cursor User key** | Launch via `api.cursor.com`                                                                                                                |
+| Codex Direct                       | Only if Staging has **ChatGPT Workspace** secrets               | `CHATGPT_WORK_AGENT_TRIGGER_ID` + `CHATGPT_WORK_AGENT_TOKEN` (or `CODEX_WORK_AGENT_*`) — `api.chatgpt.com/v1/workspace_agents/.../trigger` |
+| Knights Round Table                | Cursor + Grok (Cloud) + Codex (Workspace)                       | Parliament fans out to configured seats                                                                                                    |
 
 How we keep them working:
 

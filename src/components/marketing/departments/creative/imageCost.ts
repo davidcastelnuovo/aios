@@ -27,7 +27,10 @@ export const GPT_IMAGE1_USD_PER_M = {
  * Official output-token ladder for gpt-image-1.
  * High 1024 = 4160 × $40/1M ≈ $0.167; portrait/landscape high = 6240 ≈ $0.25.
  */
-export const GPT_IMAGE1_OUTPUT_TOKENS: Record<ImageQuality, Record<ImageSize, number>> = {
+export const GPT_IMAGE1_OUTPUT_TOKENS: Record<
+  ImageQuality,
+  Record<ImageSize, number>
+> = {
   low: { "1024x1024": 272, "1024x1536": 408, "1536x1024": 408 },
   medium: { "1024x1024": 1056, "1024x1536": 1584, "1536x1024": 1584 },
   high: { "1024x1024": 4160, "1024x1536": 6240, "1536x1024": 6240 },
@@ -36,15 +39,22 @@ export const GPT_IMAGE1_OUTPUT_TOKENS: Record<ImageQuality, Record<ImageSize, nu
 /** High-fidelity 1024 input image, used only when the API does not return usage. */
 export const GPT_IMAGE1_REF_INPUT_TOKENS = 1440;
 
-export const imageOutputTokens = (quality: ImageQuality, size: ImageSize): number =>
-  GPT_IMAGE1_OUTPUT_TOKENS[quality][size];
+export const imageOutputTokens = (
+  quality: ImageQuality,
+  size: ImageSize,
+): number => GPT_IMAGE1_OUTPUT_TOKENS[quality][size];
 
-export const usdFromImageTokens = (textTokens: number, imageInTokens: number, outputTokens: number): number =>
-  +((
-    textTokens * GPT_IMAGE1_USD_PER_M.textIn
-    + imageInTokens * GPT_IMAGE1_USD_PER_M.imageIn
-    + outputTokens * GPT_IMAGE1_USD_PER_M.imageOut
-  ) / 1e6).toFixed(6);
+export const usdFromImageTokens = (
+  textTokens: number,
+  imageInTokens: number,
+  outputTokens: number,
+): number =>
+  +(
+    (textTokens * GPT_IMAGE1_USD_PER_M.textIn +
+      imageInTokens * GPT_IMAGE1_USD_PER_M.imageIn +
+      outputTokens * GPT_IMAGE1_USD_PER_M.imageOut) /
+    1e6
+  ).toFixed(6);
 
 /** Mixed Hebrew/English prompt: Latin ≈ 4 chars/token, Hebrew/other ≈ 1.5 chars/token. */
 export const estimateTextTokens = (text: string): number => {
@@ -62,14 +72,18 @@ export const isImageQuality = (value: unknown): value is ImageQuality =>
 export const isImageSize = (value: unknown): value is ImageSize =>
   value === "1024x1024" || value === "1024x1536" || value === "1536x1024";
 
-export const isImageGenerationCost = (value: unknown): value is ImageGenerationCost => {
+export const isImageGenerationCost = (
+  value: unknown,
+): value is ImageGenerationCost => {
   if (!value || typeof value !== "object") return false;
   const cost = value as ImageGenerationCost;
-  return cost.model === "gpt-image-1"
-    && isImageQuality(cost.quality)
-    && isImageSize(cost.size)
-    && typeof cost.totalTokens === "number"
-    && typeof cost.costUsd === "number";
+  return (
+    cost.model === "gpt-image-1" &&
+    isImageQuality(cost.quality) &&
+    isImageSize(cost.size) &&
+    typeof cost.totalTokens === "number" &&
+    typeof cost.costUsd === "number"
+  );
 };
 
 const makeCost = (
@@ -130,15 +144,28 @@ export const costFromApiUsage = (
     input_tokens_details?: { text_tokens?: number; image_tokens?: number };
   };
   const details = row.input_tokens_details;
-  const textTokens = Number(details?.text_tokens ?? (details ? 0 : row.input_tokens) ?? 0);
+  const textTokens = Number(
+    details?.text_tokens ?? (details ? 0 : row.input_tokens) ?? 0,
+  );
   const imageInTokens = Number(details?.image_tokens ?? 0);
   const outputTokens = Number(row.output_tokens ?? 0);
   if (!Number.isFinite(textTokens + imageInTokens + outputTokens)) return null;
   if (textTokens + imageInTokens + outputTokens <= 0) return null;
-  return makeCost(quality, size, textTokens, imageInTokens, outputTokens, "api", referenceCount);
+  return makeCost(
+    quality,
+    size,
+    textTokens,
+    imageInTokens,
+    outputTokens,
+    "api",
+    referenceCount,
+  );
 };
 
-export const inferImageCost = (quality: ImageQuality, size: ImageSize): ImageGenerationCost =>
+export const inferImageCost = (
+  quality: ImageQuality,
+  size: ImageSize,
+): ImageGenerationCost =>
   makeCost(quality, size, 0, 0, imageOutputTokens(quality, size), "inferred");
 
 export interface CostTotals {
@@ -157,7 +184,10 @@ export const emptyCostTotals = (): CostTotals => ({
   estimatedImages: 0,
 });
 
-export const addCost = (totals: CostTotals, cost: ImageGenerationCost): CostTotals => ({
+export const addCost = (
+  totals: CostTotals,
+  cost: ImageGenerationCost,
+): CostTotals => ({
   images: totals.images + 1,
   tokens: totals.tokens + cost.totalTokens,
   costUsd: +(totals.costUsd + cost.costUsd).toFixed(6),
@@ -175,7 +205,8 @@ export const costSourceLabel = (totals: CostTotals) => {
   if (totals.images === 0) return "אין תמונות";
   if (totals.exactImages === totals.images) return "מדויק מה־API";
   if (totals.exactImages > 0) return "חלק מדויק / חלק מחירון";
-  if (totals.estimatedImages > 0 && totals.images === totals.estimatedImages) return "מחירון רשמי";
+  if (totals.estimatedImages > 0 && totals.images === totals.estimatedImages)
+    return "מחירון רשמי";
   return "הערכה";
 };
 
@@ -204,7 +235,9 @@ export const summarizeStoredImageCosts = (
   fallbackQuality: ImageQuality,
   runs: LoggedRunCost[] = [],
 ): CostTotals => {
-  const stored = images.filter((image) => isImageGenerationCost(image.generationCost));
+  const stored = images.filter((image) =>
+    isImageGenerationCost(image.generationCost),
+  );
   if (stored.length > 0) {
     let totals = emptyCostTotals();
     for (const image of images) {
@@ -212,17 +245,28 @@ export const summarizeStoredImageCosts = (
         totals = addCost(totals, image.generationCost);
         continue;
       }
-      if (image.imageUrl) totals = addCost(totals, inferImageCost(fallbackQuality, sizeFromFormat(image.format)));
+      if (image.imageUrl)
+        totals = addCost(
+          totals,
+          inferImageCost(fallbackQuality, sizeFromFormat(image.format)),
+        );
     }
     return totals;
   }
 
-  const relevantRuns = runs.filter((run) => (run.cost_usd ?? 0) > 0 || (run.tokens_out ?? 0) > 0);
+  const relevantRuns = runs.filter(
+    (run) => (run.cost_usd ?? 0) > 0 || (run.tokens_out ?? 0) > 0,
+  );
   if (relevantRuns.length > 0) {
     return {
       images: relevantRuns.length,
-      tokens: relevantRuns.reduce((sum, run) => sum + (run.tokens_in ?? 0) + (run.tokens_out ?? 0), 0),
-      costUsd: +relevantRuns.reduce((sum, run) => sum + Number(run.cost_usd ?? 0), 0).toFixed(6),
+      tokens: relevantRuns.reduce(
+        (sum, run) => sum + (run.tokens_in ?? 0) + (run.tokens_out ?? 0),
+        0,
+      ),
+      costUsd: +relevantRuns
+        .reduce((sum, run) => sum + Number(run.cost_usd ?? 0), 0)
+        .toFixed(6),
       exactImages: 0,
       estimatedImages: relevantRuns.length,
     };
@@ -231,7 +275,10 @@ export const summarizeStoredImageCosts = (
   let totals = emptyCostTotals();
   for (const image of images) {
     if (!image.imageUrl || image.source === "manual_edit") continue;
-    totals = addCost(totals, inferImageCost(fallbackQuality, sizeFromFormat(image.format)));
+    totals = addCost(
+      totals,
+      inferImageCost(fallbackQuality, sizeFromFormat(image.format)),
+    );
   }
   return totals;
 };

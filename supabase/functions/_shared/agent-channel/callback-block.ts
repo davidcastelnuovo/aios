@@ -21,7 +21,11 @@ export async function buildAiosCallbackBlock(
     extractConversationId(args.contextHint || "") ||
     extractConversationId(args.messageHint || "") ||
     "";
-  const channelSession = await resolveCallbackSessionForTenant(sb, args.tenantId, conversationId || null);
+  const channelSession = await resolveCallbackSessionForTenant(
+    sb,
+    args.tenantId,
+    conversationId || null,
+  );
   if (!channelSession) return "";
   const token = await mintCallbackToken({
     sessionId: channelSession.id,
@@ -29,7 +33,8 @@ export async function buildAiosCallbackBlock(
     tenantId: args.tenantId,
   });
   return buildCallbackInstructions({
-    origin: args.origin || (channelSession.provider as ChannelProvider) || "cursor",
+    origin:
+      args.origin || (channelSession.provider as ChannelProvider) || "cursor",
     conversationId: channelSession.conversation_id,
     sessionId: channelSession.id,
     tenantId: args.tenantId,

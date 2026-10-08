@@ -17,7 +17,12 @@ import { differenceInDays } from "date-fns";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { AlertTriangle, MessageSquare, ChevronDown, ChevronUp } from "lucide-react";
+import {
+  AlertTriangle,
+  MessageSquare,
+  ChevronDown,
+  ChevronUp,
+} from "lucide-react";
 import {
   calculateHealthScore,
   FLAG_LABELS,
@@ -32,8 +37,14 @@ import { SeoUpdateModal } from "@/components/clients/SeoUpdateModal";
 export function CRMAlerts() {
   const { tenantId } = useCurrentTenant();
   const [expanded, setExpanded] = useState(true);
-  const [commModal, setCommModal] = useState<{ clientId: string; clientName: string } | null>(null);
-  const [seoModal, setSeoModal] = useState<{ clientId: string; clientName: string } | null>(null);
+  const [commModal, setCommModal] = useState<{
+    clientId: string;
+    clientName: string;
+  } | null>(null);
+  const [seoModal, setSeoModal] = useState<{
+    clientId: string;
+    clientName: string;
+  } | null>(null);
 
   const { data: clients = [] } = useQuery({
     queryKey: ["crm-alerts-clients", tenantId],
@@ -91,7 +102,8 @@ export function CRMAlerts() {
   const alertRows = useMemo(() => {
     return clients
       .map((c: any) => {
-        const latestComm = commLogs.find((l: any) => l.client_id === c.id) ?? null;
+        const latestComm =
+          commLogs.find((l: any) => l.client_id === c.id) ?? null;
         const daysSinceComm = latestComm
           ? differenceInDays(new Date(), new Date(latestComm.created_at))
           : null;
@@ -122,11 +134,18 @@ export function CRMAlerts() {
 
   if (alertRows.length === 0) return null;
 
-  const redCount = alertRows.filter((r: any) => r.overallStatus === "red").length;
-  const yellowCount = alertRows.filter((r: any) => r.overallStatus === "yellow").length;
+  const redCount = alertRows.filter(
+    (r: any) => r.overallStatus === "red",
+  ).length;
+  const yellowCount = alertRows.filter(
+    (r: any) => r.overallStatus === "yellow",
+  ).length;
 
   return (
-    <Card className="border-orange-200 bg-orange-50/30 dark:bg-orange-950/10" dir="rtl">
+    <Card
+      className="border-orange-200 bg-orange-50/30 dark:bg-orange-950/10"
+      dir="rtl"
+    >
       <CardHeader className="pb-2 pt-3 px-4">
         <div className="flex items-center justify-between">
           <CardTitle className="text-sm font-semibold flex items-center gap-2">
@@ -177,11 +196,17 @@ export function CRMAlerts() {
               >
                 <div className="flex items-start gap-2 flex-1 min-w-0">
                   <span className="text-base mt-0.5 shrink-0">
-                    {OVERALL_STATUS_CONFIG[client.overallStatus as OverallStatus]?.dot}
+                    {
+                      OVERALL_STATUS_CONFIG[
+                        client.overallStatus as OverallStatus
+                      ]?.dot
+                    }
                   </span>
                   <div className="min-w-0">
                     <div className="flex items-center gap-1.5 flex-wrap">
-                      <span className="font-medium truncate">{client.name}</span>
+                      <span className="font-medium truncate">
+                        {client.name}
+                      </span>
                       <Badge
                         variant="outline"
                         className={`text-xs h-4 px-1 ${
@@ -194,15 +219,17 @@ export function CRMAlerts() {
                       </Badge>
                     </div>
                     <div className="flex flex-wrap gap-1 mt-1">
-                      {(client.flags as FlagKey[]).slice(0, 3).map((flag: FlagKey) => (
-                        <Badge
-                          key={flag}
-                          variant="outline"
-                          className={`text-xs h-4 px-1 ${FLAG_COLORS[flag] || ""}`}
-                        >
-                          {FLAG_LABELS[flag]}
-                        </Badge>
-                      ))}
+                      {(client.flags as FlagKey[])
+                        .slice(0, 3)
+                        .map((flag: FlagKey) => (
+                          <Badge
+                            key={flag}
+                            variant="outline"
+                            className={`text-xs h-4 px-1 ${FLAG_COLORS[flag] || ""}`}
+                          >
+                            {FLAG_LABELS[flag]}
+                          </Badge>
+                        ))}
                       {client.flags.length > 3 && (
                         <Badge variant="outline" className="text-xs h-4 px-1">
                           +{client.flags.length - 3}
@@ -218,7 +245,10 @@ export function CRMAlerts() {
                     size="sm"
                     className="h-7 px-2 text-xs"
                     onClick={() =>
-                      setCommModal({ clientId: client.id, clientName: client.name })
+                      setCommModal({
+                        clientId: client.id,
+                        clientName: client.name,
+                      })
                     }
                   >
                     <MessageSquare className="h-3 w-3 ml-1" />
@@ -230,7 +260,10 @@ export function CRMAlerts() {
                       size="sm"
                       className="h-7 px-2 text-xs"
                       onClick={() =>
-                        setSeoModal({ clientId: client.id, clientName: client.name })
+                        setSeoModal({
+                          clientId: client.id,
+                          clientName: client.name,
+                        })
                       }
                     >
                       🔍 SEO

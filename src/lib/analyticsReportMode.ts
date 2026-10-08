@@ -1,6 +1,6 @@
 // Analytics "leads vs ecommerce" mode for GoogleAnalyticsDashboard.
 // Prefer an explicit saved choice; otherwise infer from ads campaign types so
- // lead-gen clients (e.g. Eco) don't open as ecommerce by default.
+// lead-gen clients (e.g. Eco) don't open as ecommerce by default.
 
 export type AnalyticsReportMode = "leads" | "ecommerce";
 
@@ -23,7 +23,10 @@ export function resolveAnalyticsReportMode(opts: {
   tableMode?: string | null;
   tables?: Array<{
     integration_type?: string | null;
-    integration_settings?: { campaign_type?: string | null; default_report_mode?: string | null } | null;
+    integration_settings?: {
+      campaign_type?: string | null;
+      default_report_mode?: string | null;
+    } | null;
   }>;
 }): AnalyticsReportMode {
   const fromDashboard = normalizeAnalyticsReportMode(opts.dashboardMode);
@@ -46,7 +49,10 @@ export function resolveAnalyticsReportMode(opts: {
     const type = String(table.integration_type || "");
     if (!ADS_TYPES.has(type)) return false;
     if (type === "facebook_ecommerce") return true;
-    return String(table.integration_settings?.campaign_type || "").toLowerCase() === "ecommerce";
+    return (
+      String(table.integration_settings?.campaign_type || "").toLowerCase() ===
+      "ecommerce"
+    );
   });
 
   return adsAreEcommerce ? "ecommerce" : "leads";

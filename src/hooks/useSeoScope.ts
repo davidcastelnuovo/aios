@@ -80,9 +80,11 @@ export function useSeoScope(clientId: string | undefined) {
 
       const clientTenantId = client?.tenant_id ?? null;
       const agencyId = client?.agency_id ?? null;
-      const clientWebsite = (client as { website?: string | null } | null)?.website ?? null;
+      const clientWebsite =
+        (client as { website?: string | null } | null)?.website ?? null;
       const clientGscSiteUrl =
-        (client as { gsc_site_url?: string | null } | null)?.gsc_site_url ?? null;
+        (client as { gsc_site_url?: string | null } | null)?.gsc_site_url ??
+        null;
 
       // 2. Build the set of accessible tenant_ids via agency_tenant_access
       const tenantSet = new Set<string>();
@@ -115,43 +117,76 @@ export function useSeoScope(clientId: string | undefined) {
       if (accessibleTenantIds.length > 0) {
         const { data: seoCandidates } = await supabase
           .from("crm_tables")
-          .select("id, tenant_id, name, slug, integration_type, integration_settings, client_id, agency_id, created_at, updated_at")
+          .select(
+            "id, tenant_id, name, slug, integration_type, integration_settings, client_id, agency_id, created_at, updated_at",
+          )
           .in("tenant_id", accessibleTenantIds)
           .eq("integration_type", "ahrefs")
           .limit(200);
 
-        seoTable = selectSeoTableForClient(seoCandidates || [], clientId, clientWebsite);
+        seoTable = selectSeoTableForClient(
+          seoCandidates || [],
+          clientId,
+          clientWebsite,
+        );
 
         const { data: relatedTables } = await supabase
           .from("crm_tables")
-          .select("id, tenant_id, name, slug, integration_type, integration_settings, client_id, agency_id")
+          .select(
+            "id, tenant_id, name, slug, integration_type, integration_settings, client_id, agency_id",
+          )
           .in("tenant_id", accessibleTenantIds)
-          .in("integration_type", ["google_search_console", "google_analytics"]);
+          .in("integration_type", [
+            "google_search_console",
+            "google_analytics",
+          ]);
 
         const all = relatedTables || [];
-        const settingsClientId = (table: { integration_settings?: unknown }) => {
-          const settings = (table.integration_settings || {}) as Record<string, unknown>;
+        const settingsClientId = (table: {
+          integration_settings?: unknown;
+        }) => {
+          const settings = (table.integration_settings || {}) as Record<
+            string,
+            unknown
+          >;
           const id = settings.clientId ?? settings.client_id;
           return typeof id === "string" ? id : null;
         };
-        const seoSettings = (seoTable?.integration_settings || {}) as Record<string, unknown>;
-        const savedGaId = typeof seoSettings.linkedGaTableId === "string" ? seoSettings.linkedGaTableId : null;
-        const savedGscId = typeof seoSettings.linkedGscTableId === "string" ? seoSettings.linkedGscTableId : null;
+        const seoSettings = (seoTable?.integration_settings || {}) as Record<
+          string,
+          unknown
+        >;
+        const savedGaId =
+          typeof seoSettings.linkedGaTableId === "string"
+            ? seoSettings.linkedGaTableId
+            : null;
+        const savedGscId =
+          typeof seoSettings.linkedGscTableId === "string"
+            ? seoSettings.linkedGscTableId
+            : null;
         // Keep this client's tables (any accessible tenant) plus the explicitly
         // saved link. Do not offer every Analytics property in the tenant —
         // a link to another client's table 403s for campaigners.
         const forThisClient = (
-          table: { id: string; client_id?: string | null; integration_settings?: unknown },
+          table: {
+            id: string;
+            client_id?: string | null;
+            integration_settings?: unknown;
+          },
           savedId: string | null,
         ) =>
           table.client_id === clientId ||
           settingsClientId(table) === clientId ||
           (!!savedId && table.id === savedId);
         gaTables = all.filter(
-          (t) => t.integration_type === "google_analytics" && forThisClient(t, savedGaId),
+          (t) =>
+            t.integration_type === "google_analytics" &&
+            forThisClient(t, savedGaId),
         );
         gscTables = all.filter(
-          (t) => t.integration_type === "google_search_console" && forThisClient(t, savedGscId),
+          (t) =>
+            t.integration_type === "google_search_console" &&
+            forThisClient(t, savedGscId),
         );
       }
 
@@ -162,7 +197,8 @@ export function useSeoScope(clientId: string | undefined) {
         clientWebsite,
         clientGscSiteUrl,
         expectedDomain:
-          normalizeSeoDomain(clientWebsite) || (seoTable ? seoTableDomain(seoTable) : ""),
+          normalizeSeoDomain(clientWebsite) ||
+          (seoTable ? seoTableDomain(seoTable) : ""),
         accessibleTenantIds,
         seoTable,
         gaTables,

@@ -8,8 +8,20 @@ import { Textarea } from "@/components/ui/textarea";
 import { Card } from "@/components/ui/card";
 import { Calendar } from "@/components/ui/calendar";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Calendar as CalendarIcon, Clock, UserPlus, CheckCircle2, Loader2 } from "lucide-react";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
+  Calendar as CalendarIcon,
+  Clock,
+  UserPlus,
+  CheckCircle2,
+  Loader2,
+} from "lucide-react";
 import { format } from "date-fns";
 import { he } from "date-fns/locale";
 
@@ -18,7 +30,10 @@ interface CampaignerMeetingTabProps {
   tenantId?: string;
 }
 
-export function CampaignerMeetingTab({ campaigner, tenantId }: CampaignerMeetingTabProps) {
+export function CampaignerMeetingTab({
+  campaigner,
+  tenantId,
+}: CampaignerMeetingTabProps) {
   const queryClient = useQueryClient();
   const meetingScheduler = useMeetingScheduler(tenantId);
   const [includeCampaignerEmail, setIncludeCampaignerEmail] = useState(true);
@@ -38,8 +53,16 @@ export function CampaignerMeetingTab({ campaigner, tenantId }: CampaignerMeeting
 
   const timeSlots = meetingScheduler.getAvailableTimeSlots();
   const endTimeSlots = meetingScheduler.getAvailableEndTimeSlots();
-  const startConflict = !!meetingScheduler.meetingTime && timeSlots.some(s => s.time === meetingScheduler.meetingTime && !s.available);
-  const endConflict = !!meetingScheduler.meetingEndTime && endTimeSlots.some(s => s.time === meetingScheduler.meetingEndTime && !s.available);
+  const startConflict =
+    !!meetingScheduler.meetingTime &&
+    timeSlots.some(
+      (s) => s.time === meetingScheduler.meetingTime && !s.available,
+    );
+  const endConflict =
+    !!meetingScheduler.meetingEndTime &&
+    endTimeSlots.some(
+      (s) => s.time === meetingScheduler.meetingEndTime && !s.available,
+    );
   const hasConflict = startConflict || endConflict;
 
   const handleScheduleMeeting = async () => {
@@ -49,10 +72,14 @@ export function CampaignerMeetingTab({ campaigner, tenantId }: CampaignerMeeting
     ];
     await meetingScheduler.scheduleMeeting({
       contactName: campaigner.full_name,
-      contactEmail: includeCampaignerEmail ? campaigner.email || undefined : undefined,
+      contactEmail: includeCampaignerEmail
+        ? campaigner.email || undefined
+        : undefined,
       contactId: campaigner.id,
-      contactType: 'campaigner',
-      additionalEmails: additionalEmails.filter((e, i, self) => self.indexOf(e) === i),
+      contactType: "campaigner",
+      additionalEmails: additionalEmails.filter(
+        (e, i, self) => self.indexOf(e) === i,
+      ),
       onSuccess: () => {
         queryClient.invalidateQueries({ queryKey: ["campaigners", tenantId] });
         setSelectedTeamMembers([]);
@@ -88,13 +115,18 @@ export function CampaignerMeetingTab({ campaigner, tenantId }: CampaignerMeeting
               <Clock className="h-4 w-4" />
               משעה
             </label>
-            <Select value={meetingScheduler.meetingTime} onValueChange={meetingScheduler.setMeetingTime}>
+            <Select
+              value={meetingScheduler.meetingTime}
+              onValueChange={meetingScheduler.setMeetingTime}
+            >
               <SelectTrigger className="w-full text-right rounded-lg border-2 h-11">
                 <SelectValue placeholder="בחר שעה" />
               </SelectTrigger>
               <SelectContent className="bg-background z-50 max-h-[200px]">
                 {meetingScheduler.isLoadingCalendar ? (
-                  <SelectItem value="loading" disabled>טוען יומן...</SelectItem>
+                  <SelectItem value="loading" disabled>
+                    טוען יומן...
+                  </SelectItem>
                 ) : (
                   timeSlots.map(({ time, available }) => (
                     <SelectItem
@@ -112,17 +144,26 @@ export function CampaignerMeetingTab({ campaigner, tenantId }: CampaignerMeeting
 
           <div className="space-y-2">
             <label className="text-sm font-medium">עד שעה</label>
-            <Select value={meetingScheduler.meetingEndTime} onValueChange={meetingScheduler.setMeetingEndTime}>
+            <Select
+              value={meetingScheduler.meetingEndTime}
+              onValueChange={meetingScheduler.setMeetingEndTime}
+            >
               <SelectTrigger className="w-full text-right rounded-lg border-2 h-11">
                 <SelectValue placeholder="בחר שעת סיום" />
               </SelectTrigger>
               <SelectContent className="bg-background z-50 max-h-[200px]">
                 {!meetingScheduler.meetingTime ? (
-                  <SelectItem value="no-start" disabled>בחר קודם שעת התחלה</SelectItem>
+                  <SelectItem value="no-start" disabled>
+                    בחר קודם שעת התחלה
+                  </SelectItem>
                 ) : meetingScheduler.isLoadingCalendar ? (
-                  <SelectItem value="loading-end" disabled>טוען יומן...</SelectItem>
+                  <SelectItem value="loading-end" disabled>
+                    טוען יומן...
+                  </SelectItem>
                 ) : endTimeSlots.length === 0 ? (
-                  <SelectItem value="none-end" disabled>אין אפשרויות סיום ליום זה</SelectItem>
+                  <SelectItem value="none-end" disabled>
+                    אין אפשרויות סיום ליום זה
+                  </SelectItem>
                 ) : (
                   endTimeSlots.map(({ time, available }) => (
                     <SelectItem
@@ -148,7 +189,9 @@ export function CampaignerMeetingTab({ campaigner, tenantId }: CampaignerMeeting
             <label className="text-sm font-medium">נושא הפגישה</label>
             <Input
               value={meetingScheduler.meetingSubject}
-              onChange={(e) => meetingScheduler.setMeetingSubject(e.target.value)}
+              onChange={(e) =>
+                meetingScheduler.setMeetingSubject(e.target.value)
+              }
               placeholder={`פגישה עם ${campaigner.full_name}`}
             />
           </div>
@@ -157,16 +200,22 @@ export function CampaignerMeetingTab({ campaigner, tenantId }: CampaignerMeeting
             <label className="text-sm font-medium">מיקום (אופציונלי)</label>
             <Input
               value={meetingScheduler.meetingLocation}
-              onChange={(e) => meetingScheduler.setMeetingLocation(e.target.value)}
+              onChange={(e) =>
+                meetingScheduler.setMeetingLocation(e.target.value)
+              }
               placeholder="Google Meet / משרד / זום"
             />
           </div>
 
           <div className="space-y-2">
-            <label className="text-sm font-medium">הודעה אישית (אופציונלי)</label>
+            <label className="text-sm font-medium">
+              הודעה אישית (אופציונלי)
+            </label>
             <Textarea
               value={meetingScheduler.personalMessage}
-              onChange={(e) => meetingScheduler.setPersonalMessage(e.target.value)}
+              onChange={(e) =>
+                meetingScheduler.setPersonalMessage(e.target.value)
+              }
               placeholder="הוסף הודעה אישית שתופיע בהזמנה..."
               rows={3}
             />
@@ -178,10 +227,14 @@ export function CampaignerMeetingTab({ campaigner, tenantId }: CampaignerMeeting
               <label className="flex items-center gap-2 p-2 rounded-md bg-muted/50 cursor-pointer text-sm">
                 <Checkbox
                   checked={includeCampaignerEmail}
-                  onCheckedChange={(checked) => setIncludeCampaignerEmail(!!checked)}
+                  onCheckedChange={(checked) =>
+                    setIncludeCampaignerEmail(!!checked)
+                  }
                 />
                 <span className="font-medium">{campaigner.full_name}</span>
-                <span className="text-muted-foreground mr-auto">{campaigner.email}</span>
+                <span className="text-muted-foreground mr-auto">
+                  {campaigner.email}
+                </span>
               </label>
             </div>
           ) : (
@@ -196,32 +249,43 @@ export function CampaignerMeetingTab({ campaigner, tenantId }: CampaignerMeeting
               הזמן משתמשים מהמערכת:
             </label>
             {isLoadingTeamMembers ? (
-              <p className="text-sm text-muted-foreground">טוען משתמשי צוות...</p>
+              <p className="text-sm text-muted-foreground">
+                טוען משתמשי צוות...
+              </p>
             ) : teamMembersError ? (
               <p className="text-sm text-destructive">
-                {teamMembersError instanceof Error ? teamMembersError.message : "שגיאה בטעינת משתמשי צוות"}
+                {teamMembersError instanceof Error
+                  ? teamMembersError.message
+                  : "שגיאה בטעינת משתמשי צוות"}
               </p>
             ) : teamMembers.length > 0 ? (
               <div className="space-y-1.5 max-h-[150px] overflow-y-auto">
                 {teamMembers.map((member: any) => (
-                  <label key={member.id} className="flex items-center gap-2 p-2 rounded-md bg-muted/50 cursor-pointer text-sm">
+                  <label
+                    key={member.id}
+                    className="flex items-center gap-2 p-2 rounded-md bg-muted/50 cursor-pointer text-sm"
+                  >
                     <Checkbox
                       checked={selectedTeamMembers.includes(member.email)}
                       onCheckedChange={(checked) => {
-                        setSelectedTeamMembers(prev =>
+                        setSelectedTeamMembers((prev) =>
                           checked
                             ? [...prev, member.email]
-                            : prev.filter(e => e !== member.email)
+                            : prev.filter((e) => e !== member.email),
                         );
                       }}
                     />
                     <span className="font-medium">{member.full_name}</span>
-                    <span className="text-muted-foreground mr-auto">{member.email}</span>
+                    <span className="text-muted-foreground mr-auto">
+                      {member.email}
+                    </span>
                   </label>
                 ))}
               </div>
             ) : (
-              <p className="text-sm text-muted-foreground">לא נמצאו משתמשים עם אימייל</p>
+              <p className="text-sm text-muted-foreground">
+                לא נמצאו משתמשים עם אימייל
+              </p>
             )}
           </div>
 
@@ -230,7 +294,11 @@ export function CampaignerMeetingTab({ campaigner, tenantId }: CampaignerMeeting
               <div className="flex items-center gap-2 text-sm">
                 <CheckCircle2 className="h-4 w-4 text-primary" />
                 <span className="font-medium">
-                  {format(meetingScheduler.meetingDate, 'EEEE, d בMMMM yyyy', { locale: he })} {meetingScheduler.meetingTime} - {meetingScheduler.meetingEndTime}
+                  {format(meetingScheduler.meetingDate, "EEEE, d בMMMM yyyy", {
+                    locale: he,
+                  })}{" "}
+                  {meetingScheduler.meetingTime} -{" "}
+                  {meetingScheduler.meetingEndTime}
                 </span>
               </div>
             </Card>
@@ -238,7 +306,12 @@ export function CampaignerMeetingTab({ campaigner, tenantId }: CampaignerMeeting
 
           <Button
             onClick={handleScheduleMeeting}
-            disabled={!meetingScheduler.meetingDate || !meetingScheduler.meetingTime || !meetingScheduler.meetingEndTime || meetingScheduler.isSchedulingMeeting}
+            disabled={
+              !meetingScheduler.meetingDate ||
+              !meetingScheduler.meetingTime ||
+              !meetingScheduler.meetingEndTime ||
+              meetingScheduler.isSchedulingMeeting
+            }
             className="w-full"
           >
             {meetingScheduler.isSchedulingMeeting ? (
@@ -250,8 +323,13 @@ export function CampaignerMeetingTab({ campaigner, tenantId }: CampaignerMeeting
               <>
                 <CalendarIcon className="ml-2 h-4 w-4" />
                 {(() => {
-                  const totalInvitees = (includeCampaignerEmail && campaigner.email ? 1 : 0) + selectedTeamMembers.length;
-                  const base = totalInvitees > 0 ? `קבע פגישה ושלח זימון ל-${totalInvitees} משתתפים` : "קבע פגישה";
+                  const totalInvitees =
+                    (includeCampaignerEmail && campaigner.email ? 1 : 0) +
+                    selectedTeamMembers.length;
+                  const base =
+                    totalInvitees > 0
+                      ? `קבע פגישה ושלח זימון ל-${totalInvitees} משתתפים`
+                      : "קבע פגישה";
                   return hasConflict ? `${base} (למרות חפיפה)` : base;
                 })()}
               </>

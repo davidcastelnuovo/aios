@@ -1,10 +1,22 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { buildOfferBoardLayers, fitCta, fitFontSize, footerModules, parseOfferBullets } from "./offerBoard.ts";
+import {
+  buildOfferBoardLayers,
+  fitCta,
+  fitFontSize,
+  footerModules,
+  parseOfferBullets,
+} from "./offerBoard.ts";
 
 test("fitFontSize shrinks long lines and grows short ones", () => {
-  assert.ok(fitFontSize("AI", 46, 40, 22) > fitFontSize("הלקוח עדיין מחפש המלצה בגוגל", 46, 40, 22));
-  assert.equal(fitFontSize("הלקוח עדיין מחפש המלצה בגוגל ובפייסבוק בלי תוצאה", 46, 40, 22), 22);
+  assert.ok(
+    fitFontSize("AI", 46, 40, 22) >
+      fitFontSize("הלקוח עדיין מחפש המלצה בגוגל", 46, 40, 22),
+  );
+  assert.equal(
+    fitFontSize("הלקוח עדיין מחפש המלצה בגוגל ובפייסבוק בלי תוצאה", 46, 40, 22),
+    22,
+  );
 });
 
 test("parseOfferBullets reads marked lines only", () => {
@@ -20,8 +32,14 @@ test("footer modules come from copy bullets, not Promo's default services", () =
   assert.deepEqual(footerModules([]), []);
   assert.deepEqual(footerModules(["חיפוש AI"]), []);
   const modules = footerModules(["חיפוש AI", "בדיקת אתר", "אסטרטגיה", "ליווי"]);
-  assert.deepEqual(modules.map((item) => item.label), ["חיפוש AI", "בדיקת אתר", "אסטרטגיה", "ליווי"]);
-  assert.equal(modules.some((item) => item.label === "ליווי"), true);
+  assert.deepEqual(
+    modules.map((item) => item.label),
+    ["חיפוש AI", "בדיקת אתר", "אסטרטגיה", "ליווי"],
+  );
+  assert.equal(
+    modules.some((item) => item.label === "ליווי"),
+    true,
+  );
 });
 
 test("offer board builds a clean column, black footer, and four icon objects", () => {
@@ -44,13 +62,35 @@ test("offer board builds a clean column, black footer, and four icon objects", (
     logoUrl: "https://example.com/logo.png",
     format: "1:1",
   });
-  assert.ok(layers.some((layer) => layer.role === "type_field" && (layer.width ?? 0) <= 48));
+  assert.ok(
+    layers.some(
+      (layer) => layer.role === "type_field" && (layer.width ?? 0) <= 48,
+    ),
+  );
   assert.ok(layers.some((layer) => layer.role === "divider"));
-  assert.equal(layers.find((layer) => layer.role === "footer")?.fill, "#111111");
-  assert.equal(layers.filter((layer) => layer.role === "icon" && (layer.y ?? 0) > 64).length, 4);
-  assert.ok(layers.some((layer) => layer.role === "cta" && (layer.text?.length ?? 99) <= 28));
-  assert.ok(layers.some((layer) => layer.role === "cta_fill" && layer.fill === "#dc2626"));
-  assert.equal(layers.some((layer) => layer.role === "logo"), false);
+  assert.equal(
+    layers.find((layer) => layer.role === "footer")?.fill,
+    "#111111",
+  );
+  assert.equal(
+    layers.filter((layer) => layer.role === "icon" && (layer.y ?? 0) > 64)
+      .length,
+    4,
+  );
+  assert.ok(
+    layers.some(
+      (layer) => layer.role === "cta" && (layer.text?.length ?? 99) <= 28,
+    ),
+  );
+  assert.ok(
+    layers.some(
+      (layer) => layer.role === "cta_fill" && layer.fill === "#dc2626",
+    ),
+  );
+  assert.equal(
+    layers.some((layer) => layer.role === "logo"),
+    false,
+  );
 });
 
 test("offer board without copy bullets does not stamp Promo's four services", () => {
@@ -70,8 +110,14 @@ test("offer board without copy bullets does not stamp Promo's four services", ()
     format: "1:1",
   });
   assert.equal(layers.filter((layer) => layer.role === "icon_label").length, 0);
-  assert.equal(layers.some((layer) => layer.text === "חיפוש AI"), false);
-  assert.equal(layers.some((layer) => layer.text === "מה מקבלים איתנו?"), false);
+  assert.equal(
+    layers.some((layer) => layer.text === "חיפוש AI"),
+    false,
+  );
+  assert.equal(
+    layers.some((layer) => layer.text === "מה מקבלים איתנו?"),
+    false,
+  );
   assert.ok(layers.some((layer) => layer.role === "cta"));
 });
 

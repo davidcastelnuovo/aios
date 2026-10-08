@@ -28,10 +28,13 @@ serve(async (req) => {
     const supabase = createClient(
       Deno.env.get("SUPABASE_URL")!,
       Deno.env.get("SUPABASE_ANON_KEY")!,
-      { global: { headers: { Authorization: authHeader } } }
+      { global: { headers: { Authorization: authHeader } } },
     );
 
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
+    const {
+      data: { user },
+      error: authError,
+    } = await supabase.auth.getUser();
     if (authError || !user) throw new Error("Unauthorized");
 
     const {
@@ -48,7 +51,12 @@ serve(async (req) => {
       throw new Error("נא להזין תמלול או הערות מהפגישה");
     }
 
-    const validTargetTypes = new Set(["client", "lead", "campaigner", "agency"]);
+    const validTargetTypes = new Set([
+      "client",
+      "lead",
+      "campaigner",
+      "agency",
+    ]);
     if (!validTargetTypes.has(target_type) || !target_id) {
       throw new Error("נא לבחור לקוח, ליד, איש צוות או סוכנות לשיוך הסיכום");
     }
@@ -81,7 +89,9 @@ serve(async (req) => {
 
     let focusPrompt = "";
     if (focus_points && focus_points.length > 0) {
-      const labels = focus_points.map((fp: string) => focusLabels[fp] || fp).join(", ");
+      const labels = focus_points
+        .map((fp: string) => focusLabels[fp] || fp)
+        .join(", ");
       focusPrompt = `\n\nדגשים מיוחדים שיש להתמקד בהם: ${labels}`;
     }
     if (custom_focus && custom_focus.trim()) {
@@ -92,10 +102,18 @@ serve(async (req) => {
     let targetName = "";
     let targetAgencyId: string | null = null;
     if (target_type === "client") {
-      const { data } = await supabase.from("clients").select("name").eq("id", target_id).maybeSingle();
+      const { data } = await supabase
+        .from("clients")
+        .select("name")
+        .eq("id", target_id)
+        .maybeSingle();
       targetName = data?.name || "";
     } else if (target_type === "lead") {
-      const { data } = await supabase.from("leads").select("company_name").eq("id", target_id).maybeSingle();
+      const { data } = await supabase
+        .from("leads")
+        .select("company_name")
+        .eq("id", target_id)
+        .maybeSingle();
       targetName = data?.company_name || "";
     } else if (target_type === "campaigner") {
       const { data } = await supabase
@@ -128,25 +146,25 @@ serve(async (req) => {
 
     const admin = createClient(
       Deno.env.get("SUPABASE_URL")!,
-      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
+      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
     );
 
     const dispatched = recording_id
       ? await dispatchMeetingSummaryToCursor(admin, {
-      tenantId: tenant_id,
-      userId: user.id,
-      recordingId: recording_id,
-      transcript,
-      recordingInfo,
-      focusPrompt,
-      targetType: target_type,
-      targetId: target_id,
-      targetName,
-      clientId: target_type === "client" ? target_id : null,
-      briefSource: "zoom_meeting",
-      createdBy: user.id,
-      manual: true,
-    })
+          tenantId: tenant_id,
+          userId: user.id,
+          recordingId: recording_id,
+          transcript,
+          recordingInfo,
+          focusPrompt,
+          targetType: target_type,
+          targetId: target_id,
+          targetName,
+          clientId: target_type === "client" ? target_id : null,
+          briefSource: "zoom_meeting",
+          createdBy: user.id,
+          manual: true,
+        })
       : { ok: false as const, reason: "not_configured" as const };
     if (dispatched.ok) {
       return new Response(
@@ -161,13 +179,14 @@ serve(async (req) => {
       );
     }
     if (dispatched.reason !== "not_configured") {
-      const message = dispatched.reason === "busy"
-        ? "קרסר ישיר עסוק כרגע. נסה שוב בעוד דקה."
-        : "לא הצלחתי לשלוח את הסיכום לקרסר ישיר.";
-      return new Response(
-        JSON.stringify({ error: message }),
-        { status: 503, headers: { ...corsHeaders, "Content-Type": "application/json" } },
-      );
+      const message =
+        dispatched.reason === "busy"
+          ? "קרסר ישיר עסוק כרגע. נסה שוב בעוד דקה."
+          : "לא הצלחתי לשלוח את הסיכום לקרסר ישיר.";
+      return new Response(JSON.stringify({ error: message }), {
+        status: 503,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
     }
 
     const OPENAI_API_KEY = await resolveOpenAIKey();
@@ -175,13 +194,18 @@ serve(async (req) => {
 
     let summary: string;
     try {
-      summary = await generateMeetingSummary(OPENAI_API_KEY, transcript, recordingInfo, focusPrompt);
+      summary = await generateMeetingSummary(
+        OPENAI_API_KEY,
+        transcript,
+        recordingInfo,
+        focusPrompt,
+      );
     } catch (err) {
       if (err instanceof AiHttpError) {
-        return new Response(
-          JSON.stringify({ error: err.message }),
-          { status: err.status, headers: { ...corsHeaders, "Content-Type": "application/json" } },
-        );
+        return new Response(JSON.stringify({ error: err.message }), {
+          status: err.status,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
       }
       throw err;
     }
@@ -197,38 +221,42 @@ serve(async (req) => {
     });
 
     if (recording_id) {
-      const association = target_type === "client"
-        ? {
-          client_id: target_id,
-          lead_id: null,
-          agency_id: null,
-          campaigner_ids: [],
-          summary_scope: "client",
-        }
-        : target_type === "lead"
-        ? {
-          client_id: null,
-          lead_id: target_id,
-          agency_id: null,
-          campaigner_ids: [],
-          summary_scope: "lead",
-        }
-        : target_type === "campaigner"
-        ? {
-          client_id: null,
-          lead_id: null,
-          agency_id: targetAgencyId,
-          campaigner_ids: [target_id],
-          summary_scope: "campaigner",
-        }
-        : {
-          client_id: null,
-          lead_id: null,
-          agency_id: target_id,
-          campaigner_ids: [],
-          summary_scope: "agency",
-        };
-      await admin.from("zoom_recordings").update(association).eq("id", recording_id);
+      const association =
+        target_type === "client"
+          ? {
+              client_id: target_id,
+              lead_id: null,
+              agency_id: null,
+              campaigner_ids: [],
+              summary_scope: "client",
+            }
+          : target_type === "lead"
+            ? {
+                client_id: null,
+                lead_id: target_id,
+                agency_id: null,
+                campaigner_ids: [],
+                summary_scope: "lead",
+              }
+            : target_type === "campaigner"
+              ? {
+                  client_id: null,
+                  lead_id: null,
+                  agency_id: targetAgencyId,
+                  campaigner_ids: [target_id],
+                  summary_scope: "campaigner",
+                }
+              : {
+                  client_id: null,
+                  lead_id: null,
+                  agency_id: target_id,
+                  campaigner_ids: [],
+                  summary_scope: "agency",
+                };
+      await admin
+        .from("zoom_recordings")
+        .update(association)
+        .eq("id", recording_id);
     }
 
     // Auto-detect marketing needs and create a brief work item
@@ -256,13 +284,18 @@ serve(async (req) => {
         marketing_brief_created: marketingBriefCreated,
         marketing_work_item_id: marketingWorkItemId,
       }),
-      { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      { headers: { ...corsHeaders, "Content-Type": "application/json" } },
     );
   } catch (error) {
     console.error("Error:", error);
     return new Response(
-      JSON.stringify({ error: error instanceof Error ? error.message : "Unknown error" }),
-      { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      JSON.stringify({
+        error: error instanceof Error ? error.message : "Unknown error",
+      }),
+      {
+        status: 500,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      },
     );
   }
 });

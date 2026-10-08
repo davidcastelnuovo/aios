@@ -1,4 +1,8 @@
-import { useAiModels, useConnectedAiModels, type AiModel } from "@/hooks/useAiModels";
+import {
+  useAiModels,
+  useConnectedAiModels,
+  type AiModel,
+} from "@/hooks/useAiModels";
 import {
   Select,
   SelectContent,
@@ -10,7 +14,13 @@ import {
 } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Brain, Sparkles, Zap, AlertTriangle, ExternalLink } from "lucide-react";
+import {
+  Brain,
+  Sparkles,
+  Zap,
+  AlertTriangle,
+  ExternalLink,
+} from "lucide-react";
 import { useTenantPath } from "@/hooks/useTenantPath";
 import { useNavigate } from "react-router-dom";
 
@@ -52,12 +62,21 @@ function ModelItem({ m }: { m: AiModel }) {
   );
 }
 
-export function BrainSelector({ value, onChange, disabled, showAll = false }: BrainSelectorProps) {
+export function BrainSelector({
+  value,
+  onChange,
+  disabled,
+  showAll = false,
+}: BrainSelectorProps) {
   const { buildPath } = useTenantPath();
   const navigate = useNavigate();
 
   // Connected models (filtered by configured API keys)
-  const { data: connectedModels = [], isLoading: connLoading, connected } = useConnectedAiModels();
+  const {
+    data: connectedModels = [],
+    isLoading: connLoading,
+    connected,
+  } = useConnectedAiModels();
   // Full catalog (for fallback display of current value)
   const { data: allModels = [], isLoading: allLoading } = useAiModels();
 
@@ -75,7 +94,7 @@ export function BrainSelector({ value, onChange, disabled, showAll = false }: Br
 
   // Resolve current display value (match alias or full id from full catalog)
   const current = allModels.find((m) => m.alias === value || m.id === value);
-  const selectedValue = current ? (current.alias || current.id) : value || "";
+  const selectedValue = current ? current.alias || current.id : value || "";
 
   // If the current engine's provider is not connected, show a warning
   const currentProviderConnected =
@@ -101,8 +120,8 @@ export function BrainSelector({ value, onChange, disabled, showAll = false }: Br
                 isLoading
                   ? "טוען מודלים..."
                   : noProviders && !showAll
-                  ? "אין ספק מחובר"
-                  : "בחר מוח"
+                    ? "אין ספק מחובר"
+                    : "בחר מוח"
               }
             />
           </SelectTrigger>

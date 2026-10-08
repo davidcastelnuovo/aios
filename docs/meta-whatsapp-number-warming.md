@@ -8,11 +8,11 @@
 
 Meta דוחה חלק מהתראות הלידים עם:
 
-| קוד | משמעות | מה לעשות |
-|---|---|---|
-| **131049** | מגבלת מעורבות/איכות | חימום + opt-in, Quality Rating ירוק, פחות תבניות לנמענים שלא מגיבים |
-| **131042** | בעיית Billing | Meta Business → WhatsApp Manager → **Billing** (אשראי/תשלום — לא ב-AIOS) |
-| **200** | אין הרשאה ל-WABA | חיבור מחדש של Meta WhatsApp ב-AIOS |
+| קוד        | משמעות              | מה לעשות                                                                 |
+| ---------- | ------------------- | ------------------------------------------------------------------------ |
+| **131049** | מגבלת מעורבות/איכות | חימום + opt-in, Quality Rating ירוק, פחות תבניות לנמענים שלא מגיבים      |
+| **131042** | בעיית Billing       | Meta Business → WhatsApp Manager → **Billing** (אשראי/תשלום — לא ב-AIOS) |
+| **200**    | אין הרשאה ל-WABA    | חיבור מחדש של Meta WhatsApp ב-AIOS                                       |
 
 המספר השולח בהתראות Make היה לעיתים «פליקס» (איכות UNKNOWN). מומלץ לעבור
 למספר **DMM** הירוק אחרי Billing תקין וחימום.
@@ -53,22 +53,22 @@ Meta דוחה חלק מהתראות הלידים עם:
 5. **תצוגה מקדימה** של קהל (מי שכבר דיבר / לקוחות עם טלפון / ידני).  
    מי שכבר ב-`wa_warm_opt_ins` מסונן אוטומטית.
 6. **צור טיוטה** — עדיין בלי שליחה.
-7. **אשרו במפורש:**  
-   - סימון «אני מבין/ה…»  
-   - הקלדת המשפט: `אני מאשר שליחת חימום`  
+7. **אשרו במפורש:**
+   - סימון «אני מבין/ה…»
+   - הקלדת המשפט: `אני מאשר שליחת חימום`
    - מספר נמענים מדויק
 8. המערכת שולחת **מדורג** (throttle + daily_cap, ברירת מחדל ~80/יום).
 9. אחרי opt-in — עדכנו את אוטומציית «התראת ליד ללקוח מ-Make» ל-`meta_whatsapp_integration_id` של המספר 77.
 
 ## איפה זה בקוד / DB
 
-| רכיב | מיקום |
-|---|---|
-| UI | `MetaWhatsAppSettings` → `MetaWhatsAppWarming` |
-| Edge | `meta-whatsapp-warm`, `meta-whatsapp-templates` (BUTTONS), `meta-whatsapp-webhook` |
-| טבלאות | `wa_warm_campaigns`, `wa_warm_recipients`, `wa_warm_opt_ins` |
-| הגדרות חיבור | `tenant_integrations.settings.warm_auto_reply_*` |
-| שליחה | `send-meta-whatsapp-message` עם `template.name=lead_optin_confirm_he` |
+| רכיב         | מיקום                                                                              |
+| ------------ | ---------------------------------------------------------------------------------- |
+| UI           | `MetaWhatsAppSettings` → `MetaWhatsAppWarming`                                     |
+| Edge         | `meta-whatsapp-warm`, `meta-whatsapp-templates` (BUTTONS), `meta-whatsapp-webhook` |
+| טבלאות       | `wa_warm_campaigns`, `wa_warm_recipients`, `wa_warm_opt_ins`                       |
+| הגדרות חיבור | `tenant_integrations.settings.warm_auto_reply_*`                                   |
+| שליחה        | `send-meta-whatsapp-message` עם `template.name=lead_optin_confirm_he`              |
 
 ## הגנות
 
@@ -80,7 +80,7 @@ Meta דוחה חלק מהתראות הלידים עם:
 
 ## אם Meta עדיין דוחה
 
-1. בדקו Quality Rating של המספר ב-Business Manager.  
-2. הפחיתו daily_cap והמתינו לתגובות (כפתור אישור).  
-3. אל תשלחו שוב לאותם מספרים שנכשלו ב-131049.  
+1. בדקו Quality Rating של המספר ב-Business Manager.
+2. הפחיתו daily_cap והמתינו לתגובות (כפתור אישור).
+3. אל תשלחו שוב לאותם מספרים שנכשלו ב-131049.
 4. ודאו ש-Make שולח `client_phone` ישראלי תקין (לא placeholder «שם הלקוח»).

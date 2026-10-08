@@ -14,7 +14,8 @@ Deno.serve(async (req) => {
     JSON.stringify({
       success: true,
       neutralized: true,
-      message: "run-db-migration is a no-op. Use apply-sql-migration.yml / SQL editor.",
+      message:
+        "run-db-migration is a no-op. Use apply-sql-migration.yml / SQL editor.",
     }),
     { status: 200, headers: cors },
   );

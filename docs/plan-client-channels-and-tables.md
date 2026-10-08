@@ -6,7 +6,9 @@ Ahrefs/SEO, אתר, עמוד פייסבוק) — כאשר **מוצגים רק ה
 מאוחד**.
 
 ## מצב קיים (כבר בנוי — נשתמש מחדש)
+
 **ניהול לקוחות**
+
 - `clients.services` (text[]) = **סימון הערוצים**. ערכים: `ppc_google`, `ppc_meta`,
   `seo`, `social`, `full_social`, `social_meta`, `automation`.
 - שדות חשבון קיימים: `clients.meta_ads_account_id`, `clients.google_ads_account_id`,
@@ -15,6 +17,7 @@ Ahrefs/SEO, אתר, עמוד פייסבוק) — כאשר **מוצגים רק ה
   `EditClientDialog.tsx`, `AddClientForm.tsx`. דפוס שמירה: `supabase.from("clients").update(...)`.
 
 **טבלאות דינמיות + דשבורד (בוגר)**
+
 - טבלאות: `crm_tables` (עם `integration_type`, `client_id`, `integration_settings` jsonb),
   `crm_fields`, `crm_records`. דשבורד: `crm_dashboards` (dashboard_type='client').
 - CRUD דרך edge function `crm-tables`. קישור ללקוח כבר קיים ב-`ClientTablesTab.tsx`
@@ -26,6 +29,7 @@ Ahrefs/SEO, אתר, עמוד פייסבוק) — כאשר **מוצגים רק ה
   `sync-google-analytics-data`, `sync-google-search-console-data`, `sync-ahrefs-data`.
 
 ## פערים שצריך לבנות
+
 1. אין שדות מזהה ל-Analytics ו-Ahrefs ברמת הלקוח (יש רק meta/google ads).
 2. שדות החיבור מוצגים תמיד — אין תצוגה מותנית לפי `services`.
 3. אין "מקור אמת" אחד שממפה ערוץ → שדות + integration_type + sync.
@@ -34,7 +38,9 @@ Ahrefs/SEO, אתר, עמוד פייסבוק) — כאשר **מוצגים רק ה
 ---
 
 ## עיקרון מנחה (best practice): קונפיג ערוצים אחד
+
 מקור אמת יחיד `src/config/clientChannels.ts` שממפה כל ערוץ:
+
 ```
 service code (ב-clients.services)  →  {
   label, icon,
@@ -44,16 +50,19 @@ service code (ב-clients.services)  →  {
   tableDialog/snapshot
 }
 ```
+
 הקונפיג הזה מזין גם את **התצוגה המותנית של השדות** וגם את **ההקצאה האוטומטית של הטבלאות**
 — כך אין כפילות לוגיקה, והוספת ערוץ עתידי = שורה אחת בקונפיג.
 
 ## החלטות שאושרו
+
 - **אחסון מזהים**: עמודות חדשות ב-`clients` (עקבי עם meta/google ads הקיימים).
 - **Analytics (GA)**: שדה `ga_property_id` **מוצג תמיד** לכל לקוח (כמו האתר).
 - **Search Console**: שדה `gsc_site_url` מוצג **רק** ללקוחות SEO.
 - **Ahrefs**: שדה `ahrefs_domain` מוצג רק ללקוחות SEO.
 
 ## שלב 0 — DB (Supabase, פרויקט `zvoijyneresvkadpprel`)
+
 - הוספת עמודות ל-`clients`:
   - `ga_property_id` (text) — Google Analytics (GA4 property) — תמיד.
   - `gsc_site_url` (text) — Search Console — רק SEO.
@@ -62,6 +71,7 @@ service code (ב-clients.services)  →  {
 - ללא שינוי סכמה לטבלאות הדינמיות — הן כבר תומכות בכל הנדרש.
 
 ## שלב 1 — פרטי לקוח עם תצוגה מותנית
+
 - הרחבת `ClientConnectionsTab.tsx` (וגם השדות ב-EditClientDialog details + AddClientForm)
   כך שכל קבוצת שדות חיבור תוצג **רק אם** `client.services` כולל את הערוץ:
   - `ppc_google` → `google_ads_account_id`
@@ -72,6 +82,7 @@ service code (ב-clients.services)  →  {
 - אינדיקציה ויזואלית: אם ערוץ מסומן אך חסר מזהה — תג "חסר חיבור".
 
 ## שלב 2 — כפתור "צור/פתח טבלאות + דשבורד" (אוטומציה אידמפוטנטית)
+
 - כפתור בכותרת תצוגת הצ'אט של הלקוח (וגם בתפריט שורת הטבלה).
 - בלחיצה, פונקציית `provision-client-channels` (edge function חדשה, או flow צד-לקוח שמשתמש
   ב-`crm-tables`):
@@ -85,12 +96,14 @@ service code (ב-clients.services)  →  {
 - לאחר מכן פתיחת ה-`ClientTablesTab`/`DashboardView` של הלקוח עם הטאבים החדשים.
 
 ## שלב 3 — בדיקות והשקה
+
 - מיגרציות עמודות דרך `apply_migration`.
 - פריסת ה-edge function (אם נבחר) דרך `deploy-edge-function.yml`.
 - בדיקה ידנית: לקוח עם seo+ppc_google → רואים רק את השדות הרלוונטיים → כפתור יוצר 2 טבלאות
-  + דשבורד → סנכרון מציג נתונים.
+  - דשבורד → סנכרון מציג נתונים.
 
 ## נקודות פתוחות / סיכונים
+
 - **אידמפוטנטיות**: זיהוי טבלה קיימת לפי (client_id, integration_type) כדי לא לכפול.
 - **הרשאות**: שדות פיננסיים/credentials כבר מאחורי `canViewFinance`; לשמור על אותו דפוס.
 - **מזהים חסרים**: UX ברור כשמסמנים ערוץ בלי למלא מזהה.

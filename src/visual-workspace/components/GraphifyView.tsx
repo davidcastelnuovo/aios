@@ -4,7 +4,14 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
-import { ArrowRight, Boxes, GitBranch, Search, Network, Lock } from "lucide-react";
+import {
+  ArrowRight,
+  Boxes,
+  GitBranch,
+  Search,
+  Network,
+  Lock,
+} from "lucide-react";
 import {
   useGraphifyOverview,
   useGraphifyCommunity,
@@ -35,11 +42,13 @@ function useDebounced(value: string, ms = 400) {
 
 export function GraphifyView() {
   const { data: overview, isLoading, error } = useGraphifyOverview();
-  const [selectedCommunity, setSelectedCommunity] = useState<GraphifyCommunity | null>(null);
+  const [selectedCommunity, setSelectedCommunity] =
+    useState<GraphifyCommunity | null>(null);
   const [selectedNode, setSelectedNode] = useState<GraphifyNode | null>(null);
   const [search, setSearch] = useState("");
   const debouncedSearch = useDebounced(search);
-  const { data: searchHits = [], isFetching: searching } = useGraphifySearch(debouncedSearch);
+  const { data: searchHits = [], isFetching: searching } =
+    useGraphifySearch(debouncedSearch);
   const subgraph = useGraphifyCommunity(selectedCommunity?.group_key ?? null);
 
   if (isLoading) {
@@ -47,7 +56,9 @@ export function GraphifyView() {
       <div className="p-6 space-y-4" dir="rtl">
         <Skeleton className="h-8 w-64" />
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-          {Array.from({ length: 8 }).map((_, i) => <Skeleton key={i} className="h-28" />)}
+          {Array.from({ length: 8 }).map((_, i) => (
+            <Skeleton key={i} className="h-28" />
+          ))}
         </div>
       </div>
     );
@@ -57,7 +68,10 @@ export function GraphifyView() {
     const message = String((error as Error)?.message || "");
     const isForbidden = message.includes("limited to admins");
     return (
-      <div className="flex flex-col items-center justify-center h-[50vh] text-center gap-3" dir="rtl">
+      <div
+        className="flex flex-col items-center justify-center h-[50vh] text-center gap-3"
+        dir="rtl"
+      >
         <Lock className="h-8 w-8 text-muted-foreground" />
         <p className="text-sm text-muted-foreground max-w-md">
           {isForbidden
@@ -70,9 +84,14 @@ export function GraphifyView() {
 
   if (!overview?.active) {
     return (
-      <div className="flex flex-col items-center justify-center h-[50vh] text-center gap-3" dir="rtl">
+      <div
+        className="flex flex-col items-center justify-center h-[50vh] text-center gap-3"
+        dir="rtl"
+      >
         <Network className="h-8 w-8 text-muted-foreground" />
-        <p className="text-sm text-muted-foreground">אין גרסת גרף פעילה. הרץ סנכרון Graphify כדי לטעון אחת.</p>
+        <p className="text-sm text-muted-foreground">
+          אין גרסת גרף פעילה. הרץ סנכרון Graphify כדי לטעון אחת.
+        </p>
       </div>
     );
   }
@@ -84,15 +103,25 @@ export function GraphifyView() {
     return (
       <div className="flex flex-col h-full" dir="rtl">
         <div className="flex items-center gap-3 px-6 py-3 border-b">
-          <Button variant="ghost" size="sm" onClick={() => { setSelectedCommunity(null); setSelectedNode(null); }}>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => {
+              setSelectedCommunity(null);
+              setSelectedNode(null);
+            }}
+          >
             <ArrowRight className="h-4 w-4 ml-1" />
             חזרה לכל הקהילות
           </Button>
           <div className="flex-1">
             <span className="font-semibold">{selectedCommunity.name}</span>
             <span className="text-xs text-muted-foreground mr-2">
-              {subgraph.data ? `${subgraph.data.nodes.length} צמתים · ${subgraph.data.edges.length} קשרים` : ""}
-              {(selectedCommunity.nodes > (subgraph.data?.nodes.length ?? 0)) && subgraph.data
+              {subgraph.data
+                ? `${subgraph.data.nodes.length} צמתים · ${subgraph.data.edges.length} קשרים`
+                : ""}
+              {selectedCommunity.nodes > (subgraph.data?.nodes.length ?? 0) &&
+              subgraph.data
                 ? ` (מציג את ${subgraph.data.nodes.length} המרכזיים מתוך ${selectedCommunity.nodes})`
                 : ""}
             </span>
@@ -102,7 +131,9 @@ export function GraphifyView() {
         <div className="flex flex-1 min-h-0">
           <div className="flex-1 min-w-0">
             {subgraph.isLoading ? (
-              <div className="flex items-center justify-center h-full text-sm text-muted-foreground">טוען גרף…</div>
+              <div className="flex items-center justify-center h-full text-sm text-muted-foreground">
+                טוען גרף…
+              </div>
             ) : (
               <GraphCanvas
                 nodes={subgraph.data?.nodes ?? []}
@@ -116,13 +147,23 @@ export function GraphifyView() {
             <aside className="w-80 border-r p-4 space-y-3 overflow-auto bg-background/60">
               <h3 className="font-semibold break-all">{selectedNode.label}</h3>
               <div className="space-y-1.5 text-xs">
-                {selectedNode.file_type && <Badge variant="secondary">{selectedNode.file_type}</Badge>}
+                {selectedNode.file_type && (
+                  <Badge variant="secondary">{selectedNode.file_type}</Badge>
+                )}
                 {selectedNode.source_file && (
-                  <p className="font-mono text-muted-foreground break-all" dir="ltr">
-                    {selectedNode.source_file}{selectedNode.source_location ? `:${selectedNode.source_location}` : ""}
+                  <p
+                    className="font-mono text-muted-foreground break-all"
+                    dir="ltr"
+                  >
+                    {selectedNode.source_file}
+                    {selectedNode.source_location
+                      ? `:${selectedNode.source_location}`
+                      : ""}
                   </p>
                 )}
-                <p className="text-muted-foreground">{selectedNode.degree} קשרים בגרף המלא</p>
+                <p className="text-muted-foreground">
+                  {selectedNode.degree} קשרים בגרף המלא
+                </p>
               </div>
             </aside>
           )}
@@ -137,11 +178,15 @@ export function GraphifyView() {
       <div className="flex flex-wrap items-center gap-4">
         <div className="flex items-center gap-2">
           <Boxes className="h-4 w-4 text-primary" />
-          <span className="text-sm"><b>{overview.node_count?.toLocaleString()}</b> צמתים</span>
+          <span className="text-sm">
+            <b>{overview.node_count?.toLocaleString()}</b> צמתים
+          </span>
         </div>
         <div className="flex items-center gap-2">
           <GitBranch className="h-4 w-4 text-primary" />
-          <span className="text-sm"><b>{overview.edge_count?.toLocaleString()}</b> קשרים</span>
+          <span className="text-sm">
+            <b>{overview.edge_count?.toLocaleString()}</b> קשרים
+          </span>
         </div>
         {overview.commit_sha && (
           <Badge variant="outline" className="font-mono text-[10px]" dir="ltr">
@@ -164,19 +209,35 @@ export function GraphifyView() {
       {debouncedSearch.trim().length >= 2 && (
         <Card>
           <CardContent className="p-4 space-y-2">
-            <p className="text-xs text-muted-foreground">{searching ? "מחפש…" : `${searchHits.length} תוצאות`}</p>
+            <p className="text-xs text-muted-foreground">
+              {searching ? "מחפש…" : `${searchHits.length} תוצאות`}
+            </p>
             <div className="max-h-72 overflow-auto divide-y">
               {searchHits.map((hit) => (
                 <div key={hit.node_id} className="py-2 flex items-start gap-3">
-                  <Badge variant={hit.distance === 0 ? "default" : "secondary"} className="mt-0.5 shrink-0">
+                  <Badge
+                    variant={hit.distance === 0 ? "default" : "secondary"}
+                    className="mt-0.5 shrink-0"
+                  >
                     {hit.distance === 0 ? "התאמה" : `מרחק ${hit.distance}`}
                   </Badge>
                   <div className="min-w-0">
                     <p className="text-sm font-medium break-all">{hit.label}</p>
-                    <p className="text-xs text-muted-foreground font-mono break-all" dir="ltr">{hit.source_file}</p>
+                    <p
+                      className="text-xs text-muted-foreground font-mono break-all"
+                      dir="ltr"
+                    >
+                      {hit.source_file}
+                    </p>
                     {(() => {
-                      const groupName = hit.community_name || groupKeyOf(hit.source_file);
-                      const c = groupName ? communities.find(x => x.group_key === groupName || x.name === groupName) : null;
+                      const groupName =
+                        hit.community_name || groupKeyOf(hit.source_file);
+                      const c = groupName
+                        ? communities.find(
+                            (x) =>
+                              x.group_key === groupName || x.name === groupName,
+                          )
+                        : null;
                       return c ? (
                         <button
                           className="text-xs text-primary hover:underline"
@@ -195,7 +256,9 @@ export function GraphifyView() {
       )}
 
       <div>
-        <h2 className="text-sm font-semibold mb-3">קהילות בגרף ({communities.length})</h2>
+        <h2 className="text-sm font-semibold mb-3">
+          קהילות בגרף ({communities.length})
+        </h2>
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
           {communities.map((c) => (
             <Card
@@ -206,15 +269,22 @@ export function GraphifyView() {
               <CardContent className="p-4 space-y-2">
                 <div className="flex items-center justify-between gap-2">
                   <h3 className="font-medium text-sm truncate">{c.name}</h3>
-                  <Badge variant="secondary" className="shrink-0">{c.nodes}</Badge>
+                  <Badge variant="secondary" className="shrink-0">
+                    {c.nodes}
+                  </Badge>
                 </div>
                 {c.file_types && (
                   <div className="flex flex-wrap gap-1">
-                    {Object.entries(c.file_types).slice(0, 4).map(([ft, cnt]) => (
-                      <span key={ft} className="text-[10px] text-muted-foreground bg-muted rounded px-1.5 py-0.5">
-                        {ft} · {cnt}
-                      </span>
-                    ))}
+                    {Object.entries(c.file_types)
+                      .slice(0, 4)
+                      .map(([ft, cnt]) => (
+                        <span
+                          key={ft}
+                          className="text-[10px] text-muted-foreground bg-muted rounded px-1.5 py-0.5"
+                        >
+                          {ft} · {cnt}
+                        </span>
+                      ))}
                   </div>
                 )}
               </CardContent>

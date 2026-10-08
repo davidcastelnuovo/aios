@@ -22,7 +22,11 @@ test("buildLayersForComplete returns RTL text layers when live text is on", () =
     compositionSeed: "var5|promo",
   }).layers;
   assert.ok(layers.length > 0);
-  assert.ok(layers.some((layer) => layer.type === "text" && (layer.text?.length ?? 0) > 0));
+  assert.ok(
+    layers.some(
+      (layer) => layer.type === "text" && (layer.text?.length ?? 0) > 0,
+    ),
+  );
 });
 
 test("buildLayersForComplete skips layers when live text is off", () => {

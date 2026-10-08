@@ -1,13 +1,39 @@
 import { useState } from "react";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { useWordPressSites, useCreateWordPressSite, useDeleteWordPressSite } from "@/hooks/useSocialMedia";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
+import {
+  useWordPressSites,
+  useCreateWordPressSite,
+  useDeleteWordPressSite,
+} from "@/hooks/useSocialMedia";
 import { Globe, Plus, Trash2, Loader2, ExternalLink } from "lucide-react";
-import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 
 export function WordPressSettings() {
   const { data: sites = [], isLoading } = useWordPressSites();
@@ -39,8 +65,8 @@ export function WordPressSettings() {
         <div>
           <CardTitle>אתרי וורדפרס</CardTitle>
           <CardDescription>
-            חבר אתרי וורדפרס לפרסום פוסטים ישירות מהמערכת.
-            נדרש Application Password בוורדפרס.
+            חבר אתרי וורדפרס לפרסום פוסטים ישירות מהמערכת. נדרש Application
+            Password בוורדפרס.
           </CardDescription>
         </div>
         <Dialog open={open} onOpenChange={setOpen}>
@@ -59,7 +85,9 @@ export function WordPressSettings() {
                 <Label>שם האתר (אופציונלי)</Label>
                 <Input
                   value={form.site_name}
-                  onChange={(e) => setForm({ ...form, site_name: e.target.value })}
+                  onChange={(e) =>
+                    setForm({ ...form, site_name: e.target.value })
+                  }
                   placeholder="האתר שלי"
                 />
               </div>
@@ -67,7 +95,9 @@ export function WordPressSettings() {
                 <Label>כתובת האתר</Label>
                 <Input
                   value={form.site_url}
-                  onChange={(e) => setForm({ ...form, site_url: e.target.value })}
+                  onChange={(e) =>
+                    setForm({ ...form, site_url: e.target.value })
+                  }
                   placeholder="https://example.com"
                   dir="ltr"
                 />
@@ -76,7 +106,9 @@ export function WordPressSettings() {
                 <Label>שם משתמש</Label>
                 <Input
                   value={form.username}
-                  onChange={(e) => setForm({ ...form, username: e.target.value })}
+                  onChange={(e) =>
+                    setForm({ ...form, username: e.target.value })
+                  }
                   placeholder="admin"
                   dir="ltr"
                 />
@@ -86,20 +118,30 @@ export function WordPressSettings() {
                 <Input
                   type="password"
                   value={form.app_password}
-                  onChange={(e) => setForm({ ...form, app_password: e.target.value })}
+                  onChange={(e) =>
+                    setForm({ ...form, app_password: e.target.value })
+                  }
                   placeholder="xxxx xxxx xxxx xxxx xxxx xxxx"
                   dir="ltr"
                 />
                 <p className="text-xs text-muted-foreground mt-1">
-                  ניתן ליצור Application Password בוורדפרס תחת Users → Profile → Application Passwords
+                  ניתן ליצור Application Password בוורדפרס תחת Users → Profile →
+                  Application Passwords
                 </p>
               </div>
               <Button
                 className="w-full"
                 onClick={handleCreate}
-                disabled={!form.site_url || !form.username || !form.app_password || createSite.isPending}
+                disabled={
+                  !form.site_url ||
+                  !form.username ||
+                  !form.app_password ||
+                  createSite.isPending
+                }
               >
-                {createSite.isPending && <Loader2 className="h-4 w-4 animate-spin me-2" />}
+                {createSite.isPending && (
+                  <Loader2 className="h-4 w-4 animate-spin me-2" />
+                )}
                 הוסף אתר
               </Button>
             </div>
@@ -127,8 +169,13 @@ export function WordPressSettings() {
                     <Globe className="h-4 w-4" />
                   </div>
                   <div>
-                    <p className="font-medium">{site.site_name || site.site_url}</p>
-                    <p className="text-sm text-muted-foreground flex items-center gap-1" dir="ltr">
+                    <p className="font-medium">
+                      {site.site_name || site.site_url}
+                    </p>
+                    <p
+                      className="text-sm text-muted-foreground flex items-center gap-1"
+                      dir="ltr"
+                    >
                       {site.site_url}
                       <ExternalLink className="h-3 w-3" />
                     </p>
@@ -148,12 +195,15 @@ export function WordPressSettings() {
                       <AlertDialogHeader>
                         <AlertDialogTitle>מחק אתר</AlertDialogTitle>
                         <AlertDialogDescription>
-                          האם אתה בטוח שברצונך למחוק את האתר "{site.site_name || site.site_url}"?
+                          האם אתה בטוח שברצונך למחוק את האתר "
+                          {site.site_name || site.site_url}"?
                         </AlertDialogDescription>
                       </AlertDialogHeader>
                       <AlertDialogFooter>
                         <AlertDialogCancel>ביטול</AlertDialogCancel>
-                        <AlertDialogAction onClick={() => deleteSite.mutate(site.id)}>
+                        <AlertDialogAction
+                          onClick={() => deleteSite.mutate(site.id)}
+                        >
                           מחק
                         </AlertDialogAction>
                       </AlertDialogFooter>

@@ -18,7 +18,8 @@ export function normalizeMeetingUrl(raw: string): string {
 export function detectMeetingPlatform(url: string): MeetingPlatform {
   const lower = url.toLowerCase();
   if (lower.includes("zoom.us/") || lower.includes("zoom.com/")) return "zoom";
-  if (lower.includes("meet.google.com/") || lower.includes("google.com/meet/")) return "google_meet";
+  if (lower.includes("meet.google.com/") || lower.includes("google.com/meet/"))
+    return "google_meet";
   if (
     lower.includes("teams.microsoft.com/") ||
     lower.includes("teams.live.com/") ||

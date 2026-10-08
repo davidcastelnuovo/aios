@@ -23,7 +23,9 @@ import {
 test("selecting a direct channel changes the send path", () => {
   const internal = FALLBACK_BRAIN_ROUTES.find((r) => r.slug === "internal")!;
   const cursor = FALLBACK_BRAIN_ROUTES.find((r) => r.slug === "cursor")!;
-  const parliament = FALLBACK_BRAIN_ROUTES.find((r) => r.slug === "parliament")!;
+  const parliament = FALLBACK_BRAIN_ROUTES.find(
+    (r) => r.slug === "parliament",
+  )!;
   assert.equal(sendPathForRoute(internal), "internal_stream");
   assert.equal(sendPathForRoute(cursor), "channel_gateway");
   assert.equal(sendPathForRoute(parliament), "channel_gateway");
@@ -46,14 +48,29 @@ test("default brain is Carmen Direct; first paint opens solo HUD not knights tab
   assert.equal(DEFAULT_BRAIN_SLUG, "cursor");
   assert.equal(pickDefaultRoute(FALLBACK_BRAIN_ROUTES).slug, "cursor");
   assert.equal(pickDefaultRoute(FALLBACK_BRAIN_ROUTES, "grok").slug, "grok");
-  assert.equal(initialSelectedRoute("tenant-with-saved-parliament").slug, "cursor");
-  assert.equal(hudStage({ routeType: initialSelectedRoute(null).route_type }), "direct");
+  assert.equal(
+    initialSelectedRoute("tenant-with-saved-parliament").slug,
+    "cursor",
+  );
+  assert.equal(
+    hudStage({ routeType: initialSelectedRoute(null).route_type }),
+    "direct",
+  );
 });
 
 test("restored chat keeps its own brain; empty session stays on Carmen Direct", () => {
   const routes = FALLBACK_BRAIN_ROUTES;
-  assert.equal(routeForRestoredChat(routes, { routing_mode: "parliament" }).slug, "parliament");
-  assert.equal(routeForRestoredChat(routes, { routing_mode: "direct_channel", brain_route_id: "fallback-cursor" }).slug, "cursor");
+  assert.equal(
+    routeForRestoredChat(routes, { routing_mode: "parliament" }).slug,
+    "parliament",
+  );
+  assert.equal(
+    routeForRestoredChat(routes, {
+      routing_mode: "direct_channel",
+      brain_route_id: "fallback-cursor",
+    }).slug,
+    "cursor",
+  );
   assert.equal(routeForRestoredChat(routes, null).slug, "cursor");
 });
 
@@ -77,9 +94,15 @@ test("table address picks a seat route without leaving parliament HUD", () => {
 
 test("channel health banner only when Cursor key is rejected", () => {
   assert.equal(channelHealthBanner(null), null);
-  assert.equal(channelHealthBanner({ ok: true, cursor: { ok: true, status: 200 } }), null);
+  assert.equal(
+    channelHealthBanner({ ok: true, cursor: { ok: true, status: 200 } }),
+    null,
+  );
   assert.equal(channelHealthBanner({ ok: false }), null);
-  const banner = channelHealthBanner({ ok: false, cursor: { ok: false, status: 401 } });
+  const banner = channelHealthBanner({
+    ok: false,
+    cursor: { ok: false, status: 401 },
+  });
   assert.match(banner || "", /CURSOR_API_KEY/);
   assert.match(banner || "", /Staging/);
   assert.match(banner || "", /כרמן הפנימית עובדת/);
@@ -107,12 +130,23 @@ test("parliament seats are Cursor + Grok + Codex", () => {
 
 test("parliament view maps seat replies and advances to review round", () => {
   const p = FALLBACK_BRAIN_ROUTES.find((r) => r.slug === "parliament")!;
-  const view = deriveParliamentView([
-    { role: "user", content: "איך לשחרר את הדופק?" },
-    { role: "tool_call", tool: "פרלמנט נפתח — סבב 1", channel: "parliament" },
-    { role: "assistant", speaker: "cursor", channel: "cursor", content: "תקן את ה-JID" },
-    { role: "tool_call", tool: "סבב ביקורת — כל מושב מקבל את תשובות האחרים." },
-  ], p);
+  const view = deriveParliamentView(
+    [
+      { role: "user", content: "איך לשחרר את הדופק?" },
+      { role: "tool_call", tool: "פרלמנט נפתח — סבב 1", channel: "parliament" },
+      {
+        role: "assistant",
+        speaker: "cursor",
+        channel: "cursor",
+        content: "תקן את ה-JID",
+      },
+      {
+        role: "tool_call",
+        tool: "סבב ביקורת — כל מושב מקבל את תשובות האחרים.",
+      },
+    ],
+    p,
+  );
   assert.equal(view.round, 2);
   assert.equal(view.topic, "איך לשחרר את הדופק?");
   const cursor = view.seats.find((s) => s.provider === "cursor")!;

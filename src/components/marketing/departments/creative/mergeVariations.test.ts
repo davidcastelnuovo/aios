@@ -3,7 +3,9 @@ import test from "node:test";
 import { mergeCreativeVariations } from "./mergeVariations.ts";
 import type { CreativeVariation } from "./types.ts";
 
-const variation = (overrides: Partial<CreativeVariation>): CreativeVariation => ({
+const variation = (
+  overrides: Partial<CreativeVariation>,
+): CreativeVariation => ({
   id: "a",
   name: "A",
   imageUrl: "https://img/a.png",
@@ -24,8 +26,13 @@ test("mergeCreativeVariations keeps a live reject when the incoming snapshot is 
 });
 
 test("mergeCreativeVariations keeps a variation Cursor completed that the local write did not know", () => {
-  const live = [variation({ id: "a" }), variation({ id: "b", name: "from agent", imageUrl: "https://img/b.png" })];
-  const incoming = [variation({ id: "a", rejected: true, rejectNote: "רג׳קט" })];
+  const live = [
+    variation({ id: "a" }),
+    variation({ id: "b", name: "from agent", imageUrl: "https://img/b.png" }),
+  ];
+  const incoming = [
+    variation({ id: "a", rejected: true, rejectNote: "רג׳קט" }),
+  ];
   const merged = mergeCreativeVariations(live, incoming);
   assert.equal(merged.map((row) => row.id).join(","), "a,b");
   assert.equal(merged[0].rejected, true);
@@ -34,7 +41,9 @@ test("mergeCreativeVariations keeps a variation Cursor completed that the local 
 
 test("mergeCreativeVariations can un-reject when the incoming write says so", () => {
   const live = [variation({ rejected: true })];
-  const incoming = [variation({ rejected: false, imageUrl: "https://img/new.png" })];
+  const incoming = [
+    variation({ rejected: false, imageUrl: "https://img/new.png" }),
+  ];
   assert.equal(mergeCreativeVariations(live, incoming)[0].rejected, false);
 });
 

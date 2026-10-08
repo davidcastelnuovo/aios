@@ -26,12 +26,23 @@ test("mine follows the campaigner linked on the user, including owners", () => {
     campaignerId: "staff-david",
     userId: "user-david",
   });
-  assert.deepEqual(mine, { kind: "assigned", campaignerId: "staff-david", salesPersonId: undefined });
+  assert.deepEqual(mine, {
+    kind: "assigned",
+    campaignerId: "staff-david",
+    salesPersonId: undefined,
+  });
 });
 
 test("mine uses sales-person when that is the linked staff row", () => {
-  const mine = resolveMineTaskAssignee({ salesPersonId: "sales-1", userId: "user-1" });
-  assert.deepEqual(mine, { kind: "assigned", campaignerId: undefined, salesPersonId: "sales-1" });
+  const mine = resolveMineTaskAssignee({
+    salesPersonId: "sales-1",
+    userId: "user-1",
+  });
+  assert.deepEqual(mine, {
+    kind: "assigned",
+    campaignerId: undefined,
+    salesPersonId: "sales-1",
+  });
 });
 
 test("without a staff link, mine falls back to tasks the user created", () => {
@@ -56,8 +67,18 @@ test("isMineQueueFilter covers mine and mine_assigned", () => {
 
 test("filterTasksByCampaignerBoardFilter keeps only mine assignments", () => {
   const rows = [
-    { id: "1", campaigner_id: "staff-itay", sales_person_id: null, created_by: null },
-    { id: "2", campaigner_id: "staff-other", sales_person_id: null, created_by: null },
+    {
+      id: "1",
+      campaigner_id: "staff-itay",
+      sales_person_id: null,
+      created_by: null,
+    },
+    {
+      id: "2",
+      campaigner_id: "staff-other",
+      sales_person_id: null,
+      created_by: null,
+    },
   ];
   const mine = {
     kind: "assigned" as const,
@@ -66,11 +87,15 @@ test("filterTasksByCampaignerBoardFilter keeps only mine assignments", () => {
     campaignerIds: ["staff-itay"],
   };
   assert.deepEqual(
-    filterTasksByCampaignerBoardFilter(rows, "mine", mine).map((task) => task.id),
+    filterTasksByCampaignerBoardFilter(rows, "mine", mine).map(
+      (task) => task.id,
+    ),
     ["1"],
   );
   assert.deepEqual(
-    filterTasksByCampaignerBoardFilter(rows, "staff-other", mine).map((task) => task.id),
+    filterTasksByCampaignerBoardFilter(rows, "staff-other", mine).map(
+      (task) => task.id,
+    ),
     ["2"],
   );
 });
@@ -82,8 +107,19 @@ test("chunkIds splits long id lists for PostgREST .in()", () => {
 
 test("collaborator_for_me keeps a task in mine without embed rows", () => {
   const rows = [
-    { id: "collab", campaigner_id: "staff-other", sales_person_id: null, created_by: "user-other", collaborator_for_me: true },
-    { id: "unrelated", campaigner_id: "staff-other", sales_person_id: null, created_by: "user-other" },
+    {
+      id: "collab",
+      campaigner_id: "staff-other",
+      sales_person_id: null,
+      created_by: "user-other",
+      collaborator_for_me: true,
+    },
+    {
+      id: "unrelated",
+      campaigner_id: "staff-other",
+      sales_person_id: null,
+      created_by: "user-other",
+    },
   ];
   const mine = {
     kind: "assigned" as const,
@@ -92,7 +128,9 @@ test("collaborator_for_me keeps a task in mine without embed rows", () => {
     campaignerIds: ["staff-itay"],
   };
   assert.deepEqual(
-    filterTasksByCampaignerBoardFilter(rows, "mine", mine).map((task) => task.id),
+    filterTasksByCampaignerBoardFilter(rows, "mine", mine).map(
+      (task) => task.id,
+    ),
     ["collab"],
   );
   assert.equal(taskTouchesCampaigner(rows[0], "staff-itay"), true);
@@ -100,7 +138,12 @@ test("collaborator_for_me keeps a task in mine without embed rows", () => {
 
 test("mine includes tasks where I am a collaborator", () => {
   const rows = [
-    { id: "assigned", campaigner_id: "staff-itay", sales_person_id: null, created_by: null },
+    {
+      id: "assigned",
+      campaigner_id: "staff-itay",
+      sales_person_id: null,
+      created_by: null,
+    },
     {
       id: "collab",
       campaigner_id: "staff-other",
@@ -108,7 +151,12 @@ test("mine includes tasks where I am a collaborator", () => {
       created_by: "user-other",
       task_collaborators: [{ campaigner_id: "staff-itay" }],
     },
-    { id: "unrelated", campaigner_id: "staff-other", sales_person_id: null, created_by: "user-other" },
+    {
+      id: "unrelated",
+      campaigner_id: "staff-other",
+      sales_person_id: null,
+      created_by: "user-other",
+    },
   ];
   const mine = {
     kind: "assigned" as const,
@@ -117,21 +165,40 @@ test("mine includes tasks where I am a collaborator", () => {
     campaignerIds: ["staff-itay"],
   };
   assert.deepEqual(
-    filterTasksByCampaignerBoardFilter(rows, "mine", mine).map((task) => task.id),
+    filterTasksByCampaignerBoardFilter(rows, "mine", mine).map(
+      (task) => task.id,
+    ),
     ["assigned", "collab"],
   );
   assert.equal(taskTouchesCampaigner(rows[1], "staff-itay"), true);
   assert.deepEqual(
-    filterTasksByCampaignerBoardFilter(rows, "staff-itay", mine).map((task) => task.id),
+    filterTasksByCampaignerBoardFilter(rows, "staff-itay", mine).map(
+      (task) => task.id,
+    ),
     ["assigned", "collab"],
   );
 });
 
 test("mine_assigned keeps tasks I assigned to someone else", () => {
   const rows = [
-    { id: "assigned-to-me", campaigner_id: "staff-itay", sales_person_id: null, created_by: "user-other" },
-    { id: "i-assigned", campaigner_id: "staff-other", sales_person_id: null, created_by: "user-itay" },
-    { id: "unrelated", campaigner_id: "staff-other", sales_person_id: null, created_by: "user-other" },
+    {
+      id: "assigned-to-me",
+      campaigner_id: "staff-itay",
+      sales_person_id: null,
+      created_by: "user-other",
+    },
+    {
+      id: "i-assigned",
+      campaigner_id: "staff-other",
+      sales_person_id: null,
+      created_by: "user-itay",
+    },
+    {
+      id: "unrelated",
+      campaigner_id: "staff-other",
+      sales_person_id: null,
+      created_by: "user-other",
+    },
   ];
   const mine = {
     kind: "assigned" as const,
@@ -140,11 +207,15 @@ test("mine_assigned keeps tasks I assigned to someone else", () => {
     campaignerIds: ["staff-itay"],
   };
   assert.deepEqual(
-    filterTasksByCampaignerBoardFilter(rows, "mine", mine).map((task) => task.id),
+    filterTasksByCampaignerBoardFilter(rows, "mine", mine).map(
+      (task) => task.id,
+    ),
     ["assigned-to-me"],
   );
   assert.deepEqual(
-    filterTasksByCampaignerBoardFilter(rows, "mine_assigned", mine).map((task) => task.id),
+    filterTasksByCampaignerBoardFilter(rows, "mine_assigned", mine).map(
+      (task) => task.id,
+    ),
     ["assigned-to-me", "i-assigned"],
   );
 });
@@ -194,18 +265,38 @@ test("period window uses week/month starts and rolling 3 months / year", () => {
   assert.equal(resolveTaskPeriodStart("all", now), undefined);
   const three = resolveTaskPeriodStart("quarter", now);
   assert.equal(three?.getMonth(), 5);
-  assert.equal(taskMatchesActivityPeriod({ status: "open", created_at: "2026-09-10T10:00:00" }, month), true);
-  assert.equal(taskMatchesActivityPeriod({ status: "open", created_at: "2026-07-01T10:00:00" }, month), false);
   assert.equal(
     taskMatchesActivityPeriod(
-      { status: "done", updated_at: "2026-09-16T10:00:00", created_at: "2026-01-01T10:00:00" },
+      { status: "open", created_at: "2026-09-10T10:00:00" },
+      month,
+    ),
+    true,
+  );
+  assert.equal(
+    taskMatchesActivityPeriod(
+      { status: "open", created_at: "2026-07-01T10:00:00" },
       month,
     ),
     false,
   );
   assert.equal(
     taskMatchesActivityPeriod(
-      { status: "done", updated_at: "2026-09-16T10:00:00", created_at: "2026-09-02T10:00:00" },
+      {
+        status: "done",
+        updated_at: "2026-09-16T10:00:00",
+        created_at: "2026-01-01T10:00:00",
+      },
+      month,
+    ),
+    false,
+  );
+  assert.equal(
+    taskMatchesActivityPeriod(
+      {
+        status: "done",
+        updated_at: "2026-09-16T10:00:00",
+        created_at: "2026-09-02T10:00:00",
+      },
       month,
     ),
     true,
@@ -226,17 +317,41 @@ test("filterTasksByRelatedEntity matches client, lead, or unassigned", () => {
     { id: "2", client_id: null, lead_id: "l1" },
     { id: "3", client_id: null, lead_id: null },
   ];
-  assert.deepEqual(filterTasksByRelatedEntity(rows, "client", "c1").map((task) => task.id), ["1"]);
-  assert.deepEqual(filterTasksByRelatedEntity(rows, "lead", "l1").map((task) => task.id), ["2"]);
-  assert.deepEqual(filterTasksByRelatedEntity(rows, "none").map((task) => task.id), ["3"]);
+  assert.deepEqual(
+    filterTasksByRelatedEntity(rows, "client", "c1").map((task) => task.id),
+    ["1"],
+  );
+  assert.deepEqual(
+    filterTasksByRelatedEntity(rows, "lead", "l1").map((task) => task.id),
+    ["2"],
+  );
+  assert.deepEqual(
+    filterTasksByRelatedEntity(rows, "none").map((task) => task.id),
+    ["3"],
+  );
   assert.equal(filterTasksByRelatedEntity(rows, "all").length, 3);
 });
 
 test("filterTasksForBoardUserPreview hides other users' tasks in view-as mode", () => {
   const rows = [
-    { id: "1", campaigner_id: "staff-felix", sales_person_id: null, created_by: "user-felix" },
-    { id: "2", campaigner_id: "staff-david", sales_person_id: null, created_by: "user-david" },
-    { id: "3", campaigner_id: null, sales_person_id: null, created_by: "user-david" },
+    {
+      id: "1",
+      campaigner_id: "staff-felix",
+      sales_person_id: null,
+      created_by: "user-felix",
+    },
+    {
+      id: "2",
+      campaigner_id: "staff-david",
+      sales_person_id: null,
+      created_by: "user-david",
+    },
+    {
+      id: "3",
+      campaigner_id: null,
+      sales_person_id: null,
+      created_by: "user-david",
+    },
   ];
   const felix = {
     kind: "assigned" as const,
@@ -245,7 +360,9 @@ test("filterTasksForBoardUserPreview hides other users' tasks in view-as mode", 
     campaignerIds: ["staff-felix"],
   };
   assert.deepEqual(
-    filterTasksForBoardUserPreview(rows, "user-felix", felix).map((task) => task.id),
+    filterTasksForBoardUserPreview(rows, "user-felix", felix).map(
+      (task) => task.id,
+    ),
     ["1"],
   );
 });

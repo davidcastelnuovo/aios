@@ -26,12 +26,20 @@ const getUnifiedCallbackUrl = () => {
 };
 
 const isCalendarCandidate = (integration: WorkspaceIntegration) => {
-  const values = [integration.name, integration.type, ...integration.categories].map(normalize);
+  const values = [
+    integration.name,
+    integration.type,
+    ...integration.categories,
+  ].map(normalize);
   return values.some((value) => value.includes("calendar"));
 };
 
 const rankCalendarCandidate = (integration: WorkspaceIntegration) => {
-  const haystack = [integration.name, integration.type, ...integration.categories]
+  const haystack = [
+    integration.name,
+    integration.type,
+    ...integration.categories,
+  ]
     .map(normalize)
     .join(" ");
 
@@ -46,12 +54,15 @@ const rankCalendarCandidate = (integration: WorkspaceIntegration) => {
 };
 
 async function getWorkspaceCalendarIntegration(tenantId: string) {
-  const { data, error } = await supabase.functions.invoke("unified-connections", {
-    body: {
-      action: "list_workspace_integrations",
-      tenant_id: tenantId,
+  const { data, error } = await supabase.functions.invoke(
+    "unified-connections",
+    {
+      body: {
+        action: "list_workspace_integrations",
+        tenant_id: tenantId,
+      },
     },
-  });
+  );
 
   if (error) throw error;
 
@@ -62,13 +73,23 @@ async function getWorkspaceCalendarIntegration(tenantId: string) {
     throw new Error("לא נמצאה אינטגרציית Google Calendar פעילה ב-Unified.");
   }
 
-  return [...candidates].sort((a, b) => rankCalendarCandidate(b) - rankCalendarCandidate(a))[0];
+  return [...candidates].sort(
+    (a, b) => rankCalendarCandidate(b) - rankCalendarCandidate(a),
+  )[0];
 }
 
-export async function openUnifiedCalendarConnection({ tenantId }: { tenantId: string }) {
+export async function openUnifiedCalendarConnection({
+  tenantId,
+}: {
+  tenantId: string;
+}) {
   if (!tenantId) throw new Error("לא נמצא ארגון פעיל.");
 
-  const popup = window.open("about:blank", "unified-calendar-auth", "width=600,height=700,left=100,top=100");
+  const popup = window.open(
+    "about:blank",
+    "unified-calendar-auth",
+    "width=600,height=700,left=100,top=100",
+  );
 
   if (!popup) {
     throw new Error("חלון הקופץ נחסם. נא לאפשר חלונות קופצים ולנסות שוב.");
@@ -76,7 +97,12 @@ export async function openUnifiedCalendarConnection({ tenantId }: { tenantId: st
 
   try {
     const integration = await getWorkspaceCalendarIntegration(tenantId);
-    const category = integration.categories.find((value) => normalize(value).includes("calendar")) ?? integration.categories[0] ?? "calendar";
+    const category =
+      integration.categories.find((value) =>
+        normalize(value).includes("calendar"),
+      ) ??
+      integration.categories[0] ??
+      "calendar";
     const flowUid = crypto.randomUUID();
     const pendingConnection: PendingConnection = {
       category,
@@ -85,20 +111,26 @@ export async function openUnifiedCalendarConnection({ tenantId }: { tenantId: st
       flow_uid: flowUid,
     };
 
-    sessionStorage.setItem("unified_pending_connection", JSON.stringify(pendingConnection));
+    sessionStorage.setItem(
+      "unified_pending_connection",
+      JSON.stringify(pendingConnection),
+    );
 
-    const { data, error } = await supabase.functions.invoke("unified-connections", {
-      body: {
-        action: "get_embed_url",
-        tenant_id: tenantId,
-        category,
-        integration_type: integration.type,
-        success_redirect: getUnifiedCallbackUrl().toString(),
-        failure_redirect: window.location.href,
-        state: window.btoa(JSON.stringify(pendingConnection)),
-        uid: flowUid,
+    const { data, error } = await supabase.functions.invoke(
+      "unified-connections",
+      {
+        body: {
+          action: "get_embed_url",
+          tenant_id: tenantId,
+          category,
+          integration_type: integration.type,
+          success_redirect: getUnifiedCallbackUrl().toString(),
+          failure_redirect: window.location.href,
+          state: window.btoa(JSON.stringify(pendingConnection)),
+          uid: flowUid,
+        },
       },
-    });
+    );
 
     if (error) throw error;
 
@@ -118,12 +150,15 @@ export async function openUnifiedCalendarConnection({ tenantId }: { tenantId: st
 }
 
 export async function findUnifiedCalendarConnectionId(tenantId: string) {
-  const { data, error } = await supabase.functions.invoke("unified-connections", {
-    body: {
-      action: "list",
-      tenant_id: tenantId,
+  const { data, error } = await supabase.functions.invoke(
+    "unified-connections",
+    {
+      body: {
+        action: "list",
+        tenant_id: tenantId,
+      },
     },
-  });
+  );
 
   if (error) throw error;
 
@@ -135,7 +170,9 @@ export async function findUnifiedCalendarConnectionId(tenantId: string) {
 
   const calendarConnection = connections.find((connection) => {
     if (connection.integration_type === "unified_calendar") return true;
-    return normalize(connection.settings?.unified_category).includes("calendar");
+    return normalize(connection.settings?.unified_category).includes(
+      "calendar",
+    );
   });
 
   return calendarConnection?.id ?? null;

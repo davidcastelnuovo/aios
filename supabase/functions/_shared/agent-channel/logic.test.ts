@@ -25,9 +25,12 @@ function base(): ParliamentState {
 
 test("parliament MVP seats default to cursor+grok+codex", () => {
   assert.deepEqual(parliamentSeatsFromConfig({}), ["cursor", "grok", "codex"]);
-  assert.deepEqual(parliamentSeatsFromConfig({ seats: ["cursor", "grok", "codex", "claude", "extra"] }), [
-    "cursor", "grok", "codex", "claude",
-  ]);
+  assert.deepEqual(
+    parliamentSeatsFromConfig({
+      seats: ["cursor", "grok", "codex", "claude", "extra"],
+    }),
+    ["cursor", "grok", "codex", "claude"],
+  );
 });
 
 test("partial failure does not block synthesis", () => {
@@ -40,8 +43,16 @@ test("partial failure does not block synthesis", () => {
 });
 
 test("reused Cursor Direct copy says the chat was already open", () => {
-  assert.match(acceptedMessageFor("cursor", "https://cursor.com/agents/bc-1", { reused: true }), /שכבר פתוח/);
-  assert.match(acceptedMessageFor("codex", "https://chatgpt.com/c/abc", { reused: true }), /ChatGPT Workspace/);
+  assert.match(
+    acceptedMessageFor("cursor", "https://cursor.com/agents/bc-1", {
+      reused: true,
+    }),
+    /שכבר פתוח/,
+  );
+  assert.match(
+    acceptedMessageFor("codex", "https://chatgpt.com/c/abc", { reused: true }),
+    /ChatGPT Workspace/,
+  );
 });
 
 test("direct channels require a callback; internal streams", () => {

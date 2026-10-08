@@ -60,7 +60,12 @@ function Thumbnail({
         className="block w-full h-auto rounded-sm pointer-events-none select-none bg-muted/20"
       />
       <div className="mt-1 flex items-center justify-between gap-1 text-[11px]">
-        <span className={cn("font-medium", active ? "text-primary" : "text-muted-foreground")}>
+        <span
+          className={cn(
+            "font-medium",
+            active ? "text-primary" : "text-muted-foreground",
+          )}
+        >
           עמוד {pageNumber}
         </span>
         {fieldCount > 0 && (

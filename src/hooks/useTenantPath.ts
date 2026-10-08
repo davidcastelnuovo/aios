@@ -14,7 +14,7 @@ export function useTenantPath() {
   const { tenantSlug } = useParams<{ tenantSlug: string }>();
   const tenantContext = useOptionalTenant();
   const currentTenantSlug = tenantContext?.currentTenantSlug ?? null;
-  
+
   // URL params → tenant context → pathname parse (avoids brief /module 404 flashes)
   const activeSlug = tenantSlug || currentTenantSlug || slugFromPathname();
 
@@ -25,10 +25,12 @@ export function useTenantPath() {
    */
   const buildPath = (path: string): string => {
     if (!activeSlug) {
-      console.warn("useTenantPath: No tenant slug available, returning root path");
+      console.warn(
+        "useTenantPath: No tenant slug available, returning root path",
+      );
       return `/${path}`;
     }
-    
+
     // Remove leading slash if present
     const cleanPath = path.startsWith("/") ? path.slice(1) : path;
     return `/t/${activeSlug}/${cleanPath}`;

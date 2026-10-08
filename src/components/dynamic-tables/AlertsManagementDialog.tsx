@@ -218,7 +218,10 @@ export function AlertsManagementDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent dir="rtl" className="max-w-2xl max-h-[80vh] overflow-y-auto">
+      <DialogContent
+        dir="rtl"
+        className="max-w-2xl max-h-[80vh] overflow-y-auto"
+      >
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Bell className="h-5 w-5" />
@@ -356,7 +359,9 @@ export function AlertsManagementDialog({
                 </Button>
                 <Button
                   onClick={handleSubmit}
-                  disabled={createMutation.isPending || updateMutation.isPending}
+                  disabled={
+                    createMutation.isPending || updateMutation.isPending
+                  }
                 >
                   {editingAlert ? "עדכון" : "הוספה"}
                 </Button>
@@ -387,7 +392,9 @@ export function AlertsManagementDialog({
               <div className="text-center py-8 text-muted-foreground border rounded-lg">
                 <Bell className="h-8 w-8 mx-auto mb-2 opacity-50" />
                 <p>אין התראות מוגדרות</p>
-                <p className="text-sm">הוסף התראה כדי לקבל עדכונים על שינויים במדדים</p>
+                <p className="text-sm">
+                  הוסף התראה כדי לקבל עדכונים על שינויים במדדים
+                </p>
               </div>
             ) : (
               <div className="space-y-2">
@@ -395,7 +402,9 @@ export function AlertsManagementDialog({
                   <div
                     key={alert.id}
                     className={`border rounded-lg p-3 flex items-center justify-between ${
-                      alert.is_active ? "bg-background" : "bg-muted/50 opacity-60"
+                      alert.is_active
+                        ? "bg-background"
+                        : "bg-muted/50 opacity-60"
                     }`}
                   >
                     <div className="flex-1">
@@ -403,8 +412,7 @@ export function AlertsManagementDialog({
                       <div className="text-sm text-muted-foreground">
                         {getMetricLabel(alert.metric)} •{" "}
                         {getComparisonLabel(alert.comparison_type)} •{" "}
-                        {getOperatorLabel(alert.operator)}{" "}
-                        {alert.threshold}
+                        {getOperatorLabel(alert.operator)} {alert.threshold}
                         {alert.is_percentage ? "%" : ""}
                       </div>
                     </div>

@@ -5,7 +5,13 @@
  * Anything missing stays visible, so existing share links keep their current tabs.
  */
 
-export const SHARED_REPORT_TAB_KEYS = ["seo", "gsc", "ga", "maskyoo", "monthly_work"] as const;
+export const SHARED_REPORT_TAB_KEYS = [
+  "seo",
+  "gsc",
+  "ga",
+  "maskyoo",
+  "monthly_work",
+] as const;
 
 export type SharedReportTabKey = (typeof SHARED_REPORT_TAB_KEYS)[number];
 
@@ -58,13 +64,19 @@ function allVisible(): SharedReportTabVisibility {
  * input falls back to "show everything", and a map that hides every tab keeps
  * the SEO tab so a share link is never blank.
  */
-export function parseSharedReportTabs(settings: unknown): SharedReportTabVisibility {
+export function parseSharedReportTabs(
+  settings: unknown,
+): SharedReportTabVisibility {
   const visibility = allVisible();
-  const raw = (settings as { shared_tabs?: unknown; sharedTabs?: unknown } | null | undefined);
+  const raw = settings as
+    { shared_tabs?: unknown; sharedTabs?: unknown } | null | undefined;
   const stored = raw?.shared_tabs ?? raw?.sharedTabs;
-  if (!stored || typeof stored !== "object" || Array.isArray(stored)) return visibility;
+  if (!stored || typeof stored !== "object" || Array.isArray(stored))
+    return visibility;
 
-  for (const [rawKey, value] of Object.entries(stored as Record<string, unknown>)) {
+  for (const [rawKey, value] of Object.entries(
+    stored as Record<string, unknown>,
+  )) {
     const key = normalizeKey(rawKey);
     if (!key) continue;
     if (typeof value === "boolean") visibility[key] = value;
@@ -72,11 +84,15 @@ export function parseSharedReportTabs(settings: unknown): SharedReportTabVisibil
     else if (value === "true" || value === 1) visibility[key] = true;
   }
 
-  if (!SHARED_REPORT_TAB_KEYS.some((key) => visibility[key])) visibility.seo = true;
+  if (!SHARED_REPORT_TAB_KEYS.some((key) => visibility[key]))
+    visibility.seo = true;
   return visibility;
 }
 
-export function isSharedReportTabVisible(settings: unknown, key: SharedReportTabKey): boolean {
+export function isSharedReportTabVisible(
+  settings: unknown,
+  key: SharedReportTabKey,
+): boolean {
   return parseSharedReportTabs(settings)[key];
 }
 
@@ -89,10 +105,15 @@ export function withSharedReportTab(
   key: SharedReportTabKey,
   visible: boolean,
 ): Record<string, unknown> {
-  const base = (settings && typeof settings === "object" && !Array.isArray(settings)
-    ? { ...(settings as Record<string, unknown>) }
-    : {}) as Record<string, unknown>;
-  const next = { ...parseSharedReportTabs(settings), [key]: visible } as SharedReportTabVisibility;
+  const base = (
+    settings && typeof settings === "object" && !Array.isArray(settings)
+      ? { ...(settings as Record<string, unknown>) }
+      : {}
+  ) as Record<string, unknown>;
+  const next = {
+    ...parseSharedReportTabs(settings),
+    [key]: visible,
+  } as SharedReportTabVisibility;
   if (!SHARED_REPORT_TAB_KEYS.some((tab) => next[tab])) next.seo = true;
   base.shared_tabs = next;
   delete base.sharedTabs;

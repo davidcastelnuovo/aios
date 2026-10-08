@@ -25,7 +25,9 @@ export function phonesMatch(a, b) {
 }
 
 export function isPhoneInAllowedList(phone, allowedPhones) {
-  const list = Array.isArray(allowedPhones) ? allowedPhones.map(digitsOnly).filter(Boolean) : [];
+  const list = Array.isArray(allowedPhones)
+    ? allowedPhones.map(digitsOnly).filter(Boolean)
+    : [];
   if (!list.length) return false;
   return list.some((p) => phonesMatch(phone, p));
 }
@@ -55,7 +57,11 @@ export function isUsableLidKey(value) {
 }
 
 /** LID digits of an inbound private event — taken only from LID-bearing fields. */
-export function pickInboundLidDigits({ fromRaw = "", chatIdRaw = "", senderLidRaw = "" } = {}) {
+export function pickInboundLidDigits({
+  fromRaw = "",
+  chatIdRaw = "",
+  senderLidRaw = "",
+} = {}) {
   const senderLid = digitsOnly(senderLidRaw);
   if (isUsableLidKey(senderLid)) return senderLid;
   for (const raw of [fromRaw, chatIdRaw]) {
@@ -108,7 +114,12 @@ export function resolveInboundLidToPhone({
     : [];
 
   const fromPayload = digitsOnly(payloadRealPhone);
-  if (fromPayload && fromPayload.length >= 9 && fromPayload.length <= 15 && fromPayload !== lid) {
+  if (
+    fromPayload &&
+    fromPayload.length >= 9 &&
+    fromPayload.length <= 15 &&
+    fromPayload !== lid
+  ) {
     return { phone: fromPayload, reason: "payload_real_phone" };
   }
 
@@ -120,7 +131,9 @@ export function resolveInboundLidToPhone({
   }
 
   const aliases =
-    lidAliases && typeof lidAliases === "object" && !Array.isArray(lidAliases) ? lidAliases : {};
+    lidAliases && typeof lidAliases === "object" && !Array.isArray(lidAliases)
+      ? lidAliases
+      : {};
   if (lid && aliases[lid]) {
     const mapped = digitsOnly(aliases[lid]);
     if (mapped) return { phone: mapped, reason: "configured_lid_alias" };
@@ -162,17 +175,29 @@ export function pickPrivateCarmenTarget({
   const source = digitsOnly(sourcePhoneNumber);
 
   if (pairedFromGreenApi && source) {
-    return { phone: source, chatId: `${source}@c.us`, reason: "paired_green_api_operator" };
+    return {
+      phone: source,
+      chatId: `${source}@c.us`,
+      reason: "paired_green_api_operator",
+    };
   }
 
   // Outbound from the connected phone to a third party: reply stays in that
   // counterpart chat (only when outbound-third-party guard already allowed it).
   if (isOutgoingFromPhone && counterpart) {
-    return { phone: counterpart, chatId: `${counterpart}@c.us`, reason: "outbound_counterpart" };
+    return {
+      phone: counterpart,
+      chatId: `${counterpart}@c.us`,
+      reason: "outbound_counterpart",
+    };
   }
 
   if (counterpart) {
-    return { phone: counterpart, chatId: `${counterpart}@c.us`, reason: "inbound_counterpart" };
+    return {
+      phone: counterpart,
+      chatId: `${counterpart}@c.us`,
+      reason: "inbound_counterpart",
+    };
   }
 
   return { phone: null, chatId: null, reason: "missing_counterpart" };

@@ -52,7 +52,9 @@ test("splits a Copy-department document into one block per וריאציה", () =
 });
 
 test("bullet variation headers keep the copy angle", () => {
-  const [block] = splitCopyVariations("וריאציה 3 • מגולל לצ'אט\nכותרת: תפתח צ'אט");
+  const [block] = splitCopyVariations(
+    "וריאציה 3 • מגולל לצ'אט\nכותרת: תפתח צ'אט",
+  );
   assert.equal(block?.angle, "מגולל לצ'אט");
   assert.match(copyBlockLabel(block!), /מגולל לצ'אט/);
 });
@@ -64,13 +66,17 @@ test("a document without headers is a single copy block", () => {
 });
 
 test("multiple כותרת blocks split when there is no וריאציה header", () => {
-  const blocks = splitCopyVariations("כותרת:\nאלפא\nCTA: אחד\n\nכותרת:\nבטא\nCTA: שתיים");
+  const blocks = splitCopyVariations(
+    "כותרת:\nאלפא\nCTA: אחד\n\nכותרת:\nבטא\nCTA: שתיים",
+  );
   assert.equal(blocks.length, 2);
   assert.equal(blocks[0].parts.headline, "אלפא");
   assert.equal(blocks[1].parts.headline, "בטא");
 });
 
-const stored = (overrides: Partial<StoredCopyVariation> = {}): StoredCopyVariation => ({
+const stored = (
+  overrides: Partial<StoredCopyVariation> = {},
+): StoredCopyVariation => ({
   id: overrides.id ?? "copy-1",
   key: overrides.key ?? "1",
   label: overrides.label ?? "וריאציה 1",
@@ -99,7 +105,12 @@ const concept = (overrides: Partial<CopyConcept> = {}): CopyConcept => ({
 
 test("hydrateCopyVariations preserves approval by variation key", () => {
   const next = hydrateCopyVariations(DOC, [
-    stored({ key: "1", approved: true, approvedAt: "2026-08-26T00:00:00.000Z", id: "keep-1" }),
+    stored({
+      key: "1",
+      approved: true,
+      approvedAt: "2026-08-26T00:00:00.000Z",
+      id: "keep-1",
+    }),
     stored({ key: "2", approved: false, id: "keep-2" }),
   ]);
   assert.equal(next.length, 2);
@@ -129,7 +140,10 @@ test("pairConceptsToCopyVariations links by copyKey then by index", () => {
     stored({ id: "b", key: "2", label: "וריאציה 2", headline: "בטא" }),
   ];
   const paired = pairConceptsToCopyVariations(
-    [concept({ copyKey: "2" }), concept({ id: "c2", name: "שני", copyKey: "" })],
+    [
+      concept({ copyKey: "2" }),
+      concept({ id: "c2", name: "שני", copyKey: "" }),
+    ],
     copies,
   );
   assert.equal(paired[0].copyId, "b");
@@ -188,7 +202,10 @@ test("applyVariationText edits one variation without swallowing siblings", () =>
 
 test("applyVariationText ignores a pasted sibling variation header", () => {
   const item = stored({ id: "b", key: "2", angle: "כאב" });
-  const next = applyVariationText(item, "וריאציה 9 — גנוב\nכותרת:\nרק זה\nCTA:\nכאן");
+  const next = applyVariationText(
+    item,
+    "וריאציה 9 — גנוב\nכותרת:\nרק זה\nCTA:\nכאן",
+  );
   assert.equal(next.id, "b");
   assert.equal(next.key, "2");
   assert.match(next.text, /^וריאציה 2/);
@@ -198,16 +215,19 @@ test("applyVariationText ignores a pasted sibling variation header", () => {
 
 test("applyVariationText keeps only the first pasted chunk when a full document is dropped in", () => {
   const item = stored({ id: "a", key: "1", angle: "פומו" });
-  const next = applyVariationText(item, [
-    "כותרת:",
-    "שלי",
-    "CTA:",
-    "כאן",
-    "",
-    "וריאציה 2 — כאב",
-    "כותרת:",
-    "של אחר",
-  ].join("\n"));
+  const next = applyVariationText(
+    item,
+    [
+      "כותרת:",
+      "שלי",
+      "CTA:",
+      "כאן",
+      "",
+      "וריאציה 2 — כאב",
+      "כותרת:",
+      "של אחר",
+    ].join("\n"),
+  );
   assert.equal(next.key, "1");
   assert.equal(next.headline, "שלי");
   assert.equal(next.text.includes("וריאציה 2"), false);
@@ -250,7 +270,13 @@ test("linkApprovedConceptsToCopy fills only approved concepts that have no copy 
   const linked = linkApprovedConceptsToCopy(
     [
       concept({ id: "has", approved: true, copyId: "keep", copyKey: "1" }),
-      concept({ id: "need", name: "שני", approved: true, copyId: "", copyKey: "" }),
+      concept({
+        id: "need",
+        name: "שני",
+        approved: true,
+        copyId: "",
+        copyKey: "",
+      }),
       concept({ id: "skip", name: "שלוש", approved: false, copyId: "" }),
     ],
     copies,
@@ -279,7 +305,10 @@ test("stampCopiesWithConcept writes two variations locked to that concept", () =
 });
 
 test("linkConceptToGeneratedCopy sets the primary copy only when empty", () => {
-  const copies = [stored({ id: "n1", key: "3" }), stored({ id: "n2", key: "4" })];
+  const copies = [
+    stored({ id: "n1", key: "3" }),
+    stored({ id: "n2", key: "4" }),
+  ];
   const first = linkConceptToGeneratedCopy(
     [concept({ id: "c1", copyId: "", copyKey: "" })],
     "c1",

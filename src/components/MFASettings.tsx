@@ -1,6 +1,12 @@
 import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -25,10 +31,13 @@ export function MFASettings() {
 
   const checkMFAStatus = async () => {
     try {
-      const { data, error } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
+      const { data, error } =
+        await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
       if (error) throw error;
-      
-      setIsEnrolled(data?.currentLevel === "aal2" || data?.nextLevel === "aal2");
+
+      setIsEnrolled(
+        data?.currentLevel === "aal2" || data?.nextLevel === "aal2",
+      );
     } catch (error: any) {
       console.error("Error checking MFA status:", error);
     } finally {
@@ -55,7 +64,7 @@ export function MFASettings() {
 
       const { data, error } = await supabase.auth.mfa.enroll({
         factorType: "totp",
-        friendlyName: `Authenticator ${new Date().getTime()}`
+        friendlyName: `Authenticator ${new Date().getTime()}`,
       });
 
       if (error) throw error;
@@ -207,7 +216,8 @@ export function MFASettings() {
             <Alert>
               <AlertCircle className="h-4 w-4" />
               <AlertDescription>
-                אימות דו-שלבי מוסיף שכבת אבטחה נוספת לחשבון שלך. תזדקק לאפליקציית Authenticator כמו Google Authenticator או Authy.
+                אימות דו-שלבי מוסיף שכבת אבטחה נוספת לחשבון שלך. תזדקק
+                לאפליקציית Authenticator כמו Google Authenticator או Authy.
               </AlertDescription>
             </Alert>
             <Button onClick={startMFAEnrollment} disabled={isEnrolling}>
@@ -221,13 +231,18 @@ export function MFASettings() {
             <Alert>
               <AlertCircle className="h-4 w-4" />
               <AlertDescription>
-                סרוק את קוד ה-QR באפליקציית ה-Authenticator שלך, או הזן את הסוד ידנית
+                סרוק את קוד ה-QR באפליקציית ה-Authenticator שלך, או הזן את הסוד
+                ידנית
               </AlertDescription>
             </Alert>
 
             <div className="space-y-4">
               <div className="flex justify-center">
-                <img src={qrCode} alt="QR Code" className="border rounded p-2" />
+                <img
+                  src={qrCode}
+                  alt="QR Code"
+                  className="border rounded p-2"
+                />
               </div>
 
               <div className="space-y-2">
@@ -238,11 +253,7 @@ export function MFASettings() {
                     readOnly
                     className="font-mono text-sm"
                   />
-                  <Button
-                    variant="outline"
-                    size="icon"
-                    onClick={copySecret}
-                  >
+                  <Button variant="outline" size="icon" onClick={copySecret}>
                     {copiedSecret ? (
                       <Check className="h-4 w-4" />
                     ) : (
@@ -252,20 +263,26 @@ export function MFASettings() {
                 </div>
               </div>
 
-              <form onSubmit={(e) => {
-                e.preventDefault();
-                if (verifyCode.length === 6) {
-                  verifyAndEnableMFA();
-                }
-              }}>
+              <form
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  if (verifyCode.length === 6) {
+                    verifyAndEnableMFA();
+                  }
+                }}
+              >
                 <div className="space-y-2">
-                  <Label htmlFor="verify-code">הזן את הקוד בן 6 הספרות מהאפליקציה:</Label>
+                  <Label htmlFor="verify-code">
+                    הזן את הקוד בן 6 הספרות מהאפליקציה:
+                  </Label>
                   <Input
                     id="verify-code"
                     type="text"
                     maxLength={6}
                     value={verifyCode}
-                    onChange={(e) => setVerifyCode(e.target.value.replace(/\D/g, ""))}
+                    onChange={(e) =>
+                      setVerifyCode(e.target.value.replace(/\D/g, ""))
+                    }
                     placeholder="123456"
                     className="font-mono text-lg tracking-wider"
                   />
@@ -275,7 +292,11 @@ export function MFASettings() {
                   <Button type="submit" disabled={verifyCode.length !== 6}>
                     אמת והפעל
                   </Button>
-                  <Button type="button" variant="outline" onClick={cancelEnrollment}>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={cancelEnrollment}
+                  >
                     ביטול
                   </Button>
                 </div>

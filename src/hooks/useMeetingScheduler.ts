@@ -47,15 +47,15 @@ export function useMeetingScheduler(tenantId?: string) {
       const data = await getCalendarEvents(
         startOfDay.toISOString(),
         endOfDay.toISOString(),
-        { tenantId }
+        { tenantId },
       );
 
       if (data?.events) {
         setCalendarEvents(data.events);
       }
     } catch (err: any) {
-      console.error('Error fetching calendar events:', err);
-      setCalendarError(err.message || 'שגיאה בטעינת היומן');
+      console.error("Error fetching calendar events:", err);
+      setCalendarError(err.message || "שגיאה בטעינת היומן");
     } finally {
       setIsLoadingCalendar(false);
     }
@@ -80,7 +80,9 @@ export function useMeetingScheduler(tenantId?: string) {
     const options: string[] = [];
     for (let h = 7; h <= 21; h++) {
       for (let m = 0; m < 60; m += 30) {
-        options.push(`${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}`);
+        options.push(
+          `${h.toString().padStart(2, "0")}:${m.toString().padStart(2, "0")}`,
+        );
       }
     }
     return options;
@@ -90,7 +92,7 @@ export function useMeetingScheduler(tenantId?: string) {
    * יצירת רשימת שעות סיום אפשריות לפי שעת התחלה
    */
   const generateEndTimeOptions = (startTime: string): string[] => {
-    const [startHour, startMinute] = startTime.split(':').map(Number);
+    const [startHour, startMinute] = startTime.split(":").map(Number);
     const cursor = new Date();
     cursor.setHours(startHour, startMinute, 0, 0);
     cursor.setMinutes(cursor.getMinutes() + 30);
@@ -100,7 +102,9 @@ export function useMeetingScheduler(tenantId?: string) {
 
     const options: string[] = [];
     while (cursor <= maxEnd) {
-      options.push(`${cursor.getHours().toString().padStart(2, '0')}:${cursor.getMinutes().toString().padStart(2, '0')}`);
+      options.push(
+        `${cursor.getHours().toString().padStart(2, "0")}:${cursor.getMinutes().toString().padStart(2, "0")}`,
+      );
       cursor.setMinutes(cursor.getMinutes() + 30);
     }
 
@@ -113,15 +117,15 @@ export function useMeetingScheduler(tenantId?: string) {
   useEffect(() => {
     if (!meetingTime) return;
 
-    const [startHour, startMinute] = meetingTime.split(':').map(Number);
+    const [startHour, startMinute] = meetingTime.split(":").map(Number);
     const nextHour = new Date();
     nextHour.setHours(startHour, startMinute, 0, 0);
     nextHour.setMinutes(nextHour.getMinutes() + 60);
 
-    const suggestedEnd = `${nextHour.getHours().toString().padStart(2, '0')}:${nextHour
+    const suggestedEnd = `${nextHour.getHours().toString().padStart(2, "0")}:${nextHour
       .getMinutes()
       .toString()
-      .padStart(2, '0')}`;
+      .padStart(2, "0")}`;
 
     if (!meetingEndTime || meetingEndTime <= meetingTime) {
       setMeetingEndTime(suggestedEnd);
@@ -135,17 +139,17 @@ export function useMeetingScheduler(tenantId?: string) {
     const allTimeOptions = generateTimeOptions();
 
     if (!meetingDate || calendarEvents.length === 0 || calendarError) {
-      return allTimeOptions.map(time => ({ time, available: true }));
+      return allTimeOptions.map((time) => ({ time, available: true }));
     }
 
-    return allTimeOptions.map(time => {
-      const [hours, minutes] = time.split(':').map(Number);
+    return allTimeOptions.map((time) => {
+      const [hours, minutes] = time.split(":").map(Number);
       const slotStart = new Date(meetingDate);
       slotStart.setHours(hours, minutes, 0, 0);
       const slotEnd = new Date(slotStart);
       slotEnd.setMinutes(slotEnd.getMinutes() + 30);
 
-      const isOccupied = calendarEvents.some(event => {
+      const isOccupied = calendarEvents.some((event) => {
         if (!event.start?.dateTime || !event.end?.dateTime) {
           return false;
         }
@@ -166,22 +170,22 @@ export function useMeetingScheduler(tenantId?: string) {
       return [] as { time: string; available: boolean }[];
     }
 
-    const [startHours, startMinutes] = meetingTime.split(':').map(Number);
+    const [startHours, startMinutes] = meetingTime.split(":").map(Number);
     const startDateTime = new Date(meetingDate);
     startDateTime.setHours(startHours, startMinutes, 0, 0);
 
     const endOptions = generateEndTimeOptions(meetingTime);
 
     if (calendarEvents.length === 0 || calendarError) {
-      return endOptions.map(time => ({ time, available: true }));
+      return endOptions.map((time) => ({ time, available: true }));
     }
 
-    return endOptions.map(time => {
-      const [endHours, endMinutes] = time.split(':').map(Number);
+    return endOptions.map((time) => {
+      const [endHours, endMinutes] = time.split(":").map(Number);
       const candidateEnd = new Date(meetingDate);
       candidateEnd.setHours(endHours, endMinutes, 0, 0);
 
-      const hasConflict = calendarEvents.some(event => {
+      const hasConflict = calendarEvents.some((event) => {
         if (!event.start?.dateTime || !event.end?.dateTime) {
           return false;
         }
@@ -201,7 +205,7 @@ export function useMeetingScheduler(tenantId?: string) {
     contactName: string;
     contactEmail?: string;
     contactId: string;
-    contactType: 'lead' | 'client' | 'campaigner';
+    contactType: "lead" | "client" | "campaigner";
     additionalEmails?: string[];
     inviteeLabels?: string[];
     onSuccess?: () => void;
@@ -229,11 +233,11 @@ export function useMeetingScheduler(tenantId?: string) {
     setIsSchedulingMeeting(true);
 
     try {
-      const [hours, minutes] = meetingTime.split(':').map(Number);
+      const [hours, minutes] = meetingTime.split(":").map(Number);
       const startDateTime = new Date(meetingDate);
       startDateTime.setHours(hours, minutes, 0, 0);
 
-      const [endHours, endMinutes] = meetingEndTime.split(':').map(Number);
+      const [endHours, endMinutes] = meetingEndTime.split(":").map(Number);
       const endDateTime = new Date(meetingDate);
       endDateTime.setHours(endHours, endMinutes, 0, 0);
 
@@ -252,16 +256,18 @@ export function useMeetingScheduler(tenantId?: string) {
       await addCalendarEvent(
         {
           summary: subject,
-          description: personalMessage || `פגישה עם ${contactType === 'lead' ? 'ליד' : 'לקוח'}: ${contactName}`,
+          description:
+            personalMessage ||
+            `פגישה עם ${contactType === "lead" ? "ליד" : "לקוח"}: ${contactName}`,
           start: startDateTime.toISOString(),
           end: endDateTime.toISOString(),
           attendees,
         },
-        { tenantId }
+        { tenantId },
       );
 
       // עדכון פרטי הפגישה בליד (אם זה ליד)
-      if (contactType === 'lead') {
+      if (contactType === "lead") {
         const meetingDateFormatted = format(meetingDate, "yyyy-MM-dd");
         const { error: updateError } = await supabase
           .from("leads")
@@ -276,25 +282,27 @@ export function useMeetingScheduler(tenantId?: string) {
           .eq("id", contactId);
 
         if (updateError) {
-          console.error('Error saving meeting details:', updateError);
+          console.error("Error saving meeting details:", updateError);
         }
 
         const dateLabel = format(meetingDate, "dd/MM/yyyy");
         const { data: sessionData } = await supabase.auth.getSession();
         const updaterId = sessionData?.session?.user?.id;
         if (updaterId) {
-          const { error: noteError } = await supabase.from("lead_updates").insert({
-            lead_id: contactId,
-            user_id: updaterId,
-            content: formatMeetingLeadUpdate({
-              dateLabel,
-              startTime: meetingTime,
-              endTime: meetingEndTime,
-              location: meetingLocation,
-              subject,
-              inviteeLabels,
-            }),
-          });
+          const { error: noteError } = await supabase
+            .from("lead_updates")
+            .insert({
+              lead_id: contactId,
+              user_id: updaterId,
+              content: formatMeetingLeadUpdate({
+                dateLabel,
+                startTime: meetingTime,
+                endTime: meetingEndTime,
+                location: meetingLocation,
+                subject,
+                inviteeLabels,
+              }),
+            });
           if (noteError) {
             console.error("Error writing meeting lead update:", noteError);
           }
@@ -322,9 +330,9 @@ export function useMeetingScheduler(tenantId?: string) {
       if (tenantId) {
         try {
           const formattedDate = format(meetingDate, "dd/MM/yyyy");
-          await supabase.functions.invoke('trigger-automation', {
+          await supabase.functions.invoke("trigger-automation", {
             body: {
-              trigger_type: 'meeting_created',
+              trigger_type: "meeting_created",
               tenant_id: tenantId,
               data: {
                 [`${contactType}_id`]: contactId,
@@ -332,11 +340,11 @@ export function useMeetingScheduler(tenantId?: string) {
                 meeting_date: formattedDate,
                 meeting_time: meetingTime,
                 meeting_location: meetingLocation || subject,
-              }
-            }
+              },
+            },
           });
         } catch (autoErr) {
-          console.error('Automation trigger error:', autoErr);
+          console.error("Automation trigger error:", autoErr);
         }
       }
 
@@ -351,9 +359,8 @@ export function useMeetingScheduler(tenantId?: string) {
       if (onSuccess) {
         onSuccess();
       }
-
     } catch (error: any) {
-      console.error('Meeting scheduling error:', error);
+      console.error("Meeting scheduling error:", error);
       toast.error(`שגיאה בקביעת פגישה: ${error.message}`);
     } finally {
       setIsSchedulingMeeting(false);

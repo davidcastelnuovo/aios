@@ -34,7 +34,10 @@ test("owned default beats other owned agencies", () => {
 });
 
 test("first owned agency is used when none is default", () => {
-  assert.equal(pickTenantHomeAgencyId(TENANT, [OWNED_FIRST, SHARED]), OWNED_FIRST.id);
+  assert.equal(
+    pickTenantHomeAgencyId(TENANT, [OWNED_FIRST, SHARED]),
+    OWNED_FIRST.id,
+  );
 });
 
 test("shared agency is used when the tenant owns none", () => {
@@ -49,11 +52,17 @@ test("returns null without a tenant or agency list", () => {
 
 test("mergeAgencyLists de-duplicates owned and shared rows", () => {
   const merged = mergeAgencyLists([OWNED_FIRST, SHARED], [SHARED]);
-  assert.deepEqual(merged.map((row) => row.id), [OWNED_FIRST.id, SHARED.id]);
+  assert.deepEqual(
+    merged.map((row) => row.id),
+    [OWNED_FIRST.id, SHARED.id],
+  );
 });
 
 test("agenciesFromJoin accepts a nested object or array", () => {
-  assert.deepEqual(agenciesFromJoin(SHARED).map((row) => row.id), [SHARED.id]);
+  assert.deepEqual(
+    agenciesFromJoin(SHARED).map((row) => row.id),
+    [SHARED.id],
+  );
   assert.deepEqual(
     agenciesFromJoin([SHARED, null]).map((row) => row.id),
     [SHARED.id],

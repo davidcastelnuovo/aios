@@ -1,5 +1,11 @@
 import { useState } from "react";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+} from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -26,14 +32,21 @@ interface AhrefsProjectPickerProps {
   onSyncComplete?: () => void;
 }
 
-export function AhrefsProjectPicker({ open, onOpenChange, clientId, onSyncComplete }: AhrefsProjectPickerProps) {
+export function AhrefsProjectPicker({
+  open,
+  onOpenChange,
+  clientId,
+  onSyncComplete,
+}: AhrefsProjectPickerProps) {
   const [search, setSearch] = useState("");
   const [syncingId, setSyncingId] = useState<string | null>(null);
 
   const { data, isLoading, error, refetch } = useQuery({
     queryKey: ["ahrefs-projects"],
     queryFn: async () => {
-      const { data, error } = await supabase.functions.invoke("list-ahrefs-projects");
+      const { data, error } = await supabase.functions.invoke(
+        "list-ahrefs-projects",
+      );
       if (error) throw error;
       if ((data as any)?.error) throw new Error((data as any).error);
       return (data as any)?.projects as AhrefsProject[];
@@ -56,21 +69,24 @@ export function AhrefsProjectPicker({ open, onOpenChange, clientId, onSyncComple
   const handleSync = async (project: AhrefsProject) => {
     setSyncingId(project.project_id);
     try {
-      const { data, error } = await supabase.functions.invoke("fetch-ahrefs-snapshot", {
-        body: {
-          clientId,
-          domain: project.domain,
-          mode: project.mode,
-          protocol: project.protocol,
-          projectId: project.project_id,
+      const { data, error } = await supabase.functions.invoke(
+        "fetch-ahrefs-snapshot",
+        {
+          body: {
+            clientId,
+            domain: project.domain,
+            mode: project.mode,
+            protocol: project.protocol,
+            projectId: project.project_id,
+          },
         },
-      });
+      );
       if (error) throw error;
       if ((data as any)?.error) throw new Error((data as any).error);
       const organic = (data as any)?.keywords_count ?? 0;
       const tracked = (data as any)?.tracked_count ?? 0;
       toast.success(
-        `הדוח של ${project.project_name} נטען בהצלחה (${organic} אורגניים, ${tracked} במעקב)`
+        `הדוח של ${project.project_name} נטען בהצלחה (${organic} אורגניים, ${tracked} במעקב)`,
       );
       onSyncComplete?.();
       onOpenChange(false);
@@ -88,7 +104,8 @@ export function AhrefsProjectPicker({ open, onOpenChange, clientId, onSyncComple
         <DialogHeader>
           <DialogTitle>בחר פרויקט מ-Ahrefs לסנכרון</DialogTitle>
           <DialogDescription>
-            רשימת כל הפרויקטים הזמינים בחשבון ה-Ahrefs המחובר. בחר פרויקט כדי למשוך את הדומיין שלו ללקוח הזה.
+            רשימת כל הפרויקטים הזמינים בחשבון ה-Ahrefs המחובר. בחר פרויקט כדי
+            למשוך את הדומיין שלו ללקוח הזה.
           </DialogDescription>
         </DialogHeader>
 
@@ -102,8 +119,15 @@ export function AhrefsProjectPicker({ open, onOpenChange, clientId, onSyncComple
               className="pr-9"
             />
           </div>
-          <Button variant="outline" size="icon" onClick={() => refetch()} disabled={isLoading}>
-            <RefreshCw className={`h-4 w-4 ${isLoading ? "animate-spin" : ""}`} />
+          <Button
+            variant="outline"
+            size="icon"
+            onClick={() => refetch()}
+            disabled={isLoading}
+          >
+            <RefreshCw
+              className={`h-4 w-4 ${isLoading ? "animate-spin" : ""}`}
+            />
           </Button>
         </div>
 
@@ -131,8 +155,13 @@ export function AhrefsProjectPicker({ open, onOpenChange, clientId, onSyncComple
                   <div className="flex items-center gap-3 min-w-0 flex-1">
                     <Globe className="h-4 w-4 text-primary shrink-0" />
                     <div className="min-w-0 flex-1">
-                      <div className="font-medium truncate">{p.project_name}</div>
-                      <div className="text-xs text-muted-foreground truncate" dir="ltr">
+                      <div className="font-medium truncate">
+                        {p.project_name}
+                      </div>
+                      <div
+                        className="text-xs text-muted-foreground truncate"
+                        dir="ltr"
+                      >
                         {p.domain}
                       </div>
                     </div>

@@ -42,13 +42,18 @@ export function EditUserSalesPersonDialog({
   const { tenantId } = useCurrentTenant();
   const { createSalesPerson } = useAutoCreateTeamMember();
 
-  const [selectedSalesPerson, setSelectedSalesPerson] = useState<string>("none");
+  const [selectedSalesPerson, setSelectedSalesPerson] =
+    useState<string>("none");
   const [showCreateForm, setShowCreateForm] = useState(false);
 
   // טופס יצירת איש מכירות חדש
-  const [newSalesPersonName, setNewSalesPersonName] = useState(userFullName || "");
+  const [newSalesPersonName, setNewSalesPersonName] = useState(
+    userFullName || "",
+  );
   const [newSalesPersonPhone, setNewSalesPersonPhone] = useState("");
-  const [newSalesPersonEmail, setNewSalesPersonEmail] = useState(userEmail || "");
+  const [newSalesPersonEmail, setNewSalesPersonEmail] = useState(
+    userEmail || "",
+  );
   const [selectedAgency, setSelectedAgency] = useState("");
   const [notes, setNotes] = useState("");
 
@@ -112,8 +117,12 @@ export function EditUserSalesPersonDialog({
       }
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["users-with-roles", tenantId] });
-      queryClient.invalidateQueries({ queryKey: ["user-sales-person", userId] });
+      queryClient.invalidateQueries({
+        queryKey: ["users-with-roles", tenantId],
+      });
+      queryClient.invalidateQueries({
+        queryKey: ["user-sales-person", userId],
+      });
       queryClient.invalidateQueries({ queryKey: ["sales-people", tenantId] });
       toast.success("איש מכירות עודכן בהצלחה");
       onClose();
@@ -128,7 +137,8 @@ export function EditUserSalesPersonDialog({
       setShowCreateForm(true);
       return;
     }
-    const salesPersonId = selectedSalesPerson === "none" ? null : selectedSalesPerson;
+    const salesPersonId =
+      selectedSalesPerson === "none" ? null : selectedSalesPerson;
     updateSalesPersonMutation.mutate(salesPersonId);
   };
 
@@ -143,19 +153,22 @@ export function EditUserSalesPersonDialog({
       return;
     }
 
-    createSalesPerson.mutate({
-      userId,
-      fullName: newSalesPersonName,
-      email: newSalesPersonEmail,
-      phone: newSalesPersonPhone,
-      agencyId: selectedAgency,
-      notes,
-    }, {
-      onSuccess: () => {
-        setShowCreateForm(false);
-        onClose();
+    createSalesPerson.mutate(
+      {
+        userId,
+        fullName: newSalesPersonName,
+        email: newSalesPersonEmail,
+        phone: newSalesPersonPhone,
+        agencyId: selectedAgency,
+        notes,
       },
-    });
+      {
+        onSuccess: () => {
+          setShowCreateForm(false);
+          onClose();
+        },
+      },
+    );
   };
 
   const handleCancelCreate = () => {
@@ -170,7 +183,10 @@ export function EditUserSalesPersonDialog({
 
   return (
     <Dialog open={!!userId} onOpenChange={onClose}>
-      <DialogContent dir="rtl" className="max-w-2xl max-h-[90vh] overflow-y-auto">
+      <DialogContent
+        dir="rtl"
+        className="max-w-2xl max-h-[90vh] overflow-y-auto"
+      >
         <DialogHeader>
           <DialogTitle>
             {showCreateForm ? "צור איש מכירות חדש" : "עריכת איש מכירות"}
@@ -178,8 +194,7 @@ export function EditUserSalesPersonDialog({
           <DialogDescription>
             {showCreateForm
               ? "מלא את הפרטים כדי ליצור איש מכירות חדש ולשייך אותו למשתמש"
-              : `משתמש: ${userEmail}`
-            }
+              : `משתמש: ${userEmail}`}
           </DialogDescription>
         </DialogHeader>
 
@@ -196,7 +211,10 @@ export function EditUserSalesPersonDialog({
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="none">ללא שיוך</SelectItem>
-                  <SelectItem value="create_new" className="font-semibold text-primary">
+                  <SelectItem
+                    value="create_new"
+                    className="font-semibold text-primary"
+                  >
                     + צור איש מכירות חדש
                   </SelectItem>
                   {salesPeople?.map((sp) => (

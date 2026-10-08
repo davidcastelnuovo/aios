@@ -5,13 +5,43 @@ import * as z from "zod";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
+import {
+  Form,
+  FormControl,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormMessage,
+} from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from "@/components/ui/command";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
 import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
 import { Pencil, Check, ChevronsUpDown } from "lucide-react";
@@ -35,7 +65,9 @@ interface EditSalesPersonDialogProps {
   salesPerson: any;
 }
 
-export function EditSalesPersonDialog({ salesPerson }: EditSalesPersonDialogProps) {
+export function EditSalesPersonDialog({
+  salesPerson,
+}: EditSalesPersonDialogProps) {
   const [open, setOpen] = useState(false);
   const [agencyPopoverOpen, setAgencyPopoverOpen] = useState(false);
   const { toast } = useToast();
@@ -123,24 +155,57 @@ export function EditSalesPersonDialog({ salesPerson }: EditSalesPersonDialogProp
               render={({ field }) => (
                 <FormItem>
                   <FormLabel>סוכנות *</FormLabel>
-                  <Popover open={agencyPopoverOpen} onOpenChange={setAgencyPopoverOpen}>
+                  <Popover
+                    open={agencyPopoverOpen}
+                    onOpenChange={setAgencyPopoverOpen}
+                  >
                     <PopoverTrigger asChild>
                       <FormControl>
-                        <Button variant="outline" role="combobox" className={cn("w-full justify-between h-10", !field.value && "text-muted-foreground")}>
-                          <span className="text-right flex-1">{field.value ? agencies?.find(a => a.id === field.value)?.name : "בחר סוכנות"}</span>
+                        <Button
+                          variant="outline"
+                          role="combobox"
+                          className={cn(
+                            "w-full justify-between h-10",
+                            !field.value && "text-muted-foreground",
+                          )}
+                        >
+                          <span className="text-right flex-1">
+                            {field.value
+                              ? agencies?.find((a) => a.id === field.value)
+                                  ?.name
+                              : "בחר סוכנות"}
+                          </span>
                           <ChevronsUpDown className="h-4 w-4 shrink-0 opacity-50" />
                         </Button>
                       </FormControl>
                     </PopoverTrigger>
-                    <PopoverContent className="w-full p-0 bg-background" align="end" dir="rtl">
+                    <PopoverContent
+                      className="w-full p-0 bg-background"
+                      align="end"
+                      dir="rtl"
+                    >
                       <Command>
                         <CommandInput placeholder="חפש סוכנות..." />
                         <CommandList>
                           <CommandEmpty>לא נמצאו סוכנויות</CommandEmpty>
                           <CommandGroup>
                             {agencies?.map((agency) => (
-                              <CommandItem key={agency.id} value={agency.name} onSelect={() => { field.onChange(agency.id); setAgencyPopoverOpen(false); }}>
-                                <Check className={cn("mr-2 h-4 w-4", field.value === agency.id ? "opacity-100" : "opacity-0")} />
+                              <CommandItem
+                                key={agency.id}
+                                value={agency.name}
+                                onSelect={() => {
+                                  field.onChange(agency.id);
+                                  setAgencyPopoverOpen(false);
+                                }}
+                              >
+                                <Check
+                                  className={cn(
+                                    "mr-2 h-4 w-4",
+                                    field.value === agency.id
+                                      ? "opacity-100"
+                                      : "opacity-0",
+                                  )}
+                                />
                                 {agency.name}
                               </CommandItem>
                             ))}
@@ -230,7 +295,11 @@ export function EditSalesPersonDialog({ salesPerson }: EditSalesPersonDialogProp
               )}
             />
 
-            <Button type="submit" disabled={updateMutation.isPending} className="w-full">
+            <Button
+              type="submit"
+              disabled={updateMutation.isPending}
+              className="w-full"
+            >
               {updateMutation.isPending ? "מעדכן..." : "עדכן איש מכירות"}
             </Button>
           </form>

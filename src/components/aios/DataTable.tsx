@@ -14,7 +14,11 @@ interface DataTableProps {
 
 export function DataTable({ columns, data }: DataTableProps) {
   if (!data || data.length === 0) {
-    return <p className="text-sm text-muted-foreground text-center py-4">אין נתונים להצגה</p>;
+    return (
+      <p className="text-sm text-muted-foreground text-center py-4">
+        אין נתונים להצגה
+      </p>
+    );
   }
 
   // Auto-detect columns if not provided
@@ -26,7 +30,9 @@ export function DataTable({ columns, data }: DataTableProps) {
         <TableHeader>
           <TableRow>
             {cols.map((col) => (
-              <TableHead key={col} className="text-right font-medium">{col}</TableHead>
+              <TableHead key={col} className="text-right font-medium">
+                {col}
+              </TableHead>
             ))}
           </TableRow>
         </TableHeader>

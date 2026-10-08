@@ -55,11 +55,13 @@ export function LinkCampaignerDialog({
         .eq("tenant_id", tenantId)
         .eq("active", true)
         .order("full_name");
-      
+
       if (searchTerm) {
-        query = query.or(`full_name.ilike.%${searchTerm}%,phone.ilike.%${searchTerm}%,email.ilike.%${searchTerm}%`);
+        query = query.or(
+          `full_name.ilike.%${searchTerm}%,phone.ilike.%${searchTerm}%,email.ilike.%${searchTerm}%`,
+        );
       }
-      
+
       const { data } = await query.limit(50);
       return data || [];
     },
@@ -85,9 +87,11 @@ export function LinkCampaignerDialog({
       return selectedCampaignerId;
     },
     onSuccess: (campaignerId) => {
-      toast.success(`מספר הטלפון עודכן בהצלחה ל${t('role_campaigner')}`);
+      toast.success(`מספר הטלפון עודכן בהצלחה ל${t("role_campaigner")}`);
       queryClient.invalidateQueries({ queryKey: ["active-chats", tenantId] });
-      queryClient.invalidateQueries({ queryKey: ["unknown-contacts", tenantId] });
+      queryClient.invalidateQueries({
+        queryKey: ["unknown-contacts", tenantId],
+      });
       queryClient.invalidateQueries({ queryKey: ["chat-messages", tenantId] });
       queryClient.invalidateQueries({ queryKey: ["chat-contacts", tenantId] });
       queryClient.invalidateQueries({ queryKey: ["campaigners", tenantId] });
@@ -97,14 +101,14 @@ export function LinkCampaignerDialog({
     },
     onError: (error: any) => {
       console.error("Link to campaigner error:", error);
-      toast.error(error.message || `שגיאה בשיוך ל${t('role_campaigner')}`);
+      toast.error(error.message || `שגיאה בשיוך ל${t("role_campaigner")}`);
     },
   });
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedCampaignerId) {
-      toast.error(`יש לבחור ${t('role_campaigner')}`);
+      toast.error(`יש לבחור ${t("role_campaigner")}`);
       return;
     }
     linkMutation.mutate();
@@ -114,9 +118,9 @@ export function LinkCampaignerDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-[500px]" dir="rtl">
         <DialogHeader>
-          <DialogTitle>שיוך ל{t('role_campaigner')}</DialogTitle>
+          <DialogTitle>שיוך ל{t("role_campaigner")}</DialogTitle>
           <DialogDescription>
-            שייך את המספר {senderPhone} ל{t('role_campaigner')} במערכת
+            שייך את המספר {senderPhone} ל{t("role_campaigner")} במערכת
           </DialogDescription>
         </DialogHeader>
 
@@ -128,14 +132,14 @@ export function LinkCampaignerDialog({
               <Input
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                placeholder={`חפש ${t('role_campaigner')}...`}
+                placeholder={`חפש ${t("role_campaigner")}...`}
                 className="pr-10"
               />
             </div>
           </div>
 
           <div className="space-y-2">
-            <Label>בחר {t('role_campaigner')}</Label>
+            <Label>בחר {t("role_campaigner")}</Label>
             {isLoading ? (
               <div className="flex items-center justify-center p-4">
                 <Loader2 className="h-6 w-6 animate-spin" />
@@ -146,12 +150,12 @@ export function LinkCampaignerDialog({
                 onValueChange={setSelectedCampaignerId}
               >
                 <SelectTrigger>
-                  <SelectValue placeholder={`בחר ${t('role_campaigner')}...`} />
+                  <SelectValue placeholder={`בחר ${t("role_campaigner")}...`} />
                 </SelectTrigger>
                 <SelectContent>
                   {campaigners.length === 0 ? (
                     <div className="p-2 text-center text-sm text-muted-foreground">
-                      לא נמצאו {t('role_campaigner', true)}
+                      לא נמצאו {t("role_campaigner", true)}
                     </div>
                   ) : (
                     campaigners.map((campaigner) => (
@@ -175,7 +179,10 @@ export function LinkCampaignerDialog({
             >
               ביטול
             </Button>
-            <Button type="submit" disabled={linkMutation.isPending || !selectedCampaignerId}>
+            <Button
+              type="submit"
+              disabled={linkMutation.isPending || !selectedCampaignerId}
+            >
               {linkMutation.isPending && (
                 <Loader2 className="ml-2 h-4 w-4 animate-spin" />
               )}

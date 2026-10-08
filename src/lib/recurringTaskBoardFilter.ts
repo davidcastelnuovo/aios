@@ -21,7 +21,10 @@ export function shouldShowRecurringTaskNow(
   if (task.status === "done") return false;
   if (!task.due_date) return false;
   if (isTaskOverdue(task, asOf)) return true;
-  return format(startOfDay(new Date(task.due_date)), "yyyy-MM-dd") === format(asOf, "yyyy-MM-dd");
+  return (
+    format(startOfDay(new Date(task.due_date)), "yyyy-MM-dd") ===
+    format(asOf, "yyyy-MM-dd")
+  );
 }
 
 export function shouldShowRecurringTaskOnBoard(
@@ -45,11 +48,15 @@ export function recurringTaskBelongsInBacklog(
   if (showAllRecurring) {
     const dueDay = startOfDay(new Date(task.due_date));
     const onDueDayWithTime =
-      format(dueDay, "yyyy-MM-dd") === format(today, "yyyy-MM-dd") && Boolean(task.due_time);
+      format(dueDay, "yyyy-MM-dd") === format(today, "yyyy-MM-dd") &&
+      Boolean(task.due_time);
     return !onDueDayWithTime;
   }
   if (isTaskOverdue(task, today)) return true;
-  if (format(startOfDay(new Date(task.due_date)), "yyyy-MM-dd") !== format(today, "yyyy-MM-dd")) {
+  if (
+    format(startOfDay(new Date(task.due_date)), "yyyy-MM-dd") !==
+    format(today, "yyyy-MM-dd")
+  ) {
     return false;
   }
   return !task.due_time;

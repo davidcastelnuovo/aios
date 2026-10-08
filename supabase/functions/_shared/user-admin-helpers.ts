@@ -16,7 +16,9 @@ export async function callerCanDeleteUsers(
     throw new Error("Error checking user roles");
   }
 
-  const isSuperAdmin = roles?.some((r) => r.role === "super_admin" && r.tenant_id === null);
+  const isSuperAdmin = roles?.some(
+    (r) => r.role === "super_admin" && r.tenant_id === null,
+  );
   if (isSuperAdmin) return true;
 
   if (tenantId) {
@@ -54,13 +56,21 @@ export async function detachUserReferences(
   fallbackUserId: string,
 ): Promise<void> {
   const nullify = async (table: string, column: string) => {
-    const { error } = await supabaseAdmin.from(table).update({ [column]: null }).eq(column, targetUserId);
-    if (error) console.error(`detachUserReferences nullify ${table}.${column}:`, error);
+    const { error } = await supabaseAdmin
+      .from(table)
+      .update({ [column]: null })
+      .eq(column, targetUserId);
+    if (error)
+      console.error(`detachUserReferences nullify ${table}.${column}:`, error);
   };
 
   const reassign = async (table: string, column: string) => {
-    const { error } = await supabaseAdmin.from(table).update({ [column]: fallbackUserId }).eq(column, targetUserId);
-    if (error) console.error(`detachUserReferences reassign ${table}.${column}:`, error);
+    const { error } = await supabaseAdmin
+      .from(table)
+      .update({ [column]: fallbackUserId })
+      .eq(column, targetUserId);
+    if (error)
+      console.error(`detachUserReferences reassign ${table}.${column}:`, error);
   };
 
   await nullify("agency_tenant_access", "created_by");
@@ -80,6 +90,12 @@ export async function detachUserReferences(
   await nullify("task_collaborators", "added_by");
   await reassign("tasks", "created_by");
 
-  await supabaseAdmin.from("user_active_tenant").delete().eq("user_id", targetUserId);
-  await supabaseAdmin.from("user_workspace_layout").delete().eq("user_id", targetUserId);
+  await supabaseAdmin
+    .from("user_active_tenant")
+    .delete()
+    .eq("user_id", targetUserId);
+  await supabaseAdmin
+    .from("user_workspace_layout")
+    .delete()
+    .eq("user_id", targetUserId);
 }

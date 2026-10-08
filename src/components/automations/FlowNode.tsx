@@ -1,9 +1,20 @@
 import { memo } from "react";
 import { Handle, Position } from "@xyflow/react";
 import {
-  Zap, Play, GitBranch, Timer, Bot, Trash2, MessageSquare,
-  GitMerge, RotateCcw, Code2, AlertTriangle, SplitSquareHorizontal,
-  GripVertical, Unlink,
+  Zap,
+  Play,
+  GitBranch,
+  Timer,
+  Bot,
+  Trash2,
+  MessageSquare,
+  GitMerge,
+  RotateCcw,
+  Code2,
+  AlertTriangle,
+  SplitSquareHorizontal,
+  GripVertical,
+  Unlink,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -40,7 +51,13 @@ export const NODE_HEIGHT = 88;
 // ─── Step type static config (for flow-logic types that don't have action_type) ─
 const STEP_TYPE_STATIC: Record<
   string,
-  { label: string; color: string; bgClass: string; headerClass: string; iconClass: string }
+  {
+    label: string;
+    color: string;
+    bgClass: string;
+    headerClass: string;
+    iconClass: string;
+  }
 > = {
   trigger: {
     label: "טריגר",
@@ -207,11 +224,23 @@ export const FlowNodeRF = memo(function FlowNodeRF({
   const { nodeData, onDelete, onSelect, onDisconnect } = data;
 
   // Resolve icon config: prefer action_type-specific, fall back to step_type
-  const iconConfig = getNodeIconConfig(nodeData.step_type, nodeData.action_type);
-  const staticConfig = STEP_TYPE_STATIC[nodeData.step_type] || STEP_TYPE_STATIC.action;
+  const iconConfig = getNodeIconConfig(
+    nodeData.step_type,
+    nodeData.action_type,
+  );
+  const staticConfig =
+    STEP_TYPE_STATIC[nodeData.step_type] || STEP_TYPE_STATIC.action;
 
   // For trigger/action nodes, use the action_type color; for flow-logic use static
-  const isLogicNode = ["condition", "switch", "delay", "merge", "loop", "code", "error_branch"].includes(nodeData.step_type);
+  const isLogicNode = [
+    "condition",
+    "switch",
+    "delay",
+    "merge",
+    "loop",
+    "code",
+    "error_branch",
+  ].includes(nodeData.step_type);
   const nodeColor = isLogicNode ? staticConfig.color : iconConfig.color;
   const nodeBgColor = isLogicNode ? staticConfig.bgClass : undefined;
   const nodeHeaderClass = isLogicNode ? staticConfig.headerClass : undefined;
@@ -225,7 +254,7 @@ export const FlowNodeRF = memo(function FlowNodeRF({
 
   // Carmen image for agent nodes
   const carmenImageUrl =
-    (nodeData.step_type === "agent" || nodeData.action_type === "agent")
+    nodeData.step_type === "agent" || nodeData.action_type === "agent"
       ? "https://d2xsxph8kpxj0f.cloudfront.net/310419663030948028/XGJWpzb5zh76ZdoV37Q3K8/carmen-icon-CyF3DNNJ8Z9Uhfz7EpYJcQ.webp"
       : undefined;
 
@@ -245,7 +274,7 @@ export const FlowNodeRF = memo(function FlowNodeRF({
       className={cn(
         "w-[240px] rounded-xl border-2 shadow-lg cursor-pointer transition-all select-none relative overflow-hidden",
         isLogicNode ? nodeBgColor : "border-2",
-        selected && "ring-2 ring-primary ring-offset-2 ring-offset-background"
+        selected && "ring-2 ring-primary ring-offset-2 ring-offset-background",
       )}
       style={
         !isLogicNode
@@ -263,7 +292,12 @@ export const FlowNodeRF = memo(function FlowNodeRF({
           type="target"
           position={Position.Top}
           id="input"
-          style={{ background: nodeColor, width: 12, height: 12, border: "2px solid white" }}
+          style={{
+            background: nodeColor,
+            width: 12,
+            height: 12,
+            border: "2px solid white",
+          }}
         />
       )}
       {isMerge &&
@@ -290,11 +324,14 @@ export const FlowNodeRF = memo(function FlowNodeRF({
       <div
         className={cn(
           "flex items-center gap-2 px-3 py-2 rounded-t-[10px]",
-          isLogicNode ? nodeHeaderClass : undefined
+          isLogicNode ? nodeHeaderClass : undefined,
         )}
         style={
           !isLogicNode
-            ? { backgroundColor: iconConfig.bgColor, borderBottom: `1px solid ${iconConfig.borderColor}` }
+            ? {
+                backgroundColor: iconConfig.bgColor,
+                borderBottom: `1px solid ${iconConfig.borderColor}`,
+              }
             : undefined
         }
       >
@@ -318,20 +355,22 @@ export const FlowNodeRF = memo(function FlowNodeRF({
         </span>
 
         {/* Disconnect button */}
-        {nodeData.step_type !== "trigger" && nodeData.parent_step_id && onDisconnect && (
-          <Button
-            variant="ghost"
-            size="icon"
-            className="h-5 w-5 hover:bg-orange-500/20"
-            title="נתק שלב"
-            onClick={(e) => {
-              e.stopPropagation();
-              onDisconnect(nodeData.id);
-            }}
-          >
-            <Unlink className="h-3 w-3 text-orange-500" />
-          </Button>
-        )}
+        {nodeData.step_type !== "trigger" &&
+          nodeData.parent_step_id &&
+          onDisconnect && (
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-5 w-5 hover:bg-orange-500/20"
+              title="נתק שלב"
+              onClick={(e) => {
+                e.stopPropagation();
+                onDisconnect(nodeData.id);
+              }}
+            >
+              <Unlink className="h-3 w-3 text-orange-500" />
+            </Button>
+          )}
 
         {/* Delete button */}
         <Button
@@ -367,11 +406,13 @@ export const FlowNodeRF = memo(function FlowNodeRF({
           </div>
         )}
 
-        {nodeData.step_type === "delay" && nodeData.configuration?.delay_value && (
-          <p className="text-xs text-muted-foreground">
-            {nodeData.configuration.delay_value} {nodeData.configuration.delay_unit || "דקות"}
-          </p>
-        )}
+        {nodeData.step_type === "delay" &&
+          nodeData.configuration?.delay_value && (
+            <p className="text-xs text-muted-foreground">
+              {nodeData.configuration.delay_value}{" "}
+              {nodeData.configuration.delay_unit || "דקות"}
+            </p>
+          )}
 
         {nodeData.step_type === "loop" && (
           <p className="text-xs text-muted-foreground">
@@ -400,14 +441,16 @@ export const FlowNodeRF = memo(function FlowNodeRF({
           Array.isArray(nodeData.configuration?.skin_slugs) &&
           nodeData.configuration.skin_slugs.length > 0 && (
             <div className="flex flex-wrap gap-1 mt-0.5">
-              {nodeData.configuration.skin_slugs.slice(0, 3).map((s: string) => (
-                <span
-                  key={s}
-                  className="text-[9px] bg-orange-500/20 text-orange-700 dark:text-orange-300 rounded px-1 font-medium"
-                >
-                  {s}
-                </span>
-              ))}
+              {nodeData.configuration.skin_slugs
+                .slice(0, 3)
+                .map((s: string) => (
+                  <span
+                    key={s}
+                    className="text-[9px] bg-orange-500/20 text-orange-700 dark:text-orange-300 rounded px-1 font-medium"
+                  >
+                    {s}
+                  </span>
+                ))}
             </div>
           )}
 
@@ -416,7 +459,9 @@ export const FlowNodeRF = memo(function FlowNodeRF({
           nodeData.action_type === "send_greenapi_message" ||
           nodeData.action_type === "send_meta_whatsapp_message" ||
           nodeData.action_type === "send_manus_message") &&
-          (nodeData.configuration?.message_template || nodeData.configuration?.template_name || nodeData.configuration?.message) && (
+          (nodeData.configuration?.message_template ||
+            nodeData.configuration?.template_name ||
+            nodeData.configuration?.message) && (
             <p className="text-xs text-muted-foreground truncate">
               {String(
                 nodeData.configuration.message_template ||
@@ -427,11 +472,14 @@ export const FlowNodeRF = memo(function FlowNodeRF({
           )}
 
         {/* Scheduled time preview */}
-        {nodeData.action_type === "scheduled_daily" && nodeData.configuration?.hour !== undefined && (
-          <p className="text-xs text-muted-foreground">
-            {String(nodeData.configuration.hour).padStart(2, "0")}:{String(nodeData.configuration.minute ?? 0).padStart(2, "0")} בכל יום
-          </p>
-        )}
+        {nodeData.action_type === "scheduled_daily" &&
+          nodeData.configuration?.hour !== undefined && (
+            <p className="text-xs text-muted-foreground">
+              {String(nodeData.configuration.hour).padStart(2, "0")}:
+              {String(nodeData.configuration.minute ?? 0).padStart(2, "0")} בכל
+              יום
+            </p>
+          )}
       </div>
 
       {/* ── Output handles ── */}
@@ -443,16 +491,32 @@ export const FlowNodeRF = memo(function FlowNodeRF({
             type="source"
             position={Position.Bottom}
             id="true"
-            style={{ left: "30%", background: "#22c55e", width: 12, height: 12, border: "2px solid white" }}
+            style={{
+              left: "30%",
+              background: "#22c55e",
+              width: 12,
+              height: 12,
+              border: "2px solid white",
+            }}
           />
           <Handle
             type="source"
             position={Position.Bottom}
             id="false"
-            style={{ left: "70%", background: "#ef4444", width: 12, height: 12, border: "2px solid white" }}
+            style={{
+              left: "70%",
+              background: "#ef4444",
+              width: 12,
+              height: 12,
+              border: "2px solid white",
+            }}
           />
-          <div className="absolute -bottom-5 left-[18%] text-[10px] text-green-600 font-bold pointer-events-none">כן</div>
-          <div className="absolute -bottom-5 left-[62%] text-[10px] text-red-500 font-bold pointer-events-none">לא</div>
+          <div className="absolute -bottom-5 left-[18%] text-[10px] text-green-600 font-bold pointer-events-none">
+            כן
+          </div>
+          <div className="absolute -bottom-5 left-[62%] text-[10px] text-red-500 font-bold pointer-events-none">
+            לא
+          </div>
         </>
       )}
 
@@ -485,16 +549,32 @@ export const FlowNodeRF = memo(function FlowNodeRF({
             type="source"
             position={Position.Bottom}
             id="loop_body"
-            style={{ left: "30%", background: "#06b6d4", width: 12, height: 12, border: "2px solid white" }}
+            style={{
+              left: "30%",
+              background: "#06b6d4",
+              width: 12,
+              height: 12,
+              border: "2px solid white",
+            }}
           />
           <Handle
             type="source"
             position={Position.Bottom}
             id="loop_done"
-            style={{ left: "70%", background: "#10b981", width: 12, height: 12, border: "2px solid white" }}
+            style={{
+              left: "70%",
+              background: "#10b981",
+              width: 12,
+              height: 12,
+              border: "2px solid white",
+            }}
           />
-          <div className="absolute -bottom-5 left-[14%] text-[10px] text-cyan-600 font-bold pointer-events-none">איטרציה</div>
-          <div className="absolute -bottom-5 left-[60%] text-[10px] text-emerald-600 font-bold pointer-events-none">סיום</div>
+          <div className="absolute -bottom-5 left-[14%] text-[10px] text-cyan-600 font-bold pointer-events-none">
+            איטרציה
+          </div>
+          <div className="absolute -bottom-5 left-[60%] text-[10px] text-emerald-600 font-bold pointer-events-none">
+            סיום
+          </div>
         </>
       )}
 
@@ -505,16 +585,32 @@ export const FlowNodeRF = memo(function FlowNodeRF({
             type="source"
             position={Position.Bottom}
             id="success"
-            style={{ left: "30%", background: "#22c55e", width: 12, height: 12, border: "2px solid white" }}
+            style={{
+              left: "30%",
+              background: "#22c55e",
+              width: 12,
+              height: 12,
+              border: "2px solid white",
+            }}
           />
           <Handle
             type="source"
             position={Position.Bottom}
             id="error"
-            style={{ left: "70%", background: "#ef4444", width: 12, height: 12, border: "2px solid white" }}
+            style={{
+              left: "70%",
+              background: "#ef4444",
+              width: 12,
+              height: 12,
+              border: "2px solid white",
+            }}
           />
-          <div className="absolute -bottom-5 left-[14%] text-[10px] text-green-600 font-bold pointer-events-none">הצלחה</div>
-          <div className="absolute -bottom-5 left-[60%] text-[10px] text-red-500 font-bold pointer-events-none">שגיאה</div>
+          <div className="absolute -bottom-5 left-[14%] text-[10px] text-green-600 font-bold pointer-events-none">
+            הצלחה
+          </div>
+          <div className="absolute -bottom-5 left-[60%] text-[10px] text-red-500 font-bold pointer-events-none">
+            שגיאה
+          </div>
         </>
       )}
 
@@ -524,17 +620,29 @@ export const FlowNodeRF = memo(function FlowNodeRF({
           type="source"
           position={Position.Bottom}
           id="output"
-          style={{ background: nodeColor, width: 12, height: 12, border: "2px solid white" }}
+          style={{
+            background: nodeColor,
+            width: 12,
+            height: 12,
+            border: "2px solid white",
+          }}
         />
       )}
 
       {/* default single output */}
-      {!["condition", "switch", "loop", "error_branch", "merge"].includes(nodeData.step_type) && (
+      {!["condition", "switch", "loop", "error_branch", "merge"].includes(
+        nodeData.step_type,
+      ) && (
         <Handle
           type="source"
           position={Position.Bottom}
           id="output"
-          style={{ background: nodeColor, width: 12, height: 12, border: "2px solid white" }}
+          style={{
+            background: nodeColor,
+            width: 12,
+            height: 12,
+            border: "2px solid white",
+          }}
         />
       )}
     </div>
@@ -558,20 +666,33 @@ export const FlowNode = memo(function FlowNode({
   isDragging,
 }: FlowNodeProps) {
   const iconConfig = getNodeIconConfig(node.step_type, node.action_type);
-  const staticConfig = STEP_TYPE_STATIC[node.step_type] || STEP_TYPE_STATIC.action;
-  const isLogicNode = ["condition", "switch", "delay", "merge", "loop", "code", "error_branch"].includes(node.step_type);
+  const staticConfig =
+    STEP_TYPE_STATIC[node.step_type] || STEP_TYPE_STATIC.action;
+  const isLogicNode = [
+    "condition",
+    "switch",
+    "delay",
+    "merge",
+    "loop",
+    "code",
+    "error_branch",
+  ].includes(node.step_type);
 
   return (
     <div
       className={cn(
         "w-[240px] rounded-xl border-2 shadow-lg cursor-pointer transition-all select-none",
         isLogicNode ? staticConfig.bgClass : undefined,
-        isSelected && "ring-2 ring-primary ring-offset-2 ring-offset-background",
-        isDragging && "opacity-70 scale-105 shadow-2xl"
+        isSelected &&
+          "ring-2 ring-primary ring-offset-2 ring-offset-background",
+        isDragging && "opacity-70 scale-105 shadow-2xl",
       )}
       style={
         !isLogicNode
-          ? { borderColor: iconConfig.borderColor, backgroundColor: iconConfig.bgColor }
+          ? {
+              borderColor: iconConfig.borderColor,
+              backgroundColor: iconConfig.bgColor,
+            }
           : undefined
       }
       onClick={(e) => {
@@ -580,16 +701,26 @@ export const FlowNode = memo(function FlowNode({
       }}
     >
       <div
-        className={cn("flex items-center gap-2 px-3 py-2 rounded-t-[10px]", isLogicNode ? staticConfig.headerClass : undefined)}
+        className={cn(
+          "flex items-center gap-2 px-3 py-2 rounded-t-[10px]",
+          isLogicNode ? staticConfig.headerClass : undefined,
+        )}
         style={
           !isLogicNode
-            ? { backgroundColor: iconConfig.bgColor, borderBottom: `1px solid ${iconConfig.borderColor}` }
+            ? {
+                backgroundColor: iconConfig.bgColor,
+                borderBottom: `1px solid ${iconConfig.borderColor}`,
+              }
             : undefined
         }
       >
         <GripVertical className="h-3.5 w-3.5 text-muted-foreground cursor-grab" />
         <div className="w-5 h-5 flex items-center justify-center shrink-0">
-          <NodeIconDisplay stepType={node.step_type} actionType={node.action_type} size={18} />
+          <NodeIconDisplay
+            stepType={node.step_type}
+            actionType={node.action_type}
+            size={18}
+          />
         </div>
         <span
           className="text-xs font-semibold flex-1 truncate"

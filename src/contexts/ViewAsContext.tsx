@@ -5,7 +5,11 @@ interface ViewAsContextType {
   viewAsSalesPersonId: string | null;
   viewAsUserName: string | null;
   isViewingAs: boolean;
-  setViewAs: (userId: string, salesPersonId: string | null, userName: string) => void;
+  setViewAs: (
+    userId: string,
+    salesPersonId: string | null,
+    userName: string,
+  ) => void;
   clearViewAs: () => void;
 }
 
@@ -13,12 +17,18 @@ const ViewAsContext = createContext<ViewAsContextType | undefined>(undefined);
 
 export function ViewAsProvider({ children }: { children: ReactNode }) {
   const [viewAsUserId, setViewAsUserId] = useState<string | null>(null);
-  const [viewAsSalesPersonId, setViewAsSalesPersonId] = useState<string | null>(null);
+  const [viewAsSalesPersonId, setViewAsSalesPersonId] = useState<string | null>(
+    null,
+  );
   const [viewAsUserName, setViewAsUserName] = useState<string | null>(null);
 
   const isViewingAs = viewAsUserId !== null;
 
-  const setViewAs = (userId: string, salesPersonId: string | null, userName: string) => {
+  const setViewAs = (
+    userId: string,
+    salesPersonId: string | null,
+    userName: string,
+  ) => {
     setViewAsUserId(userId);
     setViewAsSalesPersonId(salesPersonId);
     setViewAsUserName(userName);

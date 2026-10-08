@@ -43,12 +43,14 @@ export function useSeoKeywordRelevance(
     options?.initialForceIrrelevant !== undefined;
 
   const [forceRelevant, setForceRelevant] = useState<string[]>(() => {
-    if (options?.initialForceRelevant !== undefined) return options.initialForceRelevant;
+    if (options?.initialForceRelevant !== undefined)
+      return options.initialForceRelevant;
     if (readOnly) return [];
     return loadSeoForceRelevant(persistKey);
   });
   const [forceIrrelevant, setForceIrrelevant] = useState<string[]>(() => {
-    if (options?.initialForceIrrelevant !== undefined) return options.initialForceIrrelevant;
+    if (options?.initialForceIrrelevant !== undefined)
+      return options.initialForceIrrelevant;
     if (readOnly) return [];
     return loadSeoForceIrrelevant(persistKey);
   });
@@ -109,7 +111,8 @@ export function useSeoKeywordRelevance(
     if (readOnly || !persistKey || typeof window === "undefined") return;
 
     const onCustom = (event: Event) => {
-      const detail = (event as CustomEvent<SeoKeywordRelevanceChangedDetail>).detail;
+      const detail = (event as CustomEvent<SeoKeywordRelevanceChangedDetail>)
+        .detail;
       if (detail?.persistKey && detail.persistKey !== persistKey) return;
       // Prefer fresh local cache after same-tab mark; DB write is already done.
       applyLists({
@@ -162,12 +165,17 @@ export function useSeoKeywordRelevance(
       const key = normalizeKeywordPhrase(keyword);
       if (!key) return;
       setForceIrrelevant((prevIrr) => {
-        const nextIrr = prevIrr.filter((p) => normalizeKeywordPhrase(p) !== key);
+        const nextIrr = prevIrr.filter(
+          (p) => normalizeKeywordPhrase(p) !== key,
+        );
         setForceRelevant((prevRel) => {
           const nextRel = prevRel.some((p) => normalizeKeywordPhrase(p) === key)
             ? prevRel
             : [...prevRel, keyword.trim()];
-          void persistLists({ forceRelevant: nextRel, forceIrrelevant: nextIrr });
+          void persistLists({
+            forceRelevant: nextRel,
+            forceIrrelevant: nextIrr,
+          });
           return nextRel;
         });
         return nextIrr;
@@ -182,12 +190,17 @@ export function useSeoKeywordRelevance(
       const key = normalizeKeywordPhrase(keyword);
       if (!key) return;
       setForceRelevant((prevRel) => {
-        const nextRel = prevRel.filter((p) => normalizeKeywordPhrase(p) !== key);
+        const nextRel = prevRel.filter(
+          (p) => normalizeKeywordPhrase(p) !== key,
+        );
         setForceIrrelevant((prevIrr) => {
           const nextIrr = prevIrr.some((p) => normalizeKeywordPhrase(p) === key)
             ? prevIrr
             : [...prevIrr, keyword.trim()];
-          void persistLists({ forceRelevant: nextRel, forceIrrelevant: nextIrr });
+          void persistLists({
+            forceRelevant: nextRel,
+            forceIrrelevant: nextIrr,
+          });
           return nextIrr;
         });
         return nextRel;

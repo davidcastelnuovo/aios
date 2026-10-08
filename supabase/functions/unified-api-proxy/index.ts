@@ -1,8 +1,9 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.75.0";
 
 const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Headers":
+    "authorization, x-client-info, apikey, content-type",
 };
 
 Deno.serve(async (req) => {
@@ -24,7 +25,10 @@ Deno.serve(async (req) => {
     const supabase = createClient(supabaseUrl, supabaseKey);
 
     const token = authHeader.replace("Bearer ", "");
-    const { data: { user }, error: authError } = await supabase.auth.getUser(token);
+    const {
+      data: { user },
+      error: authError,
+    } = await supabase.auth.getUser(token);
     if (authError || !user) {
       return new Response(JSON.stringify({ error: "Unauthorized" }), {
         status: 401,
@@ -34,19 +38,25 @@ Deno.serve(async (req) => {
 
     const unifiedApiKey = Deno.env.get("UNIFIED_API_KEY");
     if (!unifiedApiKey) {
-      return new Response(JSON.stringify({ error: "UNIFIED_API_KEY not configured" }), {
-        status: 500,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+      return new Response(
+        JSON.stringify({ error: "UNIFIED_API_KEY not configured" }),
+        {
+          status: 500,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        },
+      );
     }
 
     const { connection_id, method, path, body } = await req.json();
 
     if (!connection_id || !path) {
-      return new Response(JSON.stringify({ error: "connection_id and path are required" }), {
-        status: 400,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+      return new Response(
+        JSON.stringify({ error: "connection_id and path are required" }),
+        {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        },
+      );
     }
 
     const httpMethod = (method || "GET").toUpperCase();
@@ -55,7 +65,7 @@ Deno.serve(async (req) => {
     const fetchOptions: RequestInit = {
       method: httpMethod,
       headers: {
-        "Authorization": `Bearer ${unifiedApiKey}`,
+        Authorization: `Bearer ${unifiedApiKey}`,
         "Content-Type": "application/json",
       },
     };
@@ -73,7 +83,8 @@ Deno.serve(async (req) => {
     });
   } catch (error) {
     console.error("unified-api-proxy error:", error);
-    const errorMessage = error instanceof Error ? error.message : "Unknown error";
+    const errorMessage =
+      error instanceof Error ? error.message : "Unknown error";
     return new Response(JSON.stringify({ error: errorMessage }), {
       status: 500,
       headers: { ...corsHeaders, "Content-Type": "application/json" },

@@ -8,7 +8,10 @@ import { he } from "date-fns/locale";
 import { ResizableTaskItem } from "./ResizableTaskItem";
 import { cn } from "@/lib/utils";
 import { useEffect, useRef } from "react";
-import { generateWorkdayTimeSlots, workdaySlotIndex } from "@/lib/taskWorkdayHours";
+import {
+  generateWorkdayTimeSlots,
+  workdaySlotIndex,
+} from "@/lib/taskWorkdayHours";
 
 interface Task {
   id: string;
@@ -57,42 +60,46 @@ const TIME_SLOTS = generateWorkdayTimeSlots();
 const SLOT_HEIGHT = 40; // Height in pixels for each half-hour slot
 
 // Draggable calendar event block component
-function DraggableCalendarEventBlock({ 
-  event, 
-  slotHeight, 
-  onClick 
-}: { 
-  event: CalendarEvent; 
+function DraggableCalendarEventBlock({
+  event,
+  slotHeight,
+  onClick,
+}: {
+  event: CalendarEvent;
   slotHeight: number;
   onClick?: () => void;
 }) {
-  const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
-    id: `calendar-event-${event.id}`,
-    data: { type: 'calendar-event', event }
-  });
+  const { attributes, listeners, setNodeRef, transform, isDragging } =
+    useDraggable({
+      id: `calendar-event-${event.id}`,
+      data: { type: "calendar-event", event },
+    });
 
   const startTime = new Date(event.start);
   const endTime = new Date(event.end);
-  const durationMinutes = (endTime.getTime() - startTime.getTime()) / (1000 * 60);
+  const durationMinutes =
+    (endTime.getTime() - startTime.getTime()) / (1000 * 60);
   const slots = Math.max(1, Math.ceil(durationMinutes / 30));
   const height = slots * slotHeight - 4;
-  
+
   const startHours = startTime.getHours().toString().padStart(2, "0");
   const startMins = startTime.getMinutes().toString().padStart(2, "0");
   const endHours = endTime.getHours().toString().padStart(2, "0");
   const endMins = endTime.getMinutes().toString().padStart(2, "0");
 
-  const style = transform ? {
-    transform: `translate3d(${transform.x}px, ${transform.y}px, 0)`,
-    height: `${height}px`,
-    zIndex: isDragging ? 50 : 5,
-  } : {
-    height: `${height}px`,
-    zIndex: 5,
-  };
-  
+  const style = transform
+    ? {
+        transform: `translate3d(${transform.x}px, ${transform.y}px, 0)`,
+        height: `${height}px`,
+        zIndex: isDragging ? 50 : 5,
+      }
+    : {
+        height: `${height}px`,
+        zIndex: 5,
+      };
+
   return (
-    <div 
+    <div
       ref={setNodeRef}
       {...attributes}
       {...listeners}
@@ -102,7 +109,7 @@ function DraggableCalendarEventBlock({
       }}
       className={cn(
         "absolute left-8 right-1 bg-blue-100 dark:bg-blue-900/40 border-r-2 border-blue-500 rounded px-2 py-0.5 text-xs overflow-hidden cursor-pointer hover:bg-blue-200 dark:hover:bg-blue-800/50 transition-colors touch-none",
-        isDragging && "opacity-50 shadow-lg"
+        isDragging && "opacity-50 shadow-lg",
       )}
       style={style}
     >
@@ -160,24 +167,27 @@ function TimeSlotDroppable({
       onDoubleClick={() => onSlotDoubleClick?.(date, time)}
       className={cn(
         "flex items-start gap-1 py-0.5 px-1 border-b border-dashed border-muted cursor-pointer hover:bg-accent/30 transition-colors",
-        isOver && "bg-accent/50"
+        isOver && "bg-accent/50",
       )}
       style={{ minHeight: `${SLOT_HEIGHT}px`, position: "relative" }}
     >
       <span className="text-[10px] text-muted-foreground w-8 shrink-0 pt-1">
         {time}
       </span>
-      <div className="flex-1 min-w-0 relative" style={{ minHeight: `${SLOT_HEIGHT - 8}px` }}>
+      <div
+        className="flex-1 min-w-0 relative"
+        style={{ minHeight: `${SLOT_HEIGHT - 8}px` }}
+      >
         {/* Calendar events (draggable) */}
         {slotEvents.map((event) => (
-          <DraggableCalendarEventBlock 
-            key={event.id} 
-            event={event} 
+          <DraggableCalendarEventBlock
+            key={event.id}
+            event={event}
             slotHeight={SLOT_HEIGHT}
             onClick={() => onCalendarEventClick?.(event)}
           />
         ))}
-        
+
         {/* Tasks (foreground) */}
         <SortableContext items={taskIds} strategy={verticalListSortingStrategy}>
           {slotTasks.map((task, index) => (
@@ -219,7 +229,10 @@ export function DayColumn({
 
   // Only show tasks with time
   const dayTasks = tasks.filter(
-    (task) => task.due_date && task.due_time && isSameDay(new Date(task.due_date), date)
+    (task) =>
+      task.due_date &&
+      task.due_time &&
+      isSameDay(new Date(task.due_date), date),
   );
 
   // Filter calendar events for this day
@@ -237,7 +250,10 @@ export function DayColumn({
       const currentSlotIndex = workdaySlotIndex(
         `${now.getHours().toString().padStart(2, "0")}:${now.getMinutes() >= 30 ? "30" : "00"}`,
       );
-      const scrollToIndex = Math.max(0, Math.min(TIME_SLOTS.length - 1, currentSlotIndex - 2));
+      const scrollToIndex = Math.max(
+        0,
+        Math.min(TIME_SLOTS.length - 1, currentSlotIndex - 2),
+      );
       const scrollPosition = scrollToIndex * SLOT_HEIGHT;
       scrollContainerRef.current.scrollTop = scrollPosition;
     }
@@ -249,25 +265,15 @@ export function DayColumn({
       className={cn(
         "flex flex-col rounded-xl border bg-muted/30 min-w-[33vw] flex-1",
         today && "ring-2 ring-primary/50 bg-primary/5",
-        isOver && "bg-accent/50"
+        isOver && "bg-accent/50",
       )}
     >
       {/* Header */}
-      <div
-        className={cn(
-          "p-3 border-b text-center",
-          today && "bg-primary/10"
-        )}
-      >
+      <div className={cn("p-3 border-b text-center", today && "bg-primary/10")}>
         <p className="text-xs text-muted-foreground">
           {format(date, "EEEE", { locale: he })}
         </p>
-        <p
-          className={cn(
-            "text-lg font-bold",
-            today && "text-primary"
-          )}
-        >
+        <p className={cn("text-lg font-bold", today && "text-primary")}>
           {format(date, "dd/MM")}
         </p>
       </div>
@@ -282,7 +288,10 @@ export function DayColumn({
             while (el) {
               const style = window.getComputedStyle(el);
               const ox = style.overflowX;
-              if ((ox === 'auto' || ox === 'scroll') && el.scrollWidth > el.clientWidth) {
+              if (
+                (ox === "auto" || ox === "scroll") &&
+                el.scrollWidth > el.clientWidth
+              ) {
                 el.scrollLeft += e.deltaX;
                 e.preventDefault();
                 break;

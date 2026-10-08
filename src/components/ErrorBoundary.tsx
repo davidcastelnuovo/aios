@@ -47,7 +47,9 @@ export class ErrorBoundary extends Component<Props, State> {
     }
 
     try {
-      const { data: { session } } = await supabase.auth.getSession();
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
 
       await fetch(
         `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/report-error`,
@@ -55,7 +57,9 @@ export class ErrorBoundary extends Component<Props, State> {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
-            ...(session ? { Authorization: `Bearer ${session.access_token}` } : {}),
+            ...(session
+              ? { Authorization: `Bearer ${session.access_token}` }
+              : {}),
           },
           body: JSON.stringify({
             source: "frontend",
@@ -68,7 +72,7 @@ export class ErrorBoundary extends Component<Props, State> {
             url: window.location.href,
             tenant_id: this.props.tenantId,
           }),
-        }
+        },
       );
     } catch (reportErr) {
       console.error("Failed to report error:", reportErr);
@@ -76,9 +80,16 @@ export class ErrorBoundary extends Component<Props, State> {
   }
 
   render() {
-    if (this.state.hasError && this.state.error && isChunkLoadError(this.state.error)) {
+    if (
+      this.state.hasError &&
+      this.state.error &&
+      isChunkLoadError(this.state.error)
+    ) {
       return (
-        <div className="flex flex-col items-center justify-center min-h-screen gap-4 p-8 text-center" dir="rtl">
+        <div
+          className="flex flex-col items-center justify-center min-h-screen gap-4 p-8 text-center"
+          dir="rtl"
+        >
           <h2 className="text-xl font-bold">טוען מחדש…</h2>
           <p className="text-muted-foreground text-sm">העמוד עודכן, רגע אחד.</p>
         </div>
@@ -92,7 +103,10 @@ export class ErrorBoundary extends Component<Props, State> {
         // ignore
       }
       return (
-        <div className="flex flex-col items-center justify-center min-h-screen gap-4 p-8 text-center" dir="rtl">
+        <div
+          className="flex flex-col items-center justify-center min-h-screen gap-4 p-8 text-center"
+          dir="rtl"
+        >
           <div className="text-5xl">⚠️</div>
           <h2 className="text-xl font-bold">משהו השתבש</h2>
           <p className="text-muted-foreground text-sm max-w-md">

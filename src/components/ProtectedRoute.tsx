@@ -1,7 +1,10 @@
 import { useEffect, useState } from "react";
 import { Navigate, useParams, useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
-import { useUserPermissions, ModulePermission } from "@/hooks/useUserPermissions";
+import {
+  useUserPermissions,
+  ModulePermission,
+} from "@/hooks/useUserPermissions";
 import { useUserRole } from "@/hooks/useUserRole";
 import { useTenantPath } from "@/hooks/useTenantPath";
 import { resolveTenantSlug } from "@/hooks/useResolveTenant";
@@ -13,13 +16,21 @@ interface ProtectedRouteProps {
   redirectTo?: string;
 }
 
-export function ProtectedRoute({ children, requiredPermission, redirectTo = "my-profile" }: ProtectedRouteProps) {
+export function ProtectedRoute({
+  children,
+  requiredPermission,
+  redirectTo = "my-profile",
+}: ProtectedRouteProps) {
   // Use the cached session from React Query (useCurrentUser) to avoid a blocking
   // async getSession() call on every navigation — this removes the per-route spinner flash.
   const { userId, isLoading: sessionLoading } = useCurrentUser();
   const authenticated = !sessionLoading && !!userId;
 
-  const { hasPermission, isLoading: permissionsLoading, isReady: permissionsReady } = useUserPermissions();
+  const {
+    hasPermission,
+    isLoading: permissionsLoading,
+    isReady: permissionsReady,
+  } = useUserPermissions();
   const { isLoading: rolesLoading, isReady: rolesReady } = useUserRole();
   const { buildPath } = useTenantPath();
   const { tenantSlug } = useParams();
@@ -31,7 +42,9 @@ export function ProtectedRoute({ children, requiredPermission, redirectTo = "my-
     const goToTenant = async () => {
       if (!authenticated || tenantSlug || resolvingTenant) return;
       setResolvingTenant(true);
-      const { data: { user } } = await supabase.auth.getUser();
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
       if (user) {
         const slug = await resolveTenantSlug(user.id);
         if (slug) {

@@ -57,12 +57,16 @@ export function normalizePhoneSuffix(phone) {
 }
 
 function matchesAllowlist(identity, allowlist) {
-  const campaignerId = identity.campaignerId ? String(identity.campaignerId) : null;
+  const campaignerId = identity.campaignerId
+    ? String(identity.campaignerId)
+    : null;
   const userId = identity.userId ? String(identity.userId) : null;
   const phoneSuffix = normalizePhoneSuffix(identity.phone);
-  if (campaignerId && allowlist.campaigner_ids.includes(campaignerId)) return true;
+  if (campaignerId && allowlist.campaigner_ids.includes(campaignerId))
+    return true;
   if (userId && allowlist.user_ids.includes(userId)) return true;
-  if (phoneSuffix && allowlist.phone_suffixes.includes(phoneSuffix)) return true;
+  if (phoneSuffix && allowlist.phone_suffixes.includes(phoneSuffix))
+    return true;
   return false;
 }
 
@@ -100,13 +104,19 @@ export function isDevEscalationToolAllowed(toolName, tier) {
 export function isDevEscalationTool(toolName) {
   if (!toolName) return false;
   const n = String(toolName);
-  if (n.startsWith("mcp_Cursor__") || n.startsWith("mcp_Claude__") || n.startsWith("mcp_Manus__") || n.startsWith("mcp_Grok__")) {
+  if (
+    n.startsWith("mcp_Cursor__") ||
+    n.startsWith("mcp_Claude__") ||
+    n.startsWith("mcp_Manus__") ||
+    n.startsWith("mcp_Grok__")
+  ) {
     return true;
   }
   if (n === "delegate_to_github_agent") return true;
   if (NATIVE_DEV_TASK_TOOL_SET.has(n)) return true;
   // Defensive: unprefixed remote names if ever executed without mcp_ prefix.
-  if (/^(request_dev_task|ask_cursor|ask_claude|ask_manus|ask_grok)$/i.test(n)) return true;
+  if (/^(request_dev_task|ask_cursor|ask_claude|ask_manus|ask_grok)$/i.test(n))
+    return true;
   return false;
 }
 
@@ -131,7 +141,11 @@ export function isDevEscalationSkill(slug) {
 export function isBugfixEscalationSkill(slug) {
   if (!slug) return false;
   const s = String(slug).toLowerCase();
-  return s === "bugfix_escalation_to_cursor" || s.includes("bugfix_escalation") || s === "carmen_dev_task_command_center";
+  return (
+    s === "bugfix_escalation_to_cursor" ||
+    s.includes("bugfix_escalation") ||
+    s === "carmen_dev_task_command_center"
+  );
 }
 
 /**
@@ -146,7 +160,8 @@ export async function resolveDevTaskActorUserId(
   supabase,
   { tenantId, userId, campaignerId, phone, devEscalationTier },
 ) {
-  const uuidRe = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+  const uuidRe =
+    /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
   if (userId && uuidRe.test(String(userId))) return String(userId);
 
   if (campaignerId) {
@@ -158,7 +173,8 @@ export async function resolveDevTaskActorUserId(
     if (prof?.id) return prof.id;
   }
 
-  const tier = devEscalationTier ?? getDevEscalationTier({ userId, campaignerId, phone });
+  const tier =
+    devEscalationTier ?? getDevEscalationTier({ userId, campaignerId, phone });
   if (!tier) return null;
 
   const digits = normalizePhoneSuffix(phone);
@@ -169,7 +185,9 @@ export async function resolveDevTaskActorUserId(
       .select("id, phone")
       .eq("tenant_id", tenantId)
       .eq("active", true);
-    const camp = (camps || []).find((c) => normalizePhoneSuffix(c.phone) === tail);
+    const camp = (camps || []).find(
+      (c) => normalizePhoneSuffix(c.phone) === tail,
+    );
     if (camp?.id) {
       const { data: prof } = await supabase
         .from("profiles")

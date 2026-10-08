@@ -1,9 +1,16 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { buildAdaptiveTreatment, detectCopyMood, isOptionalCostume } from "./adaptiveTreatment.ts";
+import {
+  buildAdaptiveTreatment,
+  detectCopyMood,
+  isOptionalCostume,
+} from "./adaptiveTreatment.ts";
 
 test("detectCopyMood reads urgency, doubt, and screen life from the copy", () => {
-  assert.equal(detectCopyMood("וריאציה 1 — פומו תחרותי\nהמתחרים כבר טסים"), "urgent");
+  assert.equal(
+    detectCopyMood("וריאציה 1 — פומו תחרותי\nהמתחרים כבר טסים"),
+    "urgent",
+  );
   assert.equal(detectCopyMood("אתה עדיין לא יודע אם אתה שם? מתלבט"), "doubt");
   assert.equal(detectCopyMood("עדיין מגלגל בטיקטוק? תפתח צ'אט"), "screen");
   assert.equal(detectCopyMood("רק 99 ש״ח ללילה"), "offer");

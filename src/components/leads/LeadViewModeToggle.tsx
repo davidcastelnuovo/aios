@@ -1,4 +1,10 @@
-import { Check, LayoutGrid, MessageCircle, Star, Table as TableIcon } from "lucide-react";
+import {
+  Check,
+  LayoutGrid,
+  MessageCircle,
+  Star,
+  Table as TableIcon,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -37,7 +43,12 @@ export function LeadViewModeToggle({
 }) {
   return (
     <div className="flex items-center gap-1">
-      <div className={cn("flex gap-0.5 border rounded-md", compact ? "p-0.5" : "p-1")}>
+      <div
+        className={cn(
+          "flex gap-0.5 border rounded-md",
+          compact ? "p-0.5" : "p-1",
+        )}
+      >
         {LEAD_VIEW_MODES.map((mode) => {
           const Icon = VIEW_ICONS[mode];
           return (
@@ -55,32 +66,41 @@ export function LeadViewModeToggle({
         })}
       </div>
       {hideDefaultMenu ? null : (
-      <DropdownMenu>
-        <DropdownMenuTrigger asChild>
-          <Button
-            variant="outline"
-            size="icon"
-            className="h-8 w-8"
-            title="תצוגת ברירת מחדל"
-          >
-            <Star className={cn("h-4 w-4", defaultView === viewMode && "fill-current")} />
-          </Button>
-        </DropdownMenuTrigger>
-        <DropdownMenuContent align="end" className="w-44">
-          <DropdownMenuLabel>תצוגת ברירת מחדל</DropdownMenuLabel>
-          {LEAD_VIEW_MODES.map((mode) => {
-            const Icon = VIEW_ICONS[mode];
-            const isDefault = defaultView === mode;
-            return (
-              <DropdownMenuItem key={mode} className="gap-2" onClick={() => onDefaultViewChange(mode)}>
-                <Icon className="h-4 w-4" />
-                <span className="flex-1">{LEAD_VIEW_MODE_LABELS[mode]}</span>
-                {isDefault ? <Check className="h-4 w-4" /> : null}
-              </DropdownMenuItem>
-            );
-          })}
-        </DropdownMenuContent>
-      </DropdownMenu>
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button
+              variant="outline"
+              size="icon"
+              className="h-8 w-8"
+              title="תצוגת ברירת מחדל"
+            >
+              <Star
+                className={cn(
+                  "h-4 w-4",
+                  defaultView === viewMode && "fill-current",
+                )}
+              />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="w-44">
+            <DropdownMenuLabel>תצוגת ברירת מחדל</DropdownMenuLabel>
+            {LEAD_VIEW_MODES.map((mode) => {
+              const Icon = VIEW_ICONS[mode];
+              const isDefault = defaultView === mode;
+              return (
+                <DropdownMenuItem
+                  key={mode}
+                  className="gap-2"
+                  onClick={() => onDefaultViewChange(mode)}
+                >
+                  <Icon className="h-4 w-4" />
+                  <span className="flex-1">{LEAD_VIEW_MODE_LABELS[mode]}</span>
+                  {isDefault ? <Check className="h-4 w-4" /> : null}
+                </DropdownMenuItem>
+              );
+            })}
+          </DropdownMenuContent>
+        </DropdownMenu>
       )}
     </div>
   );

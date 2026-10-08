@@ -4,9 +4,15 @@ import { supabase } from "@/integrations/supabase/client";
 import { useCurrentTenant } from "@/hooks/useCurrentTenant";
 import { useMenuItems, MenuItem } from "@/hooks/useMenuItems";
 import {
-  MENU_TABS, SUB_MODULES, INTEGRATION_SETTINGS, ORPHAN_MODULES,
-  MenuModule, MenuTab, MenuTabId,
-  buildParentMenuKey, parseParentMenuKey,
+  MENU_TABS,
+  SUB_MODULES,
+  INTEGRATION_SETTINGS,
+  ORPHAN_MODULES,
+  MenuModule,
+  MenuTab,
+  MenuTabId,
+  buildParentMenuKey,
+  parseParentMenuKey,
 } from "@/lib/menuStructure";
 import { toast } from "sonner";
 
@@ -19,7 +25,7 @@ export type SitemapNode = {
 };
 
 export type SitemapColumn = {
-  id: string;             // tab:<tabId>:<sectionLabel>  OR special: "orphans" / "hidden"
+  id: string; // tab:<tabId>:<sectionLabel>  OR special: "orphans" / "hidden"
   tabId: MenuTabId | null;
   tabLabel: string;
   sectionLabel: string;
@@ -41,10 +47,19 @@ export function useSitemap() {
       menu_key: string;
       original_label: string;
       route: string;
-      patch: Partial<Pick<MenuItem, "custom_label" | "is_visible" | "sort_order" | "parent_menu_key" | "icon">>;
+      patch: Partial<
+        Pick<
+          MenuItem,
+          | "custom_label"
+          | "is_visible"
+          | "sort_order"
+          | "parent_menu_key"
+          | "icon"
+        >
+      >;
     }) => {
       if (!tenantId) throw new Error("No tenant");
-      const existing = menuItems.find(m => m.menu_key === input.menu_key);
+      const existing = menuItems.find((m) => m.menu_key === input.menu_key);
       if (existing) {
         const { error } = await supabase
           .from("menu_items")
@@ -97,13 +112,18 @@ export function useSitemap() {
         route: mod.route,
         patch: { custom_label: newLabel.trim() || null },
       }),
-    moveModule: (mod: MenuModule, target: { tabId: MenuTabId; sectionLabel: string } | null) =>
+    moveModule: (
+      mod: MenuModule,
+      target: { tabId: MenuTabId; sectionLabel: string } | null,
+    ) =>
       upsertOverride.mutateAsync({
         menu_key: mod.key,
         original_label: mod.label,
         route: mod.route,
         patch: {
-          parent_menu_key: target ? buildParentMenuKey(target.tabId, target.sectionLabel) : null,
+          parent_menu_key: target
+            ? buildParentMenuKey(target.tabId, target.sectionLabel)
+            : null,
         },
       }),
     toggleVisibility: (mod: MenuModule, current: boolean) =>
@@ -136,7 +156,10 @@ export function buildSitemap(menuItems: MenuItem[]): {
 
   // 3. For each tab+section, gather default modules, then apply re-parent overrides
   type CK = string;
-  const moduleHomeOverrides = new Map<string, { tabId: MenuTabId; sectionLabel: string }>();
+  const moduleHomeOverrides = new Map<
+    string,
+    { tabId: MenuTabId; sectionLabel: string }
+  >();
   for (const m of menuItems) {
     const parsed = parseParentMenuKey(m.parent_menu_key);
     if (parsed) moduleHomeOverrides.set(m.menu_key, parsed);
@@ -152,7 +175,9 @@ export function buildSitemap(menuItems: MenuItem[]): {
         tabId: tab.id,
         tabLabel: tab.label,
         sectionLabel,
-        customSectionLabel: itemByKey.get(`section:${tab.id}:${sectionLabel}`)?.custom_label || null,
+        customSectionLabel:
+          itemByKey.get(`section:${tab.id}:${sectionLabel}`)?.custom_label ||
+          null,
         customTabLabel: itemByKey.get(`tab:${tab.id}`)?.custom_label || null,
         modules: [],
       };
@@ -182,7 +207,7 @@ export function buildSitemap(menuItems: MenuItem[]): {
     // find the original module def from MENU_TABS
     const mod = findModuleByKey(moduleKey);
     if (!mod) continue;
-    const targetTab = MENU_TABS.find(t => t.id === target.tabId);
+    const targetTab = MENU_TABS.find((t) => t.id === target.tabId);
     if (!targetTab) continue;
     const col = ensureColumn(targetTab, target.sectionLabel);
     col.modules.push(buildNode(mod, itemByKey, childrenByParent));
@@ -222,7 +247,7 @@ export function buildSitemap(menuItems: MenuItem[]): {
 
   // Move hidden modules across all columns into the hidden column (still showing in workspace)
   for (const col of columnsMap.values()) {
-    col.modules = col.modules.filter(node => {
+    col.modules = col.modules.filter((node) => {
       if (node.hidden) {
         hiddenCol.modules.push(node);
         return false;
@@ -248,7 +273,7 @@ export function buildSitemap(menuItems: MenuItem[]): {
 function buildNode(
   mod: MenuModule,
   itemByKey: Map<string, MenuItem>,
-  childrenByParent: Map<string, MenuModule[]>
+  childrenByParent: Map<string, MenuModule[]>,
 ): SitemapNode {
   const item = itemByKey.get(mod.key);
   return {
@@ -262,7 +287,7 @@ function buildNode(
 function findModuleByKey(key: string): MenuModule | null {
   for (const tab of MENU_TABS) {
     for (const section of tab.sections) {
-      const m = section.items.find(i => i.key === key);
+      const m = section.items.find((i) => i.key === key);
       if (m) return m;
     }
   }
@@ -280,10 +305,17 @@ export type SidebarOverlay = {
 export function computeSidebarOverlay(menuItems: MenuItem[]): SidebarOverlay {
   const tabLabels = new Map<MenuTabId, string>();
   const sectionLabels = new Map<string, string>();
-  const moduleHome = new Map<string, { tabId: MenuTabId; sectionLabel: string }>();
+  const moduleHome = new Map<
+    string,
+    { tabId: MenuTabId; sectionLabel: string }
+  >();
 
   for (const m of menuItems) {
-    if (m.menu_key.startsWith("tab:") && !m.menu_key.includes(":", 4) && m.custom_label) {
+    if (
+      m.menu_key.startsWith("tab:") &&
+      !m.menu_key.includes(":", 4) &&
+      m.custom_label
+    ) {
       tabLabels.set(m.menu_key.slice(4) as MenuTabId, m.custom_label);
     } else if (m.menu_key.startsWith("section:") && m.custom_label) {
       const rest = m.menu_key.slice(8);

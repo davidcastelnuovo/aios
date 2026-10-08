@@ -15,9 +15,10 @@ export function useHeaderShortcuts(accessibleKeys: string[]) {
   const accessibleFingerprint = accessibleKeys.join("|");
 
   const storageKey = useMemo(
-    () => userId && currentTenantId
-      ? headerShortcutsStorageKey(userId, currentTenantId)
-      : null,
+    () =>
+      userId && currentTenantId
+        ? headerShortcutsStorageKey(userId, currentTenantId)
+        : null,
     [userId, currentTenantId],
   );
 
@@ -37,19 +38,22 @@ export function useHeaderShortcuts(accessibleKeys: string[]) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [storageKey, accessibleFingerprint]);
 
-  const toggle = useCallback((key: string) => {
-    setSelectedKeys((previous) => {
-      const next = toggleHeaderShortcut(previous, key);
-      if (storageKey) {
-        try {
-          localStorage.setItem(storageKey, JSON.stringify(next));
-        } catch {
-          // Keep the in-memory preference when storage is unavailable.
+  const toggle = useCallback(
+    (key: string) => {
+      setSelectedKeys((previous) => {
+        const next = toggleHeaderShortcut(previous, key);
+        if (storageKey) {
+          try {
+            localStorage.setItem(storageKey, JSON.stringify(next));
+          } catch {
+            // Keep the in-memory preference when storage is unavailable.
+          }
         }
-      }
-      return next;
-    });
-  }, [storageKey]);
+        return next;
+      });
+    },
+    [storageKey],
+  );
 
   return {
     selectedKeys,
@@ -58,4 +62,3 @@ export function useHeaderShortcuts(accessibleKeys: string[]) {
     isAtLimit: selectedKeys.length >= MAX_HEADER_SHORTCUTS,
   };
 }
-

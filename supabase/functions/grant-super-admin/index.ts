@@ -3,7 +3,8 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+  "Access-Control-Allow-Headers":
+    "authorization, x-client-info, apikey, content-type",
 };
 
 interface GrantSuperAdminRequest {
@@ -29,21 +30,27 @@ serve(async (req: Request) => {
     if (!authHeader) {
       return new Response(
         JSON.stringify({ error: "Missing authorization header" }),
-        { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        {
+          status: 401,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        },
       );
     }
 
     const supabase = createClient(supabaseUrl, serviceRoleKey);
-    
+
     // Verify current user is super_admin
     const token = authHeader.replace("Bearer ", "");
-    const { data: { user }, error: authError } = await supabase.auth.getUser(token);
-    
+    const {
+      data: { user },
+      error: authError,
+    } = await supabase.auth.getUser(token);
+
     if (authError || !user) {
-      return new Response(
-        JSON.stringify({ error: "Unauthorized" }),
-        { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
+      return new Response(JSON.stringify({ error: "Unauthorized" }), {
+        status: 401,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
     }
 
     // Check if current user is super_admin
@@ -56,33 +63,46 @@ serve(async (req: Request) => {
 
     if (!currentUserRoles) {
       return new Response(
-        JSON.stringify({ error: "Only super admins can grant super admin access" }),
-        { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        JSON.stringify({
+          error: "Only super admins can grant super admin access",
+        }),
+        {
+          status: 403,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        },
       );
     }
 
     const payload: GrantSuperAdminRequest = await req.json();
-    
+
     if (!payload.user_email) {
-      return new Response(
-        JSON.stringify({ error: "user_email is required" }),
-        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
+      return new Response(JSON.stringify({ error: "user_email is required" }), {
+        status: 400,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
     }
 
     // Find user by email
-    const { data: targetUser, error: userError } = await supabase.auth.admin.listUsers();
-    
+    const { data: targetUser, error: userError } =
+      await supabase.auth.admin.listUsers();
+
     if (userError) {
       throw new Error("Failed to fetch users: " + userError.message);
     }
 
-    const foundUser = targetUser.users.find(u => u.email === payload.user_email);
-    
+    const foundUser = targetUser.users.find(
+      (u) => u.email === payload.user_email,
+    );
+
     if (!foundUser) {
       return new Response(
-        JSON.stringify({ error: `User with email ${payload.user_email} not found` }),
-        { status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        JSON.stringify({
+          error: `User with email ${payload.user_email} not found`,
+        }),
+        {
+          status: 404,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        },
       );
     }
 
@@ -96,27 +116,29 @@ serve(async (req: Request) => {
 
     if (existingRole) {
       return new Response(
-        JSON.stringify({ 
-          success: true, 
+        JSON.stringify({
+          success: true,
           message: "User already has super_admin role",
           user_id: foundUser.id,
         }),
-        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        {
+          status: 200,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        },
       );
     }
 
     // Grant super_admin role
-    const { error: insertError } = await supabase
-      .from("user_roles")
-      .insert({
-        user_id: foundUser.id,
-        role: "super_admin",
-      });
+    const { error: insertError } = await supabase.from("user_roles").insert({
+      user_id: foundUser.id,
+      role: "super_admin",
+    });
 
     if (insertError) {
-      throw new Error("Failed to grant super_admin role: " + insertError.message);
+      throw new Error(
+        "Failed to grant super_admin role: " + insertError.message,
+      );
     }
-
 
     return new Response(
       JSON.stringify({
@@ -127,9 +149,8 @@ serve(async (req: Request) => {
       {
         status: 200,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
-      }
+      },
     );
-
   } catch (error: any) {
     console.error("Error in grant-super-admin:", error);
     return new Response(
@@ -137,7 +158,7 @@ serve(async (req: Request) => {
       {
         status: 500,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
-      }
+      },
     );
   }
 });

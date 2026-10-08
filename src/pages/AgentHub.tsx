@@ -3,9 +3,17 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useCurrentTenant } from "@/hooks/useCurrentTenant";
 import { useIsMobile } from "@/hooks/use-mobile";
-import { AgentSidebar, type AgentListItem } from "@/components/agents/AgentSidebar";
+import {
+  AgentSidebar,
+  type AgentListItem,
+} from "@/components/agents/AgentSidebar";
 import { AgentEditor } from "@/components/agents/AgentEditor";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -39,37 +47,50 @@ export default function AgentHub() {
 
   useEffect(() => {
     if (!selectedId && agents.length > 0) {
-      const carmen = agents.find(a => (a.name || "").toLowerCase().includes("carmen") || a.name?.includes("כרמן"));
+      const carmen = agents.find(
+        (a) =>
+          (a.name || "").toLowerCase().includes("carmen") ||
+          a.name?.includes("כרמן"),
+      );
       setSelectedId(carmen?.id || agents[0].id);
     }
   }, [agents, selectedId]);
 
-  const selectedAgent = agents.find(a => a.id === selectedId);
+  const selectedAgent = agents.find((a) => a.id === selectedId);
 
   const create = useMutation({
     mutationFn: async () => {
       if (!tenantId) throw new Error("missing tenant");
-      const { data, error } = await supabase.from("ai_agents").insert({
-        tenant_id: tenantId,
-        name: newName,
-        talent: newTalent,
-        engine: "gemini-3-flash",
-        active: true,
-      }).select().single();
+      const { data, error } = await supabase
+        .from("ai_agents")
+        .insert({
+          tenant_id: tenantId,
+          name: newName,
+          talent: newTalent,
+          engine: "gemini-3-flash",
+          active: true,
+        })
+        .select()
+        .single();
       if (error) throw error;
       return data;
     },
     onSuccess: (data) => {
       qc.invalidateQueries({ queryKey: ["ai-agents", tenantId] });
       setSelectedId(data.id);
-      setNewName(""); setNewTalent(""); setCreateOpen(false);
+      setNewName("");
+      setNewTalent("");
+      setCreateOpen(false);
       toast.success("סוכן נוצר");
     },
     onError: (e: any) => toast.error(e.message),
   });
 
-  const list: AgentListItem[] = agents.map(a => ({
-    id: a.id, name: a.name, active: a.active ?? true, engine: a.engine,
+  const list: AgentListItem[] = agents.map((a) => ({
+    id: a.id,
+    name: a.name,
+    active: a.active ?? true,
+    engine: a.engine,
   }));
 
   const handleSelect = (id: string) => {
@@ -83,7 +104,10 @@ export default function AgentHub() {
   };
 
   return (
-    <div className="h-[calc(100vh-4rem)] flex flex-col md:flex-row overflow-hidden" dir="rtl">
+    <div
+      className="h-[calc(100vh-4rem)] flex flex-col md:flex-row overflow-hidden"
+      dir="rtl"
+    >
       {isMobile ? (
         <>
           <div className="flex items-center justify-between gap-2 p-2 border-b bg-card shrink-0">
@@ -127,17 +151,31 @@ export default function AgentHub() {
 
       <Dialog open={createOpen} onOpenChange={setCreateOpen}>
         <DialogContent>
-          <DialogHeader><DialogTitle>סוכן חדש</DialogTitle></DialogHeader>
+          <DialogHeader>
+            <DialogTitle>סוכן חדש</DialogTitle>
+          </DialogHeader>
           <div className="space-y-3">
             <div>
               <Label>שם</Label>
-              <Input value={newName} onChange={e => setNewName(e.target.value)} placeholder="לדוגמה: סוכן מכירות" />
+              <Input
+                value={newName}
+                onChange={(e) => setNewName(e.target.value)}
+                placeholder="לדוגמה: סוכן מכירות"
+              />
             </div>
             <div>
               <Label>טלנט / מומחיות</Label>
-              <Input value={newTalent} onChange={e => setNewTalent(e.target.value)} placeholder="מה הסוכן עושה?" />
+              <Input
+                value={newTalent}
+                onChange={(e) => setNewTalent(e.target.value)}
+                placeholder="מה הסוכן עושה?"
+              />
             </div>
-            <Button onClick={() => create.mutate()} disabled={!newName || create.isPending} className="w-full">
+            <Button
+              onClick={() => create.mutate()}
+              disabled={!newName || create.isPending}
+              className="w-full"
+            >
               {create.isPending ? "יוצר..." : "צור סוכן"}
             </Button>
           </div>

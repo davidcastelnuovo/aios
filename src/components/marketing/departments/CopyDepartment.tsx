@@ -6,7 +6,11 @@ import "@blocknote/core/fonts/inter.css";
 import "@blocknote/mantine/style.css";
 import { supabase } from "@/integrations/supabase/client";
 import { ensurePipelineForClient } from "@/components/marketing/lib/ensurePipeline";
-import { applyClientFilter, ALL_CLIENTS_FILTER, type MarketingClientFilter } from "@/components/marketing/clientFilter";
+import {
+  applyClientFilter,
+  ALL_CLIENTS_FILTER,
+  type MarketingClientFilter,
+} from "@/components/marketing/clientFilter";
 import { isCopyDepartmentItem } from "@/components/marketing/departmentFilters";
 import {
   appendCopyConcepts,
@@ -44,7 +48,10 @@ import {
 } from "@/components/marketing/copyHandoff";
 import { CopyConceptsPanel } from "@/components/marketing/departments/CopyConceptsPanel";
 import { CopyVariationsPanel } from "@/components/marketing/departments/CopyVariationsPanel";
-import { COPY_HANDOFF_NEW_TARGET, CopyHandoffDialog } from "@/components/marketing/departments/CopyHandoffDialog";
+import {
+  COPY_HANDOFF_NEW_TARGET,
+  CopyHandoffDialog,
+} from "@/components/marketing/departments/CopyHandoffDialog";
 import { ClientSelector } from "@/components/marketing/ClientSelector";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -69,7 +76,12 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
+import {
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+} from "@/components/ui/sheet";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
 import { cn } from "@/lib/utils";
@@ -91,7 +103,11 @@ import {
   Trash2,
   Upload,
 } from "lucide-react";
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "@/components/ui/collapsible";
 
 interface Props {
   clientFilter: MarketingClientFilter;
@@ -99,7 +115,8 @@ interface Props {
   onClientChange: (id: string | null) => void;
 }
 
-type JsonValue = string | number | boolean | null | JsonValue[] | { [key: string]: JsonValue };
+type JsonValue =
+  string | number | boolean | null | JsonValue[] | { [key: string]: JsonValue };
 
 interface CopyItem {
   id: string;
@@ -153,13 +170,16 @@ const errorMessage = (error: unknown, fallback: string) =>
   error instanceof Error ? error.message : fallback;
 
 const isAbortError = (error: unknown) =>
-  (error instanceof DOMException && error.name === "AbortError")
-  || (error instanceof Error && (error.name === "AbortError" || /aborted|AbortError|timed out/i.test(error.message)));
+  (error instanceof DOMException && error.name === "AbortError") ||
+  (error instanceof Error &&
+    (error.name === "AbortError" ||
+      /aborted|AbortError|timed out/i.test(error.message)));
 
 const CONCEPTS_GENERATE_TIMEOUT_MS = 120_000;
 const COPY_GENERATE_TIMEOUT_MS = CONCEPTS_GENERATE_TIMEOUT_MS;
 
-const asText = (value: JsonValue | undefined) => (typeof value === "string" ? value : "");
+const asText = (value: JsonValue | undefined) =>
+  typeof value === "string" ? value : "";
 
 const CONTENT_TYPES = [
   { value: "posts", label: "פוסטים" },
@@ -168,11 +188,21 @@ const CONTENT_TYPES = [
   { value: "book", label: "ספר" },
 ];
 
-const typeLabel = (value: string) => CONTENT_TYPES.find((type) => type.value === value)?.label
-  ?? (value === "social_post" ? "פוסטים" : value === "ad_copy" || value === "ad_script" ? "מודעות" : value === "video_script" ? "תסריט" : "קופי");
+const typeLabel = (value: string) =>
+  CONTENT_TYPES.find((type) => type.value === value)?.label ??
+  (value === "social_post"
+    ? "פוסטים"
+    : value === "ad_copy" || value === "ad_script"
+      ? "מודעות"
+      : value === "video_script"
+        ? "תסריט"
+        : "קופי");
 
 const timeAgo = (iso: string) => {
-  const minutes = Math.max(1, Math.floor((Date.now() - new Date(iso).getTime()) / 60000));
+  const minutes = Math.max(
+    1,
+    Math.floor((Date.now() - new Date(iso).getTime()) / 60000),
+  );
   if (minutes < 60) return `${minutes}ד׳`;
   const hours = Math.floor(minutes / 60);
   if (hours < 24) return `${hours}ש׳`;
@@ -184,16 +214,28 @@ const readChat = (payload: Record<string, JsonValue> | null): ChatTurn[] => {
   if (!Array.isArray(raw)) return [];
   return raw.flatMap((value) => {
     if (!value || typeof value !== "object" || Array.isArray(value)) return [];
-    const role = value.role === "user" || value.role === "assistant" ? value.role : null;
+    const role =
+      value.role === "user" || value.role === "assistant" ? value.role : null;
     if (!role) return [];
-    return [{ role, content: asText(value.content), at: asText(value.at) || new Date().toISOString() }];
+    return [
+      {
+        role,
+        content: asText(value.content),
+        at: asText(value.at) || new Date().toISOString(),
+      },
+    ];
   });
 };
 
 const sanitizeFileName = (name: string) => {
-  const ext = name.lastIndexOf(".") > 0 ? name.slice(name.lastIndexOf(".")) : "";
-  const base = name.lastIndexOf(".") > 0 ? name.slice(0, name.lastIndexOf(".")) : name;
-  return `${base.replace(/[^a-zA-Z0-9_-]/g, "_").replace(/_+/g, "_").slice(0, 50)}${ext.toLowerCase()}`;
+  const ext =
+    name.lastIndexOf(".") > 0 ? name.slice(name.lastIndexOf(".")) : "";
+  const base =
+    name.lastIndexOf(".") > 0 ? name.slice(0, name.lastIndexOf(".")) : name;
+  return `${base
+    .replace(/[^a-zA-Z0-9_-]/g, "_")
+    .replace(/_+/g, "_")
+    .slice(0, 50)}${ext.toLowerCase()}`;
 };
 
 const filesFromAttachments = (attachments: unknown): BriefFile[] => {
@@ -203,37 +245,57 @@ const filesFromAttachments = (attachments: unknown): BriefFile[] => {
     const rec = file as Record<string, unknown>;
     const name = typeof rec.name === "string" ? rec.name : "";
     if (!name) return [];
-    return [{
-      name,
-      path: typeof rec.path === "string" ? rec.path : undefined,
-      size: typeof rec.size === "number" ? rec.size : undefined,
-      type: typeof rec.type === "string" ? rec.type : undefined,
-    }];
+    return [
+      {
+        name,
+        path: typeof rec.path === "string" ? rec.path : undefined,
+        size: typeof rec.size === "number" ? rec.size : undefined,
+        type: typeof rec.type === "string" ? rec.type : undefined,
+      },
+    ];
   });
 };
 
 const recordingHasText = (recording: RecordingRow) =>
   Boolean(recording.summary_md || recording.transcription || recording.notes);
 
-const invokeErrorMessage = async (error: unknown, data: { error?: string } | null, fallback: string) => {
+const invokeErrorMessage = async (
+  error: unknown,
+  data: { error?: string } | null,
+  fallback: string,
+) => {
   if (data?.error) return data.error;
-  const context = error && typeof error === "object" ? (error as { context?: Response }).context : undefined;
+  const context =
+    error && typeof error === "object"
+      ? (error as { context?: Response }).context
+      : undefined;
   if (context && typeof context.json === "function") {
     try {
-      const body = await context.json() as { error?: string };
+      const body = (await context.json()) as { error?: string };
       if (body?.error) return body.error;
-    } catch { /* ignore */ }
+    } catch {
+      /* ignore */
+    }
   }
   return error instanceof Error ? error.message : fallback;
 };
 
 const extractCopyDocument = (output: string) => {
   const marker = output.split(/---COPY---/i);
-  const body = (marker.length > 1 ? marker.slice(1).join("---COPY---") : output).trim();
-  return body.replace(/^```(?:markdown|md)?\s*/i, "").replace(/\s*```$/, "").trim();
+  const body = (
+    marker.length > 1 ? marker.slice(1).join("---COPY---") : output
+  ).trim();
+  return body
+    .replace(/^```(?:markdown|md)?\s*/i, "")
+    .replace(/\s*```$/, "")
+    .trim();
 };
 
-export function CopyDepartment({ clientFilter, tenantId, onClientChange }: Props) {
+export function CopyDepartment({
+  clientFilter,
+  tenantId,
+  onClientChange,
+}: Props) {
   const queryClient = useQueryClient();
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
@@ -246,66 +308,82 @@ export function CopyDepartment({ clientFilter, tenantId, onClientChange }: Props
   const [deleteTarget, setDeleteTarget] = useState<CopyItem | null>(null);
   const [deleting, setDeleting] = useState(false);
   const [generatingConcepts, setGeneratingConcepts] = useState(false);
-  const [generatingCopyFor, setGeneratingCopyFor] = useState<string | null>(null);
+  const [generatingCopyFor, setGeneratingCopyFor] = useState<string | null>(
+    null,
+  );
   const [handoffOpen, setHandoffOpen] = useState(false);
   const [handoffProjects, setHandoffProjects] = useState<HandoffWorkItem[]>([]);
-  const [handoffTargetId, setHandoffTargetId] = useState(COPY_HANDOFF_NEW_TARGET);
+  const [handoffTargetId, setHandoffTargetId] = useState(
+    COPY_HANDOFF_NEW_TARGET,
+  );
   const [loadingHandoffTargets, setLoadingHandoffTargets] = useState(false);
   const [editingCopyId, setEditingCopyId] = useState<string | null>(null);
   const [editingCopyDraft, setEditingCopyDraft] = useState("");
   const [savingCopyEdit, setSavingCopyEdit] = useState(false);
   const threadEndRef = useRef<HTMLDivElement>(null);
   const conceptsAbortRef = useRef<AbortController | null>(null);
-  const conceptsAbortKindRef = useRef<"timeout" | "cancel" | "switch" | null>(null);
+  const conceptsAbortKindRef = useRef<"timeout" | "cancel" | "switch" | null>(
+    null,
+  );
   const conceptsTimeoutRef = useRef<number | null>(null);
   const copyAbortRef = useRef<AbortController | null>(null);
   const copyAbortKindRef = useRef<"timeout" | "cancel" | "switch" | null>(null);
   const copyTimeoutRef = useRef<number | null>(null);
 
-  const stopConceptGeneration = useCallback((kind: "timeout" | "cancel" | "switch") => {
-    conceptsAbortKindRef.current = kind;
-    if (conceptsTimeoutRef.current != null) {
-      window.clearTimeout(conceptsTimeoutRef.current);
-      conceptsTimeoutRef.current = null;
-    }
-    conceptsAbortRef.current?.abort();
-    if (kind !== "timeout") setGeneratingConcepts(false);
-  }, []);
+  const stopConceptGeneration = useCallback(
+    (kind: "timeout" | "cancel" | "switch") => {
+      conceptsAbortKindRef.current = kind;
+      if (conceptsTimeoutRef.current != null) {
+        window.clearTimeout(conceptsTimeoutRef.current);
+        conceptsTimeoutRef.current = null;
+      }
+      conceptsAbortRef.current?.abort();
+      if (kind !== "timeout") setGeneratingConcepts(false);
+    },
+    [],
+  );
 
-  const stopCopyGeneration = useCallback((kind: "timeout" | "cancel" | "switch") => {
-    copyAbortKindRef.current = kind;
-    if (copyTimeoutRef.current != null) {
-      window.clearTimeout(copyTimeoutRef.current);
-      copyTimeoutRef.current = null;
-    }
-    copyAbortRef.current?.abort();
-    if (kind !== "timeout") setGeneratingCopyFor(null);
-  }, []);
+  const stopCopyGeneration = useCallback(
+    (kind: "timeout" | "cancel" | "switch") => {
+      copyAbortKindRef.current = kind;
+      if (copyTimeoutRef.current != null) {
+        window.clearTimeout(copyTimeoutRef.current);
+        copyTimeoutRef.current = null;
+      }
+      copyAbortRef.current?.abort();
+      if (kind !== "timeout") setGeneratingCopyFor(null);
+    },
+    [],
+  );
 
   const { data: items = [], isLoading } = useQuery({
     queryKey: ["copy-department-items", clientFilter, tenantId],
     queryFn: async () => {
       let query = supabase
         .from("marketing_work_items")
-        .select("id,title,status,payload,current_stage_id,target_channel,client_id,created_at,updated_at")
+        .select(
+          "id,title,status,payload,current_stage_id,target_channel,client_id,created_at,updated_at",
+        )
         .eq("tenant_id", tenantId)
         .order("updated_at", { ascending: false });
       query = applyClientFilter(query, clientFilter);
-      const [{ data, error }, { data: copyStages, error: stageError }] = await Promise.all([
-        query,
-        supabase
-          .from("marketing_pipeline_stages")
-          .select("id")
-          .eq("tenant_id", tenantId)
-          .eq("stage_type", "copy"),
-      ]);
+      const [{ data, error }, { data: copyStages, error: stageError }] =
+        await Promise.all([
+          query,
+          supabase
+            .from("marketing_pipeline_stages")
+            .select("id")
+            .eq("tenant_id", tenantId)
+            .eq("stage_type", "copy"),
+        ]);
       if (error) throw error;
       if (stageError) throw stageError;
       const copyStageIds = new Set((copyStages ?? []).map((stage) => stage.id));
       return ((data ?? []) as CopyItem[]).filter((item) => {
-        const copyStageId = item.current_stage_id && copyStageIds.has(item.current_stage_id)
-          ? item.current_stage_id
-          : undefined;
+        const copyStageId =
+          item.current_stage_id && copyStageIds.has(item.current_stage_id)
+            ? item.current_stage_id
+            : undefined;
         return isCopyDepartmentItem(item, copyStageId);
       });
     },
@@ -328,7 +406,11 @@ export function CopyDepartment({ clientFilter, tenantId, onClientChange }: Props
   const { data: agencies = [] } = useQuery({
     queryKey: ["copy-department-agencies", tenantId],
     queryFn: async () => {
-      const { data, error } = await supabase.from("agencies").select("id,name").eq("tenant_id", tenantId).order("name");
+      const { data, error } = await supabase
+        .from("agencies")
+        .select("id,name")
+        .eq("tenant_id", tenantId)
+        .order("name");
       if (error) throw error;
       return (data ?? []) as AgencyRow[];
     },
@@ -336,7 +418,8 @@ export function CopyDepartment({ clientFilter, tenantId, onClientChange }: Props
 
   useEffect(() => {
     if (!selectedId && items[0]?.id) setSelectedId(items[0].id);
-    if (selectedId && !items.some((item) => item.id === selectedId)) setSelectedId(items[0]?.id ?? null);
+    if (selectedId && !items.some((item) => item.id === selectedId))
+      setSelectedId(items[0]?.id ?? null);
   }, [items, selectedId]);
 
   useEffect(() => {
@@ -347,34 +430,52 @@ export function CopyDepartment({ clientFilter, tenantId, onClientChange }: Props
   }, [selectedId, stopConceptGeneration, stopCopyGeneration]);
 
   const selected = items.find((item) => item.id === selectedId) ?? null;
-  const chat = useMemo(() => readChat(selected?.payload ?? null), [selected?.payload]);
+  const chat = useMemo(
+    () => readChat(selected?.payload ?? null),
+    [selected?.payload],
+  );
   const copyText = asText(selected?.payload?.copy_text);
   const copyVariations = useMemo(() => {
     try {
       return hydrateCopyVariations(
         copyText,
-        parseCopyVariationsFromPayload(selected?.payload as Record<string, unknown> | null),
+        parseCopyVariationsFromPayload(
+          selected?.payload as Record<string, unknown> | null,
+        ),
       );
     } catch {
       return [];
     }
   }, [copyText, selected?.payload]);
-  const approvedCopies = useMemo(() => approvedCopyVariations(copyVariations), [copyVariations]);
+  const approvedCopies = useMemo(
+    () => approvedCopyVariations(copyVariations),
+    [copyVariations],
+  );
   const conceptGate = useMemo(
-    () => copyConceptsGenerateGate({
-      title: selected?.title ?? "",
-      brief: asText(selected?.payload?.brief_text),
-      copyText,
-      variationCount: copyVariations.filter((item) => item.text.trim()).length,
-    }),
+    () =>
+      copyConceptsGenerateGate({
+        title: selected?.title ?? "",
+        brief: asText(selected?.payload?.brief_text),
+        copyText,
+        variationCount: copyVariations.filter((item) => item.text.trim())
+          .length,
+      }),
     [copyText, copyVariations, selected?.payload?.brief_text, selected?.title],
   );
   const concepts = useMemo(
-    () => parseCopyConceptsFromPayload(selected?.payload as Record<string, unknown> | null),
+    () =>
+      parseCopyConceptsFromPayload(
+        selected?.payload as Record<string, unknown> | null,
+      ),
     [selected?.payload],
   );
-  const approvedConcepts = useMemo(() => approvedCopyConcepts(concepts), [concepts]);
-  const clientName = clients.find((client) => client.id === selected?.client_id)?.name;
+  const approvedConcepts = useMemo(
+    () => approvedCopyConcepts(concepts),
+    [concepts],
+  );
+  const clientName = clients.find(
+    (client) => client.id === selected?.client_id,
+  )?.name;
   const agencyName = (() => {
     const client = clients.find((row) => row.id === selected?.client_id);
     return agencies.find((agency) => agency.id === client?.agency_id)?.name;
@@ -386,8 +487,12 @@ export function CopyDepartment({ clientFilter, tenantId, onClientChange }: Props
 
   const refresh = async () => {
     await Promise.all([
-      queryClient.invalidateQueries({ queryKey: ["copy-department-items", clientFilter, tenantId] }),
-      queryClient.invalidateQueries({ queryKey: ["creative-department-items"] }),
+      queryClient.invalidateQueries({
+        queryKey: ["copy-department-items", clientFilter, tenantId],
+      }),
+      queryClient.invalidateQueries({
+        queryKey: ["creative-department-items"],
+      }),
     ]);
   };
 
@@ -419,7 +524,8 @@ export function CopyDepartment({ clientFilter, tenantId, onClientChange }: Props
         website && `אתר הלקוח: ${website}`,
         brief && `בריף:\n${brief}`,
         recordingTitle && `הקלטה משויכת: ${recordingTitle}`,
-        approvedConcepts.length > 0 && "כתבי קופי שמשרת את הקונספטים המאושרים — כל וריאציה לקונספט, לא קמפיין חדש.",
+        approvedConcepts.length > 0 &&
+          "כתבי קופי שמשרת את הקונספטים המאושרים — כל וריאציה לקונספט, לא קמפיין חדש.",
         "פורמט פלט חובה:",
         "---COPY---",
         "וריאציה N — [framework: AIDA/PAS/BAB/4Ps] — [זווית]",
@@ -427,16 +533,22 @@ export function CopyDepartment({ clientFilter, tenantId, onClientChange }: Props
         "גוף:",
         "CTA:",
         "רציונל: משפט אחד מה בודקים מול שאר הווריאציות. רפרנס: [שם קמפיין או בלי] — [עיקרון].",
-      ].filter(Boolean).join("\n");
+      ]
+        .filter(Boolean)
+        .join("\n");
       const commandText = [
         `כתבי קופי לפרויקט "${selected.title || "בלי שם"}" (${type}).`,
         clientName && `לקוח: ${clientName}.`,
         website && `אתר: ${website}.`,
         brief && `בריף:\n${brief}`,
-        approvedConcepts.length > 0 && `קונספטים מאושרים לכתוב אליהם:\n${formatApprovedConceptsForCopy(approvedConcepts)}`,
-        existing && `קופי נוכחי בעורך — שפרי לפי הבקשה והחזירי מסמך מלא:\n${existing}`,
+        approvedConcepts.length > 0 &&
+          `קונספטים מאושרים לכתוב אליהם:\n${formatApprovedConceptsForCopy(approvedConcepts)}`,
+        existing &&
+          `קופי נוכחי בעורך — שפרי לפי הבקשה והחזירי מסמך מלא:\n${existing}`,
         `בקשת המשתמש:\n${prompt}`,
-      ].filter(Boolean).join("\n\n");
+      ]
+        .filter(Boolean)
+        .join("\n\n");
 
       const { data, error } = await supabase.functions.invoke("run-ai-agent", {
         body: {
@@ -456,9 +568,14 @@ export function CopyDepartment({ clientFilter, tenantId, onClientChange }: Props
           user_name: "מחלקת קופי",
         },
       });
-      if (error) throw new Error(await invokeErrorMessage(error, data, "כרמן לא הצליחה לכתוב"));
+      if (error)
+        throw new Error(
+          await invokeErrorMessage(error, data, "כרמן לא הצליחה לכתוב"),
+        );
       if (data?.error) throw new Error(data.error);
-      const output = String(data?.output ?? data?.reply ?? data?.message ?? "").trim();
+      const output = String(
+        data?.output ?? data?.reply ?? data?.message ?? "",
+      ).trim();
       if (!output) throw new Error("כרמן החזירה תשובה ריקה");
       const copyDocument = extractCopyDocument(output);
       const now = new Date().toISOString();
@@ -469,7 +586,9 @@ export function CopyDepartment({ clientFilter, tenantId, onClientChange }: Props
       ].slice(-40);
       const nextVariations = hydrateCopyVariations(
         copyDocument,
-        parseCopyVariationsFromPayload(selected.payload as Record<string, unknown>),
+        parseCopyVariationsFromPayload(
+          selected.payload as Record<string, unknown>,
+        ),
       );
       const nextConcepts = existing
         ? concepts
@@ -478,7 +597,9 @@ export function CopyDepartment({ clientFilter, tenantId, onClientChange }: Props
         ...(selected.payload ?? {}),
         department: "copy",
         copy_text: copyDocument,
-        copy_variations: JSON.parse(JSON.stringify(nextVariations)) as JsonValue,
+        copy_variations: JSON.parse(
+          JSON.stringify(nextVariations),
+        ) as JsonValue,
         copy_concepts: JSON.parse(JSON.stringify(nextConcepts)) as JsonValue,
         copy_chat: nextChat,
         copy_prompt: prompt,
@@ -525,7 +646,9 @@ export function CopyDepartment({ clientFilter, tenantId, onClientChange }: Props
     if (error) throw error;
   };
 
-  const saveConcepts = async (nextConcepts: ReturnType<typeof parseCopyConceptsFromPayload>) => {
+  const saveConcepts = async (
+    nextConcepts: ReturnType<typeof parseCopyConceptsFromPayload>,
+  ) => {
     await persistPayload({
       copy_concepts: JSON.parse(JSON.stringify(nextConcepts)) as JsonValue,
     });
@@ -554,10 +677,16 @@ export function CopyDepartment({ clientFilter, tenantId, onClientChange }: Props
     if (!selected || !editingCopyId) return;
     setSavingCopyEdit(true);
     try {
-      const nextVariations = replaceCopyVariationText(copyVariations, editingCopyId, editingCopyDraft);
+      const nextVariations = replaceCopyVariationText(
+        copyVariations,
+        editingCopyId,
+        editingCopyDraft,
+      );
       const nextText = joinCopyVariations(nextVariations);
       await persistPayload({
-        copy_variations: JSON.parse(JSON.stringify(nextVariations)) as JsonValue,
+        copy_variations: JSON.parse(
+          JSON.stringify(nextVariations),
+        ) as JsonValue,
         copy_text: nextText,
       });
       await supabase.from("marketing_assets").insert({
@@ -566,7 +695,11 @@ export function CopyDepartment({ clientFilter, tenantId, onClientChange }: Props
         stage_id: selected.current_stage_id,
         type: "copy",
         content: nextText,
-        meta: { source: "variation_edit", variation_id: editingCopyId, skin_slug: "copywriter" },
+        meta: {
+          source: "variation_edit",
+          variation_id: editingCopyId,
+          skin_slug: "copywriter",
+        },
       });
       toast.success("הווריאציה נשמרה");
       closeCopyVariationEditor();
@@ -602,8 +735,11 @@ export function CopyDepartment({ clientFilter, tenantId, onClientChange }: Props
       const brief = asText(selected.payload?.brief_text);
       const type = typeLabel(asText(selected.payload?.content_type) || "posts");
       const website = asText(selected.payload?.client_website);
-      const copiesForConcepts = approvedCopies.length > 0 ? approvedCopies : copyVariations;
-      const existingNames = concepts.map((concept) => concept.name).filter(Boolean);
+      const copiesForConcepts =
+        approvedCopies.length > 0 ? approvedCopies : copyVariations;
+      const existingNames = concepts
+        .map((concept) => concept.name)
+        .filter(Boolean);
       const studioAddon = [
         "זה שרשור סטודיו קופי נפרד מהצ׳ט הראשי של כרמן.",
         "את מציעה קונספטים קריאייטיביים למחלקת הגרפיקה — לא עוד וריאציות טקסט.",
@@ -615,16 +751,22 @@ export function CopyDepartment({ clientFilter, tenantId, onClientChange }: Props
         clientName && `לקוח: ${clientName}`,
         "פורמט פלט חובה:",
         CONCEPTS_OUTPUT_HINT,
-      ].filter(Boolean).join("\n");
+      ]
+        .filter(Boolean)
+        .join("\n");
       const commandText = [
         `הציעי 3 קונספטים ויזואליים שונים לפרויקט "${selected.title || "בלי שם"}" (${type}).`,
         clientName && `לקוח: ${clientName}.`,
         website && `אתר: ${website}.`,
         brief && `בריף:\n${brief}`,
-        copiesForConcepts.length > 0 && `קופי קיים שאפשר להתחשב בו (לא חובה, אל תחליפי קונספטים קיימים):\n${formatCopyVariationsForConcepts(copiesForConcepts)}`,
-        existingNames.length > 0 && `קונספטים שכבר יש — אל תחזרי עליהם, הציעי רק חדשים:\n${existingNames.map((name, index) => `${index + 1}. ${name}`).join("\n")}`,
+        copiesForConcepts.length > 0 &&
+          `קופי קיים שאפשר להתחשב בו (לא חובה, אל תחליפי קונספטים קיימים):\n${formatCopyVariationsForConcepts(copiesForConcepts)}`,
+        existingNames.length > 0 &&
+          `קונספטים שכבר יש — אל תחזרי עליהם, הציעי רק חדשים:\n${existingNames.map((name, index) => `${index + 1}. ${name}`).join("\n")}`,
         "כל קונספט חייב זווית אחרת (כאב / הומור / הוכחה / סקרנות). אל תשייכי קופי עדיין. החזירי רק את בלוק ---CONCEPTS---.",
-      ].filter(Boolean).join("\n\n");
+      ]
+        .filter(Boolean)
+        .join("\n\n");
       const invoke = supabase.functions.invoke("run-ai-agent", {
         body: {
           command_text: commandText,
@@ -640,10 +782,15 @@ export function CopyDepartment({ clientFilter, tenantId, onClientChange }: Props
         signal: controller.signal,
       });
       const aborted = new Promise<never>((_, reject) => {
-        const fail = () => reject(new DOMException(
-          conceptsAbortKindRef.current === "timeout" ? "Timed out" : "Aborted",
-          "AbortError",
-        ));
+        const fail = () =>
+          reject(
+            new DOMException(
+              conceptsAbortKindRef.current === "timeout"
+                ? "Timed out"
+                : "Aborted",
+              "AbortError",
+            ),
+          );
         if (controller.signal.aborted) fail();
         else controller.signal.addEventListener("abort", fail, { once: true });
       });
@@ -652,18 +799,32 @@ export function CopyDepartment({ clientFilter, tenantId, onClientChange }: Props
         window.clearTimeout(timeoutId);
         conceptsTimeoutRef.current = null;
       }
-      if (controller.signal.aborted) throw new DOMException("Aborted", "AbortError");
-      if (error) throw new Error(await invokeErrorMessage(error, data, "כרמן לא הצליחה להציע קונספטים"));
+      if (controller.signal.aborted)
+        throw new DOMException("Aborted", "AbortError");
+      if (error)
+        throw new Error(
+          await invokeErrorMessage(
+            error,
+            data,
+            "כרמן לא הצליחה להציע קונספטים",
+          ),
+        );
       if (data?.error) throw new Error(data.error);
-      const output = String(data?.output ?? data?.reply ?? data?.message ?? "").trim();
+      const output = String(
+        data?.output ?? data?.reply ?? data?.message ?? "",
+      ).trim();
       if (!output) throw new Error("כרמן החזירה תשובה ריקה");
       const parsed = parseConceptsFromCarmen(output);
-      if (parsed.length === 0) throw new Error("לא הצלחתי לפענח קונספטים מהתשובה. נסו שוב.");
+      if (parsed.length === 0)
+        throw new Error("לא הצלחתי לפענח קונספטים מהתשובה. נסו שוב.");
       const nextConcepts = appendCopyConcepts(concepts, parsed);
-      if (nextConcepts.length === concepts.length) throw new Error("כרמן הציעה קונספטים שכבר יש. נסו שוב.");
+      if (nextConcepts.length === concepts.length)
+        throw new Error("כרמן הציעה קונספטים שכבר יש. נסו שוב.");
       await persistPayload({
         copy_concepts: JSON.parse(JSON.stringify(nextConcepts)) as JsonValue,
-        copy_variations: JSON.parse(JSON.stringify(copyVariations)) as JsonValue,
+        copy_variations: JSON.parse(
+          JSON.stringify(copyVariations),
+        ) as JsonValue,
       });
       await supabase.from("marketing_assets").insert({
         tenant_id: tenantId,
@@ -674,7 +835,11 @@ export function CopyDepartment({ clientFilter, tenantId, onClientChange }: Props
         meta: { source: "copy_concepts", skin_slug: "copywriter" },
       });
       const added = nextConcepts.length - concepts.length;
-      toast.success(concepts.length ? `נוספו ${added} קונספטים — לחצו צור קופי על קונספט` : "קונספטים מוכנים — לחצו צור קופי על קונספט");
+      toast.success(
+        concepts.length
+          ? `נוספו ${added} קונספטים — לחצו צור קופי על קונספט`
+          : "קונספטים מוכנים — לחצו צור קופי על קונספט",
+      );
       await refresh();
     } catch (error: unknown) {
       const kind = conceptsAbortKindRef.current;
@@ -693,7 +858,8 @@ export function CopyDepartment({ clientFilter, tenantId, onClientChange }: Props
         window.clearTimeout(timeoutId);
         conceptsTimeoutRef.current = null;
       }
-      if (conceptsAbortRef.current === controller) conceptsAbortRef.current = null;
+      if (conceptsAbortRef.current === controller)
+        conceptsAbortRef.current = null;
       setGeneratingConcepts(false);
     }
   };
@@ -719,7 +885,9 @@ export function CopyDepartment({ clientFilter, tenantId, onClientChange }: Props
       const website = asText(selected.payload?.client_website);
       const existingForConcept = copiesForConcept(copyVariations, concept.id);
       const existingTitles = [
-        ...existingForConcept.map((item) => item.headline || item.angle || copyBlockLabel(item)),
+        ...existingForConcept.map(
+          (item) => item.headline || item.angle || copyBlockLabel(item),
+        ),
         ...copyVariations.map((item) => item.headline).filter(Boolean),
       ].filter(Boolean);
       const studioAddon = [
@@ -745,7 +913,9 @@ export function CopyDepartment({ clientFilter, tenantId, onClientChange }: Props
         "גוף:",
         "CTA:",
         "רציונל: זווית אחרת לאותו קונספט.",
-      ].filter(Boolean).join("\n");
+      ]
+        .filter(Boolean)
+        .join("\n");
       const commandText = [
         `כתבי בדיוק ${COPY_VARIATIONS_PER_CONCEPT} וריאציות קופי עברי לקונספט הוויזואלי הזה בלבד.`,
         `הקופי חייב לשרת את הסצנה, ההוק והשפה הוויזואלית של «${concept.name}» — לא קמפיין אחר.`,
@@ -753,9 +923,12 @@ export function CopyDepartment({ clientFilter, tenantId, onClientChange }: Props
         website && `אתר: ${website}.`,
         brief && `בריף:\n${brief}`,
         `הקונספט (חובה לכתוב לפיו):\n${formatApprovedConceptsForCopy([concept])}`,
-        existingTitles.length > 0 && `כותרות שכבר יש — אל תחזרי עליהן:\n${existingTitles.join(" | ")}`,
+        existingTitles.length > 0 &&
+          `כותרות שכבר יש — אל תחזרי עליהן:\n${existingTitles.join(" | ")}`,
         "החזירי רק את בלוק ---COPY---.",
-      ].filter(Boolean).join("\n\n");
+      ]
+        .filter(Boolean)
+        .join("\n\n");
       const invoke = supabase.functions.invoke("run-ai-agent", {
         body: {
           command_text: commandText,
@@ -771,10 +944,13 @@ export function CopyDepartment({ clientFilter, tenantId, onClientChange }: Props
         signal: controller.signal,
       });
       const aborted = new Promise<never>((_, reject) => {
-        const fail = () => reject(new DOMException(
-          copyAbortKindRef.current === "timeout" ? "Timed out" : "Aborted",
-          "AbortError",
-        ));
+        const fail = () =>
+          reject(
+            new DOMException(
+              copyAbortKindRef.current === "timeout" ? "Timed out" : "Aborted",
+              "AbortError",
+            ),
+          );
         if (controller.signal.aborted) fail();
         else controller.signal.addEventListener("abort", fail, { once: true });
       });
@@ -783,23 +959,39 @@ export function CopyDepartment({ clientFilter, tenantId, onClientChange }: Props
         window.clearTimeout(timeoutId);
         copyTimeoutRef.current = null;
       }
-      if (controller.signal.aborted) throw new DOMException("Aborted", "AbortError");
-      if (error) throw new Error(await invokeErrorMessage(error, data, "כרמן לא הצליחה לכתוב קופי"));
+      if (controller.signal.aborted)
+        throw new DOMException("Aborted", "AbortError");
+      if (error)
+        throw new Error(
+          await invokeErrorMessage(error, data, "כרמן לא הצליחה לכתוב קופי"),
+        );
       if (data?.error) throw new Error(data.error);
-      const output = String(data?.output ?? data?.reply ?? data?.message ?? "").trim();
+      const output = String(
+        data?.output ?? data?.reply ?? data?.message ?? "",
+      ).trim();
       if (!output) throw new Error("כרמן החזירה תשובה ריקה");
       const copyDocument = extractCopyDocument(output);
-      const incoming = hydrateCopyVariations(copyDocument, []).slice(0, COPY_VARIATIONS_PER_CONCEPT);
-      if (incoming.length === 0) throw new Error("לא הצלחתי לפענח קופי מהתשובה. נסו שוב.");
+      const incoming = hydrateCopyVariations(copyDocument, []).slice(
+        0,
+        COPY_VARIATIONS_PER_CONCEPT,
+      );
+      if (incoming.length === 0)
+        throw new Error("לא הצלחתי לפענח קופי מהתשובה. נסו שוב.");
       const remapped = stampCopiesWithConcept(
         remapCopyVariationKeys(incoming, copyVariations),
         concept,
       );
       const nextVariations = [...copyVariations, ...remapped];
-      const nextConcepts = linkConceptToGeneratedCopy(concepts, concept.id, remapped);
+      const nextConcepts = linkConceptToGeneratedCopy(
+        concepts,
+        concept.id,
+        remapped,
+      );
       const nextText = joinCopyVariations(nextVariations);
       await persistPayload({
-        copy_variations: JSON.parse(JSON.stringify(nextVariations)) as JsonValue,
+        copy_variations: JSON.parse(
+          JSON.stringify(nextVariations),
+        ) as JsonValue,
         copy_text: nextText,
         copy_concepts: JSON.parse(JSON.stringify(nextConcepts)) as JsonValue,
       });
@@ -809,7 +1001,11 @@ export function CopyDepartment({ clientFilter, tenantId, onClientChange }: Props
         stage_id: selected.current_stage_id,
         type: "copy",
         content: nextText,
-        meta: { source: "copy_from_concept", concept_id: concept.id, skin_slug: "copywriter" },
+        meta: {
+          source: "copy_from_concept",
+          concept_id: concept.id,
+          skin_slug: "copywriter",
+        },
       });
       toast.success(
         remapped.length === 1
@@ -844,7 +1040,11 @@ export function CopyDepartment({ clientFilter, tenantId, onClientChange }: Props
     const now = new Date().toISOString();
     const nextConcepts = concepts.map((concept) =>
       concept.id === id
-        ? { ...concept, approved: !concept.approved, approvedAt: !concept.approved ? now : null }
+        ? {
+            ...concept,
+            approved: !concept.approved,
+            approvedAt: !concept.approved ? now : null,
+          }
         : concept,
     );
     try {
@@ -860,7 +1060,11 @@ export function CopyDepartment({ clientFilter, tenantId, onClientChange }: Props
     const now = new Date().toISOString();
     const nextVariations = copyVariations.map((item) =>
       item.id === id
-        ? { ...item, approved: !item.approved, approvedAt: !item.approved ? now : null }
+        ? {
+            ...item,
+            approved: !item.approved,
+            approvedAt: !item.approved ? now : null,
+          }
         : item,
     );
     try {
@@ -893,7 +1097,9 @@ export function CopyDepartment({ clientFilter, tenantId, onClientChange }: Props
     );
     try {
       await persistPayload({
-        copy_variations: JSON.parse(JSON.stringify(nextVariations)) as JsonValue,
+        copy_variations: JSON.parse(
+          JSON.stringify(nextVariations),
+        ) as JsonValue,
         copy_text: joinCopyVariations(nextVariations),
         copy_concepts: JSON.parse(JSON.stringify(nextConcepts)) as JsonValue,
       });
@@ -910,11 +1116,11 @@ export function CopyDepartment({ clientFilter, tenantId, onClientChange }: Props
     const nextConcepts = concepts.map((concept) =>
       concept.id === conceptId
         ? {
-          ...concept,
-          copyId: copy?.id ?? "",
-          copyKey: copy?.key ?? "",
-          copyAngle: copy ? copyBlockLabel(copy) : "",
-        }
+            ...concept,
+            copyId: copy?.id ?? "",
+            copyKey: copy?.key ?? "",
+            copyAngle: copy ? copyBlockLabel(copy) : "",
+          }
         : concept,
     );
     try {
@@ -927,15 +1133,27 @@ export function CopyDepartment({ clientFilter, tenantId, onClientChange }: Props
 
   const handoff = useMutation({
     mutationFn: async (targetId: string | null) => {
-      if (!selected?.client_id) throw new Error("שייכו לקוח בהגדרות כדי להעביר לקריאייטיב");
-      const pipeline = await ensurePipelineForClient({ clientId: selected.client_id, tenantId, track: "campaigns" });
+      if (!selected?.client_id)
+        throw new Error("שייכו לקוח בהגדרות כדי להעביר לקריאייטיב");
+      const pipeline = await ensurePipelineForClient({
+        clientId: selected.client_id,
+        tenantId,
+        track: "campaigns",
+      });
       if (!pipeline) throw new Error("לא נמצא פייפליין");
-      const { data: stages, error: stageError } = await supabase.from("marketing_pipeline_stages").select("id,stage_type").eq("pipeline_id", pipeline.id);
+      const { data: stages, error: stageError } = await supabase
+        .from("marketing_pipeline_stages")
+        .select("id,stage_type")
+        .eq("pipeline_id", pipeline.id);
       if (stageError) throw stageError;
-      const creativeStage = stages?.find((stage) => stage.stage_type === "creative");
+      const creativeStage = stages?.find(
+        (stage) => stage.stage_type === "creative",
+      );
       if (!creativeStage) throw new Error("שלב קריאייטיב לא נמצא");
       const readyConcepts = approvedCopyConcepts(
-        parseCopyConceptsFromPayload(selected.payload as Record<string, unknown>),
+        parseCopyConceptsFromPayload(
+          selected.payload as Record<string, unknown>,
+        ),
       );
       if (readyConcepts.length === 0) {
         throw new Error("אשרו לפחות קונספט אחד לפני ההעברה לקריאייטיב");
@@ -943,7 +1161,9 @@ export function CopyDepartment({ clientFilter, tenantId, onClientChange }: Props
       const readyCopies = approvedCopyVariations(
         hydrateCopyVariations(
           asText(selected.payload?.copy_text),
-          parseCopyVariationsFromPayload(selected.payload as Record<string, unknown>),
+          parseCopyVariationsFromPayload(
+            selected.payload as Record<string, unknown>,
+          ),
         ),
       );
       if (copyVariations.length > 0 && readyCopies.length === 0) {
@@ -954,7 +1174,9 @@ export function CopyDepartment({ clientFilter, tenantId, onClientChange }: Props
       if (targetId) {
         const { data: target, error: targetError } = await supabase
           .from("marketing_work_items")
-          .select("id,title,status,payload,current_stage_id,client_id,pipeline_id,created_at,updated_at")
+          .select(
+            "id,title,status,payload,current_stage_id,client_id,pipeline_id,created_at,updated_at",
+          )
           .eq("tenant_id", tenantId)
           .eq("id", targetId)
           .maybeSingle();
@@ -963,7 +1185,10 @@ export function CopyDepartment({ clientFilter, tenantId, onClientChange }: Props
         existing = target as HandoffWorkItem;
       }
       const nextCreativePayload = overlayCopyHandoffPayload({
-        existingPayload: (existing?.payload ?? null) as Record<string, unknown> | null,
+        existingPayload: (existing?.payload ?? null) as Record<
+          string,
+          unknown
+        > | null,
         copyPayload: (selected.payload ?? {}) as Record<string, unknown>,
         copyItem: { id: selected.id, title: selected.title },
         concepts,
@@ -1022,7 +1247,10 @@ export function CopyDepartment({ clientFilter, tenantId, onClientChange }: Props
         content: formatCopyConceptsForCreative(readyConcepts),
         meta: { source: "copy_handoff", skin_slug: "copywriter" },
       });
-      return { mode: existing ? "updated" as const : "created" as const, title: creativeTitle || selected.title || "קריאייטיב" };
+      return {
+        mode: existing ? ("updated" as const) : ("created" as const),
+        title: creativeTitle || selected.title || "קריאייטיב",
+      };
     },
     onSuccess: async (result) => {
       setHandoffOpen(false);
@@ -1033,7 +1261,8 @@ export function CopyDepartment({ clientFilter, tenantId, onClientChange }: Props
       );
       await refresh();
     },
-    onError: (error: unknown) => toast.error(errorMessage(error, "ההעברה נכשלה")),
+    onError: (error: unknown) =>
+      toast.error(errorMessage(error, "ההעברה נכשלה")),
   });
 
   const startHandoff = async () => {
@@ -1059,10 +1288,15 @@ export function CopyDepartment({ clientFilter, tenantId, onClientChange }: Props
         status: selected.status,
         current_stage_id: selected.current_stage_id,
       };
-      const [{ data: siblings, error: siblingError }, { data: creativeStages, error: stageError }] = await Promise.all([
+      const [
+        { data: siblings, error: siblingError },
+        { data: creativeStages, error: stageError },
+      ] = await Promise.all([
         supabase
           .from("marketing_work_items")
-          .select("id,title,status,payload,current_stage_id,client_id,created_at,updated_at")
+          .select(
+            "id,title,status,payload,current_stage_id,client_id,created_at,updated_at",
+          )
           .eq("tenant_id", tenantId)
           .eq("client_id", selected.client_id)
           .neq("id", selected.id)
@@ -1124,7 +1358,11 @@ export function CopyDepartment({ clientFilter, tenantId, onClientChange }: Props
     if (!deleteTarget) return;
     setDeleting(true);
     try {
-      await supabase.from("marketing_assets").delete().eq("item_id", deleteTarget.id).eq("tenant_id", tenantId);
+      await supabase
+        .from("marketing_assets")
+        .delete()
+        .eq("item_id", deleteTarget.id)
+        .eq("tenant_id", tenantId);
       const { error } = await supabase
         .from("marketing_work_items")
         .delete()
@@ -1143,7 +1381,10 @@ export function CopyDepartment({ clientFilter, tenantId, onClientChange }: Props
   };
 
   return (
-    <div className="flex min-h-0 min-w-0 flex-1 overflow-hidden bg-muted/20" dir="rtl">
+    <div
+      className="flex min-h-0 min-w-0 flex-1 overflow-hidden bg-muted/20"
+      dir="rtl"
+    >
       <aside className="group/sidebar flex w-14 shrink-0 flex-col overflow-hidden border-e bg-background transition-[width] duration-200 ease-out hover:w-[280px] focus-within:w-[280px]">
         <div className="flex items-center gap-2 px-2 py-3 group-hover/sidebar:px-3 group-focus-within/sidebar:px-3">
           <Button
@@ -1152,95 +1393,126 @@ export function CopyDepartment({ clientFilter, tenantId, onClientChange }: Props
             title="פרויקט חדש"
           >
             <Plus className="h-4 w-4 shrink-0" />
-            <span className="hidden truncate group-hover/sidebar:inline group-focus-within/sidebar:inline">פרויקט חדש</span>
+            <span className="hidden truncate group-hover/sidebar:inline group-focus-within/sidebar:inline">
+              פרויקט חדש
+            </span>
           </Button>
         </div>
         <div className="min-h-0 min-w-0 flex-1 overflow-y-auto overflow-x-hidden px-2 pb-3">
-          <div className="hidden px-2 pb-2 text-[11px] font-medium uppercase tracking-wide text-muted-foreground group-hover/sidebar:block group-focus-within/sidebar:block">פרויקטים</div>
+          <div className="hidden px-2 pb-2 text-[11px] font-medium uppercase tracking-wide text-muted-foreground group-hover/sidebar:block group-focus-within/sidebar:block">
+            פרויקטים
+          </div>
           {isLoading ? (
             <Loader2 className="mx-auto my-8 h-5 w-5 animate-spin text-muted-foreground" />
           ) : items.length === 0 ? (
-            <p className="hidden px-3 py-8 text-center text-xs text-muted-foreground group-hover/sidebar:block group-focus-within/sidebar:block">אין פרויקטים עדיין. צרו אחד כמו אייג׳נט חדש.</p>
-          ) : items.map((item) => {
-            const owner = clients.find((client) => client.id === item.client_id);
-            const title = item.title || "בלי שם";
-            const isRenaming = renamingId === item.id;
-            return (
-              <div
-                key={item.id}
-                className={cn(
-                  "group mb-0.5 flex w-full min-w-0 items-start gap-1 rounded-lg px-1 py-2 transition-colors group-hover/sidebar:px-2 group-focus-within/sidebar:px-2",
-                  selectedId === item.id ? "bg-muted" : "hover:bg-muted/60",
-                )}
-              >
-                <div className="min-w-0 flex-1 overflow-hidden">
-                  {isRenaming ? (
-                    <Input
-                      autoFocus
-                      value={renameValue}
-                      onChange={(event) => setRenameValue(event.target.value)}
-                      onClick={(event) => event.stopPropagation()}
-                      onKeyDown={(event) => {
-                        if (event.key === "Enter") {
-                          event.preventDefault();
-                          void saveRename(item.id);
-                        }
-                        if (event.key === "Escape") {
-                          setRenameValue(item.title ?? "");
-                          setRenamingId(null);
-                        }
-                      }}
-                      onBlur={() => void saveRename(item.id)}
-                      className="h-7 px-2 text-[13px]"
-                    />
-                  ) : (
-                    <button type="button" onClick={() => setSelectedId(item.id)} className="block w-full min-w-0 overflow-hidden text-right" title={title}>
-                      <div className="flex h-5 items-center justify-center group-hover/sidebar:hidden group-focus-within/sidebar:hidden">
-                        <PenLine className="h-3.5 w-3.5 text-muted-foreground" />
-                      </div>
-                      <div className="hidden min-w-0 group-hover/sidebar:block group-focus-within/sidebar:block">
-                        <div className="block w-full truncate text-[13px] font-medium [unicode-bidi:plaintext]" dir="auto">{title}</div>
-                        <div className="mt-0.5 block w-full truncate text-[11px] text-muted-foreground [unicode-bidi:plaintext]" dir="rtl">
-                          {owner?.name || "ללא לקוח"} · {typeLabel(asText(item.payload?.content_type) || "posts")} · {timeAgo(item.updated_at)}
-                        </div>
-                      </div>
-                    </button>
+            <p className="hidden px-3 py-8 text-center text-xs text-muted-foreground group-hover/sidebar:block group-focus-within/sidebar:block">
+              אין פרויקטים עדיין. צרו אחד כמו אייג׳נט חדש.
+            </p>
+          ) : (
+            items.map((item) => {
+              const owner = clients.find(
+                (client) => client.id === item.client_id,
+              );
+              const title = item.title || "בלי שם";
+              const isRenaming = renamingId === item.id;
+              return (
+                <div
+                  key={item.id}
+                  className={cn(
+                    "group mb-0.5 flex w-full min-w-0 items-start gap-1 rounded-lg px-1 py-2 transition-colors group-hover/sidebar:px-2 group-focus-within/sidebar:px-2",
+                    selectedId === item.id ? "bg-muted" : "hover:bg-muted/60",
                   )}
-                </div>
-                <div className={cn(
-                  "hidden shrink-0 items-center gap-0.5 transition-opacity group-hover/sidebar:flex group-focus-within/sidebar:flex",
-                  selectedId === item.id ? "opacity-100" : "opacity-0 group-hover:opacity-100 group-focus-within:opacity-100",
-                )}>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon"
-                    className="h-7 w-7 text-muted-foreground"
-                    title="עריכת שם"
-                    onClick={(event) => {
-                      event.stopPropagation();
-                      startRename(item);
-                    }}
+                >
+                  <div className="min-w-0 flex-1 overflow-hidden">
+                    {isRenaming ? (
+                      <Input
+                        autoFocus
+                        value={renameValue}
+                        onChange={(event) => setRenameValue(event.target.value)}
+                        onClick={(event) => event.stopPropagation()}
+                        onKeyDown={(event) => {
+                          if (event.key === "Enter") {
+                            event.preventDefault();
+                            void saveRename(item.id);
+                          }
+                          if (event.key === "Escape") {
+                            setRenameValue(item.title ?? "");
+                            setRenamingId(null);
+                          }
+                        }}
+                        onBlur={() => void saveRename(item.id)}
+                        className="h-7 px-2 text-[13px]"
+                      />
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => setSelectedId(item.id)}
+                        className="block w-full min-w-0 overflow-hidden text-right"
+                        title={title}
+                      >
+                        <div className="flex h-5 items-center justify-center group-hover/sidebar:hidden group-focus-within/sidebar:hidden">
+                          <PenLine className="h-3.5 w-3.5 text-muted-foreground" />
+                        </div>
+                        <div className="hidden min-w-0 group-hover/sidebar:block group-focus-within/sidebar:block">
+                          <div
+                            className="block w-full truncate text-[13px] font-medium [unicode-bidi:plaintext]"
+                            dir="auto"
+                          >
+                            {title}
+                          </div>
+                          <div
+                            className="mt-0.5 block w-full truncate text-[11px] text-muted-foreground [unicode-bidi:plaintext]"
+                            dir="rtl"
+                          >
+                            {owner?.name || "ללא לקוח"} ·{" "}
+                            {typeLabel(
+                              asText(item.payload?.content_type) || "posts",
+                            )}{" "}
+                            · {timeAgo(item.updated_at)}
+                          </div>
+                        </div>
+                      </button>
+                    )}
+                  </div>
+                  <div
+                    className={cn(
+                      "hidden shrink-0 items-center gap-0.5 transition-opacity group-hover/sidebar:flex group-focus-within/sidebar:flex",
+                      selectedId === item.id
+                        ? "opacity-100"
+                        : "opacity-0 group-hover:opacity-100 group-focus-within:opacity-100",
+                    )}
                   >
-                    <Pencil className="h-3.5 w-3.5" />
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon"
-                    className="h-7 w-7 text-muted-foreground hover:text-destructive"
-                    title="מחיקת פרויקט"
-                    onClick={(event) => {
-                      event.stopPropagation();
-                      setDeleteTarget(item);
-                    }}
-                  >
-                    <Trash2 className="h-3.5 w-3.5" />
-                  </Button>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      className="h-7 w-7 text-muted-foreground"
+                      title="עריכת שם"
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        startRename(item);
+                      }}
+                    >
+                      <Pencil className="h-3.5 w-3.5" />
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      className="h-7 w-7 text-muted-foreground hover:text-destructive"
+                      title="מחיקת פרויקט"
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        setDeleteTarget(item);
+                      }}
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </Button>
+                  </div>
                 </div>
-              </div>
-            );
-          })}
+              );
+            })
+          )}
         </div>
       </aside>
 
@@ -1252,13 +1524,31 @@ export function CopyDepartment({ clientFilter, tenantId, onClientChange }: Props
                 <PenLine className="h-4 w-4" />
               </div>
               <div className="min-w-0 flex-1 overflow-hidden text-right">
-                <div className="truncate text-sm font-semibold [unicode-bidi:plaintext]" dir="auto" title={selected.title ?? ""}>{selected.title}</div>
-                <div className="truncate text-[11px] text-muted-foreground [unicode-bidi:plaintext]" dir="rtl">
-                  {agencyName ? `${agencyName} · ` : ""}{clientName || "לא משויך ללקוח"} · {typeLabel(asText(selected.payload?.content_type) || "posts")} · כרמן · קופירייטר
+                <div
+                  className="truncate text-sm font-semibold [unicode-bidi:plaintext]"
+                  dir="auto"
+                  title={selected.title ?? ""}
+                >
+                  {selected.title}
+                </div>
+                <div
+                  className="truncate text-[11px] text-muted-foreground [unicode-bidi:plaintext]"
+                  dir="rtl"
+                >
+                  {agencyName ? `${agencyName} · ` : ""}
+                  {clientName || "לא משויך ללקוח"} ·{" "}
+                  {typeLabel(asText(selected.payload?.content_type) || "posts")}{" "}
+                  · כרמן · קופירייטר
                 </div>
               </div>
-              <Button variant="ghost" size="sm" className="gap-1.5 text-muted-foreground" onClick={() => setSettingsOpen(true)}>
-                <Settings2 className="h-4 w-4" />הגדרות
+              <Button
+                variant="ghost"
+                size="sm"
+                className="gap-1.5 text-muted-foreground"
+                onClick={() => setSettingsOpen(true)}
+              >
+                <Settings2 className="h-4 w-4" />
+                הגדרות
               </Button>
               <Button
                 variant="outline"
@@ -1274,27 +1564,55 @@ export function CopyDepartment({ clientFilter, tenantId, onClientChange }: Props
                       : "שייך קונספטים לפרויקט קריאייטיב קיים או חדש"
                 }
               >
-                {(handoff.isPending || loadingHandoffTargets) ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Send className="h-3.5 w-3.5" />}לקריאייטיב
+                {handoff.isPending || loadingHandoffTargets ? (
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                ) : (
+                  <Send className="h-3.5 w-3.5" />
+                )}
+                לקריאייטיב
                 {approvedConcepts.length > 0 && (
-                  <Badge variant="secondary" className="h-4 px-1 text-[9px]">{approvedConcepts.length}</Badge>
+                  <Badge variant="secondary" className="h-4 px-1 text-[9px]">
+                    {approvedConcepts.length}
+                  </Badge>
                 )}
               </Button>
             </header>
 
             <div className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden">
-              <div className="mx-auto flex w-[95%] flex-col gap-4 py-6" dir="rtl">
-                {chat.filter((turn) => turn.role === "user").map((turn, index) => (
-                  <div key={`${turn.at}-${index}`} className="flex justify-start">
-                    <div className="max-w-[85%] rounded-2xl bg-muted px-4 py-2.5 text-right text-sm leading-relaxed [unicode-bidi:plaintext]" dir="auto">{turn.content}</div>
-                  </div>
-                ))}
+              <div
+                className="mx-auto flex w-[95%] flex-col gap-4 py-6"
+                dir="rtl"
+              >
+                {chat
+                  .filter((turn) => turn.role === "user")
+                  .map((turn, index) => (
+                    <div
+                      key={`${turn.at}-${index}`}
+                      className="flex justify-start"
+                    >
+                      <div
+                        className="max-w-[85%] rounded-2xl bg-muted px-4 py-2.5 text-right text-sm leading-relaxed [unicode-bidi:plaintext]"
+                        dir="auto"
+                      >
+                        {turn.content}
+                      </div>
+                    </div>
+                  ))}
                 {pendingPrompt && (
                   <div className="flex justify-start">
-                    <div className="max-w-[85%] rounded-2xl bg-muted px-4 py-2.5 text-right text-sm leading-relaxed [unicode-bidi:plaintext]" dir="auto">{pendingPrompt}</div>
+                    <div
+                      className="max-w-[85%] rounded-2xl bg-muted px-4 py-2.5 text-right text-sm leading-relaxed [unicode-bidi:plaintext]"
+                      dir="auto"
+                    >
+                      {pendingPrompt}
+                    </div>
                   </div>
                 )}
                 {sending && (
-                  <div className="flex items-center justify-start gap-2 px-1 text-xs text-muted-foreground" dir="rtl">
+                  <div
+                    className="flex items-center justify-start gap-2 px-1 text-xs text-muted-foreground"
+                    dir="rtl"
+                  >
                     <Loader2 className="h-3.5 w-3.5 animate-spin" />
                     <span>כרמן כותבת…</span>
                   </div>
@@ -1312,14 +1630,19 @@ export function CopyDepartment({ clientFilter, tenantId, onClientChange }: Props
                   onCancel={() => stopConceptGeneration("cancel")}
                   onToggleApprove={(id) => void toggleConceptApproval(id)}
                   onDelete={(id) => void deleteConcept(id)}
-                  onAssignCopy={(conceptId, copyId) => void assignConceptCopy(conceptId, copyId)}
+                  onAssignCopy={(conceptId, copyId) =>
+                    void assignConceptCopy(conceptId, copyId)
+                  }
                   onGenerateCopy={(id) => void generateCopyForConcept(id)}
                   onCancelCopy={() => stopCopyGeneration("cancel")}
                 />
                 <CopyVariationsPanel
                   variations={copyVariations}
                   generating={Boolean(generatingCopyFor)}
-                  generatingConceptName={concepts.find((item) => item.id === generatingCopyFor)?.name ?? null}
+                  generatingConceptName={
+                    concepts.find((item) => item.id === generatingCopyFor)
+                      ?.name ?? null
+                  }
                   onToggleApprove={(id) => void toggleCopyApproval(id)}
                   onEdit={openCopyVariationEditor}
                   onDelete={(id) => void deleteCopyVariation(id)}
@@ -1330,12 +1653,19 @@ export function CopyDepartment({ clientFilter, tenantId, onClientChange }: Props
                       <CollapsibleTrigger className="flex w-full items-center justify-between border-b px-4 py-2 text-[11px] text-muted-foreground hover:bg-muted/30">
                         <span>מסמך קופי מלא — ניתן לערוך ישירות</span>
                         <span className="flex items-center gap-2">
-                          <Badge variant="outline" className="font-normal">כרמן · קופירייטר</Badge>
+                          <Badge variant="outline" className="font-normal">
+                            כרמן · קופירייטר
+                          </Badge>
                           <ChevronDown className="h-3.5 w-3.5 opacity-60" />
                         </span>
                       </CollapsibleTrigger>
                       <CollapsibleContent>
-                        <CopyEditor key={`${selected.id}-${selected.updated_at}`} item={selected} tenantId={tenantId} onSaved={refresh} />
+                        <CopyEditor
+                          key={`${selected.id}-${selected.updated_at}`}
+                          item={selected}
+                          tenantId={tenantId}
+                          onSaved={refresh}
+                        />
                       </CollapsibleContent>
                     </div>
                   </Collapsible>
@@ -1352,7 +1682,14 @@ export function CopyDepartment({ clientFilter, tenantId, onClientChange }: Props
                   void sendPrompt();
                 }}
               >
-                <Button type="button" variant="ghost" size="icon" className="h-9 w-9 shrink-0 text-muted-foreground" onClick={() => setSettingsOpen(true)} title="בריף, קבצים והקלטות">
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  className="h-9 w-9 shrink-0 text-muted-foreground"
+                  onClick={() => setSettingsOpen(true)}
+                  title="בריף, קבצים והקלטות"
+                >
                   <Paperclip className="h-4 w-4" />
                 </Button>
                 <Textarea
@@ -1374,11 +1711,25 @@ export function CopyDepartment({ clientFilter, tenantId, onClientChange }: Props
                   className="min-h-[44px] max-h-36 flex-1 resize-none border-0 bg-transparent shadow-none focus-visible:ring-0"
                   rows={1}
                 />
-                <Button type="submit" size="icon" className="h-9 w-9 shrink-0 rounded-xl" disabled={sending || !composer.trim()}>
-                  {sending ? <Loader2 className="h-4 w-4 animate-spin" /> : <ArrowUp className="h-4 w-4" />}
+                <Button
+                  type="submit"
+                  size="icon"
+                  className="h-9 w-9 shrink-0 rounded-xl"
+                  disabled={sending || !composer.trim()}
+                >
+                  {sending ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <ArrowUp className="h-4 w-4" />
+                  )}
                 </Button>
               </form>
-              <p className="mx-auto mt-1.5 w-[95%] px-1 text-right text-[10px] text-muted-foreground [unicode-bidi:plaintext]" dir="rtl">כרמן · סקין קופירייטר · שיחה נפרדת מהצ׳ט הראשי וממשימות הרקע</p>
+              <p
+                className="mx-auto mt-1.5 w-[95%] px-1 text-right text-[10px] text-muted-foreground [unicode-bidi:plaintext]"
+                dir="rtl"
+              >
+                כרמן · סקין קופירייטר · שיחה נפרדת מהצ׳ט הראשי וממשימות הרקע
+              </p>
             </div>
           </>
         ) : (
@@ -1387,8 +1738,17 @@ export function CopyDepartment({ clientFilter, tenantId, onClientChange }: Props
               <PenLine className="h-7 w-7" />
             </div>
             <h2 className="text-xl font-semibold">מחלקת קופי</h2>
-            <p className="mt-2 max-w-sm text-sm text-muted-foreground [unicode-bidi:plaintext]" dir="rtl">צרו פרויקט, צרו קונספטים, לחצו צור קופי על קונספט, והעבירו לקריאייטיב.</p>
-            <Button className="mt-5 gap-2" onClick={() => setCreateOpen(true)}><Plus className="h-4 w-4" />פרויקט חדש</Button>
+            <p
+              className="mt-2 max-w-sm text-sm text-muted-foreground [unicode-bidi:plaintext]"
+              dir="rtl"
+            >
+              צרו פרויקט, צרו קונספטים, לחצו צור קופי על קונספט, והעבירו
+              לקריאייטיב.
+            </p>
+            <Button className="mt-5 gap-2" onClick={() => setCreateOpen(true)}>
+              <Plus className="h-4 w-4" />
+              פרויקט חדש
+            </Button>
           </div>
         )}
       </section>
@@ -1397,7 +1757,9 @@ export function CopyDepartment({ clientFilter, tenantId, onClientChange }: Props
         open={createOpen}
         onClose={() => setCreateOpen(false)}
         tenantId={tenantId}
-        defaultClientId={clientFilter !== ALL_CLIENTS_FILTER ? clientFilter : null}
+        defaultClientId={
+          clientFilter !== ALL_CLIENTS_FILTER ? clientFilter : null
+        }
         onCreated={async (id) => {
           setSelectedId(id);
           setCreateOpen(false);
@@ -1427,9 +1789,18 @@ export function CopyDepartment({ clientFilter, tenantId, onClientChange }: Props
         pending={handoff.isPending}
         onSelectedIdChange={setHandoffTargetId}
         onClose={() => setHandoffOpen(false)}
-        onConfirm={() => handoff.mutate(handoffTargetId === COPY_HANDOFF_NEW_TARGET ? null : handoffTargetId)}
+        onConfirm={() =>
+          handoff.mutate(
+            handoffTargetId === COPY_HANDOFF_NEW_TARGET
+              ? null
+              : handoffTargetId,
+          )
+        }
       />
-      <AlertDialog open={!!deleteTarget} onOpenChange={(value) => !value && !deleting && setDeleteTarget(null)}>
+      <AlertDialog
+        open={!!deleteTarget}
+        onOpenChange={(value) => !value && !deleting && setDeleteTarget(null)}
+      >
         <AlertDialogContent dir="rtl">
           <AlertDialogHeader>
             <AlertDialogTitle>למחוק את הפרויקט?</AlertDialogTitle>
@@ -1453,7 +1824,10 @@ export function CopyDepartment({ clientFilter, tenantId, onClientChange }: Props
         </AlertDialogContent>
       </AlertDialog>
       <CopyVariationEditDialog
-        item={copyVariations.find((variation) => variation.id === editingCopyId) ?? null}
+        item={
+          copyVariations.find((variation) => variation.id === editingCopyId) ??
+          null
+        }
         draft={editingCopyDraft}
         saving={savingCopyEdit}
         onDraftChange={setEditingCopyDraft}
@@ -1480,10 +1854,17 @@ function CopyVariationEditDialog({
   onSave: () => void;
 }) {
   return (
-    <Dialog open={!!item} onOpenChange={(open) => { if (!open && !saving) onClose(); }}>
+    <Dialog
+      open={!!item}
+      onOpenChange={(open) => {
+        if (!open && !saving) onClose();
+      }}
+    >
       <DialogContent className="max-w-lg" dir="rtl">
         <DialogHeader>
-          <DialogTitle>עריכת {item ? copyBlockLabel(item) : "וריאציה"}</DialogTitle>
+          <DialogTitle>
+            עריכת {item ? copyBlockLabel(item) : "וריאציה"}
+          </DialogTitle>
           <DialogDescription>
             נשמרת רק הווריאציה הזו. שאר הווריאציות במסמך לא משתנות.
           </DialogDescription>
@@ -1496,11 +1877,24 @@ function CopyVariationEditDialog({
           placeholder="כותרת, גוף ו-CTA של הווריאציה הזו"
         />
         <DialogFooter className="gap-2 sm:flex-row-reverse sm:justify-start sm:space-x-reverse">
-          <Button onClick={onSave} disabled={saving || !draft.trim()} className="gap-1.5">
-            {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+          <Button
+            onClick={onSave}
+            disabled={saving || !draft.trim()}
+            className="gap-1.5"
+          >
+            {saving ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <Save className="h-4 w-4" />
+            )}
             שמור וריאציה
           </Button>
-          <Button type="button" variant="outline" onClick={onClose} disabled={saving}>
+          <Button
+            type="button"
+            variant="outline"
+            onClick={onClose}
+            disabled={saving}
+          >
             ביטול
           </Button>
         </DialogFooter>
@@ -1509,15 +1903,30 @@ function CopyVariationEditDialog({
   );
 }
 
-function CopyEditor({ item, tenantId, onSaved }: { item: CopyItem; tenantId: string; onSaved: () => Promise<void> }) {
+function CopyEditor({
+  item,
+  tenantId,
+  onSaved,
+}: {
+  item: CopyItem;
+  tenantId: string;
+  onSaved: () => Promise<void>;
+}) {
   const [saving, setSaving] = useState(false);
-  const dark = typeof document !== "undefined" && document.documentElement.classList.contains("dark");
+  const dark =
+    typeof document !== "undefined" &&
+    document.documentElement.classList.contains("dark");
   const editor = useCreateBlockNote();
 
   useEffect(() => {
     const markdown = asText(item.payload?.copy_text);
-    const parsed = markdown.trim() ? editor.tryParseMarkdownToBlocks(markdown) : [];
-    const blocks = parsed.length > 0 ? parsed : [{ type: "paragraph" as const, content: " " }];
+    const parsed = markdown.trim()
+      ? editor.tryParseMarkdownToBlocks(markdown)
+      : [];
+    const blocks =
+      parsed.length > 0
+        ? parsed
+        : [{ type: "paragraph" as const, content: " " }];
     editor.replaceBlocks(editor.document, blocks);
   }, [editor, item.id, item.payload?.copy_text]);
 
@@ -1527,7 +1936,9 @@ function CopyEditor({ item, tenantId, onSaved }: { item: CopyItem; tenantId: str
       const markdown = editor.blocksToMarkdownLossy(editor.document);
       const copyVariations = hydrateCopyVariations(
         markdown,
-        parseCopyVariationsFromPayload(item.payload as Record<string, unknown> | null),
+        parseCopyVariationsFromPayload(
+          item.payload as Record<string, unknown> | null,
+        ),
       );
       const nextPayload = {
         ...(item.payload ?? {}),
@@ -1541,14 +1952,16 @@ function CopyEditor({ item, tenantId, onSaved }: { item: CopyItem; tenantId: str
         .eq("id", item.id)
         .eq("tenant_id", tenantId);
       if (itemError) throw itemError;
-      const { error: assetError } = await supabase.from("marketing_assets").insert({
-        tenant_id: tenantId,
-        item_id: item.id,
-        stage_id: item.current_stage_id,
-        type: "copy",
-        content: markdown,
-        meta: { source: "manual_edit", skin_slug: "copywriter" },
-      });
+      const { error: assetError } = await supabase
+        .from("marketing_assets")
+        .insert({
+          tenant_id: tenantId,
+          item_id: item.id,
+          stage_id: item.current_stage_id,
+          type: "copy",
+          content: markdown,
+          meta: { source: "manual_edit", skin_slug: "copywriter" },
+        });
       if (assetError) throw assetError;
       toast.success("נשמר");
       await onSaved();
@@ -1562,11 +1975,25 @@ function CopyEditor({ item, tenantId, onSaved }: { item: CopyItem; tenantId: str
   return (
     <div>
       <div className="flex justify-end border-b px-3 py-1.5">
-        <Button size="sm" variant="ghost" className="h-7 gap-1 text-xs" onClick={() => void save()} disabled={saving}>
-          {saving ? <Loader2 className="h-3 w-3 animate-spin" /> : <Save className="h-3 w-3" />}שמור
+        <Button
+          size="sm"
+          variant="ghost"
+          className="h-7 gap-1 text-xs"
+          onClick={() => void save()}
+          disabled={saving}
+        >
+          {saving ? (
+            <Loader2 className="h-3 w-3 animate-spin" />
+          ) : (
+            <Save className="h-3 w-3" />
+          )}
+          שמור
         </Button>
       </div>
-      <div className="copy-bn p-4 [&_.bn-container]:w-full [&_.bn-container]:[direction:rtl] [&_.bn-editor]:w-full [&_.bn-editor]:max-w-none [&_.bn-editor]:text-right [&_.bn-block-content]:text-right" dir="rtl">
+      <div
+        className="copy-bn p-4 [&_.bn-container]:w-full [&_.bn-container]:[direction:rtl] [&_.bn-editor]:w-full [&_.bn-editor]:max-w-none [&_.bn-editor]:text-right [&_.bn-block-content]:text-right"
+        dir="rtl"
+      >
         <BlockNoteView editor={editor} theme={dark ? "dark" : "light"} />
       </div>
     </div>
@@ -1598,12 +2025,20 @@ function NewProjectDialog({
       let website: string | null = null;
       let files: BriefFile[] = [];
       if (defaultClientId) {
-        const pipeline = await ensurePipelineForClient({ clientId: defaultClientId, tenantId, track: "campaigns" });
+        const pipeline = await ensurePipelineForClient({
+          clientId: defaultClientId,
+          tenantId,
+          track: "campaigns",
+        });
         if (pipeline) {
-          const { data: stages, error: stageError } = await supabase.from("marketing_pipeline_stages").select("id,stage_type").eq("pipeline_id", pipeline.id);
+          const { data: stages, error: stageError } = await supabase
+            .from("marketing_pipeline_stages")
+            .select("id,stage_type")
+            .eq("pipeline_id", pipeline.id);
           if (stageError) throw stageError;
           pipelineId = pipeline.id;
-          stageId = stages?.find((stage) => stage.stage_type === "copy")?.id ?? null;
+          stageId =
+            stages?.find((stage) => stage.stage_type === "copy")?.id ?? null;
         }
         const { data: client } = await supabase
           .from("clients")
@@ -1613,21 +2048,28 @@ function NewProjectDialog({
         website = client?.website ?? null;
         files = filesFromAttachments(client?.attachments);
       }
-      const { data, error } = await supabase.from("marketing_work_items").insert({
-        tenant_id: tenantId,
-        client_id: defaultClientId ?? null,
-        pipeline_id: pipelineId,
-        current_stage_id: stageId,
-        title: title.trim(),
-        status: "draft",
-        payload: {
-          department: "copy",
-          content_type: "posts",
-          intake_source: "studio",
-          client_website: website,
-          client_files: files.map((file) => ({ name: file.name, path: file.path ?? null })),
-        },
-      }).select("id").single();
+      const { data, error } = await supabase
+        .from("marketing_work_items")
+        .insert({
+          tenant_id: tenantId,
+          client_id: defaultClientId ?? null,
+          pipeline_id: pipelineId,
+          current_stage_id: stageId,
+          title: title.trim(),
+          status: "draft",
+          payload: {
+            department: "copy",
+            content_type: "posts",
+            intake_source: "studio",
+            client_website: website,
+            client_files: files.map((file) => ({
+              name: file.name,
+              path: file.path ?? null,
+            })),
+          },
+        })
+        .select("id")
+        .single();
       if (error) throw error;
       setTitle("");
       onCreated(data.id);
@@ -1656,9 +2098,20 @@ function NewProjectDialog({
               placeholder="למשל: השקת שירות חדש"
             />
           </div>
-          <p className="text-xs text-muted-foreground">אחרי היצירה תפתחנה ההגדרות: סוג תוצר, שיוך ללקוח, בריף והקלטות.</p>
-          <Button onClick={() => void create()} disabled={saving || !title.trim()} className="gap-1.5">
-            {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}צור פרויקט
+          <p className="text-xs text-muted-foreground">
+            אחרי היצירה תפתחנה ההגדרות: סוג תוצר, שיוך ללקוח, בריף והקלטות.
+          </p>
+          <Button
+            onClick={() => void create()}
+            disabled={saving || !title.trim()}
+            className="gap-1.5"
+          >
+            {saving ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <Plus className="h-4 w-4" />
+            )}
+            צור פרויקט
           </Button>
         </div>
       </DialogContent>
@@ -1684,9 +2137,13 @@ function ProjectSettings({
   onSaved: () => Promise<void>;
 }) {
   const [title, setTitle] = useState(item.title ?? "");
-  const [contentType, setContentType] = useState(asText(item.payload?.content_type) || "posts");
+  const [contentType, setContentType] = useState(
+    asText(item.payload?.content_type) || "posts",
+  );
   const [brief, setBrief] = useState(asText(item.payload?.brief_text));
-  const [assignedClientId, setAssignedClientId] = useState<string | null>(item.client_id);
+  const [assignedClientId, setAssignedClientId] = useState<string | null>(
+    item.client_id,
+  );
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [recordingsOpen, setRecordingsOpen] = useState(false);
@@ -1696,12 +2153,21 @@ function ProjectSettings({
     if (!open) return;
     setTitle(item.title ?? "");
     const rawType = asText(item.payload?.content_type);
-    setContentType(rawType === "social_post" ? "posts" : rawType === "ad_copy" || rawType === "ad_script" ? "ads" : rawType === "video_script" ? "script" : rawType || "posts");
+    setContentType(
+      rawType === "social_post"
+        ? "posts"
+        : rawType === "ad_copy" || rawType === "ad_script"
+          ? "ads"
+          : rawType === "video_script"
+            ? "script"
+            : rawType || "posts",
+    );
     setBrief(asText(item.payload?.brief_text));
     setAssignedClientId(item.client_id);
   }, [item, open]);
 
-  const assignedClient = clients.find((client) => client.id === assignedClientId) ?? null;
+  const assignedClient =
+    clients.find((client) => client.id === assignedClientId) ?? null;
   const briefFiles = filesFromAttachments(item.payload?.brief_files);
 
   const { data: recordings = [] } = useQuery({
@@ -1721,18 +2187,29 @@ function ProjectSettings({
     },
   });
 
-  const applyClientContext = async (nextClientId: string | null, extra: Record<string, JsonValue> = {}) => {
+  const applyClientContext = async (
+    nextClientId: string | null,
+    extra: Record<string, JsonValue> = {},
+  ) => {
     let pipelineId: string | null = null;
     let stageId: string | null = null;
     let website: string | null = null;
     let files: BriefFile[] = [];
     if (nextClientId) {
-      const pipeline = await ensurePipelineForClient({ clientId: nextClientId, tenantId, track: "campaigns" });
+      const pipeline = await ensurePipelineForClient({
+        clientId: nextClientId,
+        tenantId,
+        track: "campaigns",
+      });
       if (pipeline) {
-        const { data: stages, error } = await supabase.from("marketing_pipeline_stages").select("id,stage_type").eq("pipeline_id", pipeline.id);
+        const { data: stages, error } = await supabase
+          .from("marketing_pipeline_stages")
+          .select("id,stage_type")
+          .eq("pipeline_id", pipeline.id);
         if (error) throw error;
         pipelineId = pipeline.id;
-        stageId = stages?.find((stage) => stage.stage_type === "copy")?.id ?? null;
+        stageId =
+          stages?.find((stage) => stage.stage_type === "copy")?.id ?? null;
       }
       const client = clients.find((row) => row.id === nextClientId);
       website = client?.website ?? null;
@@ -1746,13 +2223,24 @@ function ProjectSettings({
       client_website: website,
       client_files: files.map((file) => ({ name: file.name, path: file.path })),
     };
-    const keepExistingStage = !!nextClientId && nextClientId === item.client_id && !!item.current_stage_id;
-    const { error } = await supabase.from("marketing_work_items").update({
-      client_id: nextClientId,
-      pipeline_id: pipelineId,
-      current_stage_id: nextClientId ? (keepExistingStage ? item.current_stage_id : stageId) : null,
-      payload: nextPayload,
-    }).eq("id", item.id).eq("tenant_id", tenantId);
+    const keepExistingStage =
+      !!nextClientId &&
+      nextClientId === item.client_id &&
+      !!item.current_stage_id;
+    const { error } = await supabase
+      .from("marketing_work_items")
+      .update({
+        client_id: nextClientId,
+        pipeline_id: pipelineId,
+        current_stage_id: nextClientId
+          ? keepExistingStage
+            ? item.current_stage_id
+            : stageId
+          : null,
+        payload: nextPayload,
+      })
+      .eq("id", item.id)
+      .eq("tenant_id", tenantId);
     if (error) throw error;
   };
 
@@ -1763,7 +2251,11 @@ function ProjectSettings({
         brief_text: brief,
         content_type: contentType,
       });
-      const { error } = await supabase.from("marketing_work_items").update({ title: title.trim() || item.title }).eq("id", item.id).eq("tenant_id", tenantId);
+      const { error } = await supabase
+        .from("marketing_work_items")
+        .update({ title: title.trim() || item.title })
+        .eq("id", item.id)
+        .eq("tenant_id", tenantId);
       if (error) throw error;
       toast.success("ההגדרות נשמרו");
       await onSaved();
@@ -1782,14 +2274,29 @@ function ProjectSettings({
       const uploaded: BriefFile[] = [];
       for (const file of Array.from(files)) {
         const path = `${tenantId}/copy/${item.id}/${Date.now()}_${sanitizeFileName(file.name)}`;
-        const { error } = await supabase.storage.from("entity-attachments").upload(path, file);
+        const { error } = await supabase.storage
+          .from("entity-attachments")
+          .upload(path, file);
         if (error) throw error;
-        uploaded.push({ name: file.name, path, size: file.size, type: file.type });
+        uploaded.push({
+          name: file.name,
+          path,
+          size: file.size,
+          type: file.type,
+        });
       }
       const nextFiles = [...briefFiles, ...uploaded];
-      const { error } = await supabase.from("marketing_work_items").update({
-        payload: { ...(item.payload ?? {}), brief_files: nextFiles, department: "copy" },
-      }).eq("id", item.id).eq("tenant_id", tenantId);
+      const { error } = await supabase
+        .from("marketing_work_items")
+        .update({
+          payload: {
+            ...(item.payload ?? {}),
+            brief_files: nextFiles,
+            department: "copy",
+          },
+        })
+        .eq("id", item.id)
+        .eq("tenant_id", tenantId);
       if (error) throw error;
       toast.success("הקובץ צורף לבריף");
       await onSaved();
@@ -1802,22 +2309,28 @@ function ProjectSettings({
   };
 
   const attachRecording = async (recording: RecordingRow) => {
-    const excerpt = String(recording.summary_md || recording.transcription || recording.notes || "").slice(0, 8000);
+    const excerpt = String(
+      recording.summary_md || recording.transcription || recording.notes || "",
+    ).slice(0, 8000);
     if (!excerpt) {
       toast.error("אין תמלול או סיכום להקלטה הזו");
       return;
     }
     const nextBrief = brief || excerpt.slice(0, 1200);
-    const { error } = await supabase.from("marketing_work_items").update({
-      payload: {
-        ...(item.payload ?? {}),
-        department: "copy",
-        recording_id: recording.id,
-        recording_title: recording.meeting_topic ?? "פגישה",
-        recording_excerpt: excerpt,
-        brief_text: nextBrief,
-      },
-    }).eq("id", item.id).eq("tenant_id", tenantId);
+    const { error } = await supabase
+      .from("marketing_work_items")
+      .update({
+        payload: {
+          ...(item.payload ?? {}),
+          department: "copy",
+          recording_id: recording.id,
+          recording_title: recording.meeting_topic ?? "פגישה",
+          recording_excerpt: excerpt,
+          brief_text: nextBrief,
+        },
+      })
+      .eq("id", item.id)
+      .eq("tenant_id", tenantId);
     if (error) {
       toast.error(errorMessage(error, "לא הצלחתי לשייך את ההקלטה"));
       return;
@@ -1830,14 +2343,22 @@ function ProjectSettings({
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent side="left" className="flex w-full flex-col overflow-y-auto sm:max-w-md" dir="rtl">
+      <SheetContent
+        side="left"
+        className="flex w-full flex-col overflow-y-auto sm:max-w-md"
+        dir="rtl"
+      >
         <SheetHeader>
           <SheetTitle>הגדרות פרויקט</SheetTitle>
         </SheetHeader>
         <div className="mt-6 grid gap-5 pb-8">
           <div>
             <Label>שם</Label>
-            <Input className="mt-1" value={title} onChange={(event) => setTitle(event.target.value)} />
+            <Input
+              className="mt-1"
+              value={title}
+              onChange={(event) => setTitle(event.target.value)}
+            />
           </div>
 
           <div>
@@ -1850,9 +2371,14 @@ function ProjectSettings({
                   setAssignedClientId(id);
                   void (async () => {
                     try {
-                      await applyClientContext(id, { brief_text: brief, content_type: contentType });
+                      await applyClientContext(id, {
+                        brief_text: brief,
+                        content_type: contentType,
+                      });
                       await onSaved();
-                      toast.success(id ? "נמשך האתר והקבצים של הלקוח" : "השיוך הוסר");
+                      toast.success(
+                        id ? "נמשך האתר והקבצים של הלקוח" : "השיוך הוסר",
+                      );
                     } catch (error: unknown) {
                       toast.error(errorMessage(error, "השיוך נכשל"));
                     }
@@ -1870,15 +2396,28 @@ function ProjectSettings({
               <div className="flex items-start gap-2 text-muted-foreground">
                 <Globe className="mt-0.5 h-3.5 w-3.5 shrink-0" />
                 {assignedClient.website ? (
-                  <a className="underline-offset-2 hover:underline" href={/^https?:\/\//i.test(assignedClient.website) ? assignedClient.website : `https://${assignedClient.website}`} target="_blank" rel="noreferrer">
+                  <a
+                    className="underline-offset-2 hover:underline"
+                    href={
+                      /^https?:\/\//i.test(assignedClient.website)
+                        ? assignedClient.website
+                        : `https://${assignedClient.website}`
+                    }
+                    target="_blank"
+                    rel="noreferrer"
+                  >
                     {assignedClient.website}
                   </a>
-                ) : "אין אתר משויך ללקוח"}
+                ) : (
+                  "אין אתר משויך ללקוח"
+                )}
               </div>
               <div className="mt-2 flex items-start gap-2 text-muted-foreground">
                 <Paperclip className="mt-0.5 h-3.5 w-3.5 shrink-0" />
                 {filesFromAttachments(assignedClient.attachments).length > 0
-                  ? filesFromAttachments(assignedClient.attachments).map((file) => file.name).join(" · ")
+                  ? filesFromAttachments(assignedClient.attachments)
+                      .map((file) => file.name)
+                      .join(" · ")
                   : "אין קבצים בתיק הלקוח"}
               </div>
             </div>
@@ -1894,7 +2433,9 @@ function ProjectSettings({
                   onClick={() => setContentType(type.value)}
                   className={cn(
                     "rounded-xl border px-3 py-2 text-sm",
-                    contentType === type.value ? "border-violet-500 bg-violet-50 dark:bg-violet-950/30" : "hover:bg-muted/60",
+                    contentType === type.value
+                      ? "border-violet-500 bg-violet-50 dark:bg-violet-950/30"
+                      : "hover:bg-muted/60",
                   )}
                 >
                   {type.label}
@@ -1905,35 +2446,82 @@ function ProjectSettings({
 
           <div>
             <Label>בריף</Label>
-            <Textarea className="mt-1 min-h-32" value={brief} onChange={(event) => setBrief(event.target.value)} placeholder="מטרה, קהל, מסר, דברים שאסור להמציא" />
+            <Textarea
+              className="mt-1 min-h-32"
+              value={brief}
+              onChange={(event) => setBrief(event.target.value)}
+              placeholder="מטרה, קהל, מסר, דברים שאסור להמציא"
+            />
           </div>
 
           <div>
             <Label>מקורות לבריף</Label>
             <div className="mt-2 flex flex-wrap gap-2">
-              <Button type="button" variant="outline" size="sm" className="gap-1.5" onClick={() => fileInputRef.current?.click()} disabled={uploading}>
-                {uploading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Upload className="h-3.5 w-3.5" />}העלאת קובץ
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="gap-1.5"
+                onClick={() => fileInputRef.current?.click()}
+                disabled={uploading}
+              >
+                {uploading ? (
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                ) : (
+                  <Upload className="h-3.5 w-3.5" />
+                )}
+                העלאת קובץ
               </Button>
-              <Button type="button" variant="outline" size="sm" className="gap-1.5" onClick={() => setRecordingsOpen(true)}>
-                <Mic className="h-3.5 w-3.5" />משיכה מהקלטות
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="gap-1.5"
+                onClick={() => setRecordingsOpen(true)}
+              >
+                <Mic className="h-3.5 w-3.5" />
+                משיכה מהקלטות
               </Button>
-              <input ref={fileInputRef} type="file" className="hidden" multiple onChange={(event) => void uploadFiles(event.target.files)} />
+              <input
+                ref={fileInputRef}
+                type="file"
+                className="hidden"
+                multiple
+                onChange={(event) => void uploadFiles(event.target.files)}
+              />
             </div>
             {briefFiles.length > 0 && (
               <ul className="mt-2 space-y-1 text-xs text-muted-foreground">
                 {briefFiles.map((file) => (
-                  <li key={file.path || file.name} className="flex items-center gap-1.5"><FileText className="h-3 w-3" />{file.name}</li>
+                  <li
+                    key={file.path || file.name}
+                    className="flex items-center gap-1.5"
+                  >
+                    <FileText className="h-3 w-3" />
+                    {file.name}
+                  </li>
                 ))}
               </ul>
             )}
             {asText(item.payload?.recording_title) && (
-              <div className="mt-2 text-xs text-muted-foreground">הקלטה: {asText(item.payload?.recording_title)}</div>
+              <div className="mt-2 text-xs text-muted-foreground">
+                הקלטה: {asText(item.payload?.recording_title)}
+              </div>
             )}
           </div>
 
           <Separator />
-          <Button onClick={() => void save()} disabled={saving} className="gap-1.5">
-            {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}שמור הגדרות
+          <Button
+            onClick={() => void save()}
+            disabled={saving}
+            className="gap-1.5"
+          >
+            {saving ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <Save className="h-4 w-4" />
+            )}
+            שמור הגדרות
           </Button>
         </div>
       </SheetContent>
@@ -1946,21 +2534,33 @@ function ProjectSettings({
           <ScrollArea className="max-h-[420px]">
             <div className="space-y-1 py-2">
               {recordings.length === 0 ? (
-                <p className="py-8 text-center text-sm text-muted-foreground">אין הקלטות עם תמלול ללקוח הזה</p>
-              ) : recordings.map((recording) => (
-                <button
-                  key={recording.id}
-                  className="w-full rounded-lg border px-3 py-2 text-right hover:bg-muted/60 disabled:opacity-50"
-                  disabled={!recordingHasText(recording)}
-                  onClick={() => void attachRecording(recording)}
-                >
-                  <div className="text-sm font-medium">{recording.meeting_topic || "פגישה"}</div>
-                  <div className="text-[11px] text-muted-foreground">
-                    {recording.start_time ? new Date(recording.start_time).toLocaleString("he-IL") : ""}
-                    {recording.summary_md || recording.notes ? " · יש סיכום" : recording.transcription ? " · יש תמלול" : " · אין טקסט"}
-                  </div>
-                </button>
-              ))}
+                <p className="py-8 text-center text-sm text-muted-foreground">
+                  אין הקלטות עם תמלול ללקוח הזה
+                </p>
+              ) : (
+                recordings.map((recording) => (
+                  <button
+                    key={recording.id}
+                    className="w-full rounded-lg border px-3 py-2 text-right hover:bg-muted/60 disabled:opacity-50"
+                    disabled={!recordingHasText(recording)}
+                    onClick={() => void attachRecording(recording)}
+                  >
+                    <div className="text-sm font-medium">
+                      {recording.meeting_topic || "פגישה"}
+                    </div>
+                    <div className="text-[11px] text-muted-foreground">
+                      {recording.start_time
+                        ? new Date(recording.start_time).toLocaleString("he-IL")
+                        : ""}
+                      {recording.summary_md || recording.notes
+                        ? " · יש סיכום"
+                        : recording.transcription
+                          ? " · יש תמלול"
+                          : " · אין טקסט"}
+                    </div>
+                  </button>
+                ))
+              )}
             </div>
           </ScrollArea>
         </DialogContent>

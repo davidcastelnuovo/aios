@@ -35,12 +35,12 @@ JSONB ב-`ai_conversations.messages` נשמר בתקופת המעבר.
 
 ## Edge functions
 
-| Function | JWT | תפקיד |
-|---|---|---|
-| `agent-channel-send` | user JWT נבדק בפנים | נתב + persist |
-| `agent-channel-callback` | HMAC per-session | תשובה אסינכרונית |
-| `agent-channel-mcp` | `AGENT_CHANNEL_MCP_BEARER` (fallback `CURSOR_MCP_BEARER`) | `reply_to_aios_session`, `publish_aios_progress`, `request_aios_approval` |
-| `run-agent-parliament` | user JWT | start/cancel parliament |
+| Function                 | JWT                                                       | תפקיד                                                                     |
+| ------------------------ | --------------------------------------------------------- | ------------------------------------------------------------------------- |
+| `agent-channel-send`     | user JWT נבדק בפנים                                       | נתב + persist                                                             |
+| `agent-channel-callback` | HMAC per-session                                          | תשובה אסינכרונית                                                          |
+| `agent-channel-mcp`      | `AGENT_CHANNEL_MCP_BEARER` (fallback `CURSOR_MCP_BEARER`) | `reply_to_aios_session`, `publish_aios_progress`, `request_aios_approval` |
+| `run-agent-parliament`   | user JWT                                                  | start/cancel parliament                                                   |
 
 `cursor-mcp` ו-`grok-mcp` חושפים גם `reply_to_aios_session`. `cursor-mcp` חושף `reply_to_cursor_session` (follow-up ל-`bc-…` קיים).
 

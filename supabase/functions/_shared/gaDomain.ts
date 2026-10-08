@@ -1,6 +1,8 @@
 /** Host compare for Analytics property names, account names, and stream URLs. */
 export function normalizeGaHost(value?: string | null): string {
-  let v = String(value || "").trim().toLowerCase();
+  let v = String(value || "")
+    .trim()
+    .toLowerCase();
   if (!v) return "";
   v = v.replace(/^sc-domain:/, "");
   v = v.replace(/^[a-z][a-z0-9+.-]*:\/\//, "");
@@ -18,10 +20,16 @@ export function gaHostsMatch(a?: string | null, b?: string | null): boolean {
 }
 
 export function listedPropertyMatchesDomain(
-  property: { name?: string | null; accountName?: string | null; websiteUrl?: string | null },
+  property: {
+    name?: string | null;
+    accountName?: string | null;
+    websiteUrl?: string | null;
+  },
   domain: string,
 ): boolean {
-  return gaHostsMatch(property.name, domain)
-    || gaHostsMatch(property.accountName, domain)
-    || gaHostsMatch(property.websiteUrl, domain);
+  return (
+    gaHostsMatch(property.name, domain) ||
+    gaHostsMatch(property.accountName, domain) ||
+    gaHostsMatch(property.websiteUrl, domain)
+  );
 }

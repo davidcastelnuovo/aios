@@ -25,12 +25,17 @@ test("sumOrganizationCosts aggregates daily buckets", () => {
     data: [
       {
         results: [
-          { amount: { value: 1.25, currency: "usd" }, line_item: "gpt-4o-mini" },
+          {
+            amount: { value: 1.25, currency: "usd" },
+            line_item: "gpt-4o-mini",
+          },
           { amount: { value: 0.75, currency: "usd" }, line_item: "embeddings" },
         ],
       },
       {
-        results: [{ amount: { value: 2, currency: "usd" }, line_item: "gpt-4o-mini" }],
+        results: [
+          { amount: { value: 2, currency: "usd" }, line_item: "gpt-4o-mini" },
+        ],
       },
     ],
   };
@@ -62,13 +67,22 @@ test("sumCompletionsUsage aggregates tokens", () => {
 test("buildOpenAiBillingStatus never fabricates remaining credit", () => {
   const status = buildOpenAiBillingStatus({
     costs: {
-      data: [{ results: [{ amount: { value: 12.5, currency: "usd" }, line_item: "x" }] }],
+      data: [
+        {
+          results: [
+            { amount: { value: 12.5, currency: "usd" }, line_item: "x" },
+          ],
+        },
+      ],
     },
     period: monthUtcBounds(new Date("2026-08-15T12:00:00Z")),
   });
   assert.equal(status.remaining_credit, null);
   assert.equal(status.remaining_credit_available, false);
-  assert.match(status.remaining_credit_reason, /does not expose remaining prepaid credit/i);
+  assert.match(
+    status.remaining_credit_reason,
+    /does not expose remaining prepaid credit/i,
+  );
   assert.equal(status.current_month_usage_cost, 12.5);
   assert.equal(status.period, "2026-08");
   assert.ok(status.ok);
@@ -77,10 +91,22 @@ test("buildOpenAiBillingStatus never fabricates remaining credit", () => {
 test("WhatsApp summary is concise and mentions unavailable credit", () => {
   const status = buildOpenAiBillingStatus({
     costs: {
-      data: [{ results: [{ amount: { value: 3.2, currency: "usd" }, line_item: "chat" }] }],
+      data: [
+        {
+          results: [
+            { amount: { value: 3.2, currency: "usd" }, line_item: "chat" },
+          ],
+        },
+      ],
     },
     usage: {
-      data: [{ results: [{ input_tokens: 1000, output_tokens: 200, num_model_requests: 5 }] }],
+      data: [
+        {
+          results: [
+            { input_tokens: 1000, output_tokens: 200, num_model_requests: 5 },
+          ],
+        },
+      ],
     },
     period: monthUtcBounds(new Date("2026-08-04T00:00:00Z")),
   });
@@ -95,8 +121,14 @@ test("WhatsApp summary is concise and mentions unavailable credit", () => {
 test("extractDailyCostBuckets preserves dates and sums", () => {
   const payload = {
     data: [
-      { start_time: 1756684800, results: [{ amount: { value: 1.5 }, line_item: "gpt-4o-mini" }] },
-      { start_time: 1756771200, results: [{ amount: { value: 2.0 }, line_item: "gpt-4o-mini" }] },
+      {
+        start_time: 1756684800,
+        results: [{ amount: { value: 1.5 }, line_item: "gpt-4o-mini" }],
+      },
+      {
+        start_time: 1756771200,
+        results: [{ amount: { value: 2.0 }, line_item: "gpt-4o-mini" }],
+      },
     ],
   };
   const days = extractDailyCostBuckets(payload);
@@ -108,7 +140,12 @@ test("extractDailyCostBuckets preserves dates and sums", () => {
 test("extractDailyUsageBuckets aggregates per day", () => {
   const payload = {
     data: [
-      { start_time: 1756684800, results: [{ input_tokens: 100, output_tokens: 50, num_model_requests: 2 }] },
+      {
+        start_time: 1756684800,
+        results: [
+          { input_tokens: 100, output_tokens: 50, num_model_requests: 2 },
+        ],
+      },
     ],
   };
   const days = extractDailyUsageBuckets(payload);

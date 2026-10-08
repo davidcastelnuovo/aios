@@ -14,7 +14,9 @@ export const DEFAULT_REPORT_EMAIL_RECIPIENTS: EmailOption[] = [
 const normalizeEmail = (email: string) => email.trim().toLowerCase();
 
 /** Deduped default emails (+ optional client email) for initial selection. */
-export function buildDefaultReportRecipientEmails(clientEmail?: string | null): string[] {
+export function buildDefaultReportRecipientEmails(
+  clientEmail?: string | null,
+): string[] {
   const out: string[] = [];
   const seen = new Set<string>();
   for (const opt of DEFAULT_REPORT_EMAIL_RECIPIENTS) {

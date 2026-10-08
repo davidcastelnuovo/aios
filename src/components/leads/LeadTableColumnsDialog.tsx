@@ -27,11 +27,7 @@ type StoredField = {
   field_key: string;
 };
 
-export function LeadTableColumnsDialog({
-  trigger,
-}: {
-  trigger?: ReactNode;
-}) {
+export function LeadTableColumnsDialog({ trigger }: { trigger?: ReactNode }) {
   const { tenantId } = useCurrentTenant();
   const queryClient = useQueryClient();
   const { toast } = useToast();
@@ -56,7 +52,9 @@ export function LeadTableColumnsDialog({
   const toggleMutation = useMutation({
     mutationFn: async ({ key, visible }: { key: string; visible: boolean }) => {
       if (!tenantId) throw new Error("חסר ארגון");
-      const catalog = LEAD_TABLE_COLUMN_FIELDS.find((field) => field.key === key);
+      const catalog = LEAD_TABLE_COLUMN_FIELDS.find(
+        (field) => field.key === key,
+      );
       if (!catalog || catalog.required) return;
 
       const existing = existingFields.find((field) => field.field_key === key);
@@ -82,7 +80,9 @@ export function LeadTableColumnsDialog({
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["custom-fields", tenantId] });
-      queryClient.invalidateQueries({ queryKey: ["custom-field-labels", tenantId] });
+      queryClient.invalidateQueries({
+        queryKey: ["custom-field-labels", tenantId],
+      });
     },
     onError: (error: Error) => {
       toast({
@@ -97,7 +97,12 @@ export function LeadTableColumnsDialog({
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
         {trigger ?? (
-          <Button variant="outline" size="icon" className="h-9 w-9 shrink-0" title="עמודות טבלה">
+          <Button
+            variant="outline"
+            size="icon"
+            className="h-9 w-9 shrink-0"
+            title="עמודות טבלה"
+          >
             <Columns3 className="h-4 w-4" />
           </Button>
         )}
@@ -113,8 +118,14 @@ export function LeadTableColumnsDialog({
           {LEAD_TABLE_TOGGLEABLE_COLUMNS.map((field) => {
             const visible = isLeadTableColumnVisible(field.key, isFieldVisible);
             return (
-              <div key={field.key} className="flex items-center justify-between gap-3 rounded-md border px-3 py-2">
-                <Label htmlFor={`lead-col-${field.key}`} className="cursor-pointer">
+              <div
+                key={field.key}
+                className="flex items-center justify-between gap-3 rounded-md border px-3 py-2"
+              >
+                <Label
+                  htmlFor={`lead-col-${field.key}`}
+                  className="cursor-pointer"
+                >
                   {getFieldLabel(field.key, field.label)}
                 </Label>
                 <Switch

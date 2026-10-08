@@ -32,17 +32,19 @@ export function ShareIntegrationTenantsDialog({
   const { tenantId } = useCurrentTenant();
   const { toast } = useToast();
   const queryClient = useQueryClient();
-  const [pendingChanges, setPendingChanges] = useState<Record<string, boolean>>({});
+  const [pendingChanges, setPendingChanges] = useState<Record<string, boolean>>(
+    {},
+  );
 
   // Fetch all available tenants (excluding current)
   const { data: tenants = [], isLoading: tenantsLoading } = useQuery({
-    queryKey: ['all-tenants-for-sharing', tenantId],
+    queryKey: ["all-tenants-for-sharing", tenantId],
     queryFn: async () => {
       const { data, error } = await supabase
-        .from('tenants')
-        .select('id, name, slug')
-        .neq('id', tenantId)
-        .order('name');
+        .from("tenants")
+        .select("id, name, slug")
+        .neq("id", tenantId)
+        .order("name");
 
       if (error) throw error;
       return data || [];
@@ -52,25 +54,31 @@ export function ShareIntegrationTenantsDialog({
 
   // Fetch current access
   const { data: currentAccess = [], isLoading: accessLoading } = useQuery({
-    queryKey: ['integration-tenant-access', integrationId],
+    queryKey: ["integration-tenant-access", integrationId],
     queryFn: async () => {
       const { data, error } = await supabase
-        .from('integration_tenant_access')
-        .select('accessing_tenant_id')
-        .eq('integration_id', integrationId);
+        .from("integration_tenant_access")
+        .select("accessing_tenant_id")
+        .eq("integration_id", integrationId);
 
       if (error) throw error;
-      return data?.map(a => a.accessing_tenant_id) || [];
+      return data?.map((a) => a.accessing_tenant_id) || [];
     },
     enabled: open && !!integrationId,
   });
 
   // Toggle access mutation
   const toggleMutation = useMutation({
-    mutationFn: async ({ tenantIdToToggle, grant }: { tenantIdToToggle: string; grant: boolean }) => {
+    mutationFn: async ({
+      tenantIdToToggle,
+      grant,
+    }: {
+      tenantIdToToggle: string;
+      grant: boolean;
+    }) => {
       if (grant) {
         const { error } = await supabase
-          .from('integration_tenant_access')
+          .from("integration_tenant_access")
           .insert({
             integration_id: integrationId,
             accessing_tenant_id: tenantIdToToggle,
@@ -78,23 +86,25 @@ export function ShareIntegrationTenantsDialog({
         if (error) throw error;
       } else {
         const { error } = await supabase
-          .from('integration_tenant_access')
+          .from("integration_tenant_access")
           .delete()
-          .eq('integration_id', integrationId)
-          .eq('accessing_tenant_id', tenantIdToToggle);
+          .eq("integration_id", integrationId)
+          .eq("accessing_tenant_id", tenantIdToToggle);
         if (error) throw error;
       }
     },
     onSuccess: (_, { tenantIdToToggle, grant }) => {
-      queryClient.invalidateQueries({ queryKey: ['integration-tenant-access', integrationId] });
-      setPendingChanges(prev => {
+      queryClient.invalidateQueries({
+        queryKey: ["integration-tenant-access", integrationId],
+      });
+      setPendingChanges((prev) => {
         const next = { ...prev };
         delete next[tenantIdToToggle];
         return next;
       });
       toast({
         title: grant ? "גישה ניתנה" : "גישה הוסרה",
-        description: grant 
+        description: grant
           ? "הארגון יכול כעת לבחור בחיבור באוטומציות ולשלוח דרכו"
           : "הגישה לאינטגרציה הוסרה מהארגון",
       });
@@ -110,13 +120,14 @@ export function ShareIntegrationTenantsDialog({
 
   const handleToggle = (targetTenantId: string) => {
     const currentlyHasAccess = currentAccess.includes(targetTenantId);
-    const isPending = pendingChanges[targetTenantId] !== undefined 
-      ? pendingChanges[targetTenantId] 
-      : currentlyHasAccess;
-    
+    const isPending =
+      pendingChanges[targetTenantId] !== undefined
+        ? pendingChanges[targetTenantId]
+        : currentlyHasAccess;
+
     const newState = !isPending;
-    setPendingChanges(prev => ({ ...prev, [targetTenantId]: newState }));
-    
+    setPendingChanges((prev) => ({ ...prev, [targetTenantId]: newState }));
+
     toggleMutation.mutate({
       tenantIdToToggle: targetTenantId,
       grant: newState,
@@ -141,8 +152,8 @@ export function ShareIntegrationTenantsDialog({
             שיתוף אינטגרציה בין ארגונים
           </DialogTitle>
           <DialogDescription>
-            בחר אילו ארגונים יוכלו להשתמש בחיבור באוטומציות: {integrationName}. פרטי הגישה
-            והאסימונים נשארים בארגון הבעלים ואינם מועתקים.
+            בחר אילו ארגונים יוכלו להשתמש בחיבור באוטומציות: {integrationName}.
+            פרטי הגישה והאסימונים נשארים בארגון הבעלים ואינם מועתקים.
           </DialogDescription>
         </DialogHeader>
 
@@ -162,11 +173,16 @@ export function ShareIntegrationTenantsDialog({
                     <Checkbox
                       checked={isChecked(tenant.id)}
                       onCheckedChange={() => handleToggle(tenant.id)}
-                      disabled={toggleMutation.isPending && pendingChanges[tenant.id] !== undefined}
+                      disabled={
+                        toggleMutation.isPending &&
+                        pendingChanges[tenant.id] !== undefined
+                      }
                     />
                     <div>
                       <p className="font-medium">{tenant.name}</p>
-                      <p className="text-xs text-muted-foreground">/{tenant.slug}</p>
+                      <p className="text-xs text-muted-foreground">
+                        /{tenant.slug}
+                      </p>
                     </div>
                   </div>
                   {isChecked(tenant.id) && (
@@ -174,7 +190,7 @@ export function ShareIntegrationTenantsDialog({
                   )}
                 </div>
               ))}
-              
+
               {tenants.length === 0 && (
                 <p className="text-center text-muted-foreground py-8">
                   אין ארגונים נוספים לשיתוף

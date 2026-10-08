@@ -1,7 +1,10 @@
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useCurrentTenant } from "@/hooks/useCurrentTenant";
-import type { IslandSummary, IslandStatus } from "../types/visualWorkspaceTypes";
+import type {
+  IslandSummary,
+  IslandStatus,
+} from "../types/visualWorkspaceTypes";
 
 const startOfMonth = () => {
   const d = new Date();
@@ -31,16 +34,33 @@ export function useVisualWorkspaceData() {
 
       const sb = supabase as any;
       const safeCount = async (q: any): Promise<number> => {
-        try { const r = await q; return r?.count ?? 0; } catch { return 0; }
+        try {
+          const r = await q;
+          return r?.count ?? 0;
+        } catch {
+          return 0;
+        }
       };
       const safeRows = async (q: any): Promise<any[]> => {
-        try { const r = await q; return r?.data ?? []; } catch { return []; }
+        try {
+          const r = await q;
+          return r?.data ?? [];
+        } catch {
+          return [];
+        }
       };
       const safeMaybe = async (q: any): Promise<any> => {
-        try { const r = await q; return r?.data ?? null; } catch { return null; }
+        try {
+          const r = await q;
+          return r?.data ?? null;
+        } catch {
+          return null;
+        }
       };
 
-      const tenantRow = await safeMaybe(sb.from("tenants").select("name").eq("id", tid).maybeSingle());
+      const tenantRow = await safeMaybe(
+        sb.from("tenants").select("name").eq("id", tid).maybeSingle(),
+      );
 
       const [
         clientsActive,
@@ -64,30 +84,156 @@ export function useVisualWorkspaceData() {
         expensePayments,
         unpaidInvoices,
       ] = await Promise.all([
-        safeCount(sb.from("clients").select("id", { count: "exact", head: true }).eq("tenant_id", tid).neq("status", "ended")),
-        safeCount(sb.from("clients").select("id", { count: "exact", head: true }).eq("tenant_id", tid).in("mood_status", ["churn_risk", "not_progressing"])),
-        safeCount(sb.from("tasks").select("id", { count: "exact", head: true }).eq("tenant_id", tid).in("status", ["open", "in_progress"])),
-        safeCount(sb.from("tasks").select("id", { count: "exact", head: true }).eq("tenant_id", tid).in("status", ["open", "in_progress"]).lte("due_date", todayIso)),
-        safeCount(sb.from("ai_agents").select("id", { count: "exact", head: true }).eq("tenant_id", tid).eq("active", true)),
-        safeCount(sb.from("campaign_alerts").select("id", { count: "exact", head: true }).eq("tenant_id", tid).eq("status", "open")),
-        safeCount(sb.from("report_alerts").select("id", { count: "exact", head: true }).eq("tenant_id", tid).eq("is_active", true)),
-        safeCount(sb.from("leads").select("id", { count: "exact", head: true }).eq("tenant_id", tid).gte("created_at", weekAgo)),
-        safeCount(sb.from("leads").select("id", { count: "exact", head: true }).eq("tenant_id", tid).eq("status", "hot")),
-        safeCount(sb.from("social_publications").select("id", { count: "exact", head: true }).eq("tenant_id", tid).eq("status", "scheduled")),
-        safeCount(sb.from("automations").select("id", { count: "exact", head: true }).eq("tenant_id", tid).eq("is_active", true)),
-        safeCount(sb.from("automation_executions").select("id", { count: "exact", head: true }).eq("tenant_id", tid).gte("created_at", weekAgo)),
-        safeCount(sb.from("error_logs").select("id", { count: "exact", head: true }).eq("tenant_id", tid).gte("created_at", weekAgo)),
-        safeCount(sb.from("tenant_integrations").select("id", { count: "exact", head: true }).eq("tenant_id", tid).eq("is_active", true)),
-        safeCount(sb.from("tenant_users").select("user_id", { count: "exact", head: true }).eq("tenant_id", tid)),
-        safeCount(sb.from("agent_runs").select("id", { count: "exact", head: true }).eq("tenant_id", tid).in("status", ["running", "queued"])),
-        safeCount(sb.from("goals").select("id", { count: "exact", head: true }).eq("tenant_id", tid).neq("status", "completed")),
-        safeRows(sb.from("income_payments").select("amount").eq("tenant_id", tid).gte("payment_date", monthStart)),
-        safeRows(sb.from("expense_payments").select("amount").eq("tenant_id", tid).gte("payment_date", monthStart)),
-        safeCount(sb.from("supplier_invoices").select("id", { count: "exact", head: true }).eq("tenant_id", tid).neq("status", "paid")),
+        safeCount(
+          sb
+            .from("clients")
+            .select("id", { count: "exact", head: true })
+            .eq("tenant_id", tid)
+            .neq("status", "ended"),
+        ),
+        safeCount(
+          sb
+            .from("clients")
+            .select("id", { count: "exact", head: true })
+            .eq("tenant_id", tid)
+            .in("mood_status", ["churn_risk", "not_progressing"]),
+        ),
+        safeCount(
+          sb
+            .from("tasks")
+            .select("id", { count: "exact", head: true })
+            .eq("tenant_id", tid)
+            .in("status", ["open", "in_progress"]),
+        ),
+        safeCount(
+          sb
+            .from("tasks")
+            .select("id", { count: "exact", head: true })
+            .eq("tenant_id", tid)
+            .in("status", ["open", "in_progress"])
+            .lte("due_date", todayIso),
+        ),
+        safeCount(
+          sb
+            .from("ai_agents")
+            .select("id", { count: "exact", head: true })
+            .eq("tenant_id", tid)
+            .eq("active", true),
+        ),
+        safeCount(
+          sb
+            .from("campaign_alerts")
+            .select("id", { count: "exact", head: true })
+            .eq("tenant_id", tid)
+            .eq("status", "open"),
+        ),
+        safeCount(
+          sb
+            .from("report_alerts")
+            .select("id", { count: "exact", head: true })
+            .eq("tenant_id", tid)
+            .eq("is_active", true),
+        ),
+        safeCount(
+          sb
+            .from("leads")
+            .select("id", { count: "exact", head: true })
+            .eq("tenant_id", tid)
+            .gte("created_at", weekAgo),
+        ),
+        safeCount(
+          sb
+            .from("leads")
+            .select("id", { count: "exact", head: true })
+            .eq("tenant_id", tid)
+            .eq("status", "hot"),
+        ),
+        safeCount(
+          sb
+            .from("social_publications")
+            .select("id", { count: "exact", head: true })
+            .eq("tenant_id", tid)
+            .eq("status", "scheduled"),
+        ),
+        safeCount(
+          sb
+            .from("automations")
+            .select("id", { count: "exact", head: true })
+            .eq("tenant_id", tid)
+            .eq("is_active", true),
+        ),
+        safeCount(
+          sb
+            .from("automation_executions")
+            .select("id", { count: "exact", head: true })
+            .eq("tenant_id", tid)
+            .gte("created_at", weekAgo),
+        ),
+        safeCount(
+          sb
+            .from("error_logs")
+            .select("id", { count: "exact", head: true })
+            .eq("tenant_id", tid)
+            .gte("created_at", weekAgo),
+        ),
+        safeCount(
+          sb
+            .from("tenant_integrations")
+            .select("id", { count: "exact", head: true })
+            .eq("tenant_id", tid)
+            .eq("is_active", true),
+        ),
+        safeCount(
+          sb
+            .from("tenant_users")
+            .select("user_id", { count: "exact", head: true })
+            .eq("tenant_id", tid),
+        ),
+        safeCount(
+          sb
+            .from("agent_runs")
+            .select("id", { count: "exact", head: true })
+            .eq("tenant_id", tid)
+            .in("status", ["running", "queued"]),
+        ),
+        safeCount(
+          sb
+            .from("goals")
+            .select("id", { count: "exact", head: true })
+            .eq("tenant_id", tid)
+            .neq("status", "completed"),
+        ),
+        safeRows(
+          sb
+            .from("income_payments")
+            .select("amount")
+            .eq("tenant_id", tid)
+            .gte("payment_date", monthStart),
+        ),
+        safeRows(
+          sb
+            .from("expense_payments")
+            .select("amount")
+            .eq("tenant_id", tid)
+            .gte("payment_date", monthStart),
+        ),
+        safeCount(
+          sb
+            .from("supplier_invoices")
+            .select("id", { count: "exact", head: true })
+            .eq("tenant_id", tid)
+            .neq("status", "paid"),
+        ),
       ]);
 
-      const incomeMonth = (incomePayments as any[]).reduce((s: number, r: any) => s + Number(r.amount || 0), 0);
-      const expenseMonth = (expensePayments as any[]).reduce((s: number, r: any) => s + Number(r.amount || 0), 0);
+      const incomeMonth = (incomePayments as any[]).reduce(
+        (s: number, r: any) => s + Number(r.amount || 0),
+        0,
+      );
+      const expenseMonth = (expensePayments as any[]).reduce(
+        (s: number, r: any) => s + Number(r.amount || 0),
+        0,
+      );
 
       const businessName = (tenantRow?.name as string) || "העסק שלי";
       const totalAlerts = campaignAlertsOpen + reportAlertsOpen;
@@ -101,8 +247,16 @@ export function useVisualWorkspaceData() {
           agentName: "CEO Agent",
           kpis: [
             { label: "יעדים פתוחים", value: goalsOpen },
-            { label: "משימות דחופות", value: tasksUrgent, tone: tasksUrgent ? "warning" : "default" },
-            { label: "לקוחות בסיכון", value: clientsAtRisk, tone: clientsAtRisk ? "danger" : "default" },
+            {
+              label: "משימות דחופות",
+              value: tasksUrgent,
+              tone: tasksUrgent ? "warning" : "default",
+            },
+            {
+              label: "לקוחות בסיכון",
+              value: clientsAtRisk,
+              tone: clientsAtRisk ? "danger" : "default",
+            },
           ],
           openTasks: tasksOpen,
           alerts: totalAlerts,
@@ -117,7 +271,11 @@ export function useVisualWorkspaceData() {
           kpis: [
             { label: "אוטומציות פעילות", value: automationsCount },
             { label: "לידים השבוע", value: leadsWeek },
-            { label: "התראות קמפיינים", value: campaignAlertsOpen, tone: campaignAlertsOpen ? "warning" : "default" },
+            {
+              label: "התראות קמפיינים",
+              value: campaignAlertsOpen,
+              tone: campaignAlertsOpen ? "warning" : "default",
+            },
           ],
           openTasks: 0,
           alerts: campaignAlertsOpen,
@@ -130,7 +288,11 @@ export function useVisualWorkspaceData() {
           agentRole: "sales",
           agentName: "Sales Agent",
           kpis: [
-            { label: "לידים חמים", value: leadsHot, tone: leadsHot ? "success" : "default" },
+            {
+              label: "לידים חמים",
+              value: leadsHot,
+              tone: leadsHot ? "success" : "default",
+            },
             { label: "לידים השבוע", value: leadsWeek },
             { label: "Pipeline", value: leadsWeek + leadsHot },
           ],
@@ -160,9 +322,20 @@ export function useVisualWorkspaceData() {
           agentRole: "finance",
           agentName: "CFO Agent",
           kpis: [
-            { label: "הכנסות החודש", value: `₪${Math.round(incomeMonth).toLocaleString()}`, tone: "success" },
-            { label: "הוצאות החודש", value: `₪${Math.round(expenseMonth).toLocaleString()}` },
-            { label: "חשבוניות פתוחות", value: unpaidInvoices, tone: unpaidInvoices ? "warning" : "default" },
+            {
+              label: "הכנסות החודש",
+              value: `₪${Math.round(incomeMonth).toLocaleString()}`,
+              tone: "success",
+            },
+            {
+              label: "הוצאות החודש",
+              value: `₪${Math.round(expenseMonth).toLocaleString()}`,
+            },
+            {
+              label: "חשבוניות פתוחות",
+              value: unpaidInvoices,
+              tone: unpaidInvoices ? "warning" : "default",
+            },
           ],
           openTasks: 0,
           alerts: 0,
@@ -177,7 +350,11 @@ export function useVisualWorkspaceData() {
           kpis: [
             { label: "אוטומציות", value: automationsCount },
             { label: "ריצות השבוע", value: automationExecsWeek },
-            { label: "שגיאות השבוע", value: errorLogsWeek, tone: errorLogsWeek ? "danger" : "default" },
+            {
+              label: "שגיאות השבוע",
+              value: errorLogsWeek,
+              tone: errorLogsWeek ? "danger" : "default",
+            },
           ],
           openTasks: 0,
           alerts: errorLogsWeek,
@@ -191,7 +368,11 @@ export function useVisualWorkspaceData() {
           agentName: "CS Agent",
           kpis: [
             { label: "לקוחות פעילים", value: clientsActive },
-            { label: "לקוחות בסיכון", value: clientsAtRisk, tone: clientsAtRisk ? "danger" : "default" },
+            {
+              label: "לקוחות בסיכון",
+              value: clientsAtRisk,
+              tone: clientsAtRisk ? "danger" : "default",
+            },
             { label: "משימות פתוחות", value: tasksOpen },
           ],
           openTasks: tasksOpen,
@@ -207,7 +388,11 @@ export function useVisualWorkspaceData() {
           kpis: [
             { label: "משתמשים", value: usersCount },
             { label: "אינטגרציות פעילות", value: integrationsCount },
-            { label: "שגיאות השבוע", value: errorLogsWeek, tone: errorLogsWeek ? "warning" : "default" },
+            {
+              label: "שגיאות השבוע",
+              value: errorLogsWeek,
+              tone: errorLogsWeek ? "warning" : "default",
+            },
           ],
           openTasks: 0,
           alerts: 0,

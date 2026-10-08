@@ -2,7 +2,11 @@ import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useCurrentTenant } from "@/hooks/useCurrentTenant";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -23,7 +27,10 @@ interface LeadTagSelectorProps {
   initialTagIds?: string[];
 }
 
-export function LeadTagSelector({ leadId, initialTagIds }: LeadTagSelectorProps) {
+export function LeadTagSelector({
+  leadId,
+  initialTagIds,
+}: LeadTagSelectorProps) {
   const { tenantId } = useCurrentTenant();
   const queryClient = useQueryClient();
   const [isOpen, setIsOpen] = useState(false);
@@ -38,15 +45,15 @@ export function LeadTagSelector({ leadId, initialTagIds }: LeadTagSelectorProps)
 
   // Fetch all available tags
   const { data: allTags = [] } = useQuery({
-    queryKey: ['chat-tags', tenantId],
+    queryKey: ["chat-tags", tenantId],
     queryFn: async () => {
       if (!tenantId) return [];
       const { data, error } = await supabase
-        .from('chat_tags')
-        .select('*')
-        .eq('tenant_id', tenantId)
-        .order('sort_order', { ascending: true });
-      
+        .from("chat_tags")
+        .select("*")
+        .eq("tenant_id", tenantId)
+        .order("sort_order", { ascending: true });
+
       if (error) throw error;
       return data as ChatTag[];
     },
@@ -56,65 +63,78 @@ export function LeadTagSelector({ leadId, initialTagIds }: LeadTagSelectorProps)
 
   // Fetch lead's tags if not provided
   const { data: fetchedContactTags = [] } = useQuery({
-    queryKey: ['lead-tags', leadId],
+    queryKey: ["lead-tags", leadId],
     queryFn: async () => {
-      const { data: { user } } = await supabase.auth.getUser();
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
       if (!user || !tenantId) return [];
 
       const { data, error } = await supabase
-        .from('chat_contact_tags')
-        .select('tag_id')
-        .eq('lead_id', leadId)
-        .eq('tenant_id', tenantId);
+        .from("chat_contact_tags")
+        .select("tag_id")
+        .eq("lead_id", leadId)
+        .eq("tenant_id", tenantId);
 
       if (error) throw error;
-      return data.map(ct => ct.tag_id);
+      return data.map((ct) => ct.tag_id);
     },
     enabled: !!tenantId && !!leadId && initialTagIds === undefined,
     staleTime: 30000,
   });
 
   const contactTags = initialTagIds ?? fetchedContactTags;
-  
-  const filteredTags = allTags.filter(tag => 
-    tag.name.toLowerCase().includes(searchQuery.toLowerCase())
+
+  const filteredTags = allTags.filter((tag) =>
+    tag.name.toLowerCase().includes(searchQuery.toLowerCase()),
   );
 
   const toggleTagMutation = useMutation({
-    mutationFn: async ({ tagId, isAssigned }: { tagId: string; isAssigned: boolean }) => {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user || !tenantId) throw new Error('No user or tenant');
+    mutationFn: async ({
+      tagId,
+      isAssigned,
+    }: {
+      tagId: string;
+      isAssigned: boolean;
+    }) => {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      if (!user || !tenantId) throw new Error("No user or tenant");
 
       if (isAssigned) {
         const { error } = await supabase
-          .from('chat_contact_tags')
+          .from("chat_contact_tags")
           .delete()
-          .eq('tag_id', tagId)
-          .eq('lead_id', leadId);
+          .eq("tag_id", tagId)
+          .eq("lead_id", leadId);
 
         if (error) throw error;
       } else {
-        const { error } = await supabase
-          .from('chat_contact_tags')
-          .insert({
-            tag_id: tagId,
-            user_id: user.id,
-            tenant_id: tenantId,
-            lead_id: leadId,
-          });
+        const { error } = await supabase.from("chat_contact_tags").insert({
+          tag_id: tagId,
+          user_id: user.id,
+          tenant_id: tenantId,
+          lead_id: leadId,
+        });
 
         if (error) throw error;
       }
     },
     onMutate: async ({ tagId, isAssigned }) => {
-      await queryClient.cancelQueries({ queryKey: ['lead-tags', leadId] });
-      await queryClient.cancelQueries({ queryKey: ['leads-tags-bulk', tenantId] });
+      await queryClient.cancelQueries({ queryKey: ["lead-tags", leadId] });
+      await queryClient.cancelQueries({
+        queryKey: ["leads-tags-bulk", tenantId],
+      });
 
-      const previousTags = queryClient.getQueryData<string[]>(['lead-tags', leadId]);
+      const previousTags = queryClient.getQueryData<string[]>([
+        "lead-tags",
+        leadId,
+      ]);
 
-      queryClient.setQueryData<string[]>(['lead-tags', leadId], (old = []) => {
+      queryClient.setQueryData<string[]>(["lead-tags", leadId], (old = []) => {
         if (isAssigned) {
-          return old.filter(id => id !== tagId);
+          return old.filter((id) => id !== tagId);
         } else {
           return [...old, tagId];
         }
@@ -124,15 +144,19 @@ export function LeadTagSelector({ leadId, initialTagIds }: LeadTagSelectorProps)
     },
     onError: (_err, _variables, context) => {
       if (context?.previousTags !== undefined) {
-        queryClient.setQueryData(['lead-tags', leadId], context.previousTags);
+        queryClient.setQueryData(["lead-tags", leadId], context.previousTags);
       }
-      toast.error('שגיאה בעדכון התגיות');
+      toast.error("שגיאה בעדכון התגיות");
     },
     onSettled: () => {
-      queryClient.invalidateQueries({ queryKey: ['lead-tags', leadId] });
+      queryClient.invalidateQueries({ queryKey: ["lead-tags", leadId] });
       // Invalidate all visible-leads tag queries (they use different queryKeys with lead IDs)
-      queryClient.invalidateQueries({ queryKey: ['leads-tags-visible', tenantId] });
-      queryClient.invalidateQueries({ queryKey: ['leads-tags-table', tenantId] });
+      queryClient.invalidateQueries({
+        queryKey: ["leads-tags-visible", tenantId],
+      });
+      queryClient.invalidateQueries({
+        queryKey: ["leads-tags-table", tenantId],
+      });
     },
   });
 
@@ -145,11 +169,20 @@ export function LeadTagSelector({ leadId, initialTagIds }: LeadTagSelectorProps)
     <>
       <Popover open={isOpen} onOpenChange={handleOpenChange}>
         <PopoverTrigger asChild>
-          <Button variant="outline" size="icon" className="h-8 w-8" title="תגיות">
+          <Button
+            variant="outline"
+            size="icon"
+            className="h-8 w-8"
+            title="תגיות"
+          >
             <Tag className="h-4 w-4" />
           </Button>
         </PopoverTrigger>
-        <PopoverContent className="w-64 p-2 bg-background z-[100]" align="start" dir="rtl">
+        <PopoverContent
+          className="w-64 p-2 bg-background z-[100]"
+          align="start"
+          dir="rtl"
+        >
           {/* Search input */}
           {allTags.length > 3 && (
             <div className="relative mb-2">
@@ -181,7 +214,9 @@ export function LeadTagSelector({ leadId, initialTagIds }: LeadTagSelectorProps)
                   <div
                     key={tag.id}
                     className="flex items-center gap-2 p-2 rounded-md hover:bg-muted cursor-pointer"
-                    onClick={() => toggleTagMutation.mutate({ tagId: tag.id, isAssigned })}
+                    onClick={() =>
+                      toggleTagMutation.mutate({ tagId: tag.id, isAssigned })
+                    }
                   >
                     <Checkbox checked={isAssigned} />
                     <div
@@ -224,10 +259,10 @@ interface LeadTagBadgesProps {
 }
 
 export function LeadTagBadges({ allTags, tagIds }: LeadTagBadgesProps) {
-  const assignedTags = allTags.filter(tag => tagIds.includes(tag.id));
-  
+  const assignedTags = allTags.filter((tag) => tagIds.includes(tag.id));
+
   if (assignedTags.length === 0) return null;
-  
+
   return (
     <div className="flex flex-wrap gap-1">
       {assignedTags.map((tag) => (
@@ -235,10 +270,10 @@ export function LeadTagBadges({ allTags, tagIds }: LeadTagBadgesProps) {
           key={tag.id}
           variant="outline"
           className="text-[10px] px-1.5 py-0 h-4"
-          style={{ 
+          style={{
             backgroundColor: `${tag.color}20`,
             borderColor: tag.color,
-            color: tag.color 
+            color: tag.color,
           }}
         >
           {tag.name}
@@ -254,44 +289,55 @@ interface LeadTagBadgesEditableProps {
   tagIds: string[];
 }
 
-export function LeadTagBadgesEditable({ leadId, allTags, tagIds }: LeadTagBadgesEditableProps) {
+export function LeadTagBadgesEditable({
+  leadId,
+  allTags,
+  tagIds,
+}: LeadTagBadgesEditableProps) {
   const { tenantId } = useCurrentTenant();
   const queryClient = useQueryClient();
-  
+
   const removeTagMutation = useMutation({
     mutationFn: async (tagId: string) => {
       const { error } = await supabase
-        .from('chat_contact_tags')
+        .from("chat_contact_tags")
         .delete()
-        .eq('tag_id', tagId)
-        .eq('lead_id', leadId);
+        .eq("tag_id", tagId)
+        .eq("lead_id", leadId);
       if (error) throw error;
     },
     onMutate: async (tagId) => {
-      await queryClient.cancelQueries({ queryKey: ['lead-tags', leadId] });
-      const previousTags = queryClient.getQueryData<string[]>(['lead-tags', leadId]);
-      queryClient.setQueryData<string[]>(['lead-tags', leadId], (old = []) => 
-        old.filter(id => id !== tagId)
+      await queryClient.cancelQueries({ queryKey: ["lead-tags", leadId] });
+      const previousTags = queryClient.getQueryData<string[]>([
+        "lead-tags",
+        leadId,
+      ]);
+      queryClient.setQueryData<string[]>(["lead-tags", leadId], (old = []) =>
+        old.filter((id) => id !== tagId),
       );
       return { previousTags };
     },
     onError: (_err, _tagId, context) => {
       if (context?.previousTags) {
-        queryClient.setQueryData(['lead-tags', leadId], context.previousTags);
+        queryClient.setQueryData(["lead-tags", leadId], context.previousTags);
       }
-      toast.error('שגיאה בהסרת התגית');
+      toast.error("שגיאה בהסרת התגית");
     },
     onSettled: () => {
-      queryClient.invalidateQueries({ queryKey: ['lead-tags', leadId] });
-      queryClient.invalidateQueries({ queryKey: ['leads-tags-visible', tenantId] });
-      queryClient.invalidateQueries({ queryKey: ['leads-tags-table', tenantId] });
+      queryClient.invalidateQueries({ queryKey: ["lead-tags", leadId] });
+      queryClient.invalidateQueries({
+        queryKey: ["leads-tags-visible", tenantId],
+      });
+      queryClient.invalidateQueries({
+        queryKey: ["leads-tags-table", tenantId],
+      });
     },
   });
 
-  const assignedTags = allTags.filter(tag => tagIds.includes(tag.id));
-  
+  const assignedTags = allTags.filter((tag) => tagIds.includes(tag.id));
+
   if (assignedTags.length === 0) return null;
-  
+
   return (
     <div className="flex flex-wrap gap-1">
       {assignedTags.map((tag) => (
@@ -299,10 +345,10 @@ export function LeadTagBadgesEditable({ leadId, allTags, tagIds }: LeadTagBadges
           key={tag.id}
           variant="outline"
           className="text-xs px-2 py-0.5 flex items-center gap-1"
-          style={{ 
+          style={{
             backgroundColor: `${tag.color}20`,
             borderColor: tag.color,
-            color: tag.color 
+            color: tag.color,
           }}
         >
           {tag.name}

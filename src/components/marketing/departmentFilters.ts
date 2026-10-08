@@ -5,20 +5,35 @@ type WorkItemLike = {
 
 const otherDepartments = new Set(["creative", "seo", "campaigns"]);
 
-export function isCopyDepartmentItem(item: WorkItemLike, copyStageId?: string | null) {
+export function isCopyDepartmentItem(
+  item: WorkItemLike,
+  copyStageId?: string | null,
+) {
   const payload = item.payload ?? {};
   const department = payload.department;
-  if (typeof department === "string" && otherDepartments.has(department)) return false;
+  if (typeof department === "string" && otherDepartments.has(department))
+    return false;
   if (Array.isArray(payload.storyboard)) return false;
   if (Array.isArray(payload.variations)) return false;
-  if (payload.project_type === "static" || payload.project_type === "video") return false;
+  if (payload.project_type === "static" || payload.project_type === "video")
+    return false;
   if (department === "copy") return true;
   if (copyStageId && item.current_stage_id === copyStageId) return true;
-  if (!department && (payload.brief_text || payload.copy_text || payload.copy_chat || payload.copy_concepts)) return true;
+  if (
+    !department &&
+    (payload.brief_text ||
+      payload.copy_text ||
+      payload.copy_chat ||
+      payload.copy_concepts)
+  )
+    return true;
   return false;
 }
 
-export function isCreativeDepartmentItem(item: WorkItemLike, creativeStageId?: string | null) {
+export function isCreativeDepartmentItem(
+  item: WorkItemLike,
+  creativeStageId?: string | null,
+) {
   const payload = item.payload ?? {};
   const department = payload.department;
   if (department === "copy") return false;
@@ -27,7 +42,8 @@ export function isCreativeDepartmentItem(item: WorkItemLike, creativeStageId?: s
   if (payload.intake_source === "copy_link") return true;
   if (creativeStageId && item.current_stage_id === creativeStageId) return true;
   if (Array.isArray(payload.variations)) return true;
-  if (payload.project_type === "video" && Array.isArray(payload.storyboard)) return true;
+  if (payload.project_type === "video" && Array.isArray(payload.storyboard))
+    return true;
   if (payload.project_type === "static" && !!payload.image_url) return true;
   if (!department && !!payload.image_url) return true;
   return false;
@@ -39,13 +55,17 @@ export function filterCreativeDepartmentItems<T extends WorkItemLike>(
 ): T[] {
   const ids = new Set(creativeStageIds);
   return items.filter((item) => {
-    const stageId = item.current_stage_id && ids.has(item.current_stage_id)
-      ? item.current_stage_id
-      : undefined;
+    const stageId =
+      item.current_stage_id && ids.has(item.current_stage_id)
+        ? item.current_stage_id
+        : undefined;
     return isCreativeDepartmentItem(item, stageId);
   });
 }
 
-export function isLinkableCopyItem(item: WorkItemLike, copyStageId?: string | null) {
+export function isLinkableCopyItem(
+  item: WorkItemLike,
+  copyStageId?: string | null,
+) {
   return isCopyDepartmentItem(item, copyStageId);
 }

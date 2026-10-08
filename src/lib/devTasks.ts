@@ -6,8 +6,15 @@ export { normalizeTitle, titleSimilarity };
 
 export type DevTaskPriority = "urgent" | "high" | "normal" | "low";
 export type DevTaskStatus =
-  | "draft" | "approved" | "sent_to_cursor" | "in_progress" | "blocked"
-  | "pr_opened" | "ready_for_review" | "done" | "cancelled";
+  | "draft"
+  | "approved"
+  | "sent_to_cursor"
+  | "in_progress"
+  | "blocked"
+  | "pr_opened"
+  | "ready_for_review"
+  | "done"
+  | "cancelled";
 
 export type DevTask = {
   id: string;
@@ -59,7 +66,12 @@ export async function listDevTasks(
   const res = await fetch(FN, {
     method: "POST",
     headers: await authHeader(token),
-    body: JSON.stringify({ action: "list", tenant_id: tenantId, ...filters, limit: 80 }),
+    body: JSON.stringify({
+      action: "list",
+      tenant_id: tenantId,
+      ...filters,
+      limit: 80,
+    }),
   });
   const json = await res.json();
   if (!res.ok) throw new Error(json.error || "list failed");

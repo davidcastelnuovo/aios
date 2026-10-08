@@ -50,7 +50,9 @@ export function EditUserCampaignerDialog({
   const [showCreateForm, setShowCreateForm] = useState(false);
 
   // טופס יצירת קמפיינר חדש
-  const [newCampaignerName, setNewCampaignerName] = useState(userFullName || "");
+  const [newCampaignerName, setNewCampaignerName] = useState(
+    userFullName || "",
+  );
   const [newCampaignerPhone, setNewCampaignerPhone] = useState("");
   const [newCampaignerEmail, setNewCampaignerEmail] = useState(userEmail || "");
   const [selectedAgencies, setSelectedAgencies] = useState<string[]>([]);
@@ -117,7 +119,7 @@ export function EditUserCampaignerDialog({
     mutationFn: async (campaignerId: string | null) => {
       // Convert "none" to null
       const actualCampaignerId = campaignerId === "none" ? null : campaignerId;
-      
+
       const { error } = await supabase
         .from("profiles")
         .update({ campaigner_id: actualCampaignerId })
@@ -131,10 +133,18 @@ export function EditUserCampaignerDialog({
       }
     },
     onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey: ["users-with-roles", tenantId] });
-      await queryClient.invalidateQueries({ queryKey: ["user-campaigner", tenantId] });
-      await queryClient.invalidateQueries({ queryKey: ["campaigners", tenantId] });
-      await queryClient.refetchQueries({ queryKey: ["users-with-roles", tenantId] });
+      await queryClient.invalidateQueries({
+        queryKey: ["users-with-roles", tenantId],
+      });
+      await queryClient.invalidateQueries({
+        queryKey: ["user-campaigner", tenantId],
+      });
+      await queryClient.invalidateQueries({
+        queryKey: ["campaigners", tenantId],
+      });
+      await queryClient.refetchQueries({
+        queryKey: ["users-with-roles", tenantId],
+      });
       toast.success("איש הצוות המשויך עודכן בהצלחה");
       onOpenChange(false);
     },
@@ -148,7 +158,9 @@ export function EditUserCampaignerDialog({
       setShowCreateForm(true);
       return;
     }
-    updateCampaignerMutation.mutate(selectedCampaignerId === "none" ? null : selectedCampaignerId);
+    updateCampaignerMutation.mutate(
+      selectedCampaignerId === "none" ? null : selectedCampaignerId,
+    );
   };
 
   const handleCreateNew = () => {
@@ -161,20 +173,23 @@ export function EditUserCampaignerDialog({
       return;
     }
 
-    createCampaigner.mutate({
-      userId,
-      fullName: newCampaignerName,
-      email: newCampaignerEmail,
-      phone: newCampaignerPhone,
-      agencyIds: selectedAgencies,
-      roles: selectedRoles,
-      notes,
-    }, {
-      onSuccess: () => {
-        setShowCreateForm(false);
-        onOpenChange(false);
+    createCampaigner.mutate(
+      {
+        userId,
+        fullName: newCampaignerName,
+        email: newCampaignerEmail,
+        phone: newCampaignerPhone,
+        agencyIds: selectedAgencies,
+        roles: selectedRoles,
+        notes,
       },
-    });
+      {
+        onSuccess: () => {
+          setShowCreateForm(false);
+          onOpenChange(false);
+        },
+      },
+    );
   };
 
   const handleCancelCreate = () => {
@@ -190,7 +205,10 @@ export function EditUserCampaignerDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent dir="rtl" className="max-w-2xl max-h-[90vh] overflow-y-auto">
+      <DialogContent
+        dir="rtl"
+        className="max-w-2xl max-h-[90vh] overflow-y-auto"
+      >
         <DialogHeader>
           <DialogTitle>
             {showCreateForm ? "צור איש צוות חדש" : "עריכת איש צוות משויך"}
@@ -198,8 +216,7 @@ export function EditUserCampaignerDialog({
           <DialogDescription>
             {showCreateForm
               ? "מלא את הפרטים כדי ליצור איש צוות חדש ולשייך אותו למשתמש"
-              : `משתמש: ${userEmail}`
-            }
+              : `משתמש: ${userEmail}`}
           </DialogDescription>
         </DialogHeader>
 
@@ -216,7 +233,10 @@ export function EditUserCampaignerDialog({
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="none">ללא איש צוות משויך</SelectItem>
-                  <SelectItem value="create_new" className="font-semibold text-primary">
+                  <SelectItem
+                    value="create_new"
+                    className="font-semibold text-primary"
+                  >
                     + צור איש צוות חדש
                   </SelectItem>
                   {campaigners?.map((campaigner) => (
@@ -277,7 +297,10 @@ export function EditUserCampaignerDialog({
               <Label>סוכנויות *</Label>
               <div className="space-y-2 mt-2 border rounded-lg p-3 max-h-40 overflow-y-auto">
                 {agencies?.map((agency) => (
-                  <div key={agency.id} className="flex items-center space-x-2 space-x-reverse">
+                  <div
+                    key={agency.id}
+                    className="flex items-center space-x-2 space-x-reverse"
+                  >
                     <Checkbox
                       id={`agency-${agency.id}`}
                       checked={selectedAgencies.includes(agency.id)}
@@ -285,11 +308,16 @@ export function EditUserCampaignerDialog({
                         if (checked) {
                           setSelectedAgencies([...selectedAgencies, agency.id]);
                         } else {
-                          setSelectedAgencies(selectedAgencies.filter(id => id !== agency.id));
+                          setSelectedAgencies(
+                            selectedAgencies.filter((id) => id !== agency.id),
+                          );
                         }
                       }}
                     />
-                    <label htmlFor={`agency-${agency.id}`} className="text-sm cursor-pointer">
+                    <label
+                      htmlFor={`agency-${agency.id}`}
+                      className="text-sm cursor-pointer"
+                    >
                       {agency.name}
                     </label>
                   </div>
@@ -301,10 +329,15 @@ export function EditUserCampaignerDialog({
               <Label>תפקידים</Label>
               <div className="space-y-2 mt-2">
                 {rolesLoading ? (
-                  <p className="text-sm text-muted-foreground">טוען תפקידים...</p>
+                  <p className="text-sm text-muted-foreground">
+                    טוען תפקידים...
+                  </p>
                 ) : (
                   teamRoles.map((role) => (
-                    <div key={role.key} className="flex items-center space-x-2 space-x-reverse">
+                    <div
+                      key={role.key}
+                      className="flex items-center space-x-2 space-x-reverse"
+                    >
                       <Checkbox
                         id={`role-${role.key}`}
                         checked={selectedRoles.includes(role.label)}
@@ -312,11 +345,16 @@ export function EditUserCampaignerDialog({
                           if (checked) {
                             setSelectedRoles([...selectedRoles, role.label]);
                           } else {
-                            setSelectedRoles(selectedRoles.filter(r => r !== role.label));
+                            setSelectedRoles(
+                              selectedRoles.filter((r) => r !== role.label),
+                            );
                           }
                         }}
                       />
-                      <label htmlFor={`role-${role.key}`} className="text-sm cursor-pointer">
+                      <label
+                        htmlFor={`role-${role.key}`}
+                        className="text-sm cursor-pointer"
+                      >
                         {role.label}
                       </label>
                     </div>

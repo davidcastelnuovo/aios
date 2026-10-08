@@ -14,7 +14,7 @@ interface LeadStageSelectorProps {
   value: string;
   onValueChange: (value: string) => void;
   /** 'id' uses stage.id (UUID), 'stage_key' uses stage.stage_key (string key) */
-  valueType?: 'id' | 'stage_key';
+  valueType?: "id" | "stage_key";
   /** Show "ניהול שלבי משפך" button inside dropdown */
   showManageButton?: boolean;
   disabled?: boolean;
@@ -30,7 +30,7 @@ interface LeadStageSelectorProps {
 export function LeadStageSelector({
   value,
   onValueChange,
-  valueType = 'stage_key',
+  valueType = "stage_key",
   showManageButton = true,
   disabled = false,
   className,
@@ -42,13 +42,14 @@ export function LeadStageSelector({
   const { activeStages } = useLeadPipelineStages();
 
   // Find selected stage based on value type
-  const selectedStage = valueType === 'id' 
-    ? activeStages.find(s => s.id === value)
-    : activeStages.find(s => s.stage_key === value);
+  const selectedStage =
+    valueType === "id"
+      ? activeStages.find((s) => s.id === value)
+      : activeStages.find((s) => s.stage_key === value);
 
   // Get value for each stage based on value type
-  const getStageValue = (stage: typeof activeStages[0]) => 
-    valueType === 'id' ? stage.id : stage.stage_key;
+  const getStageValue = (stage: (typeof activeStages)[0]) =>
+    valueType === "id" ? stage.id : stage.stage_key;
 
   return (
     <div className={className}>
@@ -63,7 +64,7 @@ export function LeadStageSelector({
           className={triggerClassName}
           style={{
             backgroundColor: selectedStage?.color || undefined,
-            color: value && selectedStage?.color ? '#fff' : undefined,
+            color: value && selectedStage?.color ? "#fff" : undefined,
           }}
         >
           <SelectValue placeholder={placeholder} />
@@ -73,7 +74,7 @@ export function LeadStageSelector({
             <SelectItem
               key={stage.id}
               value={getStageValue(stage)}
-              style={{ backgroundColor: stage.color, color: '#fff' }}
+              style={{ backgroundColor: stage.color, color: "#fff" }}
             >
               {stage.label}
             </SelectItem>

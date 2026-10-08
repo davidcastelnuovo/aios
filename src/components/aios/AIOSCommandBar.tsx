@@ -11,7 +11,12 @@ interface AIOSCommandBarProps {
   onReset?: () => void;
 }
 
-export function AIOSCommandBar({ onSend, isLoading, statusText, onReset }: AIOSCommandBarProps) {
+export function AIOSCommandBar({
+  onSend,
+  isLoading,
+  statusText,
+  onReset,
+}: AIOSCommandBarProps) {
   const [input, setInput] = useState("");
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -92,7 +97,10 @@ export function AIOSCommandBar({ onSend, isLoading, statusText, onReset }: AIOSC
       {/* Status text - shows AI text response inline */}
       {statusText && (
         <div className="max-w-3xl mx-auto text-sm text-muted-foreground animate-fade-in">
-          <div className="prose prose-sm dark:prose-invert max-w-none" dir="rtl">
+          <div
+            className="prose prose-sm dark:prose-invert max-w-none"
+            dir="rtl"
+          >
             <ReactMarkdown>{statusText}</ReactMarkdown>
           </div>
         </div>

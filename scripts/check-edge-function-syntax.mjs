@@ -37,7 +37,9 @@ function walk(dir) {
     for (const diagnostic of source.parseDiagnostics ?? []) {
       const { line } = source.getLineAndCharacterOfPosition(diagnostic.start);
       const rel = full.slice(root.length + 1);
-      failures.push(`${rel}:${line + 1} — ${ts.flattenDiagnosticMessageText(diagnostic.messageText, " ")}`);
+      failures.push(
+        `${rel}:${line + 1} — ${ts.flattenDiagnosticMessageText(diagnostic.messageText, " ")}`,
+      );
     }
   }
 }
@@ -45,7 +47,9 @@ function walk(dir) {
 walk(functionsDir);
 
 if (failures.length > 0) {
-  console.error("Edge function syntax guard FAILED — these files cannot be bundled by Supabase:\n");
+  console.error(
+    "Edge function syntax guard FAILED — these files cannot be bundled by Supabase:\n",
+  );
   for (const failure of failures) console.error(` - ${failure}`);
   process.exit(1);
 }

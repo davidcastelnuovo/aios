@@ -1,7 +1,12 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { inferLayerShadow } from "./layerShadow.ts";
-import { EDITOR_FONT_WEIGHTS, safeFontWeight, safeHexColor, safeSelectValue } from "./layerEditorGuards.ts";
+import {
+  EDITOR_FONT_WEIGHTS,
+  safeFontWeight,
+  safeHexColor,
+  safeSelectValue,
+} from "./layerEditorGuards.ts";
 import { buildOfferBoardLayers } from "./offerBoard.ts";
 
 test("offer headlines use a weight the editor Select can render", () => {
@@ -40,6 +45,12 @@ test("safeHexColor only returns #rrggbb for color inputs", () => {
 });
 
 test("safeSelectValue falls back when an icon name is missing from the list", () => {
-  assert.equal(safeSelectValue("nope", ["search", "shield"], "search"), "search");
-  assert.equal(safeSelectValue("shield", ["search", "shield"], "search"), "shield");
+  assert.equal(
+    safeSelectValue("nope", ["search", "shield"], "search"),
+    "search",
+  );
+  assert.equal(
+    safeSelectValue("shield", ["search", "shield"], "search"),
+    "shield",
+  );
 });

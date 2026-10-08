@@ -1,16 +1,61 @@
 import { useState, useEffect } from "react";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { ArrowLeft, Check, X, Loader2, Play, RefreshCw, Zap, Link2, Workflow, Settings, ExternalLink, Eye, EyeOff, ChevronsUpDown } from "lucide-react";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import {
+  ArrowLeft,
+  Check,
+  X,
+  Loader2,
+  Play,
+  RefreshCw,
+  Zap,
+  Link2,
+  Workflow,
+  Settings,
+  ExternalLink,
+  Eye,
+  EyeOff,
+  ChevronsUpDown,
+} from "lucide-react";
 import { useNavigate } from "react-router-dom";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from "@/components/ui/command";
 import { useTenantPath } from "@/hooks/useTenantPath";
 import { useCurrentTenant } from "@/hooks/useCurrentTenant";
 import { supabase } from "@/integrations/supabase/client";
@@ -68,29 +113,37 @@ export default function MakeSettings() {
   const [teamId, setTeamId] = useState("");
   const [region, setRegion] = useState("eu1");
   const [googleAdsTemplateId, setGoogleAdsTemplateId] = useState("");
-  const [googleAnalyticsTemplateId, setGoogleAnalyticsTemplateId] = useState("");
+  const [googleAnalyticsTemplateId, setGoogleAnalyticsTemplateId] =
+    useState("");
   const [showToken, setShowToken] = useState(false);
   const [activeTab, setActiveTab] = useState("settings");
   const [templateSelectorOpen, setTemplateSelectorOpen] = useState(false);
   const [gaTemplateSelectorOpen, setGaTemplateSelectorOpen] = useState(false);
 
   // Fetch scenarios for template selector
-  const { data: templateScenarios, isLoading: isLoadingTemplateScenarios } = useQuery({
-    queryKey: ["make-scenarios-template", currentTenantId, apiToken, teamId, region],
-    queryFn: async () => {
-      const { data, error } = await supabase.functions.invoke("make-api", {
-        body: {
-          action: "list_scenarios",
-          api_token: apiToken,
-          team_id: teamId,
-          region,
-        },
-      });
-      if (error) throw error;
-      return (data?.scenarios || data) as MakeScenario[];
-    },
-    enabled: !!apiToken && !!teamId && !!region,
-  });
+  const { data: templateScenarios, isLoading: isLoadingTemplateScenarios } =
+    useQuery({
+      queryKey: [
+        "make-scenarios-template",
+        currentTenantId,
+        apiToken,
+        teamId,
+        region,
+      ],
+      queryFn: async () => {
+        const { data, error } = await supabase.functions.invoke("make-api", {
+          body: {
+            action: "list_scenarios",
+            api_token: apiToken,
+            team_id: teamId,
+            region,
+          },
+        });
+        if (error) throw error;
+        return (data?.scenarios || data) as MakeScenario[];
+      },
+      enabled: !!apiToken && !!teamId && !!region,
+    });
 
   // Fetch existing Make integration
   const { data: makeIntegration, isLoading: isLoadingIntegration } = useQuery({
@@ -116,7 +169,9 @@ export default function MakeSettings() {
       setTeamId(settings.team_id || "");
       setRegion(settings.region || "eu1");
       setGoogleAdsTemplateId(settings.google_ads_template_scenario_id || "");
-      setGoogleAnalyticsTemplateId(settings.google_analytics_template_scenario_id || "");
+      setGoogleAnalyticsTemplateId(
+        settings.google_analytics_template_scenario_id || "",
+      );
     }
   }, [makeIntegration]);
 
@@ -162,7 +217,8 @@ export default function MakeSettings() {
         team_id: teamId,
         region,
         google_ads_template_scenario_id: googleAdsTemplateId || undefined,
-        google_analytics_template_scenario_id: googleAnalyticsTemplateId || undefined,
+        google_analytics_template_scenario_id:
+          googleAnalyticsTemplateId || undefined,
         connected_at: new Date().toISOString(),
       };
 
@@ -209,24 +265,27 @@ export default function MakeSettings() {
       }
 
       // No existing row found -> insert new
-      const { error: insertError } = await supabase.from("tenant_integrations").insert([
-        {
-          tenant_id: currentTenantId,
-          integration_type: "make_api",
-          settings,
-          is_active: true,
-        },
-      ]);
+      const { error: insertError } = await supabase
+        .from("tenant_integrations")
+        .insert([
+          {
+            tenant_id: currentTenantId,
+            integration_type: "make_api",
+            settings,
+            is_active: true,
+          },
+        ]);
 
       // If a race condition happened and the row was created between lookup and insert, fall back to update.
       if (insertError && (insertError as any)?.code === "23505") {
-        const { data: rowAfterConflict, error: conflictLookupError } = await supabase
-          .from("tenant_integrations")
-          .select("id")
-          .eq("tenant_id", currentTenantId)
-          .eq("integration_type", "make_api")
-          .limit(1)
-          .maybeSingle();
+        const { data: rowAfterConflict, error: conflictLookupError } =
+          await supabase
+            .from("tenant_integrations")
+            .select("id")
+            .eq("tenant_id", currentTenantId)
+            .eq("integration_type", "make_api")
+            .limit(1)
+            .maybeSingle();
 
         if (conflictLookupError) throw conflictLookupError;
         if (!rowAfterConflict?.id) throw insertError;
@@ -246,7 +305,9 @@ export default function MakeSettings() {
       if (insertError) throw insertError;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["make-integration", currentTenantId] });
+      queryClient.invalidateQueries({
+        queryKey: ["make-integration", currentTenantId],
+      });
       toast({
         title: "ההגדרות נשמרו",
         description: "החיבור ל-Make.com הוגדר בהצלחה",
@@ -272,7 +333,9 @@ export default function MakeSettings() {
       if (error) throw error;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["make-integration", currentTenantId] });
+      queryClient.invalidateQueries({
+        queryKey: ["make-integration", currentTenantId],
+      });
       toast({
         title: "החיבור נותק",
         description: "האינטגרציה עם Make.com נותקה",
@@ -281,7 +344,11 @@ export default function MakeSettings() {
   });
 
   // Fetch connections
-  const { data: connections, isLoading: isLoadingConnections, refetch: refetchConnections } = useQuery({
+  const {
+    data: connections,
+    isLoading: isLoadingConnections,
+    refetch: refetchConnections,
+  } = useQuery({
     queryKey: ["make-connections", currentTenantId, apiToken, teamId, region],
     queryFn: async () => {
       const { data, error } = await supabase.functions.invoke("make-api", {
@@ -299,7 +366,11 @@ export default function MakeSettings() {
   });
 
   // Fetch scenarios
-  const { data: scenarios, isLoading: isLoadingScenarios, refetch: refetchScenarios } = useQuery({
+  const {
+    data: scenarios,
+    isLoading: isLoadingScenarios,
+    refetch: refetchScenarios,
+  } = useQuery({
     queryKey: ["make-scenarios", currentTenantId, apiToken, teamId, region],
     queryFn: async () => {
       const { data, error } = await supabase.functions.invoke("make-api", {
@@ -358,7 +429,11 @@ export default function MakeSettings() {
     <div className="space-y-6" dir="rtl">
       {/* Header */}
       <div className="flex items-center gap-4">
-        <Button variant="ghost" size="icon" onClick={() => navigate(buildPath("/integrations"))}>
+        <Button
+          variant="ghost"
+          size="icon"
+          onClick={() => navigate(buildPath("/integrations"))}
+        >
           <ArrowLeft className="h-4 w-4" />
         </Button>
         <div className="flex items-center gap-3">
@@ -367,7 +442,9 @@ export default function MakeSettings() {
           </div>
           <div>
             <h1 className="text-2xl font-bold">Make.com API</h1>
-            <p className="text-muted-foreground">חיבור ישיר לחשבון Make.com שלך</p>
+            <p className="text-muted-foreground">
+              חיבור ישיר לחשבון Make.com שלך
+            </p>
           </div>
         </div>
         {isConnected && (
@@ -384,11 +461,19 @@ export default function MakeSettings() {
             <Settings className="h-4 w-4" />
             הגדרות
           </TabsTrigger>
-          <TabsTrigger value="connections" disabled={!isConnected} className="flex items-center gap-2">
+          <TabsTrigger
+            value="connections"
+            disabled={!isConnected}
+            className="flex items-center gap-2"
+          >
             <Link2 className="h-4 w-4" />
             חיבורים
           </TabsTrigger>
-          <TabsTrigger value="scenarios" disabled={!isConnected} className="flex items-center gap-2">
+          <TabsTrigger
+            value="scenarios"
+            disabled={!isConnected}
+            className="flex items-center gap-2"
+          >
             <Workflow className="h-4 w-4" />
             Scenarios
           </TabsTrigger>
@@ -431,7 +516,11 @@ export default function MakeSettings() {
                     className="absolute left-1 top-1/2 -translate-y-1/2 h-7 w-7"
                     onClick={() => setShowToken(!showToken)}
                   >
-                    {showToken ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                    {showToken ? (
+                      <EyeOff className="h-4 w-4" />
+                    ) : (
+                      <Eye className="h-4 w-4" />
+                    )}
                   </Button>
                 </div>
                 <p className="text-xs text-muted-foreground">
@@ -449,7 +538,8 @@ export default function MakeSettings() {
                   placeholder="הזן את ה-Team ID שלך"
                 />
                 <p className="text-xs text-muted-foreground">
-                  ניתן למצוא את ה-Team ID ב-URL של Make.com (למשל: make.com/team/123456)
+                  ניתן למצוא את ה-Team ID ב-URL של Make.com (למשל:
+                  make.com/team/123456)
                 </p>
               </div>
 
@@ -475,7 +565,10 @@ export default function MakeSettings() {
               {/* Google Ads Template Scenario ID */}
               <div className="space-y-2 pt-4 border-t">
                 <Label>Google Ads Template Scenario</Label>
-                <Popover open={templateSelectorOpen} onOpenChange={setTemplateSelectorOpen}>
+                <Popover
+                  open={templateSelectorOpen}
+                  onOpenChange={setTemplateSelectorOpen}
+                >
                   <PopoverTrigger asChild>
                     <Button
                       variant="outline"
@@ -485,7 +578,9 @@ export default function MakeSettings() {
                       disabled={!apiToken || !teamId}
                     >
                       {googleAdsTemplateId
-                        ? templateScenarios?.find(s => s.id.toString() === googleAdsTemplateId)?.name || `Scenario #${googleAdsTemplateId}`
+                        ? templateScenarios?.find(
+                            (s) => s.id.toString() === googleAdsTemplateId,
+                          )?.name || `Scenario #${googleAdsTemplateId}`
                         : "בחר סנריו טמפלייט..."}
                       <ChevronsUpDown className="h-4 w-4 shrink-0 opacity-50" />
                     </Button>
@@ -516,12 +611,16 @@ export default function MakeSettings() {
                             >
                               <Check
                                 className={`ml-2 h-4 w-4 ${
-                                  googleAdsTemplateId === scenario.id.toString() ? "opacity-100" : "opacity-0"
+                                  googleAdsTemplateId === scenario.id.toString()
+                                    ? "opacity-100"
+                                    : "opacity-0"
                                 }`}
                               />
                               <div className="flex flex-col">
                                 <span>{scenario.name}</span>
-                                <span className="text-xs text-muted-foreground">ID: {scenario.id}</span>
+                                <span className="text-xs text-muted-foreground">
+                                  ID: {scenario.id}
+                                </span>
                               </div>
                             </CommandItem>
                           ))}
@@ -531,7 +630,8 @@ export default function MakeSettings() {
                   </PopoverContent>
                 </Popover>
                 <p className="text-xs text-muted-foreground">
-                  צור Scenario ב-Make.com עם 2 מודולים: Google Ads Report → HTTP POST, ובחר אותו מהרשימה.
+                  צור Scenario ב-Make.com עם 2 מודולים: Google Ads Report → HTTP
+                  POST, ובחר אותו מהרשימה.
                   <br />
                   המערכת תשכפל אותו אוטומטית לכל טבלת Google Ads חדשה.
                 </p>
@@ -540,7 +640,10 @@ export default function MakeSettings() {
               {/* Google Analytics Template Scenario ID */}
               <div className="space-y-2 pt-4 border-t">
                 <Label>Google Analytics Template Scenario</Label>
-                <Popover open={gaTemplateSelectorOpen} onOpenChange={setGaTemplateSelectorOpen}>
+                <Popover
+                  open={gaTemplateSelectorOpen}
+                  onOpenChange={setGaTemplateSelectorOpen}
+                >
                   <PopoverTrigger asChild>
                     <Button
                       variant="outline"
@@ -550,7 +653,10 @@ export default function MakeSettings() {
                       disabled={!apiToken || !teamId}
                     >
                       {googleAnalyticsTemplateId
-                        ? templateScenarios?.find(s => s.id.toString() === googleAnalyticsTemplateId)?.name || `Scenario #${googleAnalyticsTemplateId}`
+                        ? templateScenarios?.find(
+                            (s) =>
+                              s.id.toString() === googleAnalyticsTemplateId,
+                          )?.name || `Scenario #${googleAnalyticsTemplateId}`
                         : "בחר סנריו טמפלייט ל-GA..."}
                       <ChevronsUpDown className="h-4 w-4 shrink-0 opacity-50" />
                     </Button>
@@ -575,18 +681,25 @@ export default function MakeSettings() {
                               key={scenario.id}
                               value={`${scenario.name} ${scenario.id}`}
                               onSelect={() => {
-                                setGoogleAnalyticsTemplateId(scenario.id.toString());
+                                setGoogleAnalyticsTemplateId(
+                                  scenario.id.toString(),
+                                );
                                 setGaTemplateSelectorOpen(false);
                               }}
                             >
                               <Check
                                 className={`ml-2 h-4 w-4 ${
-                                  googleAnalyticsTemplateId === scenario.id.toString() ? "opacity-100" : "opacity-0"
+                                  googleAnalyticsTemplateId ===
+                                  scenario.id.toString()
+                                    ? "opacity-100"
+                                    : "opacity-0"
                                 }`}
                               />
                               <div className="flex flex-col">
                                 <span>{scenario.name}</span>
-                                <span className="text-xs text-muted-foreground">ID: {scenario.id}</span>
+                                <span className="text-xs text-muted-foreground">
+                                  ID: {scenario.id}
+                                </span>
                               </div>
                             </CommandItem>
                           ))}
@@ -596,7 +709,8 @@ export default function MakeSettings() {
                   </PopoverContent>
                 </Popover>
                 <p className="text-xs text-muted-foreground">
-                  צור Scenario ב-Make.com עם 2 מודולים: Google Analytics Report → HTTP POST, ובחר אותו מהרשימה.
+                  צור Scenario ב-Make.com עם 2 מודולים: Google Analytics Report
+                  → HTTP POST, ובחר אותו מהרשימה.
                   <br />
                   המערכת תשכפל אותו אוטומטית לכל טבלת Google Analytics חדשה.
                 </p>
@@ -605,7 +719,9 @@ export default function MakeSettings() {
               <div className="flex gap-3 pt-4">
                 <Button
                   onClick={() => testConnectionMutation.mutate()}
-                  disabled={!apiToken || !teamId || testConnectionMutation.isPending}
+                  disabled={
+                    !apiToken || !teamId || testConnectionMutation.isPending
+                  }
                   variant="outline"
                 >
                   {testConnectionMutation.isPending ? (
@@ -617,7 +733,9 @@ export default function MakeSettings() {
                 </Button>
                 <Button
                   onClick={() => saveSettingsMutation.mutate()}
-                  disabled={!apiToken || !teamId || saveSettingsMutation.isPending}
+                  disabled={
+                    !apiToken || !teamId || saveSettingsMutation.isPending
+                  }
                 >
                   {saveSettingsMutation.isPending ? (
                     <Loader2 className="h-4 w-4 animate-spin ml-2" />
@@ -714,14 +832,23 @@ export default function MakeSettings() {
                     {connections.map((connection) => (
                       <TableRow key={connection.id}>
                         <TableCell className="font-medium">
-                          {connection.name || connection.accountName || `Connection ${connection.id}`}
+                          {connection.name ||
+                            connection.accountName ||
+                            `Connection ${connection.id}`}
                         </TableCell>
-                        <TableCell>{connection.typeName || connection.type || connection.accountType || "Unknown"}</TableCell>
+                        <TableCell>
+                          {connection.typeName ||
+                            connection.type ||
+                            connection.accountType ||
+                            "Unknown"}
+                        </TableCell>
                         <TableCell>
                           {connection.invalid ? (
                             <Badge variant="destructive">לא תקין</Badge>
                           ) : (
-                            <Badge variant="default" className="bg-green-500">תקין</Badge>
+                            <Badge variant="default" className="bg-green-500">
+                              תקין
+                            </Badge>
                           )}
                         </TableCell>
                       </TableRow>
@@ -782,7 +909,9 @@ export default function MakeSettings() {
                           <div>
                             <div>{scenario.name}</div>
                             {scenario.description && (
-                              <div className="text-xs text-muted-foreground">{scenario.description}</div>
+                              <div className="text-xs text-muted-foreground">
+                                {scenario.description}
+                              </div>
                             )}
                           </div>
                         </TableCell>
@@ -790,13 +919,15 @@ export default function MakeSettings() {
                           {scenario.isPaused ? (
                             <Badge variant="secondary">מושהה</Badge>
                           ) : scenario.isActive ? (
-                            <Badge variant="default" className="bg-green-500">פעיל</Badge>
+                            <Badge variant="default" className="bg-green-500">
+                              פעיל
+                            </Badge>
                           ) : (
                             <Badge variant="outline">לא פעיל</Badge>
                           )}
                         </TableCell>
                         <TableCell>
-                          {scenario.scheduling?.type === "interval" 
+                          {scenario.scheduling?.type === "interval"
                             ? `כל ${scenario.scheduling.interval} דקות`
                             : scenario.scheduling?.type || "ידני"}
                         </TableCell>
@@ -804,7 +935,9 @@ export default function MakeSettings() {
                           <Button
                             size="sm"
                             variant="outline"
-                            onClick={() => runScenarioMutation.mutate(scenario.id)}
+                            onClick={() =>
+                              runScenarioMutation.mutate(scenario.id)
+                            }
                             disabled={runScenarioMutation.isPending}
                           >
                             {runScenarioMutation.isPending ? (

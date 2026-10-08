@@ -55,7 +55,11 @@ interface EditSupplierDialogProps {
   onOpenChange: (open: boolean) => void;
 }
 
-export function EditSupplierDialog({ supplier, open, onOpenChange }: EditSupplierDialogProps) {
+export function EditSupplierDialog({
+  supplier,
+  open,
+  onOpenChange,
+}: EditSupplierDialogProps) {
   const queryClient = useQueryClient();
   const { tenantId } = useCurrentTenant();
 
@@ -88,7 +92,11 @@ export function EditSupplierDialog({ supplier, open, onOpenChange }: EditSupplie
         .update({
           name: values.name,
           type: values.type,
-          related_campaigner_id: (values.related_campaigner_id && values.related_campaigner_id !== "none") ? values.related_campaigner_id : null,
+          related_campaigner_id:
+            values.related_campaigner_id &&
+            values.related_campaigner_id !== "none"
+              ? values.related_campaigner_id
+              : null,
           phone: values.phone || null,
           email: values.email || null,
           folder_link: values.folder_link || null,
@@ -120,7 +128,10 @@ export function EditSupplierDialog({ supplier, open, onOpenChange }: EditSupplie
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent dir="rtl" className="max-w-2xl max-h-[90vh] overflow-y-auto">
+      <DialogContent
+        dir="rtl"
+        className="max-w-2xl max-h-[90vh] overflow-y-auto"
+      >
         <DialogHeader>
           <DialogTitle>עריכת ספק: {supplier.name}</DialogTitle>
           <DialogDescription>
@@ -150,7 +161,10 @@ export function EditSupplierDialog({ supplier, open, onOpenChange }: EditSupplie
               render={({ field }) => (
                 <FormItem>
                   <FormLabel>סוג ספק *</FormLabel>
-                  <Select onValueChange={field.onChange} defaultValue={field.value}>
+                  <Select
+                    onValueChange={field.onChange}
+                    defaultValue={field.value}
+                  >
                     <FormControl>
                       <SelectTrigger>
                         <SelectValue />
@@ -233,7 +247,10 @@ export function EditSupplierDialog({ supplier, open, onOpenChange }: EditSupplie
                 <FormItem>
                   <FormLabel>קישור לתיקייה</FormLabel>
                   <FormControl>
-                    <Input {...field} placeholder="https://drive.google.com/..." />
+                    <Input
+                      {...field}
+                      placeholder="https://drive.google.com/..."
+                    />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -242,7 +259,7 @@ export function EditSupplierDialog({ supplier, open, onOpenChange }: EditSupplie
 
             <div className="border-t pt-4 mt-4">
               <h3 className="text-sm font-semibold mb-4">תשלומים</h3>
-              
+
               <div className="space-y-4">
                 <div className="grid grid-cols-2 gap-4 p-4 bg-muted/30 rounded-lg">
                   <FormField
@@ -264,7 +281,10 @@ export function EditSupplierDialog({ supplier, open, onOpenChange }: EditSupplie
                     render={({ field }) => (
                       <FormItem>
                         <FormLabel>סוכנות</FormLabel>
-                        <Select onValueChange={field.onChange} value={field.value}>
+                        <Select
+                          onValueChange={field.onChange}
+                          value={field.value}
+                        >
                           <FormControl>
                             <SelectTrigger>
                               <SelectValue placeholder="בחר סוכנות" />
@@ -304,7 +324,10 @@ export function EditSupplierDialog({ supplier, open, onOpenChange }: EditSupplie
                     render={({ field }) => (
                       <FormItem>
                         <FormLabel>סוכנות</FormLabel>
-                        <Select onValueChange={field.onChange} value={field.value}>
+                        <Select
+                          onValueChange={field.onChange}
+                          value={field.value}
+                        >
                           <FormControl>
                             <SelectTrigger>
                               <SelectValue placeholder="בחר סוכנות" />
@@ -344,7 +367,10 @@ export function EditSupplierDialog({ supplier, open, onOpenChange }: EditSupplie
                     render={({ field }) => (
                       <FormItem>
                         <FormLabel>סוכנות</FormLabel>
-                        <Select onValueChange={field.onChange} value={field.value}>
+                        <Select
+                          onValueChange={field.onChange}
+                          value={field.value}
+                        >
                           <FormControl>
                             <SelectTrigger>
                               <SelectValue placeholder="בחר סוכנות" />

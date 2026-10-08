@@ -7,13 +7,16 @@ import {
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+  "Access-Control-Allow-Headers":
+    "authorization, x-client-info, apikey, content-type",
 };
 
 const SEO_REPORT_SOURCES = new Set(["ahrefs_reports", "seo_unified"]);
 const BATCH_SIZE = 4;
 
-function isSeoReportTable(settings: Record<string, unknown> | null | undefined): boolean {
+function isSeoReportTable(
+  settings: Record<string, unknown> | null | undefined,
+): boolean {
   const ds = settings?.data_source;
   return typeof ds === "string" && SEO_REPORT_SOURCES.has(ds);
 }
@@ -58,21 +61,30 @@ serve(async (req) => {
   try {
     const { data: allTables, error: tablesError } = await supabase
       .from("crm_tables")
-      .select("id, tenant_id, name, client_id, integration_settings, integration_type")
+      .select(
+        "id, tenant_id, name, client_id, integration_settings, integration_type",
+      )
       .eq("integration_type", "ahrefs")
       .order("id");
 
     if (tablesError) throw tablesError;
 
     const seoTables = (allTables || []).filter((t) =>
-      isSeoReportTable((t.integration_settings as Record<string, unknown>) || {})
+      isSeoReportTable(
+        (t.integration_settings as Record<string, unknown>) || {},
+      ),
     );
 
     const clientIds = Array.from(
-      new Set(seoTables.map((t) => clientIdFromTable(t)).filter(Boolean) as string[]),
+      new Set(
+        seoTables.map((t) => clientIdFromTable(t)).filter(Boolean) as string[],
+      ),
     );
 
-    const latestReportByClient = new Map<string, { domain?: string; received_at?: string }>();
+    const latestReportByClient = new Map<
+      string,
+      { domain?: string; received_at?: string }
+    >();
     if (clientIds.length > 0) {
       const { data: reportRows } = await supabase
         .from("ahrefs_reports")
@@ -86,7 +98,10 @@ serve(async (req) => {
       }
     }
 
-    const clientRows = new Map<string, { name?: string; website?: string | null; ahrefs_domain?: string | null }>();
+    const clientRows = new Map<
+      string,
+      { name?: string; website?: string | null; ahrefs_domain?: string | null }
+    >();
     if (clientIds.length > 0) {
       const { data: clients } = await supabase
         .from("clients")
@@ -100,9 +115,12 @@ serve(async (req) => {
     const pending = forceAll
       ? seoTables
       : seoTables.filter((t) => {
-          const settings = (t.integration_settings as Record<string, unknown>) || {};
+          const settings =
+            (t.integration_settings as Record<string, unknown>) || {};
           const clientId = clientIdFromTable(t);
-          const latest = clientId ? latestReportByClient.get(clientId) : undefined;
+          const latest = clientId
+            ? latestReportByClient.get(clientId)
+            : undefined;
           return needsSeoSyncThisMonth(
             settings.last_sync_at as string | undefined,
             latest?.received_at,
@@ -118,10 +136,13 @@ serve(async (req) => {
 
     if (dryRun) {
       const batchDetails = tables.map((t) => {
-        const settings = (t.integration_settings as Record<string, unknown>) || {};
+        const settings =
+          (t.integration_settings as Record<string, unknown>) || {};
         const clientId = clientIdFromTable(t);
         const client = clientId ? clientRows.get(clientId) : null;
-        const latest = clientId ? latestReportByClient.get(clientId) : undefined;
+        const latest = clientId
+          ? latestReportByClient.get(clientId)
+          : undefined;
         const resolved = pickSeoSyncDomain({
           settings,
           client,
@@ -156,8 +177,7 @@ serve(async (req) => {
           batch_offset: batchOffset,
           batch: batchDetails,
           hasMore,
-          note:
-            "UI 'סונכרן' = ahrefs_reports.received_at; CategorySyncControl/cron used only integration_settings.last_sync_at until aligned.",
+          note: "UI 'סונכרן' = ahrefs_reports.received_at; CategorySyncControl/cron used only integration_settings.last_sync_at until aligned.",
         }),
         { headers: { ...corsHeaders, "Content-Type": "application/json" } },
       );
@@ -170,16 +190,26 @@ serve(async (req) => {
           "Content-Type": "application/json",
           Authorization: `Bearer ${serviceKey}`,
         },
-        body: JSON.stringify({ batch_offset: batchOffset + BATCH_SIZE, force: forceAll }),
-      }).catch((e) => console.error("[cron-ahrefs] next batch trigger failed:", e?.message));
+        body: JSON.stringify({
+          batch_offset: batchOffset + BATCH_SIZE,
+          force: forceAll,
+        }),
+      }).catch((e) =>
+        console.error("[cron-ahrefs] next batch trigger failed:", e?.message),
+      );
     }
 
     for (const t of tables) {
-      const settings = (t.integration_settings as Record<string, unknown>) || {};
+      const settings =
+        (t.integration_settings as Record<string, unknown>) || {};
       const clientId = clientIdFromTable(t);
 
       if (!clientId) {
-        results.push({ tableId: t.id, status: "skipped", reason: "missing clientId" });
+        results.push({
+          tableId: t.id,
+          status: "skipped",
+          reason: "missing clientId",
+        });
         continue;
       }
 
@@ -208,29 +238,37 @@ serve(async (req) => {
           tableId: t.id,
           name: t.name,
           status: "skipped",
-          reason: "no domain — set דומיין Ahrefs / אתר בחיבורים, GSC link, or sync Ahrefs once",
+          reason:
+            "no domain — set דומיין Ahrefs / אתר בחיבורים, GSC link, or sync Ahrefs once",
           client_name: client.name,
         });
         continue;
       }
 
       try {
-        const fetchRes = await fetch(`${supabaseUrl}/functions/v1/fetch-ahrefs-snapshot`, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${serviceKey}`,
-            apikey: serviceKey,
+        const fetchRes = await fetch(
+          `${supabaseUrl}/functions/v1/fetch-ahrefs-snapshot`,
+          {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${serviceKey}`,
+              apikey: serviceKey,
+            },
+            body: JSON.stringify({
+              clientId,
+              domain,
+              country: (settings.country as string) || "il",
+              ...(settings.ahrefs_project_id
+                ? { projectId: settings.ahrefs_project_id }
+                : {}),
+              ...(settings.ahrefs_mode ? { mode: settings.ahrefs_mode } : {}),
+              ...(settings.ahrefs_protocol
+                ? { protocol: settings.ahrefs_protocol }
+                : {}),
+            }),
           },
-          body: JSON.stringify({
-            clientId,
-            domain,
-            country: (settings.country as string) || "il",
-            ...(settings.ahrefs_project_id ? { projectId: settings.ahrefs_project_id } : {}),
-            ...(settings.ahrefs_mode ? { mode: settings.ahrefs_mode } : {}),
-            ...(settings.ahrefs_protocol ? { protocol: settings.ahrefs_protocol } : {}),
-          }),
-        });
+        );
 
         const fetchJson = await fetchRes.json().catch(() => ({}));
         if (!fetchRes.ok || fetchJson?.error) {
@@ -250,7 +288,11 @@ serve(async (req) => {
         await supabase
           .from("crm_tables")
           .update({
-            integration_settings: { ...settings, last_sync_at: syncedAt, targetDomain: domain },
+            integration_settings: {
+              ...settings,
+              last_sync_at: syncedAt,
+              targetDomain: domain,
+            },
           })
           .eq("id", t.id);
 
@@ -302,7 +344,10 @@ serve(async (req) => {
         error: error instanceof Error ? error.message : String(error),
         results,
       }),
-      { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      {
+        status: 500,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      },
     );
   }
 });

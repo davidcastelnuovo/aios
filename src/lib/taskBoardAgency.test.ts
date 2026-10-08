@@ -26,7 +26,10 @@ test("header agency wins over the first-agency fallback", () => {
 test("all agencies falls back to the first loaded agency", () => {
   assert.equal(resolveBoardTaskAgency("all", "agency-first"), "agency-first");
   assert.equal(resolveBoardTaskAgency(null, "agency-first"), "agency-first");
-  assert.equal(resolveBoardTaskAgency(undefined, "agency-first"), "agency-first");
+  assert.equal(
+    resolveBoardTaskAgency(undefined, "agency-first"),
+    "agency-first",
+  );
 });
 
 test("returns null when neither source has an agency", () => {
@@ -36,14 +39,24 @@ test("returns null when neither source has an agency", () => {
 
 test("a task for a client belongs to that client's agency", () => {
   assert.equal(
-    resolveNewTaskAgency({ clientAgencyId: DMM, selectedAgency: PROMO, fallbackAgencyId: PROMO }),
+    resolveNewTaskAgency({
+      clientAgencyId: DMM,
+      selectedAgency: PROMO,
+      fallbackAgencyId: PROMO,
+    }),
     DMM,
   );
 });
 
 test("a task without a client uses the header agency, then the fallback", () => {
-  assert.equal(resolveNewTaskAgency({ selectedAgency: PROMO, fallbackAgencyId: "first" }), PROMO);
-  assert.equal(resolveNewTaskAgency({ selectedAgency: "all", fallbackAgencyId: "first" }), "first");
+  assert.equal(
+    resolveNewTaskAgency({ selectedAgency: PROMO, fallbackAgencyId: "first" }),
+    PROMO,
+  );
+  assert.equal(
+    resolveNewTaskAgency({ selectedAgency: "all", fallbackAgencyId: "first" }),
+    "first",
+  );
 });
 
 const misstampedDmmTask = {
@@ -58,7 +71,12 @@ const promoClientTaskStampedDmm = {
   client_id: "client-promo",
   clients: { agency_id: PROMO },
 };
-const promoTaskNoClient = { id: "3", agency_id: PROMO, client_id: null, clients: null };
+const promoTaskNoClient = {
+  id: "3",
+  agency_id: PROMO,
+  client_id: null,
+  clients: null,
+};
 
 test("the client's agency decides where a task belongs", () => {
   assert.equal(resolveTaskEffectiveAgency(misstampedDmmTask), DMM);
@@ -70,7 +88,10 @@ test("filtering to promo hides another agency's client and keeps its own", () =>
     [misstampedDmmTask, promoClientTaskStampedDmm, promoTaskNoClient],
     PROMO,
   );
-  assert.deepEqual(filtered.map((task) => task.id), ["2", "3"]);
+  assert.deepEqual(
+    filtered.map((task) => task.id),
+    ["2", "3"],
+  );
 });
 
 test("filterTasksBySelectedAgency leaves the list alone for all", () => {
@@ -80,7 +101,11 @@ test("filterTasksBySelectedAgency leaves the list alone for all", () => {
 });
 
 test("mine view keeps assigned tasks across agencies regardless of header", () => {
-  const rows = [misstampedDmmTask, promoClientTaskStampedDmm, promoTaskNoClient];
+  const rows = [
+    misstampedDmmTask,
+    promoClientTaskStampedDmm,
+    promoTaskNoClient,
+  ];
   assert.deepEqual(
     filterTasksForBoardView(rows, "all", "mine").map((task) => task.id),
     ["1", "2", "3"],
@@ -99,7 +124,11 @@ test("resolveTasksBoardAgencyFilter ignores header on person queues", () => {
 });
 
 test("team view still honors the header agency", () => {
-  const rows = [misstampedDmmTask, promoClientTaskStampedDmm, promoTaskNoClient];
+  const rows = [
+    misstampedDmmTask,
+    promoClientTaskStampedDmm,
+    promoTaskNoClient,
+  ];
   assert.deepEqual(
     filterTasksForBoardView(rows, PROMO, "all").map((task) => task.id),
     ["2", "3"],
@@ -115,7 +144,11 @@ test("header agency applies on team board only", () => {
 });
 
 test("picking a specific campaigner keeps tasks across agencies", () => {
-  const rows = [misstampedDmmTask, promoClientTaskStampedDmm, promoTaskNoClient];
+  const rows = [
+    misstampedDmmTask,
+    promoClientTaskStampedDmm,
+    promoTaskNoClient,
+  ];
   assert.deepEqual(
     filterTasksForBoardView(rows, "all", "staff-david").map((task) => task.id),
     ["1", "2", "3"],
@@ -134,7 +167,10 @@ test("syncLocalTasksForAgencyFilter keeps mine rows across agencies while fetchi
     selectedAgency: "all",
     campaignerFilter: "mine",
   });
-  assert.deepEqual(duringFetch.map((task) => task.id), ["1", "3"]);
+  assert.deepEqual(
+    duringFetch.map((task) => task.id),
+    ["1", "3"],
+  );
 });
 
 test("syncLocalTasksForAgencyFilter can narrow by campaigner while fetching", () => {
@@ -156,7 +192,10 @@ test("syncLocalTasksForAgencyFilter can narrow by campaigner while fetching", ()
         campaignerIds: ["staff-itay"],
       }),
   });
-  assert.deepEqual(duringFetch.map((task) => task.id), ["1"]);
+  assert.deepEqual(
+    duringFetch.map((task) => task.id),
+    ["1"],
+  );
 });
 
 test("buildTasksBoardScopeOrFilter scopes tenant and shared agencies only", () => {
@@ -169,7 +208,9 @@ test("buildTasksBoardScopeOrFilter scopes tenant and shared agencies only", () =
     "tenant_id.eq.tenant-dmm,agency_id.in.(agency-dmm-mc)",
   );
   assert.equal(
-    buildTasksBoardScopeOrFilter(resolveTasksBoardScope({ tenantId: "tenant-promo" })),
+    buildTasksBoardScopeOrFilter(
+      resolveTasksBoardScope({ tenantId: "tenant-promo" }),
+    ),
     "tenant_id.eq.tenant-promo",
   );
 });
@@ -187,7 +228,11 @@ test("resolveTasksBoardScope ignores own-tenant agency ids (not cross-tenant sha
       tenantId: "tenant-promo",
       crossTenantAgencyIds: ["agency-dmm-mc"],
     }),
-    { type: "tenant_or_shared", tenantId: "tenant-promo", crossTenantAgencyIds: ["agency-dmm-mc"] },
+    {
+      type: "tenant_or_shared",
+      tenantId: "tenant-promo",
+      crossTenantAgencyIds: ["agency-dmm-mc"],
+    },
   );
 });
 
@@ -208,7 +253,9 @@ test("filterTasksByBoardTenantScope keeps own tenant and shared-agency client ro
   };
   const rows = [ownTenantTask, foreignSharedClientTask, foreignUnsharedTask];
   assert.deepEqual(
-    filterTasksByBoardTenantScope(rows, promoTenant, [sharedDmmAgency]).map((task) => task.id),
+    filterTasksByBoardTenantScope(rows, promoTenant, [sharedDmmAgency]).map(
+      (task) => task.id,
+    ),
     ["3", "1"],
   );
 });
@@ -236,7 +283,10 @@ test("syncLocalTasksForAgencyFilter narrows during an in-flight agency switch", 
     previousLocal: [misstampedDmmTask, promoTaskNoClient],
     selectedAgency: PROMO,
   });
-  assert.deepEqual(duringFetch.map((task) => task.id), ["3"]);
+  assert.deepEqual(
+    duringFetch.map((task) => task.id),
+    ["3"],
+  );
 });
 
 test("syncLocalTasksForAgencyFilter applies settled server rows for the agency", () => {
@@ -246,5 +296,8 @@ test("syncLocalTasksForAgencyFilter applies settled server rows for the agency",
     previousLocal: [],
     selectedAgency: PROMO,
   });
-  assert.deepEqual(settled.map((task) => task.id), ["2"]);
+  assert.deepEqual(
+    settled.map((task) => task.id),
+    ["2"],
+  );
 });

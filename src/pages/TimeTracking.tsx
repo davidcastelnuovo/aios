@@ -3,13 +3,41 @@ import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Clock, Play, Square, Trash2, Calendar, Pencil, Filter, X, Pause, Coffee } from "lucide-react";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import {
+  Clock,
+  Play,
+  Square,
+  Trash2,
+  Calendar,
+  Pencil,
+  Filter,
+  X,
+  Pause,
+  Coffee,
+} from "lucide-react";
 import { toast } from "sonner";
 import { useState, useEffect } from "react";
-import { format, differenceInMinutes, parse, startOfDay, endOfDay } from "date-fns";
+import {
+  format,
+  differenceInMinutes,
+  parse,
+  startOfDay,
+  endOfDay,
+} from "date-fns";
 import { he } from "date-fns/locale";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
 import { Calendar as CalendarComponent } from "@/components/ui/calendar";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -42,8 +70,12 @@ export default function TimeTracking() {
   const [editingEntry, setEditingEntry] = useState<any>(null);
   const [editStartTime, setEditStartTime] = useState("");
   const [editEndTime, setEditEndTime] = useState("");
-  const [filterStartDate, setFilterStartDate] = useState<Date | undefined>(undefined);
-  const [filterEndDate, setFilterEndDate] = useState<Date | undefined>(undefined);
+  const [filterStartDate, setFilterStartDate] = useState<Date | undefined>(
+    undefined,
+  );
+  const [filterEndDate, setFilterEndDate] = useState<Date | undefined>(
+    undefined,
+  );
   const queryClient = useQueryClient();
 
   useEffect(() => {
@@ -55,7 +87,9 @@ export default function TimeTracking() {
     // tenantId in key ensures the profile cache is scoped per-tenant (campaigner_id can differ)
     queryKey: ["profile", tenantId],
     queryFn: async () => {
-      const { data: { user } } = await supabase.auth.getUser();
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
       if (!user) throw new Error("Not authenticated");
 
       const { data, error } = await supabase
@@ -87,18 +121,27 @@ export default function TimeTracking() {
   });
 
   const { data: activeEntry } = useQuery({
-    queryKey: ["active-time-entry", tenantId, selectedCampaigner === "me" ? profile?.campaigner_id : selectedCampaigner],
+    queryKey: [
+      "active-time-entry",
+      tenantId,
+      selectedCampaigner === "me" ? profile?.campaigner_id : selectedCampaigner,
+    ],
     queryFn: async () => {
       if (!tenantId) return null;
-      const campaignerId = selectedCampaigner === "me" ? profile?.campaigner_id : selectedCampaigner;
+      const campaignerId =
+        selectedCampaigner === "me"
+          ? profile?.campaigner_id
+          : selectedCampaigner;
       if (!campaignerId) return null;
 
       const { data, error } = await supabase
         .from("time_entries")
-        .select(`
+        .select(
+          `
           *,
           campaigners (full_name)
-        `)
+        `,
+        )
         .eq("tenant_id", tenantId)
         .eq("campaigner_id", campaignerId)
         .is("end_time", null)
@@ -109,7 +152,9 @@ export default function TimeTracking() {
       if (error) throw error;
       return data;
     },
-    enabled: !!tenantId && (selectedCampaigner === "me" ? !!profile?.campaigner_id : true),
+    enabled:
+      !!tenantId &&
+      (selectedCampaigner === "me" ? !!profile?.campaigner_id : true),
     refetchInterval: 5000,
   });
 
@@ -154,16 +199,24 @@ export default function TimeTracking() {
   });
 
   const { data: timeEntries } = useQuery({
-    queryKey: ["time-entries", tenantId, selectedCampaigner, filterStartDate?.toISOString(), filterEndDate?.toISOString()],
+    queryKey: [
+      "time-entries",
+      tenantId,
+      selectedCampaigner,
+      filterStartDate?.toISOString(),
+      filterEndDate?.toISOString(),
+    ],
     queryFn: async () => {
       if (!tenantId) return [];
       let query = supabase
         .from("time_entries")
-        .select(`
+        .select(
+          `
           *,
           campaigners (full_name),
           time_entry_breaks (*)
-        `)
+        `,
+        )
         .eq("tenant_id", tenantId)
         .order("start_time", { ascending: false });
 
@@ -175,7 +228,10 @@ export default function TimeTracking() {
 
       // Date filtering
       if (filterStartDate) {
-        query = query.gte("start_time", startOfDay(filterStartDate).toISOString());
+        query = query.gte(
+          "start_time",
+          startOfDay(filterStartDate).toISOString(),
+        );
       }
       if (filterEndDate) {
         query = query.lte("start_time", endOfDay(filterEndDate).toISOString());
@@ -185,7 +241,9 @@ export default function TimeTracking() {
       if (error) throw error;
       return data;
     },
-    enabled: !!tenantId && (selectedCampaigner === "me" ? !!profile?.campaigner_id : true),
+    enabled:
+      !!tenantId &&
+      (selectedCampaigner === "me" ? !!profile?.campaigner_id : true),
   });
 
   const startTimerMutation = useMutation({
@@ -194,7 +252,9 @@ export default function TimeTracking() {
       let campaignerId = profile?.campaigner_id as string | null | undefined;
 
       // Get current user for secure lookups
-      const { data: { user } } = await supabase.auth.getUser();
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
       if (!user) throw new Error("Not authenticated");
 
       if (!campaignerId) {
@@ -208,31 +268,39 @@ export default function TimeTracking() {
       }
 
       if (!campaignerId) {
-        throw new Error("לא נמצא קמפיינר משויך למשתמש. יש לשייך קמפיינר בפרופיל.");
+        throw new Error(
+          "לא נמצא קמפיינר משויך למשתמש. יש לשייך קמפיינר בפרופיל.",
+        );
       }
 
       // Fetch tenant_id to satisfy RLS policy
-      const { data: tenantId, error: tenantErr } = await supabase.rpc("get_user_tenant_id", { _user_id: user.id });
+      const { data: tenantId, error: tenantErr } = await supabase.rpc(
+        "get_user_tenant_id",
+        { _user_id: user.id },
+      );
       if (tenantErr) throw tenantErr;
-      if (!tenantId) throw new Error("לא נמצא טננט למשתמש. יש לשייך משתמש לטננט.");
+      if (!tenantId)
+        throw new Error("לא נמצא טננט למשתמש. יש לשייך משתמש לטננט.");
 
-      const { error } = await supabase
-        .from("time_entries")
-        .insert({
-          campaigner_id: campaignerId,
-          start_time: new Date().toISOString(),
-          tenant_id: tenantId as string,
-        });
+      const { error } = await supabase.from("time_entries").insert({
+        campaigner_id: campaignerId,
+        start_time: new Date().toISOString(),
+        tenant_id: tenantId as string,
+      });
 
       if (error) throw error;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["active-time-entry", tenantId] });
+      queryClient.invalidateQueries({
+        queryKey: ["active-time-entry", tenantId],
+      });
       queryClient.invalidateQueries({ queryKey: ["time-entries", tenantId] });
       toast.success("השעון התחיל");
     },
     onError: (err) => {
-      toast.error(`שגיאה בהתחלת השעון: ${err instanceof Error ? err.message : ""}`);
+      toast.error(
+        `שגיאה בהתחלת השעון: ${err instanceof Error ? err.message : ""}`,
+      );
     },
   });
 
@@ -254,10 +322,14 @@ export default function TimeTracking() {
       if (error) throw error;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["active-time-entry", tenantId] });
+      queryClient.invalidateQueries({
+        queryKey: ["active-time-entry", tenantId],
+      });
       queryClient.invalidateQueries({ queryKey: ["time-entries", tenantId] });
       queryClient.invalidateQueries({ queryKey: ["active-break", tenantId] });
-      queryClient.invalidateQueries({ queryKey: ["active-entry-breaks", tenantId] });
+      queryClient.invalidateQueries({
+        queryKey: ["active-entry-breaks", tenantId],
+      });
       toast.success("השעון נעצר");
     },
     onError: () => {
@@ -269,20 +341,20 @@ export default function TimeTracking() {
   const startBreakMutation = useMutation({
     mutationFn: async (entryId: string) => {
       if (!tenantId) throw new Error("No tenant");
-      
-      const { error } = await supabase
-        .from("time_entry_breaks")
-        .insert({
-          time_entry_id: entryId,
-          tenant_id: tenantId,
-          start_time: new Date().toISOString(),
-        });
+
+      const { error } = await supabase.from("time_entry_breaks").insert({
+        time_entry_id: entryId,
+        tenant_id: tenantId,
+        start_time: new Date().toISOString(),
+      });
 
       if (error) throw error;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["active-break", tenantId] });
-      queryClient.invalidateQueries({ queryKey: ["active-entry-breaks", tenantId] });
+      queryClient.invalidateQueries({
+        queryKey: ["active-entry-breaks", tenantId],
+      });
       toast.success("הפסקה התחילה");
     },
     onError: () => {
@@ -302,7 +374,9 @@ export default function TimeTracking() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["active-break", tenantId] });
-      queryClient.invalidateQueries({ queryKey: ["active-entry-breaks", tenantId] });
+      queryClient.invalidateQueries({
+        queryKey: ["active-entry-breaks", tenantId],
+      });
       toast.success("הפסקה הסתיימה");
     },
     onError: () => {
@@ -329,7 +403,15 @@ export default function TimeTracking() {
   });
 
   const editEntryMutation = useMutation({
-    mutationFn: async ({ entryId, startTime, endTime }: { entryId: string; startTime: string; endTime: string }) => {
+    mutationFn: async ({
+      entryId,
+      startTime,
+      endTime,
+    }: {
+      entryId: string;
+      startTime: string;
+      endTime: string;
+    }) => {
       const { error } = await supabase
         .from("time_entries")
         .update({
@@ -342,7 +424,9 @@ export default function TimeTracking() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["time-entries", tenantId] });
-      queryClient.invalidateQueries({ queryKey: ["active-time-entry", tenantId] });
+      queryClient.invalidateQueries({
+        queryKey: ["active-time-entry", tenantId],
+      });
       setEditingEntry(null);
       toast.success("הרשומה עודכנה");
     },
@@ -354,7 +438,11 @@ export default function TimeTracking() {
   const handleEditClick = (entry: any) => {
     setEditingEntry(entry);
     setEditStartTime(format(new Date(entry.start_time), "yyyy-MM-dd'T'HH:mm"));
-    setEditEndTime(entry.end_time ? format(new Date(entry.end_time), "yyyy-MM-dd'T'HH:mm") : "");
+    setEditEndTime(
+      entry.end_time
+        ? format(new Date(entry.end_time), "yyyy-MM-dd'T'HH:mm")
+        : "",
+    );
   };
 
   const handleEditSubmit = () => {
@@ -387,7 +475,10 @@ export default function TimeTracking() {
         // Active break - count from start to now
         return acc + differenceInMinutes(currentTime, new Date(brk.start_time));
       }
-      return acc + differenceInMinutes(new Date(brk.end_time), new Date(brk.start_time));
+      return (
+        acc +
+        differenceInMinutes(new Date(brk.end_time), new Date(brk.start_time))
+      );
     }, 0);
   };
 
@@ -399,7 +490,11 @@ export default function TimeTracking() {
   };
 
   // Calculate net work time (total - breaks)
-  const calculateNetWorkTime = (start: string, end: string | null, breaks: any[]) => {
+  const calculateNetWorkTime = (
+    start: string,
+    end: string | null,
+    breaks: any[],
+  ) => {
     const startDate = new Date(start);
     const endDate = end ? new Date(end) : currentTime;
     const totalMinutes = differenceInMinutes(endDate, startDate);
@@ -412,7 +507,10 @@ export default function TimeTracking() {
     if (!timeEntries) return "0:00";
     const totalNetMinutes = timeEntries.reduce((acc, entry) => {
       if (!entry.end_time) return acc;
-      const grossMinutes = differenceInMinutes(new Date(entry.end_time), new Date(entry.start_time));
+      const grossMinutes = differenceInMinutes(
+        new Date(entry.end_time),
+        new Date(entry.start_time),
+      );
       const breakMinutes = calculateBreakTime(entry.time_entry_breaks || []);
       return acc + Math.max(0, grossMinutes - breakMinutes);
     }, 0);
@@ -430,13 +528,18 @@ export default function TimeTracking() {
 
         {campaigners && campaigners.length > 0 && (
           <div className="w-full md:w-48">
-            <Select value={selectedCampaigner} onValueChange={setSelectedCampaigner}>
+            <Select
+              value={selectedCampaigner}
+              onValueChange={setSelectedCampaigner}
+            >
               <SelectTrigger>
-                <SelectValue placeholder={`בחר ${t('role_campaigner')}`} />
+                <SelectValue placeholder={`בחר ${t("role_campaigner")}`} />
               </SelectTrigger>
               <SelectContent className="bg-background">
                 <SelectItem value="me">השעון שלי</SelectItem>
-                <SelectItem value="all">כל ה{t('role_campaigner', true)}</SelectItem>
+                <SelectItem value="all">
+                  כל ה{t("role_campaigner", true)}
+                </SelectItem>
                 {campaigners?.map((campaigner) => (
                   <SelectItem key={campaigner.id} value={campaigner.id}>
                     {campaigner.full_name}
@@ -452,14 +555,18 @@ export default function TimeTracking() {
       <div className="flex flex-wrap items-center gap-3">
         <div className="flex items-center gap-2">
           <Filter className="h-4 w-4 text-muted-foreground" />
-          <span className="text-sm text-muted-foreground">סינון לפי תאריך:</span>
+          <span className="text-sm text-muted-foreground">
+            סינון לפי תאריך:
+          </span>
         </div>
-        
+
         <Popover>
           <PopoverTrigger asChild>
             <Button variant="outline" size="sm" className="gap-2">
               <Calendar className="h-4 w-4" />
-              {filterStartDate ? format(filterStartDate, "dd/MM/yyyy") : "מתאריך"}
+              {filterStartDate
+                ? format(filterStartDate, "dd/MM/yyyy")
+                : "מתאריך"}
             </Button>
           </PopoverTrigger>
           <PopoverContent className="w-auto p-0" align="start">
@@ -506,124 +613,149 @@ export default function TimeTracking() {
       </div>
 
       {selectedCampaigner === "me" && (
-      <Card className="shadow-card border-primary/20">
-        <CardHeader className="bg-gradient-to-r from-primary/10 to-primary/5">
-          <CardTitle className="flex items-center gap-2 text-primary">
-            <Clock className="h-5 w-5" />
-            שעון עבודה
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4 pt-6">
-          {activeEntry ? (
-            <div className="space-y-4">
-              {/* Active break indicator */}
-              {activeBreak && (
-                <div className="bg-gradient-to-br from-amber-50 to-amber-100 dark:from-amber-900/20 dark:to-amber-800/20 rounded-lg border-2 border-amber-400/50 p-4">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <Coffee className="h-5 w-5 text-amber-600" />
-                      <span className="font-medium text-amber-700 dark:text-amber-400">בהפסקה</span>
+        <Card className="shadow-card border-primary/20">
+          <CardHeader className="bg-gradient-to-r from-primary/10 to-primary/5">
+            <CardTitle className="flex items-center gap-2 text-primary">
+              <Clock className="h-5 w-5" />
+              שעון עבודה
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4 pt-6">
+            {activeEntry ? (
+              <div className="space-y-4">
+                {/* Active break indicator */}
+                {activeBreak && (
+                  <div className="bg-gradient-to-br from-amber-50 to-amber-100 dark:from-amber-900/20 dark:to-amber-800/20 rounded-lg border-2 border-amber-400/50 p-4">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <Coffee className="h-5 w-5 text-amber-600" />
+                        <span className="font-medium text-amber-700 dark:text-amber-400">
+                          בהפסקה
+                        </span>
+                      </div>
+                      <span className="text-lg font-bold text-amber-600 dark:text-amber-400">
+                        {calculateDuration(activeBreak.start_time, null)}
+                      </span>
                     </div>
-                    <span className="text-lg font-bold text-amber-600 dark:text-amber-400">
-                      {calculateDuration(activeBreak.start_time, null)}
-                    </span>
                   </div>
-                </div>
-              )}
+                )}
 
-              <div className={`rounded-lg border-2 p-6 ${
-                activeBreak 
-                  ? 'bg-gradient-to-br from-amber-50/50 to-amber-100/50 dark:from-amber-900/10 dark:to-amber-800/10 border-amber-400/30' 
-                  : 'bg-gradient-to-br from-green-50 to-green-100 dark:from-green-900/20 dark:to-green-800/20 border-green-400/50'
-              }`}>
-                <div className="space-y-3">
-                  <div className="flex items-center justify-between py-2 border-b border-green-200 dark:border-green-700/30">
-                    <span className="text-sm text-muted-foreground">התחלה</span>
-                    <span className="text-lg font-semibold text-foreground">
-                      {format(new Date(activeEntry.start_time), "HH:mm:ss", { locale: he })}
-                    </span>
-                  </div>
-                  
-                  <div className="flex items-center justify-between py-2 border-b border-green-200 dark:border-green-700/30">
-                    <span className="text-sm text-muted-foreground">זמן ברוטו</span>
-                    <span className="text-xl font-bold text-muted-foreground">
-                      {calculateDuration(activeEntry.start_time, null)}
-                    </span>
-                  </div>
-
-                  {activeEntryBreaks && activeEntryBreaks.length > 0 && (
+                <div
+                  className={`rounded-lg border-2 p-6 ${
+                    activeBreak
+                      ? "bg-gradient-to-br from-amber-50/50 to-amber-100/50 dark:from-amber-900/10 dark:to-amber-800/10 border-amber-400/30"
+                      : "bg-gradient-to-br from-green-50 to-green-100 dark:from-green-900/20 dark:to-green-800/20 border-green-400/50"
+                  }`}
+                >
+                  <div className="space-y-3">
                     <div className="flex items-center justify-between py-2 border-b border-green-200 dark:border-green-700/30">
-                      <span className="text-sm text-muted-foreground flex items-center gap-1">
-                        <Coffee className="h-4 w-4" />
-                        הפסקות
+                      <span className="text-sm text-muted-foreground">
+                        התחלה
                       </span>
-                      <span className="text-lg font-medium text-amber-600 dark:text-amber-400">
-                        -{formatMinutesToTime(calculateBreakTime(activeEntryBreaks))}
+                      <span className="text-lg font-semibold text-foreground">
+                        {format(new Date(activeEntry.start_time), "HH:mm:ss", {
+                          locale: he,
+                        })}
                       </span>
                     </div>
-                  )}
 
-                  <div className="flex items-center justify-between py-2">
-                    <span className="text-sm text-muted-foreground">זמן עבודה נטו</span>
-                    <span className="text-2xl font-bold text-green-600 dark:text-green-400">
-                      {calculateNetWorkTime(activeEntry.start_time, null, activeEntryBreaks || [])}
-                    </span>
-                  </div>
+                    <div className="flex items-center justify-between py-2 border-b border-green-200 dark:border-green-700/30">
+                      <span className="text-sm text-muted-foreground">
+                        זמן ברוטו
+                      </span>
+                      <span className="text-xl font-bold text-muted-foreground">
+                        {calculateDuration(activeEntry.start_time, null)}
+                      </span>
+                    </div>
 
-                  {/* Action buttons */}
-                  <div className="flex gap-2 pt-2">
-                    {activeBreak ? (
-                      <Button
-                        onClick={() => endBreakMutation.mutate(activeBreak.id)}
-                        variant="outline"
-                        size="sm"
-                        className="flex-1 border-green-500 text-green-600 hover:bg-green-50 dark:hover:bg-green-900/20"
-                      >
-                        <Play className="h-4 w-4 ml-2" />
-                        חזור לעבודה
-                      </Button>
-                    ) : (
-                      <Button
-                        onClick={() => startBreakMutation.mutate(activeEntry.id)}
-                        variant="outline"
-                        size="sm"
-                        className="flex-1 border-amber-500 text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-900/20"
-                      >
-                        <Coffee className="h-4 w-4 ml-2" />
-                        הפסקה
-                      </Button>
+                    {activeEntryBreaks && activeEntryBreaks.length > 0 && (
+                      <div className="flex items-center justify-between py-2 border-b border-green-200 dark:border-green-700/30">
+                        <span className="text-sm text-muted-foreground flex items-center gap-1">
+                          <Coffee className="h-4 w-4" />
+                          הפסקות
+                        </span>
+                        <span className="text-lg font-medium text-amber-600 dark:text-amber-400">
+                          -
+                          {formatMinutesToTime(
+                            calculateBreakTime(activeEntryBreaks),
+                          )}
+                        </span>
+                      </div>
                     )}
-                    <Button
-                      onClick={() => stopTimerMutation.mutate(activeEntry.id)}
-                      variant="destructive"
-                      size="sm"
-                      className="shadow-lg"
-                    >
-                      <Square className="h-4 w-4 ml-2" />
-                      עצור
-                    </Button>
+
+                    <div className="flex items-center justify-between py-2">
+                      <span className="text-sm text-muted-foreground">
+                        זמן עבודה נטו
+                      </span>
+                      <span className="text-2xl font-bold text-green-600 dark:text-green-400">
+                        {calculateNetWorkTime(
+                          activeEntry.start_time,
+                          null,
+                          activeEntryBreaks || [],
+                        )}
+                      </span>
+                    </div>
+
+                    {/* Action buttons */}
+                    <div className="flex gap-2 pt-2">
+                      {activeBreak ? (
+                        <Button
+                          onClick={() =>
+                            endBreakMutation.mutate(activeBreak.id)
+                          }
+                          variant="outline"
+                          size="sm"
+                          className="flex-1 border-green-500 text-green-600 hover:bg-green-50 dark:hover:bg-green-900/20"
+                        >
+                          <Play className="h-4 w-4 ml-2" />
+                          חזור לעבודה
+                        </Button>
+                      ) : (
+                        <Button
+                          onClick={() =>
+                            startBreakMutation.mutate(activeEntry.id)
+                          }
+                          variant="outline"
+                          size="sm"
+                          className="flex-1 border-amber-500 text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-900/20"
+                        >
+                          <Coffee className="h-4 w-4 ml-2" />
+                          הפסקה
+                        </Button>
+                      )}
+                      <Button
+                        onClick={() => stopTimerMutation.mutate(activeEntry.id)}
+                        variant="destructive"
+                        size="sm"
+                        className="shadow-lg"
+                      >
+                        <Square className="h-4 w-4 ml-2" />
+                        עצור
+                      </Button>
+                    </div>
                   </div>
                 </div>
               </div>
-            </div>
-          ) : (
-            <div className="text-center py-12">
-              <div className="inline-flex items-center justify-center w-24 h-24 rounded-full bg-primary/10 mb-6">
-                <Clock className="h-12 w-12 text-primary" />
+            ) : (
+              <div className="text-center py-12">
+                <div className="inline-flex items-center justify-center w-24 h-24 rounded-full bg-primary/10 mb-6">
+                  <Clock className="h-12 w-12 text-primary" />
+                </div>
+                <p className="text-muted-foreground mb-6 text-lg">
+                  לא פעיל כרגע
+                </p>
+                <Button
+                  onClick={() => startTimerMutation.mutate()}
+                  size="lg"
+                  className="gap-2 shadow-lg px-8 py-6 text-lg"
+                >
+                  <Play className="h-6 w-6" />
+                  התחל עבודה
+                </Button>
               </div>
-              <p className="text-muted-foreground mb-6 text-lg">לא פעיל כרגע</p>
-              <Button
-                onClick={() => startTimerMutation.mutate()}
-                size="lg"
-                className="gap-2 shadow-lg px-8 py-6 text-lg"
-              >
-                <Play className="h-6 w-6" />
-                התחל עבודה
-              </Button>
-            </div>
-          )}
-        </CardContent>
-      </Card>
+            )}
+          </CardContent>
+        </Card>
       )}
 
       <Card className="shadow-card border-primary/20">
@@ -633,7 +765,10 @@ export default function TimeTracking() {
               <Calendar className="h-5 w-5" />
               היסטוריית שעות
             </CardTitle>
-            <Badge variant="outline" className="text-base font-semibold border-primary/30 bg-primary/5">
+            <Badge
+              variant="outline"
+              className="text-base font-semibold border-primary/30 bg-primary/5"
+            >
               סה"כ: {calculateTotalHours()} שעות
             </Badge>
           </div>
@@ -645,36 +780,64 @@ export default function TimeTracking() {
                 <TableHeader className="bg-primary/5">
                   <TableRow className="border-primary/20">
                     {selectedCampaigner !== "me" && (
-                      <TableHead className="text-right font-semibold">קמפיינר</TableHead>
+                      <TableHead className="text-right font-semibold">
+                        קמפיינר
+                      </TableHead>
                     )}
-                    <TableHead className="text-right font-semibold">תאריך</TableHead>
-                    <TableHead className="text-right font-semibold">התחלה</TableHead>
-                    <TableHead className="text-right font-semibold">סיום</TableHead>
-                    <TableHead className="text-right font-semibold">ברוטו</TableHead>
-                    <TableHead className="text-right font-semibold">הפסקות</TableHead>
-                    <TableHead className="text-right font-semibold">נטו</TableHead>
-                    <TableHead className="text-right font-semibold">פעולות</TableHead>
+                    <TableHead className="text-right font-semibold">
+                      תאריך
+                    </TableHead>
+                    <TableHead className="text-right font-semibold">
+                      התחלה
+                    </TableHead>
+                    <TableHead className="text-right font-semibold">
+                      סיום
+                    </TableHead>
+                    <TableHead className="text-right font-semibold">
+                      ברוטו
+                    </TableHead>
+                    <TableHead className="text-right font-semibold">
+                      הפסקות
+                    </TableHead>
+                    <TableHead className="text-right font-semibold">
+                      נטו
+                    </TableHead>
+                    <TableHead className="text-right font-semibold">
+                      פעולות
+                    </TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {timeEntries.map((entry) => (
-                    <TableRow key={entry.id} className="border-primary/10 hover:bg-primary/5">
+                    <TableRow
+                      key={entry.id}
+                      className="border-primary/10 hover:bg-primary/5"
+                    >
                       {selectedCampaigner !== "me" && (
                         <TableCell className="font-medium">
                           {entry.campaigners?.full_name}
                         </TableCell>
                       )}
                       <TableCell>
-                        {format(new Date(entry.start_time), "dd/MM/yyyy", { locale: he })}
+                        {format(new Date(entry.start_time), "dd/MM/yyyy", {
+                          locale: he,
+                        })}
                       </TableCell>
                       <TableCell>
-                        {format(new Date(entry.start_time), "HH:mm", { locale: he })}
+                        {format(new Date(entry.start_time), "HH:mm", {
+                          locale: he,
+                        })}
                       </TableCell>
                       <TableCell>
                         {entry.end_time ? (
-                          format(new Date(entry.end_time), "HH:mm", { locale: he })
+                          format(new Date(entry.end_time), "HH:mm", {
+                            locale: he,
+                          })
                         ) : (
-                          <Badge variant="outline" className="bg-green-50 text-green-700 border-green-300 dark:bg-green-900/20 dark:text-green-400">
+                          <Badge
+                            variant="outline"
+                            className="bg-green-50 text-green-700 border-green-300 dark:bg-green-900/20 dark:text-green-400"
+                          >
                             פעיל
                           </Badge>
                         )}
@@ -683,12 +846,19 @@ export default function TimeTracking() {
                         {calculateDuration(entry.start_time, entry.end_time)}
                       </TableCell>
                       <TableCell className="text-amber-600 dark:text-amber-400">
-                        {entry.time_entry_breaks && entry.time_entry_breaks.length > 0 
-                          ? formatMinutesToTime(calculateBreakTime(entry.time_entry_breaks))
+                        {entry.time_entry_breaks &&
+                        entry.time_entry_breaks.length > 0
+                          ? formatMinutesToTime(
+                              calculateBreakTime(entry.time_entry_breaks),
+                            )
                           : "-"}
                       </TableCell>
                       <TableCell className="font-medium text-primary">
-                        {calculateNetWorkTime(entry.start_time, entry.end_time, entry.time_entry_breaks || [])}
+                        {calculateNetWorkTime(
+                          entry.start_time,
+                          entry.end_time,
+                          entry.time_entry_breaks || [],
+                        )}
                       </TableCell>
                       <TableCell>
                         <div className="flex gap-2">
@@ -705,7 +875,11 @@ export default function TimeTracking() {
                           )}
                           <AlertDialog>
                             <AlertDialogTrigger asChild>
-                              <Button variant="outline" size="sm" className="gap-2">
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                className="gap-2"
+                              >
                                 <Trash2 className="h-4 w-4" />
                                 מחק
                               </Button>
@@ -714,13 +888,16 @@ export default function TimeTracking() {
                               <AlertDialogHeader>
                                 <AlertDialogTitle>מחיקת רשומה</AlertDialogTitle>
                                 <AlertDialogDescription>
-                                  האם אתה בטוח שברצונך למחוק רשומה זו? פעולה זו לא ניתנת לביטול.
+                                  האם אתה בטוח שברצונך למחוק רשומה זו? פעולה זו
+                                  לא ניתנת לביטול.
                                 </AlertDialogDescription>
                               </AlertDialogHeader>
                               <AlertDialogFooter>
                                 <AlertDialogCancel>ביטול</AlertDialogCancel>
                                 <AlertDialogAction
-                                  onClick={() => deleteEntryMutation.mutate(entry.id)}
+                                  onClick={() =>
+                                    deleteEntryMutation.mutate(entry.id)
+                                  }
                                   className="bg-destructive hover:bg-destructive/90"
                                 >
                                   מחק
@@ -744,7 +921,10 @@ export default function TimeTracking() {
         </CardContent>
       </Card>
 
-      <AlertDialog open={!!editingEntry} onOpenChange={(open) => !open && setEditingEntry(null)}>
+      <AlertDialog
+        open={!!editingEntry}
+        onOpenChange={(open) => !open && setEditingEntry(null)}
+      >
         <AlertDialogContent className="bg-background">
           <AlertDialogHeader>
             <AlertDialogTitle>עריכת זמני עבודה</AlertDialogTitle>

@@ -2,7 +2,13 @@ import { useState, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
@@ -80,7 +86,9 @@ export function ShareTelegramConnectionSection({
       if (!user?.id) throw new Error("User not found");
       const currentShares = existingShares || [];
       const toAdd = selectedTenants.filter((t) => !currentShares.includes(t));
-      const toRemove = currentShares.filter((t) => !selectedTenants.includes(t));
+      const toRemove = currentShares.filter(
+        (t) => !selectedTenants.includes(t),
+      );
 
       for (const tenantId of toAdd) {
         const { error } = await supabase.from("telegram_bot_state").insert({
@@ -105,7 +113,9 @@ export function ShareTelegramConnectionSection({
     },
     onSuccess: () => {
       toast.success("השיתופים נשמרו בהצלחה");
-      queryClient.invalidateQueries({ queryKey: ["telegram-bot-shares", currentTenantId] });
+      queryClient.invalidateQueries({
+        queryKey: ["telegram-bot-shares", currentTenantId],
+      });
     },
     onError: (error) => {
       toast.error("שגיאה בשמירת השיתופים: " + (error as Error).message);
@@ -114,7 +124,9 @@ export function ShareTelegramConnectionSection({
 
   const handleToggleTenant = (tenantId: string) => {
     setSelectedTenants((prev) =>
-      prev.includes(tenantId) ? prev.filter((t) => t !== tenantId) : [...prev, tenantId]
+      prev.includes(tenantId)
+        ? prev.filter((t) => t !== tenantId)
+        : [...prev, tenantId],
     );
   };
 
@@ -144,7 +156,8 @@ export function ShareTelegramConnectionSection({
           שתף בוט עם ארגונים אחרים
         </CardTitle>
         <CardDescription className="text-right">
-          בחר ארגונים נוספים שיוכלו להשתמש בבוט הטלגרם שלך לשליחת הודעות (כגון התראות לידים)
+          בחר ארגונים נוספים שיוכלו להשתמש בבוט הטלגרם שלך לשליחת הודעות (כגון
+          התראות לידים)
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
@@ -159,7 +172,10 @@ export function ShareTelegramConnectionSection({
                 checked={selectedTenants.includes(tenant.id)}
                 onCheckedChange={() => handleToggleTenant(tenant.id)}
               />
-              <Label htmlFor={`share-tg-${tenant.id}`} className="flex-1 cursor-pointer text-right">
+              <Label
+                htmlFor={`share-tg-${tenant.id}`}
+                className="flex-1 cursor-pointer text-right"
+              >
                 {tenant.name}
               </Label>
               {selectedTenants.includes(tenant.id) && (

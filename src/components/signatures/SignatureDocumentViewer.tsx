@@ -26,21 +26,26 @@ interface SignatureDocumentViewerProps {
  * Renders a document page and overlays children inside the exact page box.
  * Field % coordinates are relative to this page box (forwarded ref).
  */
-export const SignatureDocumentViewer = forwardRef<HTMLDivElement, SignatureDocumentViewerProps>(
-function SignatureDocumentViewer({
-  fileUrl,
-  mediaKind,
-  forcePdf,
-  page = 1,
-  loading,
-  error,
-  className = "",
-  onHeightChange,
-  onNumPagesChange,
-  onPointerDown,
-  onPointerUp,
-  children,
-}, ref) {
+export const SignatureDocumentViewer = forwardRef<
+  HTMLDivElement,
+  SignatureDocumentViewerProps
+>(function SignatureDocumentViewer(
+  {
+    fileUrl,
+    mediaKind,
+    forcePdf,
+    page = 1,
+    loading,
+    error,
+    className = "",
+    onHeightChange,
+    onNumPagesChange,
+    onPointerDown,
+    onPointerUp,
+    children,
+  },
+  ref,
+) {
   const pageStageRef = useRef<HTMLDivElement>(null);
   const setPageStageRef = (node: HTMLDivElement | null) => {
     pageStageRef.current = node;
@@ -54,10 +59,12 @@ function SignatureDocumentViewer({
   const [pdfReady, setPdfReady] = useState(false);
 
   const kind = forcePdf ? "pdf" : detectMediaKind(fileUrl, mediaKind);
-  const { pdf, numPages, loading: pdfLoading, error: pdfError } = usePdfDocument(
-    fileUrl,
-    kind === "pdf",
-  );
+  const {
+    pdf,
+    numPages,
+    loading: pdfLoading,
+    error: pdfError,
+  } = usePdfDocument(fileUrl, kind === "pdf");
 
   useEffect(() => {
     onNumPagesChange?.(kind === "pdf" ? numPages : 1);
@@ -91,9 +98,7 @@ function SignatureDocumentViewer({
         if (!canvas || cancelled) return;
 
         const parentWidth =
-          stage?.clientWidth ||
-          stage?.parentElement?.clientWidth ||
-          800;
+          stage?.clientWidth || stage?.parentElement?.clientWidth || 800;
         const safePage = Math.min(Math.max(1, page), pdf.numPages || 1);
         await renderPdfPageToCanvas(pdf, safePage, canvas, parentWidth);
         if (cancelled) return;
@@ -104,7 +109,9 @@ function SignatureDocumentViewer({
         }
       } catch (err) {
         if (!cancelled) {
-          setRenderError(err instanceof Error ? err.message : "שגיאה בטעינת PDF");
+          setRenderError(
+            err instanceof Error ? err.message : "שגיאה בטעינת PDF",
+          );
         }
       } finally {
         if (!cancelled) setRendering(false);
@@ -117,15 +124,23 @@ function SignatureDocumentViewer({
   }, [fileUrl, kind, pdf, page, onHeightChange]);
 
   if (loading || (kind === "pdf" && pdfLoading && !pdf)) {
-    return <p className="text-center text-muted-foreground py-12">טוען מסמך...</p>;
+    return (
+      <p className="text-center text-muted-foreground py-12">טוען מסמך...</p>
+    );
   }
 
   if (error || pdfError) {
-    return <p className="text-center text-destructive py-12">{error || pdfError}</p>;
+    return (
+      <p className="text-center text-destructive py-12">{error || pdfError}</p>
+    );
   }
 
   if (!fileUrl) {
-    return <p className="text-center text-destructive py-12">לא ניתן לטעון את המסמך</p>;
+    return (
+      <p className="text-center text-destructive py-12">
+        לא ניתן לטעון את המסמך
+      </p>
+    );
   }
 
   const showOverlays = kind === "image" || (kind === "pdf" && pdfReady);
@@ -167,7 +182,9 @@ function SignatureDocumentViewer({
             draggable={false}
             onLoad={() => {
               if (onHeightChange && pageStageRef.current) {
-                onHeightChange(pageStageRef.current.getBoundingClientRect().height);
+                onHeightChange(
+                  pageStageRef.current.getBoundingClientRect().height,
+                );
               }
             }}
           />

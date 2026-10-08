@@ -5,7 +5,8 @@ import { buildSkillsBlockBySlug } from "../_shared/skills/registry.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+  "Access-Control-Allow-Headers":
+    "authorization, x-client-info, apikey, content-type",
   "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
 
@@ -37,21 +38,32 @@ const TYPE_LABELS: Record<string, string> = {
   landing_page: "דף נחיתה",
 };
 
-const toMarkdown = (variant: { headline?: string; primary?: string; cta?: string; rationale?: string }) =>
-  [variant.headline && `## ${variant.headline}`, variant.primary, variant.cta && `**CTA:** ${variant.cta}`]
+const toMarkdown = (variant: {
+  headline?: string;
+  primary?: string;
+  cta?: string;
+  rationale?: string;
+}) =>
+  [
+    variant.headline && `## ${variant.headline}`,
+    variant.primary,
+    variant.cta && `**CTA:** ${variant.cta}`,
+  ]
     .filter(Boolean)
     .join("\n\n");
 
 function parseIPv4(host: string): number | null {
   const parts = host.split(".");
   if (parts.length !== 4) return null;
-  const nums = parts.map((part) => (/^\d{1,3}$/.test(part) ? Number(part) : NaN));
+  const nums = parts.map((part) =>
+    /^\d{1,3}$/.test(part) ? Number(part) : NaN,
+  );
   if (nums.some((n) => !Number.isInteger(n) || n < 0 || n > 255)) return null;
   return ((nums[0] << 24) | (nums[1] << 16) | (nums[2] << 8) | nums[3]) >>> 0;
 }
 
 function ipv4InCidr(ip: number, network: number, bits: number): boolean {
-  return (ip >>> (32 - bits)) === (network >>> (32 - bits));
+  return ip >>> (32 - bits) === network >>> (32 - bits);
 }
 
 function isPrivateIPv4(ip: number): boolean {
@@ -81,9 +93,12 @@ function expandIPv6(host: string): number[] | null {
   const sides = ip.split("::");
   if (sides.length > 2) return null;
   const parseSide = (side: string) => (side === "" ? [] : side.split(":"));
-  const left = parseSide(sides[0]).map((part) => (/^[0-9a-f]{1,4}$/.test(part) ? Number.parseInt(part, 16) : NaN));
+  const left = parseSide(sides[0]).map((part) =>
+    /^[0-9a-f]{1,4}$/.test(part) ? Number.parseInt(part, 16) : NaN,
+  );
   const right = (sides.length === 2 ? parseSide(sides[1]) : []).map((part) =>
-    (/^[0-9a-f]{1,4}$/.test(part) ? Number.parseInt(part, 16) : NaN));
+    /^[0-9a-f]{1,4}$/.test(part) ? Number.parseInt(part, 16) : NaN,
+  );
   if (left.some(Number.isNaN) || right.some(Number.isNaN)) return null;
   if (sides.length === 2) {
     const fill = 8 - left.length - right.length;
@@ -97,19 +112,33 @@ function isPrivateIPv6(host: string): boolean {
   const groups = expandIPv6(host);
   if (!groups) return true;
   if (groups.every((group) => group === 0)) return true;
-  if (groups.slice(0, 7).every((group) => group === 0) && groups[7] === 1) return true;
+  if (groups.slice(0, 7).every((group) => group === 0) && groups[7] === 1)
+    return true;
   if ((groups[0] & 0xffc0) === 0xfe80) return true;
   if ((groups[0] & 0xfe00) === 0xfc00) return true;
   if ((groups[0] & 0xff00) === 0xff00) return true;
-  const ipv4Mapped = groups[0] === 0 && groups[1] === 0 && groups[2] === 0 && groups[3] === 0 && groups[4] === 0 && groups[5] === 0xffff;
+  const ipv4Mapped =
+    groups[0] === 0 &&
+    groups[1] === 0 &&
+    groups[2] === 0 &&
+    groups[3] === 0 &&
+    groups[4] === 0 &&
+    groups[5] === 0xffff;
   if (ipv4Mapped) return isPrivateIPv4(((groups[6] << 16) | groups[7]) >>> 0);
-  const ipv4Compatible = groups.slice(0, 6).every((group) => group === 0) && groups[6] !== 0 && groups[7] !== 1;
-  if (ipv4Compatible) return isPrivateIPv4(((groups[6] << 16) | groups[7]) >>> 0);
+  const ipv4Compatible =
+    groups.slice(0, 6).every((group) => group === 0) &&
+    groups[6] !== 0 &&
+    groups[7] !== 1;
+  if (ipv4Compatible)
+    return isPrivateIPv4(((groups[6] << 16) | groups[7]) >>> 0);
   return false;
 }
 
 function isBlockedAddress(address: string): boolean {
-  const host = address.replace(/^\[|\]$/g, "").toLowerCase().replace(/\.$/, "");
+  const host = address
+    .replace(/^\[|\]$/g, "")
+    .toLowerCase()
+    .replace(/\.$/, "");
   const ipv4 = parseIPv4(host);
   if (ipv4 !== null) return isPrivateIPv4(ipv4);
   if (host.includes(":")) return isPrivateIPv6(host);
@@ -117,7 +146,10 @@ function isBlockedAddress(address: string): boolean {
 }
 
 function isBlockedHostname(hostname: string): boolean {
-  const host = hostname.replace(/^\[|\]$/g, "").toLowerCase().replace(/\.$/, "");
+  const host = hostname
+    .replace(/^\[|\]$/g, "")
+    .toLowerCase()
+    .replace(/\.$/, "");
   if (!host) return true;
   return (
     host === "localhost" ||
@@ -132,10 +164,13 @@ function isBlockedHostname(hostname: string): boolean {
 
 function parsePublicHttpUrl(raw: string): URL | null {
   const trimmed = raw.trim();
-  if (/^[a-z][a-z0-9+.-]*:/i.test(trimmed) && !/^https?:/i.test(trimmed)) return null;
+  if (/^[a-z][a-z0-9+.-]*:/i.test(trimmed) && !/^https?:/i.test(trimmed))
+    return null;
   let parsed: URL;
   try {
-    parsed = new URL(/^https?:\/\//i.test(trimmed) ? trimmed : `https://${trimmed}`);
+    parsed = new URL(
+      /^https?:\/\//i.test(trimmed) ? trimmed : `https://${trimmed}`,
+    );
   } catch {
     return null;
   }
@@ -149,7 +184,9 @@ function parsePublicHttpUrl(raw: string): URL | null {
 async function lookupIps(hostname: string): Promise<string[]> {
   const host = hostname.replace(/^\[|\]$/g, "");
   if (parseIPv4(host) !== null || host.includes(":")) return [host];
-  const resolveDns = (Deno as { resolveDns?: (q: string, t: string) => Promise<string[]> }).resolveDns;
+  const resolveDns = (
+    Deno as { resolveDns?: (q: string, t: string) => Promise<string[]> }
+  ).resolveDns;
   if (typeof resolveDns !== "function") return [];
   const [aRecords, aaaaRecords] = await Promise.all([
     resolveDns(host, "A").catch(() => [] as string[]),
@@ -169,7 +206,10 @@ async function resolvePublicTarget(raw: string): Promise<PublicTarget | null> {
   return { url, ip: ips[0] };
 }
 
-async function readPinnedHttp(conn: Deno.Conn, limit = 512_000): Promise<{ status: number; headers: Headers; body: string }> {
+async function readPinnedHttp(
+  conn: Deno.Conn,
+  limit = 512_000,
+): Promise<{ status: number; headers: Headers; body: string }> {
   const decoder = new TextDecoder();
   let buf = new Uint8Array(0);
   const readMore = async () => {
@@ -195,39 +235,60 @@ async function readPinnedHttp(conn: Deno.Conn, limit = 512_000): Promise<{ statu
   const headers = new Headers();
   for (const line of headerLines) {
     const idx = line.indexOf(":");
-    if (idx > 0) headers.append(line.slice(0, idx).trim(), line.slice(idx + 1).trim());
+    if (idx > 0)
+      headers.append(line.slice(0, idx).trim(), line.slice(idx + 1).trim());
   }
   while (buf.length < limit) {
     if (!(await readMore())) break;
   }
-  const body = decoder.decode(buf).slice(headerEnd + 4).slice(0, limit);
+  const body = decoder
+    .decode(buf)
+    .slice(headerEnd + 4)
+    .slice(0, limit);
   try {
     conn.close();
-  } catch { /* already closed */ }
+  } catch {
+    /* already closed */
+  }
   if (!Number.isInteger(status)) throw new Error("bad http status");
   return { status, headers, body };
 }
 
-async function pinnedGet(target: PublicTarget, timeoutMs: number): Promise<{ status: number; headers: Headers; body: string }> {
+async function pinnedGet(
+  target: PublicTarget,
+  timeoutMs: number,
+): Promise<{ status: number; headers: Headers; body: string }> {
   const connect = Deno.connect;
   const startTls = Deno.startTls;
   if (typeof connect !== "function" || typeof startTls !== "function") {
     throw new Error("pinned connect unavailable");
   }
-  const port = target.url.port ? Number(target.url.port) : (target.url.protocol === "https:" ? 443 : 80);
+  const port = target.url.port
+    ? Number(target.url.port)
+    : target.url.protocol === "https:"
+      ? 443
+      : 80;
   const tcp = await Promise.race([
     connect({ hostname: target.ip, port }),
-    new Promise<never>((_, reject) => setTimeout(() => reject(new Error("connect timeout")), timeoutMs)),
+    new Promise<never>((_, reject) =>
+      setTimeout(() => reject(new Error("connect timeout")), timeoutMs),
+    ),
   ]);
-  const conn = target.url.protocol === "https:"
-    ? await startTls(tcp, { hostname: target.url.hostname, alpnProtocols: ["http/1.1"] })
-    : tcp;
+  const conn =
+    target.url.protocol === "https:"
+      ? await startTls(tcp, {
+          hostname: target.url.hostname,
+          alpnProtocols: ["http/1.1"],
+        })
+      : tcp;
   const path = `${target.url.pathname || "/"}${target.url.search}`;
   const request = `GET ${path} HTTP/1.1\r\nHost: ${target.url.host}\r\nUser-Agent: AIOS-CopyDepartment/1.0\r\nAccept: text/html,text/plain,*/*\r\nConnection: close\r\n\r\n`;
   await conn.write(new TextEncoder().encode(request));
   return await Promise.race([
     readPinnedHttp(conn),
-    new Promise<never>((_, reject) => setTimeout(() => reject(new Error("read timeout")), timeoutMs)),
+    new Promise<never>((_, reject) =>
+      setTimeout(() => reject(new Error("read timeout")), timeoutMs),
+    ),
   ]);
 }
 
@@ -240,7 +301,9 @@ async function fetchWebsiteText(url: string): Promise<string | null> {
       if (response.status >= 300 && response.status < 400) {
         const location = response.headers.get("Location");
         if (!location) return null;
-        target = await resolvePublicTarget(new URL(location, target.url).toString());
+        target = await resolvePublicTarget(
+          new URL(location, target.url).toString(),
+        );
         if (!target) return null;
         continue;
       }
@@ -262,7 +325,11 @@ async function fetchWebsiteText(url: string): Promise<string | null> {
 type AttachmentRef = { name?: string; path?: string };
 
 const asAttachments = (value: unknown): AttachmentRef[] =>
-  Array.isArray(value) ? value.filter((file): file is AttachmentRef => !!file && typeof file === "object") : [];
+  Array.isArray(value)
+    ? value.filter(
+        (file): file is AttachmentRef => !!file && typeof file === "object",
+      )
+    : [];
 
 async function readTextAttachments(
   admin: ReturnType<typeof createClient>,
@@ -274,9 +341,14 @@ async function readTextAttachments(
     const path = String(file.path ?? "");
     if (!path || !/\.(txt|md|markdown|csv|json|html)$/i.test(name)) continue;
     try {
-      const { data } = await admin.storage.from("entity-attachments").download(path);
+      const { data } = await admin.storage
+        .from("entity-attachments")
+        .download(path);
       if (!data) continue;
-      const text = (await data.text()).replace(/\s+/g, " ").trim().slice(0, 4000);
+      const text = (await data.text())
+        .replace(/\s+/g, " ")
+        .trim()
+        .slice(0, 4000);
       if (text) chunks.push(`--- ${name} ---\n${text}`);
     } catch {
       // best-effort: names still go into the prompt
@@ -286,9 +358,13 @@ async function readTextAttachments(
 }
 
 serve(async (req) => {
-  if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
+  if (req.method === "OPTIONS")
+    return new Response(null, { headers: corsHeaders });
 
-  const admin = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
+  const admin = createClient(
+    Deno.env.get("SUPABASE_URL")!,
+    Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
+  );
   try {
     const auth = await requireAuth(req);
     if (!auth) return jsonResponse({ error: "Unauthorized" }, 401);
@@ -301,7 +377,8 @@ serve(async (req) => {
       .select("*")
       .eq("id", item_id)
       .single();
-    if (itemError || !item) return jsonResponse({ error: "Work item not found" }, 404);
+    if (itemError || !item)
+      return jsonResponse({ error: "Work item not found" }, 404);
 
     if (auth.kind === "user") {
       const { data: membership } = await admin
@@ -314,9 +391,15 @@ serve(async (req) => {
     }
 
     const payload = (item.payload ?? {}) as Record<string, unknown>;
-    const recordingId = typeof payload.recording_id === "string" ? payload.recording_id : null;
+    const recordingId =
+      typeof payload.recording_id === "string" ? payload.recording_id : null;
 
-    const [{ data: client }, { data: integration }, skinBlock, { data: recording }] = await Promise.all([
+    const [
+      { data: client },
+      { data: integration },
+      skinBlock,
+      { data: recording },
+    ] = await Promise.all([
       item.client_id
         ? admin
             .from("clients")
@@ -354,24 +437,44 @@ serve(async (req) => {
         .maybeSingle();
       settings = (source?.settings ?? settings) as Record<string, string>;
     }
-    if (!settings.openai_api_key) throw new Error("OpenAI API key חסר בהגדרות האינטגרציות");
+    if (!settings.openai_api_key)
+      throw new Error("OpenAI API key חסר בהגדרות האינטגרציות");
 
     const website = String(client?.website ?? payload.client_website ?? "");
     const websiteText = website ? await fetchWebsiteText(website) : null;
     const clientAttachments = asAttachments(client?.attachments);
     const briefAttachments = asAttachments(payload.brief_files);
-    const clientFiles = clientAttachments.map((file) => file.name).filter(Boolean) as string[];
-    const briefFiles = briefAttachments.map((file) => file.name).filter(Boolean) as string[];
-    const recordingRecord = recording as { notes?: string | null; transcription?: string | null; meeting_topic?: string | null } | null;
+    const clientFiles = clientAttachments
+      .map((file) => file.name)
+      .filter(Boolean) as string[];
+    const briefFiles = briefAttachments
+      .map((file) => file.name)
+      .filter(Boolean) as string[];
+    const recordingRecord = recording as {
+      notes?: string | null;
+      transcription?: string | null;
+      meeting_topic?: string | null;
+    } | null;
     const recordingText = String(
-      payload.recording_excerpt || recordingRecord?.notes || recordingRecord?.transcription || "",
+      payload.recording_excerpt ||
+        recordingRecord?.notes ||
+        recordingRecord?.transcription ||
+        "",
     ).slice(0, 6000);
-    const briefFileBodies = await readTextAttachments(admin, [...briefAttachments, ...clientAttachments]);
+    const briefFileBodies = await readTextAttachments(admin, [
+      ...briefAttachments,
+      ...clientAttachments,
+    ]);
 
     const channel = String(payload.channel ?? item.target_channel ?? "כללי");
     const contentType = String(payload.content_type ?? "posts");
-    const longForm = contentType === "book" || contentType === "script" || contentType === "video_script";
-    const limits = longForm ? { headline: 120, primary: 12000 } : (CHANNEL_LIMITS[channel] ?? { headline: 60, primary: 800 });
+    const longForm =
+      contentType === "book" ||
+      contentType === "script" ||
+      contentType === "video_script";
+    const limits = longForm
+      ? { headline: 120, primary: 12000 }
+      : (CHANNEL_LIMITS[channel] ?? { headline: 60, primary: 800 });
     const existingCopy = String(payload.copy_text ?? "");
     const typeLabel = TYPE_LABELS[contentType] ?? contentType;
 
@@ -385,11 +488,13 @@ serve(async (req) => {
       `כותרת הפרויקט: ${item.title ?? "—"}`,
       `סוג תוצר: ${typeLabel}`,
       `ערוץ: ${channel}`,
-      !longForm && `מגבלות תווים: כותרת עד ${limits.headline}, גוף עד ${limits.primary}`,
+      !longForm &&
+        `מגבלות תווים: כותרת עד ${limits.headline}, גוף עד ${limits.primary}`,
       payload.brief_text && `בריף: ${payload.brief_text}`,
       briefFiles.length > 0 && `קבצים שצורפו לבריף: ${briefFiles.join(", ")}`,
       briefFileBodies && `תוכן קבצי בריף/לקוח שנקראו:\n${briefFileBodies}`,
-      recordingText && `סיכום/תמלול פגישה (${recordingRecord?.meeting_topic ?? "הקלטה"}):\n${recordingText}`,
+      recordingText &&
+        `סיכום/תמלול פגישה (${recordingRecord?.meeting_topic ?? "הקלטה"}):\n${recordingText}`,
       prompt && `הודעת המשתמש בצ'אט: ${prompt}`,
       existingCopy && `קופי נוכחי בעורך:\n${existingCopy}`,
     ]
@@ -420,20 +525,29 @@ ${sourceContext}
 }
 הוסיפי 3 וריאציות קצרות בנוסף למסמך המלא.`;
 
-    const aiResponse = await fetch("https://api.openai.com/v1/chat/completions", {
-      method: "POST",
-      headers: { Authorization: `Bearer ${settings.openai_api_key}`, "Content-Type": "application/json" },
-      body: JSON.stringify({
-        model: "gpt-4o-mini",
-        response_format: { type: "json_object" },
-        temperature: 0.7,
-        messages: [
-          { role: "system", content: systemPrompt },
-          { role: "user", content: userPrompt },
-        ],
-      }),
-    });
-    if (!aiResponse.ok) throw new Error(`AI copy planning failed: ${aiResponse.status} ${await aiResponse.text()}`);
+    const aiResponse = await fetch(
+      "https://api.openai.com/v1/chat/completions",
+      {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${settings.openai_api_key}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          model: "gpt-4o-mini",
+          response_format: { type: "json_object" },
+          temperature: 0.7,
+          messages: [
+            { role: "system", content: systemPrompt },
+            { role: "user", content: userPrompt },
+          ],
+        }),
+      },
+    );
+    if (!aiResponse.ok)
+      throw new Error(
+        `AI copy planning failed: ${aiResponse.status} ${await aiResponse.text()}`,
+      );
     const aiData = await aiResponse.json();
     const plan = JSON.parse(aiData.choices?.[0]?.message?.content ?? "{}");
     const variants = (Array.isArray(plan.variants) ? plan.variants : [])
@@ -445,11 +559,15 @@ ${sourceContext}
         cta: String(variant.cta || ""),
         rationale: String(variant.rationale || ""),
       }));
-    const fullCopy = String(plan.full_copy || "").trim() || (variants[0] ? toMarkdown(variants[0]) : "");
+    const fullCopy =
+      String(plan.full_copy || "").trim() ||
+      (variants[0] ? toMarkdown(variants[0]) : "");
     if (!fullCopy) throw new Error("כרמן לא החזירה קופי תקין");
 
     const now = new Date().toISOString();
-    const chat = Array.isArray(payload.copy_chat) ? [...(payload.copy_chat as unknown[])] : [];
+    const chat = Array.isArray(payload.copy_chat)
+      ? [...(payload.copy_chat as unknown[])]
+      : [];
     if (prompt) chat.push({ role: "user", content: prompt, at: now });
     chat.push({ role: "assistant", content: fullCopy, at: now });
 
@@ -477,7 +595,12 @@ ${sourceContext}
       stage_id: item.current_stage_id,
       type: "copy",
       content: fullCopy,
-      meta: { source: `carmen_${mode}`, skin_slug: "copywriter", variants, prompt },
+      meta: {
+        source: `carmen_${mode}`,
+        skin_slug: "copywriter",
+        variants,
+        prompt,
+      },
     });
 
     return jsonResponse({
@@ -493,6 +616,9 @@ ${sourceContext}
     });
   } catch (error) {
     console.error("marketing-copy-plan error", error);
-    return jsonResponse({ error: error instanceof Error ? error.message : String(error) }, 500);
+    return jsonResponse(
+      { error: error instanceof Error ? error.message : String(error) },
+      500,
+    );
   }
 });

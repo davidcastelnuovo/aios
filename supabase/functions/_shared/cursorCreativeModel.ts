@@ -14,7 +14,9 @@ type CatalogItem = {
 const FAST = { id: "fast", value: "true" } as const;
 
 /** Map a secret / alias to a valid `model` object for POST /v1/agents. */
-export function resolveCreativeCursorModel(raw?: string | null): CursorModelSelection {
+export function resolveCreativeCursorModel(
+  raw?: string | null,
+): CursorModelSelection {
   const value = String(raw ?? "").trim();
   if (!value || value === "default" || value === "auto") {
     return { id: "composer-2.5", params: [FAST] };
@@ -24,7 +26,10 @@ export function resolveCreativeCursorModel(raw?: string | null): CursorModelSele
     return { id: id || "composer-2.5", params: [FAST] };
   }
   if (/^composer-2(\.5)?$/.test(value)) {
-    return { id: value === "composer-2" ? "composer-2.5" : value, params: [FAST] };
+    return {
+      id: value === "composer-2" ? "composer-2.5" : value,
+      params: [FAST],
+    };
   }
   return { id: value };
 }
@@ -34,14 +39,20 @@ export function pickCreativeModelFromCatalog(
   preferred: CursorModelSelection,
 ): CursorModelSelection {
   const list = Array.isArray(items) ? items : [];
-  const match = list.find((item) => {
-    const id = String(item.id ?? "");
-    const aliases = Array.isArray(item.aliases) ? item.aliases.map(String) : [];
-    return id === preferred.id || aliases.includes(preferred.id);
-  }) ?? list.find((item) => String(item.id ?? "").startsWith("composer-"));
+  const match =
+    list.find((item) => {
+      const id = String(item.id ?? "");
+      const aliases = Array.isArray(item.aliases)
+        ? item.aliases.map(String)
+        : [];
+      return id === preferred.id || aliases.includes(preferred.id);
+    }) ?? list.find((item) => String(item.id ?? "").startsWith("composer-"));
   if (!match?.id) return preferred;
-  const hasFast = (match.parameters ?? []).some((parameter) => parameter.id === "fast"
-    && (parameter.values ?? []).some((entry) => entry.value === "true"));
+  const hasFast = (match.parameters ?? []).some(
+    (parameter) =>
+      parameter.id === "fast" &&
+      (parameter.values ?? []).some((entry) => entry.value === "true"),
+  );
   return hasFast ? { id: match.id, params: [FAST] } : { id: match.id };
 }
 
@@ -49,11 +60,15 @@ export const isInvalidCursorModelError = (message: string): boolean =>
   /not available or invalid|unknown model|invalid model/i.test(message);
 
 /** Coding / Carmen Direct agents — default Composer, not account default (often Grok). */
-export function resolveCodingCursorModel(raw?: string | null): CursorModelSelection {
+export function resolveCodingCursorModel(
+  raw?: string | null,
+): CursorModelSelection {
   return resolveCreativeCursorModel(raw);
 }
 
-export function cursorModelBody(selection: CursorModelSelection): Record<string, unknown> {
+export function cursorModelBody(
+  selection: CursorModelSelection,
+): Record<string, unknown> {
   if (selection.params?.length) {
     return { id: selection.id, params: selection.params };
   }

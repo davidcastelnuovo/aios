@@ -6,10 +6,17 @@ import { useUserRole } from "@/hooks/useUserRole";
 import { useTenantPath } from "@/hooks/useTenantPath";
 import { useCrossTenantAgencyIds } from "@/hooks/useCrossTenantAgencyIds";
 import { useNavigate } from "react-router-dom";
-import { invalidateWooDashboardQueries, shareWordpressSiteWithAgencyTenants } from "@/lib/wooDashboardQueries";
+import {
+  invalidateWooDashboardQueries,
+  shareWordpressSiteWithAgencyTenants,
+} from "@/lib/wooDashboardQueries";
 
 import {
-  Card, CardContent, CardDescription, CardHeader, CardTitle,
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
 } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -18,30 +25,79 @@ import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
-  Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger,
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
 } from "@/components/ui/dialog";
 import {
-  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
-  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import {
-  Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
 } from "@/components/ui/table";
 import {
-  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
 } from "@/components/ui/select";
 import { toast } from "sonner";
 import {
-  Globe, Plus, Trash2, Loader2, ExternalLink, RefreshCw,
-  ShoppingCart, ArrowLeft, Settings, CheckCircle2, AlertCircle,
-  Edit, Key, Link2, UserPlus, MapPin, Check, ChevronsUpDown,
+  Globe,
+  Plus,
+  Trash2,
+  Loader2,
+  ExternalLink,
+  RefreshCw,
+  ShoppingCart,
+  ArrowLeft,
+  Settings,
+  CheckCircle2,
+  AlertCircle,
+  Edit,
+  Key,
+  Link2,
+  UserPlus,
+  MapPin,
+  Check,
+  ChevronsUpDown,
 } from "lucide-react";
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from "@/components/ui/command";
 import { cn } from "@/lib/utils";
-
 
 interface WordPressSite {
   id: string;
@@ -100,12 +156,17 @@ function mapAgencyRow(a: {
   };
 }
 
-async function withSharedTenantAccess(agencies: AgencyOpt[]): Promise<AgencyOpt[]> {
+async function withSharedTenantAccess(
+  agencies: AgencyOpt[],
+): Promise<AgencyOpt[]> {
   if (agencies.length === 0) return agencies;
   const { data, error } = await supabase
     .from("agency_tenant_access")
     .select("agency_id, accessing_tenant_id")
-    .in("agency_id", agencies.map((a) => a.id));
+    .in(
+      "agency_id",
+      agencies.map((a) => a.id),
+    );
   if (error) throw error;
   const sharedByAgency = new Map<string, string[]>();
   for (const row of data || []) {
@@ -119,7 +180,9 @@ async function withSharedTenantAccess(agencies: AgencyOpt[]): Promise<AgencyOpt[
   }));
 }
 
-async function fetchAgenciesForTenantScope(scopeTenantId: string): Promise<AgencyOpt[]> {
+async function fetchAgenciesForTenantScope(
+  scopeTenantId: string,
+): Promise<AgencyOpt[]> {
   const [ownRes, accessRes] = await Promise.all([
     supabase
       .from("agencies")
@@ -141,15 +204,18 @@ async function fetchAgenciesForTenantScope(scopeTenantId: string): Promise<Agenc
     if (a) merged.set(a.id, mapAgencyRow(a));
   });
   return withSharedTenantAccess(
-    Array.from(merged.values()).sort((x, y) => x.name.localeCompare(y.name))
+    Array.from(merged.values()).sort((x, y) => x.name.localeCompare(y.name)),
   );
 }
 
-function agenciesVisibleForTenant(agencies: AgencyOpt[], scopeTenantId: string): AgencyOpt[] {
+function agenciesVisibleForTenant(
+  agencies: AgencyOpt[],
+  scopeTenantId: string,
+): AgencyOpt[] {
   return agencies.filter(
     (a) =>
       a.tenant_id === scopeTenantId ||
-      (a.shared_with_tenant_ids?.includes(scopeTenantId) ?? false)
+      (a.shared_with_tenant_ids?.includes(scopeTenantId) ?? false),
   );
 }
 
@@ -197,7 +263,7 @@ export default function WordPressSettings() {
   const setMappingDraft = (
     updater:
       | Record<string, string>
-      | ((prev: Record<string, string>) => Record<string, string>)
+      | ((prev: Record<string, string>) => Record<string, string>),
   ) => {
     const setter = mappingMode === "form" ? setFormDraft : setSlugDraft;
     setter(updater as any);
@@ -233,7 +299,7 @@ export default function WordPressSettings() {
           .order("name");
         if (error) throw error;
         return withSharedTenantAccess(
-          (data || []).map((a: any) => mapAgencyRow(a))
+          (data || []).map((a: any) => mapAgencyRow(a)),
         );
       }
 
@@ -251,7 +317,15 @@ export default function WordPressSettings() {
   // Fetch clients - scoped to selected agency's tenant (if agency picked)
   // Otherwise to chosen tenant_id (super-admin) or current tenant + cross-tenant shared agencies
   const { data: clients = [] } = useQuery<Client[]>({
-    queryKey: ["clients-for-wp", selectedAgencyTenantId, form.tenant_id, tenantId, form.agency_id, isSuperAdmin, crossTenantAgencyIds],
+    queryKey: [
+      "clients-for-wp",
+      selectedAgencyTenantId,
+      form.tenant_id,
+      tenantId,
+      form.agency_id,
+      isSuperAdmin,
+      crossTenantAgencyIds,
+    ],
     queryFn: async () => {
       const effTenant = selectedAgencyTenantId || form.tenant_id || tenantId;
       if (!effTenant && !form.agency_id && !isSuperAdmin) return [];
@@ -265,8 +339,14 @@ export default function WordPressSettings() {
         q = q.eq("agency_id", form.agency_id);
       } else if (effTenant) {
         // Include current tenant's clients PLUS clients in cross-tenant shared agencies
-        if (!isSuperAdmin && effTenant === tenantId && crossTenantAgencyIds.length > 0) {
-          q = q.or(`tenant_id.eq.${effTenant},agency_id.in.(${crossTenantAgencyIds.join(",")})`);
+        if (
+          !isSuperAdmin &&
+          effTenant === tenantId &&
+          crossTenantAgencyIds.length > 0
+        ) {
+          q = q.or(
+            `tenant_id.eq.${effTenant},agency_id.in.(${crossTenantAgencyIds.join(",")})`,
+          );
         } else {
           q = q.eq("tenant_id", effTenant);
         }
@@ -291,7 +371,12 @@ export default function WordPressSettings() {
   // - others: own tenant + sites linked to agencies shared with their tenant
   //   (campaigners in a shared DMM agency should see DMM's WP sites).
   const { data: sites = [], isLoading } = useQuery<WordPressSite[]>({
-    queryKey: ["wordpress-sites-admin", tenantId, filterTenant, crossTenantAgencyIds.join(",")],
+    queryKey: [
+      "wordpress-sites-admin",
+      tenantId,
+      filterTenant,
+      crossTenantAgencyIds.join(","),
+    ],
     queryFn: async () => {
       let query = supabase
         .from("social_media_wordpress_sites" as any)
@@ -301,7 +386,7 @@ export default function WordPressSettings() {
       if (!isSuperAdmin) {
         if (crossTenantAgencyIds.length > 0) {
           query = query.or(
-            `tenant_id.eq.${tenantId},agency_id.in.(${crossTenantAgencyIds.join(",")})`
+            `tenant_id.eq.${tenantId},agency_id.in.(${crossTenantAgencyIds.join(",")})`,
           );
         } else {
           query = query.eq("tenant_id", tenantId);
@@ -317,11 +402,11 @@ export default function WordPressSettings() {
     enabled: !!tenantId,
   });
 
-
   // Create site
   const createMutation = useMutation({
     mutationFn: async (values: typeof form) => {
-      const tid = isSuperAdmin && values.tenant_id ? values.tenant_id : tenantId;
+      const tid =
+        isSuperAdmin && values.tenant_id ? values.tenant_id : tenantId;
       const payload: any = {
         site_url: values.site_url.replace(/\/$/, ""),
         username: values.username,
@@ -347,8 +432,12 @@ export default function WordPressSettings() {
       }
     },
     onSuccess: (_data, values) => {
-      queryClient.invalidateQueries({ queryKey: ["wordpress-sites-admin", tenantId] });
-      queryClient.invalidateQueries({ queryKey: ["wordpress-sites", tenantId] });
+      queryClient.invalidateQueries({
+        queryKey: ["wordpress-sites-admin", tenantId],
+      });
+      queryClient.invalidateQueries({
+        queryKey: ["wordpress-sites", tenantId],
+      });
       invalidateWooDashboardQueries(queryClient, values.client_id || null);
       toast.success("אתר וורדפרס נוסף בהצלחה");
       setAddOpen(false);
@@ -385,8 +474,12 @@ export default function WordPressSettings() {
       await shareWordpressSiteWithAgencyTenants(id, values.agency_id || null);
     },
     onSuccess: (_data, { values }) => {
-      queryClient.invalidateQueries({ queryKey: ["wordpress-sites-admin", tenantId] });
-      queryClient.invalidateQueries({ queryKey: ["wordpress-sites", tenantId] });
+      queryClient.invalidateQueries({
+        queryKey: ["wordpress-sites-admin", tenantId],
+      });
+      queryClient.invalidateQueries({
+        queryKey: ["wordpress-sites", tenantId],
+      });
       invalidateWooDashboardQueries(queryClient, values.client_id || null);
       toast.success("אתר עודכן בהצלחה");
       setEditSite(null);
@@ -405,8 +498,12 @@ export default function WordPressSettings() {
       if (error) throw error;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["wordpress-sites-admin", tenantId] });
-      queryClient.invalidateQueries({ queryKey: ["wordpress-sites", tenantId] });
+      queryClient.invalidateQueries({
+        queryKey: ["wordpress-sites-admin", tenantId],
+      });
+      queryClient.invalidateQueries({
+        queryKey: ["wordpress-sites", tenantId],
+      });
       toast.success("אתר נמחק");
     },
     onError: (e: Error) => toast.error("שגיאה: " + e.message),
@@ -414,7 +511,13 @@ export default function WordPressSettings() {
 
   // Toggle active
   const toggleActiveMutation = useMutation({
-    mutationFn: async ({ id, is_active }: { id: string; is_active: boolean }) => {
+    mutationFn: async ({
+      id,
+      is_active,
+    }: {
+      id: string;
+      is_active: boolean;
+    }) => {
       const { error } = await supabase
         .from("social_media_wordpress_sites" as any)
         .update({ is_active, updated_at: new Date().toISOString() })
@@ -422,7 +525,9 @@ export default function WordPressSettings() {
       if (error) throw error;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["wordpress-sites-admin", tenantId] });
+      queryClient.invalidateQueries({
+        queryKey: ["wordpress-sites-admin", tenantId],
+      });
     },
   });
 
@@ -439,7 +544,11 @@ export default function WordPressSettings() {
       client_id: string | null;
       tenant_id?: string | null;
     }) => {
-      const payload: any = { agency_id, client_id, updated_at: new Date().toISOString() };
+      const payload: any = {
+        agency_id,
+        client_id,
+        updated_at: new Date().toISOString(),
+      };
       if (newTenantId) payload.tenant_id = newTenantId;
       const { error } = await supabase
         .from("social_media_wordpress_sites" as any)
@@ -449,8 +558,12 @@ export default function WordPressSettings() {
       await shareWordpressSiteWithAgencyTenants(id, agency_id);
     },
     onSuccess: (_data, { client_id }) => {
-      queryClient.invalidateQueries({ queryKey: ["wordpress-sites-admin", tenantId] });
-      queryClient.invalidateQueries({ queryKey: ["wordpress-sites", tenantId] });
+      queryClient.invalidateQueries({
+        queryKey: ["wordpress-sites-admin", tenantId],
+      });
+      queryClient.invalidateQueries({
+        queryKey: ["wordpress-sites", tenantId],
+      });
       invalidateWooDashboardQueries(queryClient, client_id);
       toast.success("השיוך עודכן בהצלחה");
       setLinkSite(null);
@@ -471,7 +584,7 @@ export default function WordPressSettings() {
           .order("name");
         if (error) throw error;
         return withSharedTenantAccess(
-          (data || []).map((a: any) => mapAgencyRow(a))
+          (data || []).map((a: any) => mapAgencyRow(a)),
         );
       }
 
@@ -486,8 +599,11 @@ export default function WordPressSettings() {
     new Map(
       linkAgencies
         .filter((a) => a.tenant_id)
-        .map((a) => [a.tenant_id, { id: a.tenant_id, name: a.tenant_name || a.tenant_id }])
-    ).values()
+        .map((a) => [
+          a.tenant_id,
+          { id: a.tenant_id, name: a.tenant_name || a.tenant_id },
+        ]),
+    ).values(),
   ).sort((x, y) => x.name.localeCompare(y.name));
 
   // Filter agencies by chosen tenant — include shared agencies (e.g. DMM-MC for MarketingCaptain).
@@ -497,7 +613,8 @@ export default function WordPressSettings() {
 
   // Clients for the quick-link dialog — scoped to the SELECTED agency's tenant
   const linkSelectedAgency = linkAgencies.find((a) => a.id === linkAgency);
-  const linkEffectiveTenantId = linkSelectedAgency?.tenant_id || linkTenantId || linkSite?.tenant_id;
+  const linkEffectiveTenantId =
+    linkSelectedAgency?.tenant_id || linkTenantId || linkSite?.tenant_id;
 
   const { data: linkClients = [] } = useQuery<Client[]>({
     queryKey: ["clients-for-link", linkEffectiveTenantId, linkAgency, tenantId],
@@ -505,7 +622,7 @@ export default function WordPressSettings() {
       // Allow finding the client across: the chosen agency, the site's/agency's tenant,
       // AND the user's own tenant (e.g. site sits in DMM but client lives in DMM-MC).
       const tenantIds = Array.from(
-        new Set([linkEffectiveTenantId, tenantId].filter(Boolean) as string[])
+        new Set([linkEffectiveTenantId, tenantId].filter(Boolean) as string[]),
       );
       if (tenantIds.length === 0 && !linkAgency) return [];
 
@@ -515,7 +632,9 @@ export default function WordPressSettings() {
         .order("name");
 
       if (linkAgency && tenantIds.length > 0) {
-        q = q.or(`agency_id.eq.${linkAgency},tenant_id.in.(${tenantIds.join(",")})`);
+        q = q.or(
+          `agency_id.eq.${linkAgency},tenant_id.in.(${tenantIds.join(",")})`,
+        );
       } else if (linkAgency) {
         q = q.eq("agency_id", linkAgency);
       } else {
@@ -533,7 +652,6 @@ export default function WordPressSettings() {
     },
     enabled: !!(linkEffectiveTenantId || linkAgency || tenantId),
   });
-
 
   const openLink = (site: WordPressSite) => {
     setLinkSite(site);
@@ -561,15 +679,31 @@ export default function WordPressSettings() {
 
   // Discover forms + slugs for the mapping site (last 90 days of submissions)
   const { data: discovery, isLoading: isLoadingDiscovery } = useQuery<{
-    per_form: Array<{ form_id: string; form_name: string; total: number; last_30_days: number; sources: Record<string, number>; slugs?: string[]; sample_referer?: string | null }>;
-    per_slug: Array<{ slug: string; submissions: number; google_ads_submissions: number; sample_gad_campaignids: string[] }>;
+    per_form: Array<{
+      form_id: string;
+      form_name: string;
+      total: number;
+      last_30_days: number;
+      sources: Record<string, number>;
+      slugs?: string[];
+      sample_referer?: string | null;
+    }>;
+    per_slug: Array<{
+      slug: string;
+      submissions: number;
+      google_ads_submissions: number;
+      sample_gad_campaignids: string[];
+    }>;
   }>({
     queryKey: ["wp-discovery", mappingSite?.id],
     queryFn: async () => {
       if (!mappingSite) return { per_form: [], per_slug: [] };
-      const { data, error } = await supabase.functions.invoke("fetch-elementor-submissions", {
-        body: { site_id: mappingSite.id, days: 90 },
-      });
+      const { data, error } = await supabase.functions.invoke(
+        "fetch-elementor-submissions",
+        {
+          body: { site_id: mappingSite.id, days: 90 },
+        },
+      );
       if (error) throw error;
       return {
         per_form: (data?.per_form || []) as any[],
@@ -583,7 +717,9 @@ export default function WordPressSettings() {
   const discoveredSlugs = discovery?.per_slug || [];
 
   // Campaigns for mapping site's client (Google Ads campaigns from synced records)
-  const { data: clientCampaigns = [] } = useQuery<Array<{ campaign_id: string; campaign_name: string }>>({
+  const { data: clientCampaigns = [] } = useQuery<
+    Array<{ campaign_id: string; campaign_name: string }>
+  >({
     queryKey: ["wp-client-campaigns", mappingSite?.client_id],
     queryFn: async () => {
       if (!mappingSite?.client_id) return [];
@@ -616,12 +752,14 @@ export default function WordPressSettings() {
 
   // Ensure any campaign IDs already referenced in saved/draft mappings appear in the dropdown,
   // even if they were removed from Google Ads sync (otherwise the Select renders as empty).
-  const referencedIds = new Set<string>([
-    ...Object.values(formDraft),
-    ...Object.values(slugDraft),
-    ...Object.values(mappingSite?.campaign_form_mapping || {}),
-    ...Object.values(mappingSite?.campaign_url_mapping || {}),
-  ].filter(Boolean));
+  const referencedIds = new Set<string>(
+    [
+      ...Object.values(formDraft),
+      ...Object.values(slugDraft),
+      ...Object.values(mappingSite?.campaign_form_mapping || {}),
+      ...Object.values(mappingSite?.campaign_url_mapping || {}),
+    ].filter(Boolean),
+  );
   const knownIds = new Set(clientCampaigns.map((c) => c.campaign_id));
   const orphanCampaigns = Array.from(referencedIds)
     .filter((id) => !knownIds.has(id))
@@ -630,16 +768,24 @@ export default function WordPressSettings() {
 
   const filteredCampaigns = campaignSearch.trim()
     ? allCampaigns.filter((c) =>
-        c.campaign_name.toLowerCase().includes(campaignSearch.trim().toLowerCase())
+        c.campaign_name
+          .toLowerCase()
+          .includes(campaignSearch.trim().toLowerCase()),
       )
     : allCampaigns;
 
-
-
   const mappingMutation = useMutation({
-    mutationFn: async ({ id, mapping, mode }: { id: string; mapping: Record<string, string>; mode: "form" | "slug" }) => {
+    mutationFn: async ({
+      id,
+      mapping,
+      mode,
+    }: {
+      id: string;
+      mapping: Record<string, string>;
+      mode: "form" | "slug";
+    }) => {
       const clean = Object.fromEntries(
-        Object.entries(mapping).filter(([_, v]) => v && v.length > 0)
+        Object.entries(mapping).filter(([_, v]) => v && v.length > 0),
       );
       const payload: any = { updated_at: new Date().toISOString() };
       if (mode === "form") payload.campaign_form_mapping = clean;
@@ -661,16 +807,24 @@ export default function WordPressSettings() {
               ...prev,
               ...(data as any),
               campaign_form_mapping:
-                mode === "form" ? clean : (data as any)?.campaign_form_mapping ?? prev.campaign_form_mapping,
+                mode === "form"
+                  ? clean
+                  : ((data as any)?.campaign_form_mapping ??
+                    prev.campaign_form_mapping),
               campaign_url_mapping:
-                mode === "slug" ? clean : (data as any)?.campaign_url_mapping ?? prev.campaign_url_mapping,
+                mode === "slug"
+                  ? clean
+                  : ((data as any)?.campaign_url_mapping ??
+                    prev.campaign_url_mapping),
             }
-          : prev
+          : prev,
       );
       // Sync local per-mode drafts with what was saved
       if (mode === "form") setFormDraft(clean);
       else setSlugDraft(clean);
-      await queryClient.invalidateQueries({ queryKey: ["wordpress-sites-admin", tenantId] });
+      await queryClient.invalidateQueries({
+        queryKey: ["wordpress-sites-admin", tenantId],
+      });
       toast.success("המיפוי נשמר. סנכרן את דוח גוגל אדס כדי לראות את ההשפעה");
       // Keep dialog open so the user immediately sees the persisted selection
     },
@@ -679,11 +833,22 @@ export default function WordPressSettings() {
 
   // Map of clientId -> name for table display (across tenants for super-admin we fetch lazily per site tenant)
   const { data: clientsMap = {} } = useQuery<Record<string, string>>({
-    queryKey: ["clients-map-for-wp", sites.map((s) => s.client_id).filter(Boolean).join(",")],
+    queryKey: [
+      "clients-map-for-wp",
+      sites
+        .map((s) => s.client_id)
+        .filter(Boolean)
+        .join(","),
+    ],
     queryFn: async () => {
-      const ids = Array.from(new Set(sites.map((s) => s.client_id).filter(Boolean) as string[]));
+      const ids = Array.from(
+        new Set(sites.map((s) => s.client_id).filter(Boolean) as string[]),
+      );
       if (ids.length === 0) return {};
-      const { data, error } = await supabase.from("clients").select("id, name").in("id", ids);
+      const { data, error } = await supabase
+        .from("clients")
+        .select("id, name")
+        .in("id", ids);
       if (error) throw error;
       return Object.fromEntries((data || []).map((c: any) => [c.id, c.name]));
     },
@@ -693,16 +858,21 @@ export default function WordPressSettings() {
   // Trigger WooCommerce sync
   const syncMutation = useMutation({
     mutationFn: async (siteId: string) => {
-      const { data, error } = await supabase.functions.invoke("sync-woocommerce-data", {
-        body: { site_id: siteId },
-      });
+      const { data, error } = await supabase.functions.invoke(
+        "sync-woocommerce-data",
+        {
+          body: { site_id: siteId },
+        },
+      );
       if (error) throw error;
       return data;
     },
     onSuccess: (data) => {
-      queryClient.invalidateQueries({ queryKey: ["wordpress-sites-admin", tenantId] });
+      queryClient.invalidateQueries({
+        queryKey: ["wordpress-sites-admin", tenantId],
+      });
       toast.success(
-        `סנכרון הושלם: ${data?.orders_synced ?? 0} הזמנות, ${data?.products_synced ?? 0} מוצרים, ${data?.customers_synced ?? 0} לקוחות`
+        `סנכרון הושלם: ${data?.orders_synced ?? 0} הזמנות, ${data?.products_synced ?? 0} מוצרים, ${data?.customers_synced ?? 0} לקוחות`,
       );
     },
     onError: (e: Error) => toast.error("שגיאת סנכרון: " + e.message),
@@ -712,9 +882,12 @@ export default function WordPressSettings() {
   const testConnection = async (site: WordPressSite) => {
     setTestingId(site.id);
     try {
-      const { data, error } = await supabase.functions.invoke("test-wordpress-connection", {
-        body: { site_id: site.id },
-      });
+      const { data, error } = await supabase.functions.invoke(
+        "test-wordpress-connection",
+        {
+          body: { site_id: site.id },
+        },
+      );
       if (error) throw error;
       if (data?.success) {
         toast.success(`חיבור תקין! אתר: ${data.site_name || site.site_url}`);
@@ -760,14 +933,18 @@ export default function WordPressSettings() {
           <Label>ארגון (Tenant)</Label>
           <Select
             value={form.tenant_id}
-            onValueChange={(v) => setForm({ ...form, tenant_id: v, client_id: "" })}
+            onValueChange={(v) =>
+              setForm({ ...form, tenant_id: v, client_id: "" })
+            }
           >
             <SelectTrigger>
               <SelectValue placeholder="בחר ארגון..." />
             </SelectTrigger>
             <SelectContent>
               {allTenants.map((t) => (
-                <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>
+                <SelectItem key={t.id} value={t.id}>
+                  {t.name}
+                </SelectItem>
               ))}
             </SelectContent>
           </Select>
@@ -804,7 +981,9 @@ export default function WordPressSettings() {
       </div>
 
       <div>
-        <Label>Application Password {isEdit && "(השאר ריק לשמור הנוכחי)"}</Label>
+        <Label>
+          Application Password {isEdit && "(השאר ריק לשמור הנוכחי)"}
+        </Label>
         <Input
           type="password"
           value={form.app_password}
@@ -821,7 +1000,8 @@ export default function WordPressSettings() {
         <div className="flex items-start gap-2">
           <AlertCircle className="h-4 w-4 text-amber-600 mt-0.5 shrink-0" />
           <p className="text-xs text-amber-900 dark:text-amber-200 font-medium">
-            שיוך ללקוח חיוני כדי לקשר את לידי האתר (Elementor / Contact Form 7) אל דוח הלקוח.
+            שיוך ללקוח חיוני כדי לקשר את לידי האתר (Elementor / Contact Form 7)
+            אל דוח הלקוח.
           </p>
         </div>
 
@@ -829,23 +1009,32 @@ export default function WordPressSettings() {
           <Label>סוכנות מקושרת</Label>
           <Select
             value={form.agency_id || "none"}
-            onValueChange={(v) => setForm({ ...form, agency_id: v === "none" ? "" : v, client_id: "" })}
+            onValueChange={(v) =>
+              setForm({
+                ...form,
+                agency_id: v === "none" ? "" : v,
+                client_id: "",
+              })
+            }
             disabled={isSuperAdmin && !isEdit && !form.tenant_id}
           >
             <SelectTrigger>
-              <SelectValue placeholder={
-                isSuperAdmin && !isEdit && !form.tenant_id
-                  ? "בחר תחילה ארגון..."
-                  : agencies.length === 0
-                    ? "אין סוכנויות בארגון זה"
-                    : "בחר סוכנות..."
-              } />
+              <SelectValue
+                placeholder={
+                  isSuperAdmin && !isEdit && !form.tenant_id
+                    ? "בחר תחילה ארגון..."
+                    : agencies.length === 0
+                      ? "אין סוכנויות בארגון זה"
+                      : "בחר סוכנות..."
+                }
+              />
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="none">ללא</SelectItem>
               {agencies.map((a) => (
                 <SelectItem key={a.id} value={a.id}>
-                  {a.name}{a.tenant_name ? ` (${a.tenant_name})` : ""}
+                  {a.name}
+                  {a.tenant_name ? ` (${a.tenant_name})` : ""}
                 </SelectItem>
               ))}
             </SelectContent>
@@ -856,30 +1045,38 @@ export default function WordPressSettings() {
           <Label>לקוח מקושר</Label>
           <Select
             value={form.client_id || "none"}
-            onValueChange={(v) => setForm({ ...form, client_id: v === "none" ? "" : v })}
+            onValueChange={(v) =>
+              setForm({ ...form, client_id: v === "none" ? "" : v })
+            }
             disabled={isSuperAdmin && !isEdit && !form.tenant_id}
           >
             <SelectTrigger>
-              <SelectValue placeholder={
-                isSuperAdmin && !isEdit && !form.tenant_id
-                  ? "בחר תחילה ארגון..."
-                  : clients.length === 0
-                    ? (form.agency_id ? "אין לקוחות לסוכנות זו" : "אין לקוחות בארגון")
-                    : "בחר לקוח..."
-              } />
+              <SelectValue
+                placeholder={
+                  isSuperAdmin && !isEdit && !form.tenant_id
+                    ? "בחר תחילה ארגון..."
+                    : clients.length === 0
+                      ? form.agency_id
+                        ? "אין לקוחות לסוכנות זו"
+                        : "אין לקוחות בארגון"
+                      : "בחר לקוח..."
+                }
+              />
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="none">ללא</SelectItem>
               {clients.map((c) => (
                 <SelectItem key={c.id} value={c.id}>
-                  {c.name}{c.tenant_name && c.tenant_id !== (form.tenant_id || tenantId) ? ` (${c.tenant_name})` : ""}
+                  {c.name}
+                  {c.tenant_name && c.tenant_id !== (form.tenant_id || tenantId)
+                    ? ` (${c.tenant_name})`
+                    : ""}
                 </SelectItem>
               ))}
             </SelectContent>
           </Select>
         </div>
       </div>
-
 
       <div>
         <Label>הערות</Label>
@@ -899,7 +1096,9 @@ export default function WordPressSettings() {
           </div>
           <Switch
             checked={form.woocommerce_enabled}
-            onCheckedChange={(v) => setForm({ ...form, woocommerce_enabled: v })}
+            onCheckedChange={(v) =>
+              setForm({ ...form, woocommerce_enabled: v })
+            }
           />
         </div>
 
@@ -909,7 +1108,9 @@ export default function WordPressSettings() {
               <Label>Consumer Key *</Label>
               <Input
                 value={form.woo_consumer_key}
-                onChange={(e) => setForm({ ...form, woo_consumer_key: e.target.value })}
+                onChange={(e) =>
+                  setForm({ ...form, woo_consumer_key: e.target.value })
+                }
                 placeholder="ck_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
                 dir="ltr"
                 type="password"
@@ -922,7 +1123,9 @@ export default function WordPressSettings() {
               <Label>Consumer Secret *</Label>
               <Input
                 value={form.woo_consumer_secret}
-                onChange={(e) => setForm({ ...form, woo_consumer_secret: e.target.value })}
+                onChange={(e) =>
+                  setForm({ ...form, woo_consumer_secret: e.target.value })
+                }
                 placeholder="cs_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
                 dir="ltr"
                 type="password"
@@ -931,11 +1134,15 @@ export default function WordPressSettings() {
             <div className="flex items-center justify-between">
               <div>
                 <Label>סנכרון אוטומטי</Label>
-                <p className="text-xs text-muted-foreground">סנכרון כל שעה אוטומטית</p>
+                <p className="text-xs text-muted-foreground">
+                  סנכרון כל שעה אוטומטית
+                </p>
               </div>
               <Switch
                 checked={form.woo_sync_enabled}
-                onCheckedChange={(v) => setForm({ ...form, woo_sync_enabled: v })}
+                onCheckedChange={(v) =>
+                  setForm({ ...form, woo_sync_enabled: v })
+                }
               />
             </div>
           </>
@@ -948,7 +1155,11 @@ export default function WordPressSettings() {
     <div className="container mx-auto p-6 space-y-6" dir="rtl">
       {/* Header */}
       <div className="flex items-center gap-4">
-        <Button variant="ghost" size="icon" onClick={() => navigate(buildPath("integrations"))}>
+        <Button
+          variant="ghost"
+          size="icon"
+          onClick={() => navigate(buildPath("integrations"))}
+        >
           <ArrowLeft className="h-4 w-4" />
         </Button>
         <div>
@@ -979,7 +1190,9 @@ export default function WordPressSettings() {
           <CardContent className="pt-6">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-muted-foreground">WooCommerce מחובר</p>
+                <p className="text-sm text-muted-foreground">
+                  WooCommerce מחובר
+                </p>
                 <p className="text-3xl font-bold">{wooSites.length}</p>
               </div>
               <ShoppingCart className="h-8 w-8 text-purple-500 opacity-80" />
@@ -1004,7 +1217,9 @@ export default function WordPressSettings() {
         <div className="flex items-center justify-between flex-wrap gap-3">
           <TabsList>
             <TabsTrigger value="sites">אתרים ({sites.length})</TabsTrigger>
-            <TabsTrigger value="woocommerce">WooCommerce ({wooSites.length})</TabsTrigger>
+            <TabsTrigger value="woocommerce">
+              WooCommerce ({wooSites.length})
+            </TabsTrigger>
           </TabsList>
 
           <div className="flex items-center gap-3">
@@ -1016,7 +1231,9 @@ export default function WordPressSettings() {
                 <SelectContent>
                   <SelectItem value="all">כל הארגונים</SelectItem>
                   {allTenants.map((t) => (
-                    <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>
+                    <SelectItem key={t.id} value={t.id}>
+                      {t.name}
+                    </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
@@ -1038,12 +1255,16 @@ export default function WordPressSettings() {
                   className="w-full mt-2"
                   onClick={() => createMutation.mutate(form)}
                   disabled={
-                    !form.site_url || !form.username || !form.app_password ||
+                    !form.site_url ||
+                    !form.username ||
+                    !form.app_password ||
                     (isSuperAdmin && !form.tenant_id) ||
                     createMutation.isPending
                   }
                 >
-                  {createMutation.isPending && <Loader2 className="h-4 w-4 animate-spin ml-2" />}
+                  {createMutation.isPending && (
+                    <Loader2 className="h-4 w-4 animate-spin ml-2" />
+                  )}
                   הוסף אתר
                 </Button>
               </DialogContent>
@@ -1088,7 +1309,9 @@ export default function WordPressSettings() {
                         )}
                         <TableCell>
                           <div>
-                            <p className="font-medium">{site.site_name || site.site_url}</p>
+                            <p className="font-medium">
+                              {site.site_name || site.site_url}
+                            </p>
                             <a
                               href={site.site_url}
                               target="_blank"
@@ -1100,13 +1323,18 @@ export default function WordPressSettings() {
                               <ExternalLink className="h-3 w-3" />
                             </a>
                             {site.notes && (
-                              <p className="text-xs text-muted-foreground mt-0.5">{site.notes}</p>
+                              <p className="text-xs text-muted-foreground mt-0.5">
+                                {site.notes}
+                              </p>
                             )}
                           </div>
                         </TableCell>
                         <TableCell>
                           {site.client_id ? (
-                            <Badge variant="outline" className="border-emerald-500/50 text-emerald-700 dark:text-emerald-400">
+                            <Badge
+                              variant="outline"
+                              className="border-emerald-500/50 text-emerald-700 dark:text-emerald-400"
+                            >
                               <Link2 className="h-3 w-3 ml-1" />
                               {clientsMap[site.client_id] || "לקוח"}
                             </Badge>
@@ -1114,12 +1342,17 @@ export default function WordPressSettings() {
                             <TooltipProvider delayDuration={150}>
                               <Tooltip>
                                 <TooltipTrigger asChild>
-                                  <Badge variant="outline" className="border-amber-500/60 text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/30 cursor-help">
+                                  <Badge
+                                    variant="outline"
+                                    className="border-amber-500/60 text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/30 cursor-help"
+                                  >
                                     <AlertCircle className="h-3 w-3 ml-1" />
                                     לא משויך ללקוח
                                   </Badge>
                                 </TooltipTrigger>
-                                <TooltipContent>לידים מהאתר לא יקושרו לדוח לקוח</TooltipContent>
+                                <TooltipContent>
+                                  לידים מהאתר לא יקושרו לדוח לקוח
+                                </TooltipContent>
                               </Tooltip>
                             </TooltipProvider>
                           )}
@@ -1136,7 +1369,9 @@ export default function WordPressSettings() {
                         </TableCell>
                         <TableCell className="text-sm text-muted-foreground">
                           {site.woo_last_sync_at
-                            ? new Date(site.woo_last_sync_at).toLocaleString("he-IL")
+                            ? new Date(site.woo_last_sync_at).toLocaleString(
+                                "he-IL",
+                              )
                             : "—"}
                         </TableCell>
                         <TableCell>
@@ -1144,7 +1379,10 @@ export default function WordPressSettings() {
                             <Switch
                               checked={site.is_active}
                               onCheckedChange={(v) =>
-                                toggleActiveMutation.mutate({ id: site.id, is_active: v })
+                                toggleActiveMutation.mutate({
+                                  id: site.id,
+                                  is_active: v,
+                                })
                               }
                             />
                             <span className="text-xs">
@@ -1187,11 +1425,21 @@ export default function WordPressSettings() {
                             <Button
                               variant="ghost"
                               size="icon"
-                              title={site.client_id ? "ערוך שיוך לקוח" : "שייך ללקוח"}
+                              title={
+                                site.client_id ? "ערוך שיוך לקוח" : "שייך ללקוח"
+                              }
                               onClick={() => openLink(site)}
-                              className={site.client_id ? "" : "text-amber-600 hover:text-amber-700"}
+                              className={
+                                site.client_id
+                                  ? ""
+                                  : "text-amber-600 hover:text-amber-700"
+                              }
                             >
-                              {site.client_id ? <Link2 className="h-4 w-4" /> : <UserPlus className="h-4 w-4" />}
+                              {site.client_id ? (
+                                <Link2 className="h-4 w-4" />
+                              ) : (
+                                <UserPlus className="h-4 w-4" />
+                              )}
                             </Button>
 
                             {site.client_id && (
@@ -1201,8 +1449,12 @@ export default function WordPressSettings() {
                                 title="שייך טפסים / עמודי נחיתה לקמפיינים"
                                 onClick={() => openMapping(site)}
                                 className={
-                                  (site.campaign_form_mapping && Object.keys(site.campaign_form_mapping).length > 0) ||
-                                  (site.campaign_url_mapping && Object.keys(site.campaign_url_mapping).length > 0)
+                                  (site.campaign_form_mapping &&
+                                    Object.keys(site.campaign_form_mapping)
+                                      .length > 0) ||
+                                  (site.campaign_url_mapping &&
+                                    Object.keys(site.campaign_url_mapping)
+                                      .length > 0)
                                     ? "text-emerald-600"
                                     : "text-blue-600"
                                 }
@@ -1230,13 +1482,16 @@ export default function WordPressSettings() {
                                 <AlertDialogHeader>
                                   <AlertDialogTitle>מחק אתר</AlertDialogTitle>
                                   <AlertDialogDescription>
-                                    האם אתה בטוח? פעולה זו תמחק גם את כל נתוני ה-WooCommerce המסונכרנים.
+                                    האם אתה בטוח? פעולה זו תמחק גם את כל נתוני
+                                    ה-WooCommerce המסונכרנים.
                                   </AlertDialogDescription>
                                 </AlertDialogHeader>
                                 <AlertDialogFooter>
                                   <AlertDialogCancel>ביטול</AlertDialogCancel>
                                   <AlertDialogAction
-                                    onClick={() => deleteMutation.mutate(site.id)}
+                                    onClick={() =>
+                                      deleteMutation.mutate(site.id)
+                                    }
                                     className="bg-destructive hover:bg-destructive/90"
                                   >
                                     מחק
@@ -1271,7 +1526,9 @@ export default function WordPressSettings() {
                 <WooCommerceSiteCard
                   key={site.id}
                   site={site}
-                  tenantName={isSuperAdmin ? getTenantName(site.tenant_id) : undefined}
+                  tenantName={
+                    isSuperAdmin ? getTenantName(site.tenant_id) : undefined
+                  }
                   onSync={() => syncMutation.mutate(site.id)}
                   isSyncing={syncMutation.isPending}
                 />
@@ -1282,25 +1539,44 @@ export default function WordPressSettings() {
       </Tabs>
 
       {/* Edit Dialog */}
-      <Dialog open={!!editSite} onOpenChange={(o) => { if (!o) setEditSite(null); }}>
+      <Dialog
+        open={!!editSite}
+        onOpenChange={(o) => {
+          if (!o) setEditSite(null);
+        }}
+      >
         <DialogContent dir="rtl" className="max-w-lg">
           <DialogHeader>
-            <DialogTitle>ערוך אתר: {editSite?.site_name || editSite?.site_url}</DialogTitle>
+            <DialogTitle>
+              ערוך אתר: {editSite?.site_name || editSite?.site_url}
+            </DialogTitle>
           </DialogHeader>
           <SiteForm isEdit />
           <Button
             className="w-full mt-2"
-            onClick={() => editSite && updateMutation.mutate({ id: editSite.id, values: form })}
-            disabled={!form.site_url || !form.username || updateMutation.isPending}
+            onClick={() =>
+              editSite &&
+              updateMutation.mutate({ id: editSite.id, values: form })
+            }
+            disabled={
+              !form.site_url || !form.username || updateMutation.isPending
+            }
           >
-            {updateMutation.isPending && <Loader2 className="h-4 w-4 animate-spin ml-2" />}
+            {updateMutation.isPending && (
+              <Loader2 className="h-4 w-4 animate-spin ml-2" />
+            )}
             שמור שינויים
           </Button>
         </DialogContent>
       </Dialog>
 
       {/* Quick Link (Associate to Client) Dialog */}
-      <Dialog open={!!linkSite} onOpenChange={(o) => { if (!o) setLinkSite(null); }}>
+      <Dialog
+        open={!!linkSite}
+        onOpenChange={(o) => {
+          if (!o) setLinkSite(null);
+        }}
+      >
         <DialogContent dir="rtl" className="max-w-md">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
@@ -1310,14 +1586,19 @@ export default function WordPressSettings() {
           </DialogHeader>
           <div className="space-y-4">
             <div className="rounded-lg border bg-muted/30 p-3">
-              <p className="text-sm font-medium">{linkSite?.site_name || linkSite?.site_url}</p>
-              <p className="text-xs text-muted-foreground" dir="ltr">{linkSite?.site_url}</p>
+              <p className="text-sm font-medium">
+                {linkSite?.site_name || linkSite?.site_url}
+              </p>
+              <p className="text-xs text-muted-foreground" dir="ltr">
+                {linkSite?.site_url}
+              </p>
             </div>
 
             <div className="rounded-lg border border-amber-200 dark:border-amber-900 bg-amber-50 dark:bg-amber-950/20 p-3 flex items-start gap-2">
               <AlertCircle className="h-4 w-4 text-amber-600 mt-0.5 shrink-0" />
               <p className="text-xs text-amber-900 dark:text-amber-200">
-                שיוך זה מחבר את לידי האתר (Elementor / Contact Form 7) אל הלקוח, כך שיופיעו בדוח שלו.
+                שיוך זה מחבר את לידי האתר (Elementor / Contact Form 7) אל הלקוח,
+                כך שיופיעו בדוח שלו.
               </p>
             </div>
 
@@ -1333,12 +1614,20 @@ export default function WordPressSettings() {
                 }}
               >
                 <SelectTrigger>
-                  <SelectValue placeholder={linkTenants.length === 0 ? "אין ארגונים זמינים" : "בחר ארגון..."} />
+                  <SelectValue
+                    placeholder={
+                      linkTenants.length === 0
+                        ? "אין ארגונים זמינים"
+                        : "בחר ארגון..."
+                    }
+                  />
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="none">כל הארגונים</SelectItem>
                   {linkTenants.map((t) => (
-                    <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>
+                    <SelectItem key={t.id} value={t.id}>
+                      {t.name}
+                    </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
@@ -1348,10 +1637,19 @@ export default function WordPressSettings() {
               <Label>סוכנות</Label>
               <Select
                 value={linkAgency || "none"}
-                onValueChange={(v) => { setLinkAgency(v === "none" ? "" : v); setLinkClient(""); }}
+                onValueChange={(v) => {
+                  setLinkAgency(v === "none" ? "" : v);
+                  setLinkClient("");
+                }}
               >
                 <SelectTrigger>
-                  <SelectValue placeholder={linkFilteredAgencies.length === 0 ? "אין סוכנויות בארגון זה" : "בחר סוכנות..."} />
+                  <SelectValue
+                    placeholder={
+                      linkFilteredAgencies.length === 0
+                        ? "אין סוכנויות בארגון זה"
+                        : "בחר סוכנות..."
+                    }
+                  />
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="none">ללא</SelectItem>
@@ -1375,9 +1673,13 @@ export default function WordPressSettings() {
                 const selected = linkClients.find((c) => c.id === linkClient);
                 const labelFor = (c: Client) =>
                   `${c.name}${c.tenant_name && c.tenant_id !== linkSite?.tenant_id ? ` (${c.tenant_name})` : ""}`;
-                const normalize = (s: string) => s.replace(/[\s.\-_'"]/g, "").toLowerCase();
+                const normalize = (s: string) =>
+                  s.replace(/[\s.\-_'"]/g, "").toLowerCase();
                 return (
-                  <Popover open={linkClientOpen} onOpenChange={setLinkClientOpen}>
+                  <Popover
+                    open={linkClientOpen}
+                    onOpenChange={setLinkClientOpen}
+                  >
                     <PopoverTrigger asChild>
                       <Button
                         variant="outline"
@@ -1388,19 +1690,27 @@ export default function WordPressSettings() {
                           {selected
                             ? labelFor(selected)
                             : linkClient === ""
-                              ? (linkClients.length === 0
-                                  ? (linkAgency ? "אין לקוחות לסוכנות זו" : "אין לקוחות בארגון")
-                                  : "בחר לקוח...")
+                              ? linkClients.length === 0
+                                ? linkAgency
+                                  ? "אין לקוחות לסוכנות זו"
+                                  : "אין לקוחות בארגון"
+                                : "בחר לקוח..."
                               : "בחר לקוח..."}
                         </span>
                         <ChevronsUpDown className="h-4 w-4 opacity-50 shrink-0" />
                       </Button>
                     </PopoverTrigger>
-                    <PopoverContent className="w-[--radix-popover-trigger-width] p-0" align="start" dir="rtl">
+                    <PopoverContent
+                      className="w-[--radix-popover-trigger-width] p-0"
+                      align="start"
+                      dir="rtl"
+                    >
                       <Command
                         filter={(value, search) => {
                           if (!search) return 1;
-                          return normalize(value).includes(normalize(search)) ? 1 : 0;
+                          return normalize(value).includes(normalize(search))
+                            ? 1
+                            : 0;
                         }}
                       >
                         <CommandInput placeholder="חפש לקוח לפי שם..." />
@@ -1409,18 +1719,38 @@ export default function WordPressSettings() {
                           <CommandGroup>
                             <CommandItem
                               value="ללא"
-                              onSelect={() => { setLinkClient(""); setLinkClientOpen(false); }}
+                              onSelect={() => {
+                                setLinkClient("");
+                                setLinkClientOpen(false);
+                              }}
                             >
-                              <Check className={cn("ml-2 h-4 w-4", linkClient === "" ? "opacity-100" : "opacity-0")} />
+                              <Check
+                                className={cn(
+                                  "ml-2 h-4 w-4",
+                                  linkClient === ""
+                                    ? "opacity-100"
+                                    : "opacity-0",
+                                )}
+                              />
                               ללא
                             </CommandItem>
                             {linkClients.map((c) => (
                               <CommandItem
                                 key={c.id}
                                 value={labelFor(c)}
-                                onSelect={() => { setLinkClient(c.id); setLinkClientOpen(false); }}
+                                onSelect={() => {
+                                  setLinkClient(c.id);
+                                  setLinkClientOpen(false);
+                                }}
                               >
-                                <Check className={cn("ml-2 h-4 w-4", linkClient === c.id ? "opacity-100" : "opacity-0")} />
+                                <Check
+                                  className={cn(
+                                    "ml-2 h-4 w-4",
+                                    linkClient === c.id
+                                      ? "opacity-100"
+                                      : "opacity-0",
+                                  )}
+                                />
                                 {labelFor(c)}
                               </CommandItem>
                             ))}
@@ -1438,26 +1768,31 @@ export default function WordPressSettings() {
               )}
             </div>
 
-
             {/* Cross-tenant warning when selected agency belongs to another org */}
-            {linkSelectedAgency && linkSite && linkSelectedAgency.tenant_id !== linkSite.tenant_id && (
-              <div className="rounded-lg border border-blue-300 dark:border-blue-800 bg-blue-50 dark:bg-blue-950/20 p-3 flex items-start gap-2">
-                <AlertCircle className="h-4 w-4 text-blue-600 mt-0.5 shrink-0" />
-                <p className="text-xs text-blue-900 dark:text-blue-200">
-                  סוכנות זו שייכת לארגון <strong>{linkSelectedAgency.tenant_name}</strong>.
-                  בשמירה, האתר יועבר לארגון זה כדי שהשיוך יפעל כראוי.
-                </p>
-              </div>
-            )}
+            {linkSelectedAgency &&
+              linkSite &&
+              linkSelectedAgency.tenant_id !== linkSite.tenant_id && (
+                <div className="rounded-lg border border-blue-300 dark:border-blue-800 bg-blue-50 dark:bg-blue-950/20 p-3 flex items-start gap-2">
+                  <AlertCircle className="h-4 w-4 text-blue-600 mt-0.5 shrink-0" />
+                  <p className="text-xs text-blue-900 dark:text-blue-200">
+                    סוכנות זו שייכת לארגון{" "}
+                    <strong>{linkSelectedAgency.tenant_name}</strong>. בשמירה,
+                    האתר יועבר לארגון זה כדי שהשיוך יפעל כראוי.
+                  </p>
+                </div>
+              )}
 
-            {linkSite?.client_id && linkClient && linkClient !== linkSite.client_id && (
-              <div className="rounded-lg border border-destructive/40 bg-destructive/5 p-3 flex items-start gap-2">
-                <AlertCircle className="h-4 w-4 text-destructive mt-0.5 shrink-0" />
-                <p className="text-xs text-destructive">
-                  שינוי שיוך הלקוח לא יעביר לידים היסטוריים שכבר נמשכו תחת הלקוח הקודם.
-                </p>
-              </div>
-            )}
+            {linkSite?.client_id &&
+              linkClient &&
+              linkClient !== linkSite.client_id && (
+                <div className="rounded-lg border border-destructive/40 bg-destructive/5 p-3 flex items-start gap-2">
+                  <AlertCircle className="h-4 w-4 text-destructive mt-0.5 shrink-0" />
+                  <p className="text-xs text-destructive">
+                    שינוי שיוך הלקוח לא יעביר לידים היסטוריים שכבר נמשכו תחת
+                    הלקוח הקודם.
+                  </p>
+                </div>
+              )}
 
             <div className="flex gap-2 pt-2">
               <Button
@@ -1473,19 +1808,22 @@ export default function WordPressSettings() {
                 onClick={() => {
                   if (!linkSite) return;
                   const targetTenant =
-                    linkSelectedAgency?.tenant_id ||
-                    linkTenantId ||
-                    null;
+                    linkSelectedAgency?.tenant_id || linkTenantId || null;
                   linkMutation.mutate({
                     id: linkSite.id,
                     agency_id: linkAgency || null,
                     client_id: linkClient || null,
-                    tenant_id: targetTenant && targetTenant !== linkSite.tenant_id ? targetTenant : null,
+                    tenant_id:
+                      targetTenant && targetTenant !== linkSite.tenant_id
+                        ? targetTenant
+                        : null,
                   });
                 }}
                 disabled={linkMutation.isPending}
               >
-                {linkMutation.isPending && <Loader2 className="h-4 w-4 animate-spin ml-2" />}
+                {linkMutation.isPending && (
+                  <Loader2 className="h-4 w-4 animate-spin ml-2" />
+                )}
                 שמור שיוך
               </Button>
             </div>
@@ -1494,7 +1832,12 @@ export default function WordPressSettings() {
       </Dialog>
 
       {/* Form/Slug → Campaign Mapping Dialog */}
-      <Dialog open={!!mappingSite} onOpenChange={(o) => { if (!o) setMappingSite(null); }}>
+      <Dialog
+        open={!!mappingSite}
+        onOpenChange={(o) => {
+          if (!o) setMappingSite(null);
+        }}
+      >
         <DialogContent dir="rtl" className="max-w-2xl">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
@@ -1504,22 +1847,30 @@ export default function WordPressSettings() {
           </DialogHeader>
           <div className="space-y-4 max-h-[70vh] overflow-y-auto">
             <div className="rounded-lg border bg-muted/30 p-3">
-              <p className="text-sm font-medium">{mappingSite?.site_name || mappingSite?.site_url}</p>
-              <p className="text-xs text-muted-foreground" dir="ltr">{mappingSite?.site_url}</p>
+              <p className="text-sm font-medium">
+                {mappingSite?.site_name || mappingSite?.site_url}
+              </p>
+              <p className="text-xs text-muted-foreground" dir="ltr">
+                {mappingSite?.site_url}
+              </p>
             </div>
 
             <div className="rounded-lg border border-blue-200 dark:border-blue-900 bg-blue-50 dark:bg-blue-950/20 p-3 flex items-start gap-2">
               <AlertCircle className="h-4 w-4 text-blue-600 mt-0.5 shrink-0" />
               <p className="text-xs text-blue-900 dark:text-blue-200">
-                שיוך לפי <strong>טופס Elementor</strong> הוא שיטת האימות הראשית. הוא מדויק יותר משיוך לפי עמוד נחיתה (slug),
-                במיוחד כש-Google Ads מדווח Asset Group ID במקום Campaign ID (כמו ב-PMax).
+                שיוך לפי <strong>טופס Elementor</strong> הוא שיטת האימות הראשית.
+                הוא מדויק יותר משיוך לפי עמוד נחיתה (slug), במיוחד כש-Google Ads
+                מדווח Asset Group ID במקום Campaign ID (כמו ב-PMax).
               </p>
             </div>
 
-            <Tabs value={mappingMode} onValueChange={(v) => {
-              setMappingMode(v as "form" | "slug");
-              setCampaignSearch("");
-            }}>
+            <Tabs
+              value={mappingMode}
+              onValueChange={(v) => {
+                setMappingMode(v as "form" | "slug");
+                setCampaignSearch("");
+              }}
+            >
               <TabsList className="grid w-full grid-cols-2">
                 <TabsTrigger value="form">לפי טופס (מומלץ)</TabsTrigger>
                 <TabsTrigger value="slug">לפי עמוד נחיתה (legacy)</TabsTrigger>
@@ -1538,25 +1889,40 @@ export default function WordPressSettings() {
                   <div className="space-y-2">
                     <div className="grid grid-cols-12 gap-2 px-2 text-xs font-medium text-muted-foreground">
                       <div className="col-span-5">טופס</div>
-                      <div className="col-span-2 text-center">לידים (90 יום)</div>
+                      <div className="col-span-2 text-center">
+                        לידים (90 יום)
+                      </div>
                       <div className="col-span-5">קמפיין משויך</div>
                     </div>
                     {discoveredForms.map((f, idx) => {
                       const formKey = f.form_id || `${f.form_name}-${idx}`;
                       const slugLabel = (f.slugs || []).slice(0, 2).join(", ");
                       return (
-                        <div key={formKey} className="grid grid-cols-12 gap-2 items-center p-2 rounded border hover:bg-muted/30">
+                        <div
+                          key={formKey}
+                          className="grid grid-cols-12 gap-2 items-center p-2 rounded border hover:bg-muted/30"
+                        >
                           <div className="col-span-5">
                             <p className="text-sm font-medium">
-                              {f.form_name && f.form_name !== "[object Object]" ? f.form_name : `טופס ${f.form_id || idx + 1}`}
+                              {f.form_name && f.form_name !== "[object Object]"
+                                ? f.form_name
+                                : `טופס ${f.form_id || idx + 1}`}
                             </p>
                             {slugLabel && (
-                              <p className="text-[11px] text-muted-foreground" dir="ltr">
+                              <p
+                                className="text-[11px] text-muted-foreground"
+                                dir="ltr"
+                              >
                                 /{slugLabel}
                               </p>
                             )}
-                            <p className="text-[10px] text-muted-foreground" dir="ltr">
-                              id: {f.form_id || "—"} · GA: {f.sources?.google_ads || 0} · FB: {f.sources?.facebook || 0}
+                            <p
+                              className="text-[10px] text-muted-foreground"
+                              dir="ltr"
+                            >
+                              id: {f.form_id || "—"} · GA:{" "}
+                              {f.sources?.google_ads || 0} · FB:{" "}
+                              {f.sources?.facebook || 0}
                             </p>
                           </div>
                           <div className="col-span-2 text-center">
@@ -1568,35 +1934,48 @@ export default function WordPressSettings() {
                             <Select
                               value={mappingDraft[formKey] || "none"}
                               onValueChange={(v) =>
-                                setMappingDraft((prev) => ({ ...prev, [formKey]: v === "none" ? "" : v }))
+                                setMappingDraft((prev) => ({
+                                  ...prev,
+                                  [formKey]: v === "none" ? "" : v,
+                                }))
                               }
                             >
                               <SelectTrigger className="h-8 text-xs">
-                                <SelectValue placeholder={
-                                  clientCampaigns.length === 0 ? "אין קמפיינים מסונכרנים" : "בחר קמפיין..."
-                                } />
+                                <SelectValue
+                                  placeholder={
+                                    clientCampaigns.length === 0
+                                      ? "אין קמפיינים מסונכרנים"
+                                      : "בחר קמפיין..."
+                                  }
+                                />
                               </SelectTrigger>
                               <SelectContent>
                                 <div className="sticky top-0 bg-popover p-1 border-b z-10">
                                   <Input
                                     placeholder="חיפוש קמפיין..."
                                     value={campaignSearch}
-                                    onChange={(e) => setCampaignSearch(e.target.value)}
+                                    onChange={(e) =>
+                                      setCampaignSearch(e.target.value)
+                                    }
                                     onKeyDown={(e) => e.stopPropagation()}
                                     className="h-7 text-xs"
                                   />
                                 </div>
                                 <SelectItem value="none">ללא שיוך</SelectItem>
                                 {filteredCampaigns.map((c) => (
-                                  <SelectItem key={c.campaign_id} value={c.campaign_id}>
+                                  <SelectItem
+                                    key={c.campaign_id}
+                                    value={c.campaign_id}
+                                  >
                                     {c.campaign_name}
                                   </SelectItem>
                                 ))}
-                                {filteredCampaigns.length === 0 && clientCampaigns.length > 0 && (
-                                  <div className="px-2 py-2 text-xs text-muted-foreground text-center">
-                                    לא נמצאו תוצאות
-                                  </div>
-                                )}
+                                {filteredCampaigns.length === 0 &&
+                                  clientCampaigns.length > 0 && (
+                                    <div className="px-2 py-2 text-xs text-muted-foreground text-center">
+                                      לא נמצאו תוצאות
+                                    </div>
+                                  )}
                               </SelectContent>
                             </Select>
                           </div>
@@ -1624,14 +2003,26 @@ export default function WordPressSettings() {
                       <div className="col-span-5">קמפיין משויך</div>
                     </div>
                     {discoveredSlugs.map((s) => (
-                      <div key={s.slug} className="grid grid-cols-12 gap-2 items-center p-2 rounded border hover:bg-muted/30">
+                      <div
+                        key={s.slug}
+                        className="grid grid-cols-12 gap-2 items-center p-2 rounded border hover:bg-muted/30"
+                      >
                         <div className="col-span-5">
-                          <p className="font-mono text-xs" dir="ltr">/{s.slug}</p>
-                          {s.sample_gad_campaignids && s.sample_gad_campaignids.length > 0 && (
-                            <p className="text-[10px] text-muted-foreground" dir="ltr">
-                              gad: {s.sample_gad_campaignids.slice(0, 2).join(", ")}
-                            </p>
-                          )}
+                          <p className="font-mono text-xs" dir="ltr">
+                            /{s.slug}
+                          </p>
+                          {s.sample_gad_campaignids &&
+                            s.sample_gad_campaignids.length > 0 && (
+                              <p
+                                className="text-[10px] text-muted-foreground"
+                                dir="ltr"
+                              >
+                                gad:{" "}
+                                {s.sample_gad_campaignids
+                                  .slice(0, 2)
+                                  .join(", ")}
+                              </p>
+                            )}
                         </div>
                         <div className="col-span-2 text-center">
                           <Badge variant="secondary" className="text-xs">
@@ -1642,35 +2033,48 @@ export default function WordPressSettings() {
                           <Select
                             value={mappingDraft[s.slug] || "none"}
                             onValueChange={(v) =>
-                              setMappingDraft((prev) => ({ ...prev, [s.slug]: v === "none" ? "" : v }))
+                              setMappingDraft((prev) => ({
+                                ...prev,
+                                [s.slug]: v === "none" ? "" : v,
+                              }))
                             }
                           >
                             <SelectTrigger className="h-8 text-xs">
-                              <SelectValue placeholder={
-                                clientCampaigns.length === 0 ? "אין קמפיינים מסונכרנים" : "בחר קמפיין..."
-                              } />
+                              <SelectValue
+                                placeholder={
+                                  clientCampaigns.length === 0
+                                    ? "אין קמפיינים מסונכרנים"
+                                    : "בחר קמפיין..."
+                                }
+                              />
                             </SelectTrigger>
                             <SelectContent>
                               <div className="sticky top-0 bg-popover p-1 border-b z-10">
                                 <Input
                                   placeholder="חיפוש קמפיין..."
                                   value={campaignSearch}
-                                  onChange={(e) => setCampaignSearch(e.target.value)}
+                                  onChange={(e) =>
+                                    setCampaignSearch(e.target.value)
+                                  }
                                   onKeyDown={(e) => e.stopPropagation()}
                                   className="h-7 text-xs"
                                 />
                               </div>
                               <SelectItem value="none">ללא שיוך</SelectItem>
                               {filteredCampaigns.map((c) => (
-                                <SelectItem key={c.campaign_id} value={c.campaign_id}>
+                                <SelectItem
+                                  key={c.campaign_id}
+                                  value={c.campaign_id}
+                                >
                                   {c.campaign_name}
                                 </SelectItem>
                               ))}
-                              {filteredCampaigns.length === 0 && clientCampaigns.length > 0 && (
-                                <div className="px-2 py-2 text-xs text-muted-foreground text-center">
-                                  לא נמצאו תוצאות
-                                </div>
-                              )}
+                              {filteredCampaigns.length === 0 &&
+                                clientCampaigns.length > 0 && (
+                                  <div className="px-2 py-2 text-xs text-muted-foreground text-center">
+                                    לא נמצאו תוצאות
+                                  </div>
+                                )}
                             </SelectContent>
                           </Select>
                         </div>
@@ -1694,11 +2098,17 @@ export default function WordPressSettings() {
                 className="flex-1"
                 onClick={() => {
                   if (!mappingSite) return;
-                  mappingMutation.mutate({ id: mappingSite.id, mapping: mappingDraft, mode: mappingMode });
+                  mappingMutation.mutate({
+                    id: mappingSite.id,
+                    mapping: mappingDraft,
+                    mode: mappingMode,
+                  });
                 }}
                 disabled={mappingMutation.isPending}
               >
-                {mappingMutation.isPending && <Loader2 className="h-4 w-4 animate-spin ml-2" />}
+                {mappingMutation.isPending && (
+                  <Loader2 className="h-4 w-4 animate-spin ml-2" />
+                )}
                 שמור מיפוי {mappingMode === "form" ? "(טפסים)" : "(עמודים)"}
               </Button>
             </div>
@@ -1725,9 +2135,18 @@ function WooCommerceSiteCard({
     queryKey: ["woo-stats", site.id],
     queryFn: async () => {
       const [ordersRes, productsRes, customersRes] = await Promise.all([
-        supabase.from("woocommerce_orders" as any).select("id", { count: "exact", head: true }).eq("site_id", site.id),
-        supabase.from("woocommerce_products" as any).select("id", { count: "exact", head: true }).eq("site_id", site.id),
-        supabase.from("woocommerce_customers" as any).select("id", { count: "exact", head: true }).eq("site_id", site.id),
+        supabase
+          .from("woocommerce_orders" as any)
+          .select("id", { count: "exact", head: true })
+          .eq("site_id", site.id),
+        supabase
+          .from("woocommerce_products" as any)
+          .select("id", { count: "exact", head: true })
+          .eq("site_id", site.id),
+        supabase
+          .from("woocommerce_customers" as any)
+          .select("id", { count: "exact", head: true })
+          .eq("site_id", site.id),
       ]);
       return {
         orders: ordersRes.count ?? 0,
@@ -1745,7 +2164,10 @@ function WooCommerceSiteCard({
         .select("total, status")
         .eq("site_id", site.id)
         .in("status", ["completed", "processing"]);
-      const total = (data || []).reduce((sum: number, o: any) => sum + (parseFloat(o.total) || 0), 0);
+      const total = (data || []).reduce(
+        (sum: number, o: any) => sum + (parseFloat(o.total) || 0),
+        0,
+      );
       return total;
     },
   });
@@ -1765,11 +2187,19 @@ function WooCommerceSiteCard({
           </div>
           <div className="flex items-center gap-2">
             {site.woo_sync_enabled && (
-              <Badge variant="outline" className="text-green-600 border-green-600">
+              <Badge
+                variant="outline"
+                className="text-green-600 border-green-600"
+              >
                 סנכרון אוטומטי
               </Badge>
             )}
-            <Button size="sm" variant="outline" onClick={onSync} disabled={isSyncing}>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={onSync}
+              disabled={isSyncing}
+            >
               {isSyncing ? (
                 <Loader2 className="h-4 w-4 animate-spin ml-1" />
               ) : (
@@ -1796,14 +2226,17 @@ function WooCommerceSiteCard({
           </div>
           <div className="text-center p-3 bg-purple-50 rounded-lg">
             <p className="text-2xl font-bold text-purple-700">
-              {revenueData != null ? `₪${revenueData.toLocaleString("he-IL")}` : "—"}
+              {revenueData != null
+                ? `₪${revenueData.toLocaleString("he-IL")}`
+                : "—"}
             </p>
             <p className="text-xs text-muted-foreground">הכנסות</p>
           </div>
         </div>
         {site.woo_last_sync_at && (
           <p className="text-xs text-muted-foreground mt-3">
-            סנכרון אחרון: {new Date(site.woo_last_sync_at).toLocaleString("he-IL")}
+            סנכרון אחרון:{" "}
+            {new Date(site.woo_last_sync_at).toLocaleString("he-IL")}
           </p>
         )}
       </CardContent>

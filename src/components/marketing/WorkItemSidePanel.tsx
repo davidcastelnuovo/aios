@@ -1,16 +1,39 @@
 import { useEffect, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useCurrentTenant } from "@/hooks/useCurrentTenant";
-import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
+import {
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+} from "@/components/ui/sheet";
 import { supabase } from "@/integrations/supabase/client";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { toast } from "@/hooks/use-toast";
-import { Play, Loader2, Check, X, RotateCw, Image as ImageIcon, Megaphone, Search, AlertCircle, ChevronRight, Sparkles } from "lucide-react";
+import {
+  Play,
+  Loader2,
+  Check,
+  X,
+  RotateCw,
+  Image as ImageIcon,
+  Megaphone,
+  Search,
+  AlertCircle,
+  ChevronRight,
+  Sparkles,
+} from "lucide-react";
 import { CampaignLauncher } from "./CampaignLauncher";
 import { SEOPublishPanel } from "./SEOPublishPanel";
 import { ABTestPanel } from "./ABTestPanel";
@@ -20,7 +43,13 @@ interface Props {
   onClose: () => void;
 }
 
-const STATUS_LABELS: Record<string, { label: string; variant: "default" | "secondary" | "destructive" | "outline" }> = {
+const STATUS_LABELS: Record<
+  string,
+  {
+    label: string;
+    variant: "default" | "secondary" | "destructive" | "outline";
+  }
+> = {
   queued: { label: "ממתין", variant: "outline" },
   running: { label: "רץ...", variant: "secondary" },
   awaiting_approval: { label: "ממתין לאישור", variant: "default" },
@@ -39,12 +68,18 @@ export function WorkItemSidePanel({ itemId, onClose }: Props) {
 
   const loadItem = async () => {
     if (!itemId) return;
-    const { data } = await supabase.from("marketing_work_items").select("*").eq("id", itemId).single();
+    const { data } = await supabase
+      .from("marketing_work_items")
+      .select("*")
+      .eq("id", itemId)
+      .single();
     setItem(data);
     if (data?.pipeline_id) {
       const { data: st } = await supabase
         .from("marketing_pipeline_stages")
-        .select("id, name, stage_type, sort_order, agent_id, approval_mode, configuration")
+        .select(
+          "id, name, stage_type, sort_order, agent_id, approval_mode, configuration",
+        )
         .eq("pipeline_id", data.pipeline_id)
         .order("sort_order");
       setStages(st ?? []);
@@ -93,7 +128,12 @@ export function WorkItemSidePanel({ itemId, onClose }: Props) {
       .channel(`marketing-runs-${itemId}`)
       .on(
         "postgres_changes",
-        { event: "*", schema: "public", table: "marketing_runs", filter: `item_id=eq.${itemId}` },
+        {
+          event: "*",
+          schema: "public",
+          table: "marketing_runs",
+          filter: `item_id=eq.${itemId}`,
+        },
         () => {
           refetchRuns();
           refetchAssets();
@@ -121,13 +161,18 @@ export function WorkItemSidePanel({ itemId, onClose }: Props) {
 
   if (!itemId) return null;
 
-
-
   const save = async (patch: Partial<any>) => {
     setSaving(true);
-    const { error } = await supabase.from("marketing_work_items").update(patch).eq("id", itemId);
+    const { error } = await supabase
+      .from("marketing_work_items")
+      .update(patch)
+      .eq("id", itemId);
     if (error) {
-      toast({ title: "שגיאה", description: error.message, variant: "destructive" });
+      toast({
+        title: "שגיאה",
+        description: error.message,
+        variant: "destructive",
+      });
     } else {
       setItem({ ...item, ...patch });
     }
@@ -137,16 +182,21 @@ export function WorkItemSidePanel({ itemId, onClose }: Props) {
   const runStage = async (stageId: string) => {
     setRunning(stageId);
     try {
-      const { data, error } = await supabase.functions.invoke("marketing-run-stage", {
-        body: { item_id: itemId, stage_id: stageId },
-      });
+      const { data, error } = await supabase.functions.invoke(
+        "marketing-run-stage",
+        {
+          body: { item_id: itemId, stage_id: stageId },
+        },
+      );
       if (error) throw error;
       if ((data as any)?.error) throw new Error((data as any).error);
       toast({ title: "✓ הופעל", description: "השלב הסתיים" });
       refetchRuns();
       refetchAssets();
       loadItem();
-      queryClient.invalidateQueries({ queryKey: ["marketing-items-calendar", tenantId] });
+      queryClient.invalidateQueries({
+        queryKey: ["marketing-items-calendar", tenantId],
+      });
     } catch (e: any) {
       toast({ title: "שגיאה", description: e.message, variant: "destructive" });
     } finally {
@@ -157,25 +207,40 @@ export function WorkItemSidePanel({ itemId, onClose }: Props) {
   const runFullPipeline = async () => {
     setRunning("ALL");
     try {
-      const { data, error } = await supabase.functions.invoke("marketing-run-pipeline", {
-        body: { item_id: itemId },
-      });
+      const { data, error } = await supabase.functions.invoke(
+        "marketing-run-pipeline",
+        {
+          body: { item_id: itemId },
+        },
+      );
       // Always refresh UI regardless of outcome
       refetchRuns();
       refetchAssets();
       loadItem();
-      queryClient.invalidateQueries({ queryKey: ["marketing-items-calendar", tenantId] });
+      queryClient.invalidateQueries({
+        queryKey: ["marketing-items-calendar", tenantId],
+      });
       if (error) throw error;
       if ((data as any)?.error) {
-        toast({ title: "שגיאה בהרצת הפייפליין", description: (data as any).error, variant: "destructive" });
+        toast({
+          title: "שגיאה בהרצת הפייפליין",
+          description: (data as any).error,
+          variant: "destructive",
+        });
         return;
       }
       if ((data as any)?.awaiting_approval) {
-        toast({ title: "⏸ ממתין לאישורך", description: "שלב הסתיים ומחכה לאישור להמשיך" });
+        toast({
+          title: "⏸ ממתין לאישורך",
+          description: "שלב הסתיים ומחכה לאישור להמשיך",
+        });
         return;
       }
       if ((data as any)?.completed) {
-        toast({ title: "✓ הפייפליין הושלם!", description: "כל השלבים הורצו בהצלחה" });
+        toast({
+          title: "✓ הפייפליין הושלם!",
+          description: "כל השלבים הורצו בהצלחה",
+        });
         return;
       }
       toast({ title: "✓ ה-Pipeline הופעל" });
@@ -191,7 +256,10 @@ export function WorkItemSidePanel({ itemId, onClose }: Props) {
   };
 
   const approveRun = async (runId: string, stageId: string) => {
-    await supabase.from("marketing_runs").update({ status: "completed" }).eq("id", runId);
+    await supabase
+      .from("marketing_runs")
+      .update({ status: "completed" })
+      .eq("id", runId);
     // advance to next stage
     const idx = stages.findIndex((s) => s.id === stageId);
     if (idx >= 0 && idx < stages.length - 1) {
@@ -210,7 +278,10 @@ export function WorkItemSidePanel({ itemId, onClose }: Props) {
   };
 
   const rejectRun = async (runId: string) => {
-    await supabase.from("marketing_runs").update({ status: "cancelled" }).eq("id", runId);
+    await supabase
+      .from("marketing_runs")
+      .update({ status: "cancelled" })
+      .eq("id", runId);
     refetchRuns();
   };
 
@@ -231,19 +302,29 @@ export function WorkItemSidePanel({ itemId, onClose }: Props) {
 
   return (
     <Sheet open={!!itemId} onOpenChange={(o) => !o && onClose()}>
-      <SheetContent side="left" className="w-[600px] sm:max-w-none overflow-y-auto" dir="rtl">
+      <SheetContent
+        side="left"
+        className="w-[600px] sm:max-w-none overflow-y-auto"
+        dir="rtl"
+      >
         <SheetHeader>
-          <SheetTitle className="text-right">{item?.title ?? "פריט תוכן"}</SheetTitle>
+          <SheetTitle className="text-right">
+            {item?.title ?? "פריט תוכן"}
+          </SheetTitle>
         </SheetHeader>
         {!item ? (
-          <div className="py-8 text-center text-sm text-muted-foreground">טוען...</div>
+          <div className="py-8 text-center text-sm text-muted-foreground">
+            טוען...
+          </div>
         ) : (
           <div className="mt-4 space-y-4">
             {/* Hero: latest AI output */}
             {availableTypes.length > 0 ? (
               <div className="rounded-lg border bg-card p-3">
                 <div className="mb-2 flex items-center gap-2">
-                  <Label className="text-sm font-semibold">מה שקרמן הכינה</Label>
+                  <Label className="text-sm font-semibold">
+                    מה שקרמן הכינה
+                  </Label>
                   <Badge variant="secondary" className="text-[10px]">
                     {(assets ?? []).length} תוצרים
                   </Badge>
@@ -259,14 +340,19 @@ export function WorkItemSidePanel({ itemId, onClose }: Props) {
                         onClick={() => setActiveAssetTab(t)}
                       >
                         {TYPE_LABELS[t] ?? t}
-                        <span className="ms-1 opacity-60">({assetsByType[t].length})</span>
+                        <span className="ms-1 opacity-60">
+                          ({assetsByType[t].length})
+                        </span>
                       </Button>
                     ))}
                   </div>
                 )}
                 <div className="space-y-3">
                   {(assetsByType[activeAssetTab] ?? []).map((a: any) => (
-                    <div key={a.id} className="rounded-md border bg-background p-3">
+                    <div
+                      key={a.id}
+                      className="rounded-md border bg-background p-3"
+                    >
                       <div className="mb-2 flex items-center gap-2 text-xs text-muted-foreground">
                         <Badge variant="outline" className="text-[10px]">
                           {TYPE_LABELS[a.type] ?? a.type}
@@ -277,7 +363,12 @@ export function WorkItemSidePanel({ itemId, onClose }: Props) {
                         </span>
                       </div>
                       {a.url && (
-                        <a href={a.url} target="_blank" rel="noopener" className="block">
+                        <a
+                          href={a.url}
+                          target="_blank"
+                          rel="noopener"
+                          className="block"
+                        >
                           <img
                             src={a.url}
                             alt="asset"
@@ -302,14 +393,18 @@ export function WorkItemSidePanel({ itemId, onClose }: Props) {
 
             {/* Awaiting approval — prominent banner */}
             {(() => {
-              const pendingRuns = (runs ?? []).filter((r: any) => r.status === "awaiting_approval");
+              const pendingRuns = (runs ?? []).filter(
+                (r: any) => r.status === "awaiting_approval",
+              );
               if (pendingRuns.length === 0) return null;
               return (
                 <div className="rounded-xl border-2 border-amber-400 bg-gradient-to-b from-amber-50 to-amber-50/40 shadow-md overflow-hidden">
                   {/* Banner header */}
                   <div className="flex items-center gap-2 bg-amber-400/20 px-4 py-2.5 border-b border-amber-300">
                     <AlertCircle className="h-4 w-4 text-amber-600 shrink-0" />
-                    <span className="text-sm font-bold text-amber-800">נדרש אישורך להמשך</span>
+                    <span className="text-sm font-bold text-amber-800">
+                      נדרש אישורך להמשך
+                    </span>
                     <span className="ms-auto rounded-full bg-amber-500 px-2 py-0.5 text-[10px] font-bold text-white">
                       {pendingRuns.length} ממתינים
                     </span>
@@ -317,20 +412,28 @@ export function WorkItemSidePanel({ itemId, onClose }: Props) {
                   {/* Each pending run */}
                   <div className="divide-y divide-amber-200/60">
                     {pendingRuns.map((r: any) => {
-                      const stageName = r.marketing_pipeline_stages?.name ?? "שלב";
-                      const nextStageIdx = stages.findIndex((s: any) => s.id === r.stage_id);
-                      const nextStageName = nextStageIdx >= 0 && nextStageIdx < stages.length - 1
-                        ? stages[nextStageIdx + 1]?.name
-                        : null;
+                      const stageName =
+                        r.marketing_pipeline_stages?.name ?? "שלב";
+                      const nextStageIdx = stages.findIndex(
+                        (s: any) => s.id === r.stage_id,
+                      );
+                      const nextStageName =
+                        nextStageIdx >= 0 && nextStageIdx < stages.length - 1
+                          ? stages[nextStageIdx + 1]?.name
+                          : null;
                       return (
                         <div key={r.id} className="px-4 py-3">
                           <div className="mb-2 flex items-center gap-1.5 text-sm">
                             <Sparkles className="h-3.5 w-3.5 text-amber-500" />
-                            <span className="font-medium text-amber-900">{stageName}</span>
+                            <span className="font-medium text-amber-900">
+                              {stageName}
+                            </span>
                             {nextStageName && (
                               <>
                                 <ChevronRight className="h-3 w-3 text-amber-400" />
-                                <span className="text-amber-600 text-xs">{nextStageName}</span>
+                                <span className="text-amber-600 text-xs">
+                                  {nextStageName}
+                                </span>
                               </>
                             )}
                           </div>
@@ -341,7 +444,9 @@ export function WorkItemSidePanel({ itemId, onClose }: Props) {
                               onClick={() => approveRun(r.id, r.stage_id)}
                             >
                               <Check className="ml-1 h-3.5 w-3.5" />
-                              {nextStageName ? `אשר ועבור ל${nextStageName}` : "אשר וסיים"}
+                              {nextStageName
+                                ? `אשר ועבור ל${nextStageName}`
+                                : "אשר וסיים"}
                             </Button>
                             <Button
                               size="sm"
@@ -372,9 +477,15 @@ export function WorkItemSidePanel({ itemId, onClose }: Props) {
 
             {/* AB Test Panel — shown for copy stage */}
             {(() => {
-              const currentStage = stages.find((s) => s.id === item?.current_stage_id);
+              const currentStage = stages.find(
+                (s) => s.id === item?.current_stage_id,
+              );
               if (currentStage?.stage_type === "copy") {
-                const brief = item.payload?.brief_text ?? item.payload?.notes ?? item.title ?? "";
+                const brief =
+                  item.payload?.brief_text ??
+                  item.payload?.notes ??
+                  item.title ??
+                  "";
                 // Infer channel from pipeline track (stored in item payload or default to meta)
                 const channel = item.payload?.channel ?? "meta";
                 return (
@@ -385,10 +496,15 @@ export function WorkItemSidePanel({ itemId, onClose }: Props) {
                     channel={channel}
                     onVariantSelected={(variant) => {
                       // Advance to next stage after selecting winner
-                      const idx = stages.findIndex((s) => s.id === item.current_stage_id);
+                      const idx = stages.findIndex(
+                        (s) => s.id === item.current_stage_id,
+                      );
                       if (idx >= 0 && idx < stages.length - 1) {
                         const nextStage = stages[idx + 1];
-                        save({ current_stage_id: nextStage.id, status: "in_progress" });
+                        save({
+                          current_stage_id: nextStage.id,
+                          status: "in_progress",
+                        });
                       }
                       loadItem();
                     }}
@@ -400,7 +516,9 @@ export function WorkItemSidePanel({ itemId, onClose }: Props) {
 
             {/* Campaign Launcher — shown for target_paid stage */}
             {(() => {
-              const currentStage = stages.find((s) => s.id === item?.current_stage_id);
+              const currentStage = stages.find(
+                (s) => s.id === item?.current_stage_id,
+              );
               if (currentStage?.stage_type === "target_paid") {
                 return (
                   <CampaignLauncher
@@ -428,7 +546,11 @@ export function WorkItemSidePanel({ itemId, onClose }: Props) {
             })()}
 
             {/* Run pipeline button */}
-            <Button onClick={runFullPipeline} disabled={!!running} className="w-full">
+            <Button
+              onClick={runFullPipeline}
+              disabled={!!running}
+              className="w-full"
+            >
               {running === "ALL" ? (
                 <Loader2 className="ml-1 h-4 w-4 animate-spin" />
               ) : (
@@ -442,18 +564,27 @@ export function WorkItemSidePanel({ itemId, onClose }: Props) {
               <Label className="mb-2 block">הרצת שלבים</Label>
               <div className="space-y-1.5">
                 {stages.map((s) => {
-                  const lastRun = (runs ?? []).find((r: any) => r.stage_id === s.id);
+                  const lastRun = (runs ?? []).find(
+                    (r: any) => r.stage_id === s.id,
+                  );
                   const hasAsset = stageHasAsset(s.id);
                   return (
                     <div
                       key={s.id}
                       className="flex items-center gap-2 rounded-md border bg-muted/20 p-2"
                     >
-                      {hasAsset && <Check className="h-3.5 w-3.5 text-green-600" />}
+                      {hasAsset && (
+                        <Check className="h-3.5 w-3.5 text-green-600" />
+                      )}
                       <span className="flex-1 text-sm">{s.name}</span>
                       {lastRun && (
-                        <Badge variant={STATUS_LABELS[lastRun.status]?.variant ?? "outline"}>
-                          {STATUS_LABELS[lastRun.status]?.label ?? lastRun.status}
+                        <Badge
+                          variant={
+                            STATUS_LABELS[lastRun.status]?.variant ?? "outline"
+                          }
+                        >
+                          {STATUS_LABELS[lastRun.status]?.label ??
+                            lastRun.status}
                         </Badge>
                       )}
                       <Button
@@ -477,7 +608,9 @@ export function WorkItemSidePanel({ itemId, onClose }: Props) {
 
             {/* Collapsed metadata form */}
             <details className="rounded-md border p-3">
-              <summary className="cursor-pointer text-sm font-medium">פרטי הפריט</summary>
+              <summary className="cursor-pointer text-sm font-medium">
+                פרטי הפריט
+              </summary>
               <div className="mt-3 space-y-3">
                 <div>
                   <Label>כותרת</Label>
@@ -491,7 +624,9 @@ export function WorkItemSidePanel({ itemId, onClose }: Props) {
                   <Input
                     type="date"
                     defaultValue={item.scheduled_date ?? ""}
-                    onBlur={(e) => save({ scheduled_date: e.target.value || null })}
+                    onBlur={(e) =>
+                      save({ scheduled_date: e.target.value || null })
+                    }
                   />
                 </div>
                 <div>
@@ -518,7 +653,12 @@ export function WorkItemSidePanel({ itemId, onClose }: Props) {
                     rows={3}
                     defaultValue={item.payload?.notes ?? ""}
                     onBlur={(e) =>
-                      save({ payload: { ...(item.payload ?? {}), notes: e.target.value } })
+                      save({
+                        payload: {
+                          ...(item.payload ?? {}),
+                          notes: e.target.value,
+                        },
+                      })
                     }
                   />
                 </div>

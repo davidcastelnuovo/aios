@@ -52,7 +52,11 @@ interface EditAgencyDialogProps {
   onOpenChange: (open: boolean) => void;
 }
 
-export function EditAgencyDialog({ agency, open, onOpenChange }: EditAgencyDialogProps) {
+export function EditAgencyDialog({
+  agency,
+  open,
+  onOpenChange,
+}: EditAgencyDialogProps) {
   const queryClient = useQueryClient();
   const { t } = useTerminology();
   const { tenantId } = useCurrentTenant();
@@ -101,12 +105,12 @@ export function EditAgencyDialog({ agency, open, onOpenChange }: EditAgencyDialo
       if (error) throw error;
     },
     onSuccess: () => {
-      toast.success(`${t('agency')} עודכנה בהצלחה`);
+      toast.success(`${t("agency")} עודכנה בהצלחה`);
       queryClient.invalidateQueries({ queryKey: ["agencies-list", tenantId] });
       onOpenChange(false);
     },
     onError: (error) => {
-      toast.error(`שגיאה בעדכון ${t('agency')}: ` + error.message);
+      toast.error(`שגיאה בעדכון ${t("agency")}: ` + error.message);
     },
   });
 
@@ -116,9 +120,12 @@ export function EditAgencyDialog({ agency, open, onOpenChange }: EditAgencyDialo
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent dir="rtl" className="max-w-2xl max-h-[90vh] overflow-y-auto">
+      <DialogContent
+        dir="rtl"
+        className="max-w-2xl max-h-[90vh] overflow-y-auto"
+      >
         <DialogHeader>
-          <DialogTitle>ערוך {t('agency')}</DialogTitle>
+          <DialogTitle>ערוך {t("agency")}</DialogTitle>
         </DialogHeader>
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
@@ -127,7 +134,7 @@ export function EditAgencyDialog({ agency, open, onOpenChange }: EditAgencyDialo
               name="name"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>שם ה{t('agency')}</FormLabel>
+                  <FormLabel>שם ה{t("agency")}</FormLabel>
                   <FormControl>
                     <Input {...field} />
                   </FormControl>
@@ -220,7 +227,11 @@ export function EditAgencyDialog({ agency, open, onOpenChange }: EditAgencyDialo
               )}
             />
 
-            <Button type="submit" className="w-full" disabled={mutation.isPending}>
+            <Button
+              type="submit"
+              className="w-full"
+              disabled={mutation.isPending}
+            >
               {mutation.isPending ? "מעדכן..." : "עדכן סוכנות"}
             </Button>
           </form>

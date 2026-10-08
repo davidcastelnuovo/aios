@@ -3,7 +3,9 @@ import type { PixelBuffer } from "./textSlots";
 
 const ANALYSIS_SIZE = 96;
 
-export async function loadImagePixels(url: string): Promise<PixelBuffer | null> {
+export async function loadImagePixels(
+  url: string,
+): Promise<PixelBuffer | null> {
   const resolved = await resolveCreativeImageUrl(url);
   if (!resolved || typeof document === "undefined") return null;
   return new Promise((resolve) => {
@@ -20,7 +22,12 @@ export async function loadImagePixels(url: string): Promise<PixelBuffer | null> 
           return;
         }
         ctx.drawImage(image, 0, 0, ANALYSIS_SIZE, ANALYSIS_SIZE);
-        const { data, width, height } = ctx.getImageData(0, 0, ANALYSIS_SIZE, ANALYSIS_SIZE);
+        const { data, width, height } = ctx.getImageData(
+          0,
+          0,
+          ANALYSIS_SIZE,
+          ANALYSIS_SIZE,
+        );
         resolve({ data, width, height });
       } catch {
         resolve(null);

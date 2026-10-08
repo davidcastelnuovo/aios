@@ -3,8 +3,14 @@ import { useLocation, useNavigate, useParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { Download, Loader2, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { SeoMonthlyLandingPage, SeoMonthlyLandingPageCapture } from "@/components/seo/SeoMonthlyLandingPage";
-import { isSeoMonthlyShareSnapshot, SeoMonthlyShareSnapshot } from "@/lib/seoMonthlyShareSnapshot";
+import {
+  SeoMonthlyLandingPage,
+  SeoMonthlyLandingPageCapture,
+} from "@/components/seo/SeoMonthlyLandingPage";
+import {
+  isSeoMonthlyShareSnapshot,
+  SeoMonthlyShareSnapshot,
+} from "@/lib/seoMonthlyShareSnapshot";
 import { downloadSeoMonthlySlideshowPdf } from "@/lib/seoMonthlyPdf";
 import { toast } from "sonner";
 
@@ -21,38 +27,44 @@ export default function SharedSeoMonthly() {
   const [exporting, setExporting] = useState(false);
   const stackRef = useRef<HTMLDivElement>(null);
 
-  const { data, isLoading, error, dataUpdatedAt, refetch, isFetching } = useQuery({
-    queryKey: ["shared-seo-monthly", shareToken],
-    queryFn: async () => {
-      const baseUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/public-seo-monthly`;
-      const res = await fetch(`${baseUrl}?token=${encodeURIComponent(shareToken || "")}`, {
-        headers: { apikey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY },
-        cache: "no-store",
-      });
-      if (!res.ok) {
-        const body = await res.json().catch(() => ({}));
-        throw new Error(body?.error || `Failed (${res.status})`);
-      }
-      return res.json() as Promise<{
-        snapshot: unknown;
-        month: string;
-        updated_at: string;
-        live?: boolean;
-      }>;
-    },
-    enabled: !!shareToken,
-    retry: 1,
-    staleTime: 0,
-    refetchOnMount: "always",
-    refetchOnWindowFocus: true,
-  });
+  const { data, isLoading, error, dataUpdatedAt, refetch, isFetching } =
+    useQuery({
+      queryKey: ["shared-seo-monthly", shareToken],
+      queryFn: async () => {
+        const baseUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/public-seo-monthly`;
+        const res = await fetch(
+          `${baseUrl}?token=${encodeURIComponent(shareToken || "")}`,
+          {
+            headers: { apikey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY },
+            cache: "no-store",
+          },
+        );
+        if (!res.ok) {
+          const body = await res.json().catch(() => ({}));
+          throw new Error(body?.error || `Failed (${res.status})`);
+        }
+        return res.json() as Promise<{
+          snapshot: unknown;
+          month: string;
+          updated_at: string;
+          live?: boolean;
+        }>;
+      },
+      enabled: !!shareToken,
+      retry: 1,
+      staleTime: 0,
+      refetchOnMount: "always",
+      refetchOnWindowFocus: true,
+    });
 
   const snapshot = useMemo<SeoMonthlyShareSnapshot | null>(() => {
     if (!data?.snapshot) return null;
     return isSeoMonthlyShareSnapshot(data.snapshot) ? data.snapshot : null;
   }, [data, dataUpdatedAt]);
 
-  const canCloseToApp = Boolean(locationState.fromApp || locationState.returnTo);
+  const canCloseToApp = Boolean(
+    locationState.fromApp || locationState.returnTo,
+  );
 
   const handleClose = () => {
     if (locationState.returnTo) {
@@ -80,7 +92,10 @@ export default function SharedSeoMonthly() {
       const safeName = `${freshSnapshot.clientName}-${freshSnapshot.monthLabel}`
         .replace(/[^\w\u0590-\u05FF-]+/g, "-")
         .slice(0, 60);
-      await downloadSeoMonthlySlideshowPdf(stackRef.current, `seo-${safeName}.pdf`);
+      await downloadSeoMonthlySlideshowPdf(
+        stackRef.current,
+        `seo-${safeName}.pdf`,
+      );
       toast.success("ה־PDF הורד (כולל קישורים לחיצים)");
     } catch (err: any) {
       console.error(err);
@@ -108,7 +123,9 @@ export default function SharedSeoMonthly() {
         dir="rtl"
       >
         <p className="text-xl font-semibold">הקישור לא נמצא או פג תוקף</p>
-        <p className="text-sm text-slate-500">בקשו מהסוכנות קישור שיתוף מעודכן לדוח SEO.</p>
+        <p className="text-sm text-slate-500">
+          בקשו מהסוכנות קישור שיתוף מעודכן לדוח SEO.
+        </p>
         {canCloseToApp && (
           <Button variant="secondary" className="mt-2" onClick={handleClose}>
             חזרה לדשבורד
@@ -148,7 +165,11 @@ export default function SharedSeoMonthly() {
             disabled={exporting}
             onClick={onExportPdf}
           >
-            {exporting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5" />}
+            {exporting ? (
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+            ) : (
+              <Download className="h-3.5 w-3.5" />
+            )}
             PDF
           </Button>
         </div>

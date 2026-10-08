@@ -8,7 +8,10 @@ import { useCrossTenantAgencyIds } from "@/hooks/useCrossTenantAgencyIds";
  * Mirrors useAssignableCampaigners: own-tenant rows plus clients in agencies
  * shared into the tenant. RLS remains the final authority.
  */
-export function useAssignableClients(options?: { activeOnly?: boolean; enabled?: boolean }) {
+export function useAssignableClients(options?: {
+  activeOnly?: boolean;
+  enabled?: boolean;
+}) {
   const { tenantId } = useCurrentTenant();
   const { crossTenantAgencyIds } = useCrossTenantAgencyIds();
   const activeOnly = options?.activeOnly ?? false;
@@ -29,9 +32,12 @@ export function useAssignableClients(options?: { activeOnly?: boolean; enabled?:
         .order("name");
 
       if (activeOnly) query = query.eq("status", "active");
-      query = crossTenantAgencyIds.length > 0
-        ? query.or(`tenant_id.eq.${tenantId},agency_id.in.(${crossTenantAgencyIds.join(",")})`)
-        : query.eq("tenant_id", tenantId);
+      query =
+        crossTenantAgencyIds.length > 0
+          ? query.or(
+              `tenant_id.eq.${tenantId},agency_id.in.(${crossTenantAgencyIds.join(",")})`,
+            )
+          : query.eq("tenant_id", tenantId);
 
       const { data, error } = await query;
       if (error) throw error;
@@ -40,4 +46,3 @@ export function useAssignableClients(options?: { activeOnly?: boolean; enabled?:
     enabled: !!tenantId && (options?.enabled ?? true),
   });
 }
-

@@ -1,49 +1,71 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="he" dir="rtl">
-<head>
-  <meta charset="UTF-8" />
-  <title>AIOS — הקלטת פגישה</title>
-  <link rel="stylesheet" href="/src/styles.css" />
-</head>
-<body class="recorder">
-  <header class="header">
-    <img class="logo" src="/icons/icon48.png" alt="AIOS" />
-    <div class="logo-text">AIOS Rec</div>
-    <div class="subtitle">הקלטה</div>
-  </header>
+  <head>
+    <meta charset="UTF-8" />
+    <title>AIOS — הקלטת פגישה</title>
+    <link rel="stylesheet" href="/src/styles.css" />
+  </head>
+  <body class="recorder">
+    <header class="header">
+      <img class="logo" src="/icons/icon48.png" alt="AIOS" />
+      <div class="logo-text">AIOS Rec</div>
+      <div class="subtitle">הקלטה</div>
+    </header>
 
-  <main>
-    <div class="state">
-      <div class="rec-info">
-        <div>נושא: <b id="info-topic">—</b></div>
-        <div>לקוח: <b id="info-client">—</b></div>
-        <div id="info-mode" class="hidden">🎙️ מצב אודיו בלבד</div>
+    <main>
+      <div class="state">
+        <div class="rec-info">
+          <div>נושא: <b id="info-topic">—</b></div>
+          <div>לקוח: <b id="info-client">—</b></div>
+          <div id="info-mode" class="hidden">🎙️ מצב אודיו בלבד</div>
+        </div>
+
+        <div class="timer" id="timer">00:00</div>
+
+        <div id="camera-setup" class="state hidden">
+          <video
+            id="cam-preview"
+            autoplay
+            muted
+            playsinline
+            style="
+              width: 96px;
+              height: 96px;
+              object-fit: cover;
+              border-radius: 50%;
+              border: 2px solid rgba(255, 255, 255, 0.9);
+              align-self: center;
+              background: #000;
+            "
+          ></video>
+          <label
+            >מיקום הבועה בהקלטה
+            <select id="corner-select">
+              <option value="bottom-right">פינה ימנית תחתונה</option>
+              <option value="bottom-left">פינה שמאלית תחתונה</option>
+              <option value="top-right">פינה ימנית עליונה</option>
+              <option value="top-left">פינה שמאלית עליונה</option>
+            </select>
+          </label>
+        </div>
+        <button class="btn primary hidden" id="camera-btn">
+          📷 הפעל מצלמה (בועה צפה)
+        </button>
+        <button class="btn primary" id="start-btn">
+          🖥️ בחר מסך והתחל הקלטה
+        </button>
+        <div class="status hidden" id="screen-hint"></div>
+        <button class="btn danger hidden" id="stop-btn">
+          ⏹️ עצור הקלטה והעלה
+        </button>
+
+        <div class="progress hidden" id="progress">
+          <div id="progress-bar"></div>
+        </div>
+        <div class="status" id="status"></div>
       </div>
+    </main>
 
-      <div class="timer" id="timer">00:00</div>
-
-      <div id="camera-setup" class="state hidden">
-        <video id="cam-preview" autoplay muted playsinline
-          style="width:96px;height:96px;object-fit:cover;border-radius:50%;border:2px solid rgba(255,255,255,.9);align-self:center;background:#000;"></video>
-        <label>מיקום הבועה בהקלטה
-          <select id="corner-select">
-            <option value="bottom-right">פינה ימנית תחתונה</option>
-            <option value="bottom-left">פינה שמאלית תחתונה</option>
-            <option value="top-right">פינה ימנית עליונה</option>
-            <option value="top-left">פינה שמאלית עליונה</option>
-          </select>
-        </label>
-      </div>
-      <button class="btn primary hidden" id="camera-btn">📷 הפעל מצלמה (בועה צפה)</button>
-      <button class="btn primary" id="start-btn">🖥️ בחר מסך והתחל הקלטה</button>
-      <div class="status hidden" id="screen-hint"></div>
-      <button class="btn danger hidden" id="stop-btn">⏹️ עצור הקלטה והעלה</button>
-
-      <div class="progress hidden" id="progress"><div id="progress-bar"></div></div>
-      <div class="status" id="status"></div>
-    </div>
-  </main>
-
-  <script type="module" src="/src/recorder.ts"></script>
-</body>
+    <script type="module" src="/src/recorder.ts"></script>
+  </body>
 </html>

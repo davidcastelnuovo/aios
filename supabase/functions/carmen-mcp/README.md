@@ -6,19 +6,19 @@ Grok Bot connects as an MCP **client**; this edge function is the **server**.
 
 ## Tools
 
-| Tool | What it does |
-| --- | --- |
+| Tool         | What it does                                                                                                          |
+| ------------ | --------------------------------------------------------------------------------------------------------------------- |
 | `ask_carmen` | Send a message to Carmen's full brain (`run-ai-agent`). Returns her reply. Optional `conversation_id` for continuity. |
 
 ## One-time setup
 
 ### 1. Secrets (project `zvoijyneresvkadpprel`)
 
-| Secret | Required | Value |
-| --- | --- | --- |
-| `CARMEN_MCP_BEARER` | ✅ | strong random string (`openssl rand -hex 32`) — Grok Bot sends this as `Authorization: Bearer …` |
-| `CARMEN_MCP_TENANT_ID` | recommended | tenant UUID for Carmen (or rely on `CLAUDE_DEFAULT_TENANT_ID`) |
-| `CARMEN_MCP_USER_ID` | optional | acting user UUID (default David — full owner permissions) |
+| Secret                 | Required    | Value                                                                                            |
+| ---------------------- | ----------- | ------------------------------------------------------------------------------------------------ |
+| `CARMEN_MCP_BEARER`    | ✅          | strong random string (`openssl rand -hex 32`) — Grok Bot sends this as `Authorization: Bearer …` |
+| `CARMEN_MCP_TENANT_ID` | recommended | tenant UUID for Carmen (or rely on `CLAUDE_DEFAULT_TENANT_ID`)                                   |
+| `CARMEN_MCP_USER_ID`   | optional    | acting user UUID (default David — full owner permissions)                                        |
 
 ### 2. Grok Bot plugin
 
@@ -32,10 +32,10 @@ Grok Bot connects as an MCP **client**; this edge function is the **server**.
 6. Save. Tools should list `ask_carmen`.
 
 **שגיאות נפוצות:**
+
 - URL בלי `/mcp` בסוף → Grok Bot לא מתחבר
 - `Bearer Bearer …` (כפול) → 401
 - token שגוי → 401 Unauthorized
-
 
 ### 3. Use in a Bot task
 

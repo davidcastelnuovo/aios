@@ -10,7 +10,9 @@ const STORAGE_PATTERNS = [
 ];
 
 /** Extract object path inside signature-documents bucket from a stored path or legacy public URL. */
-export function extractSignatureDocumentPath(fileUrlOrPath: string | null | undefined): string | null {
+export function extractSignatureDocumentPath(
+  fileUrlOrPath: string | null | undefined,
+): string | null {
   if (!fileUrlOrPath?.trim()) return null;
   const value = fileUrlOrPath.trim();
   if (!value.startsWith("http")) return value;
@@ -48,13 +50,19 @@ export async function resolveSignatureDocumentUrl(
     .createSignedUrl(path, SIGNED_TTL_SECONDS);
 
   if (error || !data?.signedUrl) {
-    console.warn("[resolveSignatureDocumentUrl]", error?.message ?? "no signed url");
+    console.warn(
+      "[resolveSignatureDocumentUrl]",
+      error?.message ?? "no signed url",
+    );
     return value.startsWith("http") ? value : null;
   }
   return data.signedUrl;
 }
 
 /** Storage path to persist in DB (not a public URL). */
-export function signatureDocumentStoragePath(tenantId: string, fileName: string): string {
+export function signatureDocumentStoragePath(
+  tenantId: string,
+  fileName: string,
+): string {
   return `${tenantId}/${Date.now()}_${fileName}`;
 }

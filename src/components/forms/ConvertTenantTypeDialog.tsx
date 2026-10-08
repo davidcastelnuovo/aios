@@ -37,19 +37,23 @@ export function ConvertTenantTypeDialog({
 }: ConvertTenantTypeDialogProps) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
-  const [newOrgType, setNewOrgType] = useState<'organization' | 'sub_organization'>('organization');
+  const [newOrgType, setNewOrgType] = useState<
+    "organization" | "sub_organization"
+  >("organization");
   const [newParentId, setNewParentId] = useState<string>("");
 
   const convertMutation = useMutation({
     mutationFn: async (data: {
       tenant_id: string;
-      new_org_type: 'organization' | 'sub_organization';
+      new_org_type: "organization" | "sub_organization";
       new_parent_id?: string;
     }) => {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session) throw new Error('לא מחובר למערכת');
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+      if (!session) throw new Error("לא מחובר למערכת");
 
-      const response = await supabase.functions.invoke('convert-tenant-type', {
+      const response = await supabase.functions.invoke("convert-tenant-type", {
         body: data,
         headers: {
           Authorization: `Bearer ${session.access_token}`,
@@ -58,7 +62,7 @@ export function ConvertTenantTypeDialog({
 
       if (response.error) throw response.error;
       if (response.data?.error) throw new Error(response.data.error);
-      
+
       return response.data;
     },
     onSuccess: () => {
@@ -87,7 +91,7 @@ export function ConvertTenantTypeDialog({
       new_org_type: newOrgType,
     };
 
-    if (newOrgType === 'sub_organization' && newParentId) {
+    if (newOrgType === "sub_organization" && newParentId) {
       data.new_parent_id = newParentId;
     }
 
@@ -96,18 +100,24 @@ export function ConvertTenantTypeDialog({
 
   const getOrgTypeLabel = (type: string) => {
     switch (type) {
-      case 'root': return 'ארגון שורש';
-      case 'organization': return 'ארגון';
-      case 'sub_organization': return 'תת-ארגון';
-      default: return type;
+      case "root":
+        return "ארגון שורש";
+      case "organization":
+        return "ארגון";
+      case "sub_organization":
+        return "תת-ארגון";
+      default:
+        return type;
     }
   };
 
   const filteredParents = availableParents.filter(
-    p => p.id !== tenant?.id && p.org_type !== 'sub_organization'
+    (p) => p.id !== tenant?.id && p.org_type !== "sub_organization",
   );
 
-  const canConvert = newOrgType === 'organization' || (newOrgType === 'sub_organization' && newParentId);
+  const canConvert =
+    newOrgType === "organization" ||
+    (newOrgType === "sub_organization" && newParentId);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -118,14 +128,18 @@ export function ConvertTenantTypeDialog({
             שינוי סוג ארגון
           </DialogTitle>
           <DialogDescription>
-            שנה את סוג הארגון "{tenant?.name}" מ-{getOrgTypeLabel(tenant?.org_type || '')}
+            שנה את סוג הארגון "{tenant?.name}" מ-
+            {getOrgTypeLabel(tenant?.org_type || "")}
           </DialogDescription>
         </DialogHeader>
 
         <div className="space-y-4 pt-2">
           <div className="space-y-3">
             <Label>סוג ארגון חדש:</Label>
-            <RadioGroup value={newOrgType} onValueChange={(v) => setNewOrgType(v as any)}>
+            <RadioGroup
+              value={newOrgType}
+              onValueChange={(v) => setNewOrgType(v as any)}
+            >
               <div className="flex items-center space-x-2 space-x-reverse">
                 <RadioGroupItem value="organization" id="org" />
                 <Label htmlFor="org" className="cursor-pointer">
@@ -141,7 +155,7 @@ export function ConvertTenantTypeDialog({
             </RadioGroup>
           </div>
 
-          {newOrgType === 'sub_organization' && (
+          {newOrgType === "sub_organization" && (
             <div className="space-y-2">
               <Label>ארגון האב:</Label>
               <Select value={newParentId} onValueChange={setNewParentId}>
@@ -164,9 +178,10 @@ export function ConvertTenantTypeDialog({
             </div>
           )}
 
-          {newOrgType === 'organization' && (
+          {newOrgType === "organization" && (
             <p className="text-sm text-muted-foreground bg-muted p-3 rounded-md">
-              המרה לארגון תנתק את הקשר לארגון האב (אם קיים) ותאפשר לארגון זה ליצור תת-ארגונים.
+              המרה לארגון תנתק את הקשר לארגון האב (אם קיים) ותאפשר לארגון זה
+              ליצור תת-ארגונים.
             </p>
           )}
         </div>

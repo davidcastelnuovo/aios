@@ -27,21 +27,31 @@ import { isCursorSpendLimitError } from "./cloud-errors.ts";
 import { launchParliamentSeat } from "./direct.ts";
 
 function stateFromRun(run: { context?: unknown }): ParliamentState | null {
-  const ctx = (run.context && typeof run.context === "object" ? run.context : {}) as Record<string, unknown>;
+  const ctx = (
+    run.context && typeof run.context === "object" ? run.context : {}
+  ) as Record<string, unknown>;
   const raw = ctx.parliament as ParliamentState | undefined;
   if (!raw || typeof raw !== "object") return null;
   if (!raw.seats || !raw.status) return null;
   return raw;
 }
 
-function withParliament(context: unknown, state: ParliamentState): Record<string, unknown> {
-  const ctx = (context && typeof context === "object" ? context : {}) as Record<string, unknown>;
+function withParliament(
+  context: unknown,
+  state: ParliamentState,
+): Record<string, unknown> {
+  const ctx = (context && typeof context === "object" ? context : {}) as Record<
+    string,
+    unknown
+  >;
   return { ...ctx, parliament: state };
 }
 
 export async function startParliament(ctx: SendContext): Promise<SendResult> {
   const sb = serviceClient();
-  const seats = parliamentSeatsFromConfig(ctx.route.config).filter(isParliamentSeat);
+  const seats = parliamentSeatsFromConfig(ctx.route.config).filter(
+    isParliamentSeat,
+  );
   const maxRounds = parliamentRounds(ctx.route.config);
   const state: ParliamentState = {
     round: 1,
@@ -59,14 +69,21 @@ export async function startParliament(ctx: SendContext): Promise<SendResult> {
       agent_id: ctx.agentId,
       user_id: ctx.userId,
       goal: `Parliament: ${ctx.content.slice(0, 200)}`,
-      context: { conversation_id: ctx.conversationId, brain_route_id: ctx.route.id, parliament: state },
+      context: {
+        conversation_id: ctx.conversationId,
+        brain_route_id: ctx.route.id,
+        parliament: state,
+      },
       status: "running",
       trigger_source: "parliament",
       conversation_id: ctx.conversationId,
     })
     .select("id, context")
     .single();
-  if (error || !parent) throw new Error(`Failed to create parliament run: ${error?.message || "unknown"}`);
+  if (error || !parent)
+    throw new Error(
+      `Failed to create parliament run: ${error?.message || "unknown"}`,
+    );
 
   await setConversationStatus(sb, ctx.conversationId, "debating");
   await insertMessage(sb, {
@@ -81,12 +98,20 @@ export async function startParliament(ctx: SendContext): Promise<SendResult> {
     metadata: { parliament_run_id: parent.id, round: 1 },
   });
 
-  const round1 = wrapDirectPrompt({ origin: "parliament", userText: ctx.content, history: ctx.history }) +
+  const round1 =
+    wrapDirectPrompt({
+      origin: "parliament",
+      userText: ctx.content,
+      history: ctx.history,
+    }) +
     `\nQuick team round (max 5 bullets). Answer David directly. Read-only. You cannot see other seats.`;
 
   const results = await Promise.allSettled(
     seats.map((provider) =>
-      launchParliamentSeat(ctx, provider, round1, { runId: parent.id, round: 1 }),
+      launchParliamentSeat(ctx, provider, round1, {
+        runId: parent.id,
+        round: 1,
+      }),
     ),
   );
 
@@ -94,12 +119,23 @@ export async function startParliament(ctx: SendContext): Promise<SendResult> {
   results.forEach((r, i) => {
     const provider = seats[i];
     if (r.status === "fulfilled") {
-      nextState.seats[provider] = { ...nextState.seats[provider], sessionId: r.value.session_id, provider };
+      nextState.seats[provider] = {
+        ...nextState.seats[provider],
+        sessionId: r.value.session_id,
+        provider,
+      };
     } else {
-      nextState = markParliamentFailed(nextState, provider, String((r as PromiseRejectedResult).reason?.message || r.reason));
+      nextState = markParliamentFailed(
+        nextState,
+        provider,
+        String((r as PromiseRejectedResult).reason?.message || r.reason),
+      );
     }
   });
-  await sb.from("agent_runs").update({ context: withParliament(parent.context, nextState) }).eq("id", parent.id);
+  await sb
+    .from("agent_runs")
+    .update({ context: withParliament(parent.context, nextState) })
+    .eq("id", parent.id);
 
   const living = livingSeats(nextState);
   const failedNotes = Object.values(nextState.seats)
@@ -120,12 +156,22 @@ export async function startParliament(ctx: SendContext): Promise<SendResult> {
     });
   }
   if (!living.length) {
-    const firstError = Object.values(nextState.seats).map((s) => s.error).find(Boolean) || "all seats failed to start";
+    const firstError =
+      Object.values(nextState.seats)
+        .map((s) => s.error)
+        .find(Boolean) || "all seats failed to start";
     await setConversationStatus(sb, ctx.conversationId, "error");
-    await sb.from("agent_runs").update({ status: "failed", error_message: firstError }).eq("id", parent.id);
-    throw new Error(isCursorSpendLimitError(firstError) || firstError.includes("401") || /api key|תקציב|מפתח/i.test(firstError)
-      ? firstError
-      : `Parliament could not start — ${firstError}`);
+    await sb
+      .from("agent_runs")
+      .update({ status: "failed", error_message: firstError })
+      .eq("id", parent.id);
+    throw new Error(
+      isCursorSpendLimitError(firstError) ||
+        firstError.includes("401") ||
+        /api key|תקציב|מפתח/i.test(firstError)
+        ? firstError
+        : `Parliament could not start — ${firstError}`,
+    );
   }
 
   await logChannelAction(sb, {
@@ -133,10 +179,16 @@ export async function startParliament(ctx: SendContext): Promise<SendResult> {
     agentId: ctx.agentId,
     runId: parent.id,
     action: "parliament_start",
-    details: { conversation_id: ctx.conversationId, seats, living: living.map((s) => s.provider) },
+    details: {
+      conversation_id: ctx.conversationId,
+      seats,
+      living: living.map((s) => s.provider),
+    },
   });
 
-  const url = results.find((r): r is PromiseFulfilledResult<SendResult> => r.status === "fulfilled")?.value.external_url;
+  const url = results.find(
+    (r): r is PromiseFulfilledResult<SendResult> => r.status === "fulfilled",
+  )?.value.external_url;
   return {
     ok: true,
     kind: "parliament",
@@ -174,18 +226,32 @@ export async function onParliamentCallback(args: {
   }
   if (!runId) return;
 
-  const { data: run } = await sb.from("agent_runs").select("*").eq("id", runId).maybeSingle();
+  const { data: run } = await sb
+    .from("agent_runs")
+    .select("*")
+    .eq("id", runId)
+    .maybeSingle();
   if (!run) return;
   let state = stateFromRun(run);
   if (!state) return;
 
   const round = args.round || state.round;
   state = recordParliamentAnswer(state, args.origin, args.content, round);
-  await sb.from("agent_runs").update({ context: withParliament(run.context, state) }).eq("id", runId);
+  await sb
+    .from("agent_runs")
+    .update({ context: withParliament(run.context, state) })
+    .eq("id", runId);
 
-  if (canAdvanceToReview(state) && state.max_rounds >= 2 && state.status === "round1") {
+  if (
+    canAdvanceToReview(state) &&
+    state.max_rounds >= 2 &&
+    state.status === "round1"
+  ) {
     state = { ...state, round: 2, status: "round2" };
-    await sb.from("agent_runs").update({ context: withParliament(run.context, state) }).eq("id", runId);
+    await sb
+      .from("agent_runs")
+      .update({ context: withParliament(run.context, state) })
+      .eq("id", runId);
     await insertMessage(sb, {
       tenant_id: args.tenantId,
       conversation_id: args.conversationId,
@@ -206,23 +272,52 @@ export async function onParliamentCallback(args: {
           buildReviewPrompt(state, s.provider),
           { runId, round: 2 },
         ).catch(async (err) => {
-          const failed = markParliamentFailed(state, s.provider, String(err?.message || err));
-          await sb.from("agent_runs").update({ context: withParliament(run.context, failed) }).eq("id", runId);
+          const failed = markParliamentFailed(
+            state,
+            s.provider,
+            String(err?.message || err),
+          );
+          await sb
+            .from("agent_runs")
+            .update({ context: withParliament(run.context, failed) })
+            .eq("id", runId);
         }),
       );
     await Promise.allSettled(launches);
     return;
   }
 
-  if (canSynthesize(state) && state.status !== "synthesizing" && state.status !== "done") {
-    await synthesizeParliament(runId, args.tenantId, args.conversationId, { ...state, status: "synthesizing" }, run.context);
+  if (
+    canSynthesize(state) &&
+    state.status !== "synthesizing" &&
+    state.status !== "done"
+  ) {
+    await synthesizeParliament(
+      runId,
+      args.tenantId,
+      args.conversationId,
+      { ...state, status: "synthesizing" },
+      run.context,
+    );
   }
 }
 
-async function rebuildCtx(run: any, conversationId: string, state: ParliamentState): Promise<SendContext> {
+async function rebuildCtx(
+  run: any,
+  conversationId: string,
+  state: ParliamentState,
+): Promise<SendContext> {
   const sb = serviceClient();
-  const { data: conv } = await sb.from("ai_conversations").select("brain_route_id").eq("id", conversationId).maybeSingle();
-  const { data: route } = await sb.from("agent_brain_routes").select("*").eq("id", conv?.brain_route_id).maybeSingle();
+  const { data: conv } = await sb
+    .from("ai_conversations")
+    .select("brain_route_id")
+    .eq("id", conversationId)
+    .maybeSingle();
+  const { data: route } = await sb
+    .from("agent_brain_routes")
+    .select("*")
+    .eq("id", conv?.brain_route_id)
+    .maybeSingle();
   return {
     tenantId: run.tenant_id,
     userId: run.user_id || "system",
@@ -255,7 +350,10 @@ async function synthesizeParliament(
   context: unknown,
 ): Promise<void> {
   const sb = serviceClient();
-  await sb.from("agent_runs").update({ context: withParliament(context, state), status: "running" }).eq("id", runId);
+  await sb
+    .from("agent_runs")
+    .update({ context: withParliament(context, state), status: "running" })
+    .eq("id", runId);
   const prompt = buildSynthesisPrompt(state);
   const synthesis = (await aiChat(prompt)) || fallbackSynthesis(state);
   await insertMessage(sb, {
@@ -298,7 +396,12 @@ async function synthesizeParliament(
 
 function fallbackSynthesis(state: ParliamentState): string {
   const living = livingSeats(state);
-  const parts = living.map((s) => `**${s.provider}:** ${(s.round2 || s.round1 || "").slice(0, 1200)}`).join("\n\n");
+  const parts = living
+    .map(
+      (s) =>
+        `**${s.provider}:** ${(s.round2 || s.round1 || "").slice(0, 1200)}`,
+    )
+    .join("\n\n");
   return (
     `סיכום פרלמנט (סינתזה חלקית — מודל הסיכום לא היה זמין):\n\n` +
     `1. מה מוסכם: ראו את התשובות למטה.\n` +
@@ -320,7 +423,9 @@ export async function cancelParliament(conversationId: string): Promise<void> {
     .from("agent_runs")
     .update({
       status: "cancelled",
-      context: state ? withParliament(run.context, { ...state, status: "cancelled" }) : run.context,
+      context: state
+        ? withParliament(run.context, { ...state, status: "cancelled" })
+        : run.context,
       completed_at: new Date().toISOString(),
     })
     .eq("id", run.id);
@@ -364,26 +469,43 @@ async function loadRunningParliament(conversationId: string): Promise<{
 function skipSilentSeats(state: ParliamentState): ParliamentState {
   let next = state;
   for (const seat of Object.values(state.seats)) {
-    const hasAnswer = state.round >= 2 ? !!(seat.round2 || seat.round1) : !!seat.round1;
+    const hasAnswer =
+      state.round >= 2 ? !!(seat.round2 || seat.round1) : !!seat.round1;
     if (!hasAnswer && !seat.failed) {
-      next = markParliamentFailed(next, seat.provider, "skipped — no answer in time");
+      next = markParliamentFailed(
+        next,
+        seat.provider,
+        "skipped — no answer in time",
+      );
     }
   }
   return next;
 }
 
 /** Skip silent seats and start round 2, or synthesize if already in review. */
-export async function forceContinueParliament(conversationId: string): Promise<{ ok: true; status: string }> {
+export async function forceContinueParliament(
+  conversationId: string,
+): Promise<{ ok: true; status: string }> {
   const loaded = await loadRunningParliament(conversationId);
   if (!loaded.run || !loaded.state) throw new Error("no running parliament");
   const { sb, run } = loaded;
   let state = skipSilentSeats(loaded.state);
-  await sb.from("agent_runs").update({ context: withParliament(run.context, state) }).eq("id", run.id);
+  await sb
+    .from("agent_runs")
+    .update({ context: withParliament(run.context, state) })
+    .eq("id", run.id);
 
   const living = livingSeats(state);
-  if (state.status === "round1" && state.max_rounds >= 2 && living.some((s) => s.round1)) {
+  if (
+    state.status === "round1" &&
+    state.max_rounds >= 2 &&
+    living.some((s) => s.round1)
+  ) {
     state = { ...state, round: 2, status: "round2" };
-    await sb.from("agent_runs").update({ context: withParliament(run.context, state) }).eq("id", run.id);
+    await sb
+      .from("agent_runs")
+      .update({ context: withParliament(run.context, state) })
+      .eq("id", run.id);
     await insertMessage(sb, {
       tenant_id: run.tenant_id,
       conversation_id: conversationId,
@@ -399,25 +521,44 @@ export async function forceContinueParliament(conversationId: string): Promise<{
       living
         .filter((s) => isParliamentSeat(s.provider))
         .map((s) =>
-          launchParliamentSeat(ctx, s.provider, buildReviewPrompt(state, s.provider), {
-            runId: run.id,
-            round: 2,
-          }),
+          launchParliamentSeat(
+            ctx,
+            s.provider,
+            buildReviewPrompt(state, s.provider),
+            {
+              runId: run.id,
+              round: 2,
+            },
+          ),
         ),
     );
     return { ok: true, status: "debating" };
   }
 
-  await synthesizeParliament(run.id, run.tenant_id, conversationId, { ...state, status: "synthesizing" }, run.context);
+  await synthesizeParliament(
+    run.id,
+    run.tenant_id,
+    conversationId,
+    { ...state, status: "synthesizing" },
+    run.context,
+  );
   return { ok: true, status: "idle" };
 }
 
-export async function forceSynthesizeParliament(conversationId: string): Promise<{ ok: true; status: string }> {
+export async function forceSynthesizeParliament(
+  conversationId: string,
+): Promise<{ ok: true; status: string }> {
   const loaded = await loadRunningParliament(conversationId);
   if (!loaded.run || !loaded.state) throw new Error("no running parliament");
   const { run, state } = loaded;
   const skipped = skipSilentSeats(state);
-  await synthesizeParliament(run.id, run.tenant_id, conversationId, { ...skipped, status: "synthesizing" }, run.context);
+  await synthesizeParliament(
+    run.id,
+    run.tenant_id,
+    conversationId,
+    { ...skipped, status: "synthesizing" },
+    run.context,
+  );
   return { ok: true, status: "idle" };
 }
 
@@ -435,7 +576,10 @@ export async function clarifyParliamentSeat(
     `Topic:\n${state.topic}\n\n` +
     `David / Carmen asks:\n${question}\n\n` +
     `Answer this clarification only. Read-only. Do not start another parliament.`;
-  await launchParliamentSeat(ctx, provider, prompt, { runId: run.id, round: state.round });
+  await launchParliamentSeat(ctx, provider, prompt, {
+    runId: run.id,
+    round: state.round,
+  });
   await insertMessage(serviceClient(), {
     tenant_id: run.tenant_id,
     conversation_id: conversationId,

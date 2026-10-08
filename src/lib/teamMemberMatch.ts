@@ -6,7 +6,10 @@ export type TeamMemberCandidate = {
   created_at?: string | null;
 };
 
-function byPreferredRecord(a: TeamMemberCandidate, b: TeamMemberCandidate): number {
+function byPreferredRecord(
+  a: TeamMemberCandidate,
+  b: TeamMemberCandidate,
+): number {
   const aActive = a.active === false ? 1 : 0;
   const bActive = b.active === false ? 1 : 0;
   if (aActive !== bActive) return aActive - bActive;
@@ -29,5 +32,8 @@ export function pickExistingTeamMember<T extends TeamMemberCandidate>(
   const email = (identity.email || "").trim().toLowerCase();
   if (!email) return null;
   const ranked = [...candidates].sort(byPreferredRecord);
-  return ranked.find((row) => (row.email || "").trim().toLowerCase() === email) || null;
+  return (
+    ranked.find((row) => (row.email || "").trim().toLowerCase() === email) ||
+    null
+  );
 }

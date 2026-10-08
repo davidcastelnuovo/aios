@@ -1,18 +1,66 @@
 import { useState } from "react";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { useSocialMediaChannels, useCreateChannel, useDeleteChannel, SocialMediaChannel } from "@/hooks/useSocialMedia";
-import { Facebook, Instagram, Linkedin, Youtube, Plus, Trash2, Loader2 } from "lucide-react";
-import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
+import {
+  useSocialMediaChannels,
+  useCreateChannel,
+  useDeleteChannel,
+  SocialMediaChannel,
+} from "@/hooks/useSocialMedia";
+import {
+  Facebook,
+  Instagram,
+  Linkedin,
+  Youtube,
+  Plus,
+  Trash2,
+  Loader2,
+} from "lucide-react";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 
-const platformConfig: Record<SocialMediaChannel["platform"], { label: string; icon: React.ElementType; color: string }> = {
+const platformConfig: Record<
+  SocialMediaChannel["platform"],
+  { label: string; icon: React.ElementType; color: string }
+> = {
   facebook: { label: "Facebook", icon: Facebook, color: "bg-blue-600" },
-  instagram: { label: "Instagram", icon: Instagram, color: "bg-gradient-to-br from-purple-600 to-pink-500" },
+  instagram: {
+    label: "Instagram",
+    icon: Instagram,
+    color: "bg-gradient-to-br from-purple-600 to-pink-500",
+  },
   linkedin: { label: "LinkedIn", icon: Linkedin, color: "bg-blue-700" },
   youtube: { label: "YouTube", icon: Youtube, color: "bg-red-600" },
 };
@@ -37,7 +85,12 @@ export function ChannelManager() {
       channel_id: form.channel_id || undefined,
       access_token: form.access_token || undefined,
     });
-    setForm({ platform: "", channel_name: "", channel_id: "", access_token: "" });
+    setForm({
+      platform: "",
+      channel_name: "",
+      channel_id: "",
+      access_token: "",
+    });
     setOpen(false);
   };
 
@@ -64,7 +117,12 @@ export function ChannelManager() {
                 <Label>פלטפורמה</Label>
                 <Select
                   value={form.platform}
-                  onValueChange={(v) => setForm({ ...form, platform: v as SocialMediaChannel["platform"] })}
+                  onValueChange={(v) =>
+                    setForm({
+                      ...form,
+                      platform: v as SocialMediaChannel["platform"],
+                    })
+                  }
                 >
                   <SelectTrigger>
                     <SelectValue placeholder="בחר פלטפורמה" />
@@ -85,7 +143,9 @@ export function ChannelManager() {
                 <Label>שם הערוץ / עמוד</Label>
                 <Input
                   value={form.channel_name}
-                  onChange={(e) => setForm({ ...form, channel_name: e.target.value })}
+                  onChange={(e) =>
+                    setForm({ ...form, channel_name: e.target.value })
+                  }
                   placeholder="לדוגמה: העמוד העסקי שלי"
                 />
               </div>
@@ -93,7 +153,9 @@ export function ChannelManager() {
                 <Label>מזהה ערוץ (Page ID / Channel ID)</Label>
                 <Input
                   value={form.channel_id}
-                  onChange={(e) => setForm({ ...form, channel_id: e.target.value })}
+                  onChange={(e) =>
+                    setForm({ ...form, channel_id: e.target.value })
+                  }
                   placeholder="אופציונלי"
                 />
               </div>
@@ -102,16 +164,24 @@ export function ChannelManager() {
                 <Input
                   type="password"
                   value={form.access_token}
-                  onChange={(e) => setForm({ ...form, access_token: e.target.value })}
+                  onChange={(e) =>
+                    setForm({ ...form, access_token: e.target.value })
+                  }
                   placeholder="הזן את ה-Access Token"
                 />
               </div>
               <Button
                 className="w-full"
                 onClick={handleCreate}
-                disabled={!form.platform || !form.channel_name || createChannel.isPending}
+                disabled={
+                  !form.platform ||
+                  !form.channel_name ||
+                  createChannel.isPending
+                }
               >
-                {createChannel.isPending && <Loader2 className="h-4 w-4 animate-spin me-2" />}
+                {createChannel.isPending && (
+                  <Loader2 className="h-4 w-4 animate-spin me-2" />
+                )}
                 הוסף ערוץ
               </Button>
             </div>
@@ -143,11 +213,15 @@ export function ChannelManager() {
                     </div>
                     <div>
                       <p className="font-medium">{channel.channel_name}</p>
-                      <p className="text-sm text-muted-foreground">{cfg.label}</p>
+                      <p className="text-sm text-muted-foreground">
+                        {cfg.label}
+                      </p>
                     </div>
                   </div>
                   <div className="flex items-center gap-2">
-                    <Badge variant={channel.is_active ? "default" : "secondary"}>
+                    <Badge
+                      variant={channel.is_active ? "default" : "secondary"}
+                    >
                       {channel.is_active ? "פעיל" : "לא פעיל"}
                     </Badge>
                     <AlertDialog>
@@ -160,12 +234,15 @@ export function ChannelManager() {
                         <AlertDialogHeader>
                           <AlertDialogTitle>מחק ערוץ</AlertDialogTitle>
                           <AlertDialogDescription>
-                            האם אתה בטוח שברצונך למחוק את הערוץ "{channel.channel_name}"?
+                            האם אתה בטוח שברצונך למחוק את הערוץ "
+                            {channel.channel_name}"?
                           </AlertDialogDescription>
                         </AlertDialogHeader>
                         <AlertDialogFooter>
                           <AlertDialogCancel>ביטול</AlertDialogCancel>
-                          <AlertDialogAction onClick={() => deleteChannel.mutate(channel.id)}>
+                          <AlertDialogAction
+                            onClick={() => deleteChannel.mutate(channel.id)}
+                          >
                             מחק
                           </AlertDialogAction>
                         </AlertDialogFooter>

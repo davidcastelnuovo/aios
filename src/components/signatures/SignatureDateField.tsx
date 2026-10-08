@@ -2,7 +2,11 @@ import { useState } from "react";
 import { format } from "date-fns";
 import { he } from "date-fns/locale";
 import { Calendar } from "@/components/ui/calendar";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
 import { formatSignatureDate, parseSignatureDate } from "@/lib/signatureDate";
 
 interface SignatureDateFieldProps {
@@ -27,7 +31,11 @@ export function SignatureDateField({
 }: SignatureDateFieldProps) {
   const [open, setOpen] = useState(false);
   const selected = parseSignatureDate(value);
-  const display = value ? formatSignatureDate(value) : required ? `${label} *` : label;
+  const display = value
+    ? formatSignatureDate(value)
+    : required
+      ? `${label} *`
+      : label;
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
@@ -39,7 +47,9 @@ export function SignatureDateField({
           className={`flex h-full w-full items-center justify-center rounded-sm border border-primary bg-white/95 px-1 leading-none ${className ?? ""}`}
           style={{ fontSize }}
         >
-          <span className={value ? "text-foreground" : "text-primary"}>{display}</span>
+          <span className={value ? "text-foreground" : "text-primary"}>
+            {display}
+          </span>
         </button>
       </PopoverTrigger>
       <PopoverContent className="w-auto p-0" align="center">

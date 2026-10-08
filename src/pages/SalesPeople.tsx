@@ -16,7 +16,11 @@ export default function SalesPeople() {
   const { selectedAgency } = useAgency();
   const { tenantId } = useCurrentTenant();
 
-  const { data: salesPeople, isLoading, refetch } = useQuery({
+  const {
+    data: salesPeople,
+    isLoading,
+    refetch,
+  } = useQuery({
     queryKey: ["sales-people", tenantId, selectedAgency],
     queryFn: async () => {
       if (!tenantId) return [];
@@ -92,7 +96,7 @@ export default function SalesPeople() {
               {person.email && (
                 <div className="flex items-center gap-2 text-sm">
                   <Mail className="h-4 w-4 text-muted-foreground" />
-                  <a 
+                  <a
                     href={`mailto:${person.email}`}
                     className="hover:underline"
                   >
@@ -100,14 +104,11 @@ export default function SalesPeople() {
                   </a>
                 </div>
               )}
-              
+
               {person.phone && (
                 <div className="flex items-center gap-2 text-sm">
                   <Phone className="h-4 w-4 text-muted-foreground" />
-                  <a 
-                    href={`tel:${person.phone}`}
-                    className="hover:underline"
-                  >
+                  <a href={`tel:${person.phone}`} className="hover:underline">
                     {person.phone}
                   </a>
                 </div>

@@ -1,4 +1,5 @@
-export type CreativeReferenceRole = "continuity" | "technique" | "talent" | "revision";
+export type CreativeReferenceRole =
+  "continuity" | "technique" | "talent" | "revision";
 
 export const NO_TEXT_ON_IMAGE = [
   "ZERO GLYPHS ON THE PNG.",
@@ -27,23 +28,40 @@ export type CreativeImageWrapOptions = {
   inpaint?: boolean;
 };
 
-export const buildNoGlyphLock = (options?: { regenerate?: boolean }): string => [
-  NO_TEXT_ON_IMAGE,
-  options?.regenerate
-    && "REGENERATE: the previous still may have had baked type or gibberish. Do not copy those marks and do not paint replacement words. The new PNG must be completely letter-empty.",
-].filter(Boolean).join(" ");
+export const buildNoGlyphLock = (options?: { regenerate?: boolean }): string =>
+  [
+    NO_TEXT_ON_IMAGE,
+    options?.regenerate &&
+      "REGENERATE: the previous still may have had baked type or gibberish. Do not copy those marks and do not paint replacement words. The new PNG must be completely letter-empty.",
+  ]
+    .filter(Boolean)
+    .join(" ");
 
-export const buildFinishedAdLock = (options?: { regenerate?: boolean }): string => [
-  FINISHED_HEBREW_AD,
-  options?.regenerate
-    && "REVISION: keep the photograph, talent, lighting, and composition unless the director asked to change them. Fix the requested issue. Output a finished ad with correct RTL Hebrew type.",
-].filter(Boolean).join(" ");
+export const buildFinishedAdLock = (options?: {
+  regenerate?: boolean;
+}): string =>
+  [
+    FINISHED_HEBREW_AD,
+    options?.regenerate &&
+      "REVISION: keep the photograph, talent, lighting, and composition unless the director asked to change them. Fix the requested issue. Output a finished ad with correct RTL Hebrew type.",
+  ]
+    .filter(Boolean)
+    .join(" ");
 
-export const wrapCreativeImagePrompt = (prompt: string, options?: CreativeImageWrapOptions): string => {
+export const wrapCreativeImagePrompt = (
+  prompt: string,
+  options?: CreativeImageWrapOptions,
+): string => {
   const trimmed = prompt.trim();
   if (options?.inpaint) return trimmed;
-  const lock = options?.liveTextLayers ? buildNoGlyphLock(options) : buildFinishedAdLock(options);
-  if (/MUST FOLLOW THIS APPROVED VISUAL CONCEPT|CONCEPT PHOTOGRAPH — HARD LOCK/i.test(trimmed)) {
+  const lock = options?.liveTextLayers
+    ? buildNoGlyphLock(options)
+    : buildFinishedAdLock(options);
+  if (
+    /MUST FOLLOW THIS APPROVED VISUAL CONCEPT|CONCEPT PHOTOGRAPH — HARD LOCK/i.test(
+      trimmed,
+    )
+  ) {
     return `${trimmed}\n\n${lock}`;
   }
   return `${lock}\n\n${trimmed}\n\n${lock}`;

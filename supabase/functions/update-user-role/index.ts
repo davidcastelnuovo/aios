@@ -36,7 +36,10 @@ serve(async (req: Request) => {
     }
 
     const token = authHeader.replace("Bearer ", "");
-    const { data: { user }, error: userError } = await supabaseAdmin.auth.getUser(token);
+    const {
+      data: { user },
+      error: userError,
+    } = await supabaseAdmin.auth.getUser(token);
 
     if (userError || !user) {
       throw new Error("Unauthorized");
@@ -52,8 +55,10 @@ serve(async (req: Request) => {
       throw new Error("Error checking user roles");
     }
 
-    const isSuperAdmin = roles?.some(r => r.role === "super_admin" && r.tenant_id === null);
-    const isOwnerInAnyTenant = roles?.some(r => r.role === "owner");
+    const isSuperAdmin = roles?.some(
+      (r) => r.role === "super_admin" && r.tenant_id === null,
+    );
+    const isOwnerInAnyTenant = roles?.some((r) => r.role === "owner");
 
     if (!isSuperAdmin && !isOwnerInAnyTenant) {
       throw new Error("Only owners or super admins can update user roles");
@@ -66,31 +71,41 @@ serve(async (req: Request) => {
     }
 
     // Validate role
-    const validRoles = ["owner", "agency_owner", "team_manager", "campaigner", "sales_person", "super_admin", "seo"];
+    const validRoles = [
+      "owner",
+      "agency_owner",
+      "team_manager",
+      "campaigner",
+      "sales_person",
+      "super_admin",
+      "seo",
+    ];
     if (!validRoles.includes(role)) {
       throw new Error("Invalid role");
     }
 
     // Check if target user is currently an owner
-    const { data: existingRoles, error: existingRolesError } = await supabaseAdmin
-      .from("user_roles")
-      .select("role")
-      .eq("user_id", userId)
-      .eq("tenant_id", tenantId);
+    const { data: existingRoles, error: existingRolesError } =
+      await supabaseAdmin
+        .from("user_roles")
+        .select("role")
+        .eq("user_id", userId)
+        .eq("tenant_id", tenantId);
 
     if (existingRolesError) {
       console.error("Error checking existing roles:", existingRolesError);
       throw existingRolesError;
     }
 
-    const isCurrentlyOwner = existingRoles?.some(r => r.role === "owner");
+    const isCurrentlyOwner = existingRoles?.some((r) => r.role === "owner");
 
     // Prevent removing owner role (changing owner to something else)
     // Only exception: if the new role is also owner (which is just a re-assignment)
     if (isCurrentlyOwner && role !== "owner") {
-      throw new Error("Cannot demote an owner. Owner role cannot be changed to a different role.");
+      throw new Error(
+        "Cannot demote an owner. Owner role cannot be changed to a different role.",
+      );
     }
-
 
     // Delete existing roles for this user IN THIS TENANT (don't touch super_admin or other tenants)
     const { error: deleteError } = await supabaseAdmin
@@ -122,7 +137,7 @@ serve(async (req: Request) => {
       {
         status: 200,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
-      }
+      },
     );
   } catch (error: any) {
     console.error("Error in update-user-role function:", error);
@@ -132,9 +147,13 @@ serve(async (req: Request) => {
         error: error.message,
       }),
       {
-        status: error.message === "Unauthorized" || error.message === "Only owners or super admins can update user roles" ? 403 : 500,
+        status:
+          error.message === "Unauthorized" ||
+          error.message === "Only owners or super admins can update user roles"
+            ? 403
+            : 500,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
-      }
+      },
     );
   }
 });

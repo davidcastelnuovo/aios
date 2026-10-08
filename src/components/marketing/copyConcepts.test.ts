@@ -1,6 +1,17 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { appendCopyConcepts, copyConceptsGenerateGate, formatApprovedConceptsForCopy, formatCopyConceptsForImagePrompt, findCopyConcept, isApprovedConceptPrompt, parseConceptsFromCarmen, pickConceptForBatchIndex, resolveVisualPrompt, type CopyConcept } from "./copyConcepts.ts";
+import {
+  appendCopyConcepts,
+  copyConceptsGenerateGate,
+  formatApprovedConceptsForCopy,
+  formatCopyConceptsForImagePrompt,
+  findCopyConcept,
+  isApprovedConceptPrompt,
+  parseConceptsFromCarmen,
+  pickConceptForBatchIndex,
+  resolveVisualPrompt,
+  type CopyConcept,
+} from "./copyConcepts.ts";
 
 const concept = (overrides: Partial<CopyConcept> = {}): CopyConcept => ({
   id: overrides.id ?? "c1",
@@ -19,7 +30,10 @@ const concept = (overrides: Partial<CopyConcept> = {}): CopyConcept => ({
 
 test("formatCopyConceptsForImagePrompt forbids restaging the slogan", () => {
   const prompt = formatCopyConceptsForImagePrompt([concept()]);
-  assert.equal(prompt.startsWith("MUST FOLLOW THIS APPROVED VISUAL CONCEPT"), true);
+  assert.equal(
+    prompt.startsWith("MUST FOLLOW THIS APPROVED VISUAL CONCEPT"),
+    true,
+  );
   assert.match(prompt, /do NOT choose the scene/i);
   assert.match(prompt, /CONCEPT PHOTOGRAPH — HARD LOCK/);
   assert.match(prompt, /PHOTOGRAPH THIS SCENE/);
@@ -44,15 +58,23 @@ test("resolveVisualPrompt falls back to stored visual_prompt when there are no c
     "KEEP THIS",
   );
   assert.equal(isApprovedConceptPrompt("KEEP THIS"), false);
-  assert.equal(isApprovedConceptPrompt("MUST FOLLOW THIS APPROVED VISUAL CONCEPT\nPHOTOGRAPH THIS SCENE: locked door"), true);
+  assert.equal(
+    isApprovedConceptPrompt(
+      "MUST FOLLOW THIS APPROVED VISUAL CONCEPT\nPHOTOGRAPH THIS SCENE: locked door",
+    ),
+    true,
+  );
 });
 
 test("formatCopyConceptsForImagePrompt with primaryId locks to that concept only", () => {
-  const second = concept({ id: "c2", name: "הכיסא הריק", bigIdea: "כיסא מול דלת נעולה" });
-  const prompt = formatCopyConceptsForImagePrompt(
-    [concept(), second],
-    { primaryId: "c2" },
-  );
+  const second = concept({
+    id: "c2",
+    name: "הכיסא הריק",
+    bigIdea: "כיסא מול דלת נעולה",
+  });
+  const prompt = formatCopyConceptsForImagePrompt([concept(), second], {
+    primaryId: "c2",
+  });
   assert.match(prompt, /Concept name: הכיסא הריק/);
   assert.match(prompt, /כיסא מול דלת נעולה/);
   assert.match(prompt, /ONLY concept for this still/);
@@ -100,15 +122,22 @@ test("parseConceptsFromCarmen reads copy variation number into copyKey", () => {
 
 test("copyConceptsGenerateGate allows concepts from a title or brief without copy", () => {
   assert.deepEqual(
-    copyConceptsGenerateGate({ title: "", brief: "", copyText: "", variationCount: 0 }),
+    copyConceptsGenerateGate({
+      title: "",
+      brief: "",
+      copyText: "",
+      variationCount: 0,
+    }),
     { canGenerate: false, block: "need_context" },
   );
   assert.equal(
-    copyConceptsGenerateGate({ title: "השקה", brief: "", copyText: "" }).canGenerate,
+    copyConceptsGenerateGate({ title: "השקה", brief: "", copyText: "" })
+      .canGenerate,
     true,
   );
   assert.equal(
-    copyConceptsGenerateGate({ title: "", brief: "בריף קצר", copyText: "" }).canGenerate,
+    copyConceptsGenerateGate({ title: "", brief: "בריף קצר", copyText: "" })
+      .canGenerate,
     true,
   );
 });

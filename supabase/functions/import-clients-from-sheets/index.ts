@@ -1,9 +1,10 @@
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.75.0'
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2.75.0";
 
 const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-}
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Headers":
+    "authorization, x-client-info, apikey, content-type",
+};
 
 interface SheetRow {
   name?: string | null;
@@ -22,232 +23,246 @@ interface SheetRow {
 
 // Map platform strings from the sheet to service keys
 function mapPlatformToServices(platformStr: string | null): string[] {
-  if (!platformStr) return []
-  const services: string[] = []
-  const parts = platformStr.split('+').map(p => p.trim().toUpperCase())
+  if (!platformStr) return [];
+  const services: string[] = [];
+  const parts = platformStr.split("+").map((p) => p.trim().toUpperCase());
   for (const part of parts) {
     switch (part) {
-      case 'SEO':
-        services.push('seo')
-        break
-      case 'PPC GOOGLE':
-      case 'PPC GOOLE': // typo in sheet
-        services.push('ppc_google')
-        break
-      case 'PPC META':
-      case 'META':
-        services.push('ppc_meta')
-        break
-      case 'SOCIAL':
-        services.push('social')
-        break
-      case 'FULL SOCIAL':
-      case 'FULLSOCIAL':
-        services.push('full_social')
-        break
-      case 'SOCIAL META':
-        services.push('social_meta')
-        break
-      case 'AUTOMATION':
-        services.push('automation')
-        break
+      case "SEO":
+        services.push("seo");
+        break;
+      case "PPC GOOGLE":
+      case "PPC GOOLE": // typo in sheet
+        services.push("ppc_google");
+        break;
+      case "PPC META":
+      case "META":
+        services.push("ppc_meta");
+        break;
+      case "SOCIAL":
+        services.push("social");
+        break;
+      case "FULL SOCIAL":
+      case "FULLSOCIAL":
+        services.push("full_social");
+        break;
+      case "SOCIAL META":
+        services.push("social_meta");
+        break;
+      case "AUTOMATION":
+        services.push("automation");
+        break;
     }
   }
-  return [...new Set(services)] // deduplicate
+  return [...new Set(services)]; // deduplicate
 }
 
 Deno.serve(async (req) => {
   // Handle CORS preflight requests
-  if (req.method === 'OPTIONS') {
-    return new Response(null, { headers: corsHeaders })
+  if (req.method === "OPTIONS") {
+    return new Response(null, { headers: corsHeaders });
   }
 
   try {
-    const { sheetId, range } = await req.json()
-    
+    const { sheetId, range } = await req.json();
+
     if (!sheetId) {
-      throw new Error('Sheet ID is required')
+      throw new Error("Sheet ID is required");
     }
 
     // Create Supabase client to get user's tenant_id
-    const authHeader = req.headers.get('Authorization')
+    const authHeader = req.headers.get("Authorization");
     if (!authHeader) {
-      throw new Error('Missing authorization header')
+      throw new Error("Missing authorization header");
     }
 
     const supabaseClient = createClient(
-      Deno.env.get('SUPABASE_URL') ?? '',
-      Deno.env.get('SUPABASE_ANON_KEY') ?? '',
+      Deno.env.get("SUPABASE_URL") ?? "",
+      Deno.env.get("SUPABASE_ANON_KEY") ?? "",
       {
         global: {
           headers: { Authorization: authHeader },
         },
-      }
-    )
+      },
+    );
 
     // Get user and their tenant_id
-    const { data: { user }, error: userError } = await supabaseClient.auth.getUser()
+    const {
+      data: { user },
+      error: userError,
+    } = await supabaseClient.auth.getUser();
     if (userError || !user) {
-      throw new Error('User not authenticated')
+      throw new Error("User not authenticated");
     }
 
     const { data: tenantData, error: tenantError } = await supabaseClient
-      .from('tenant_users')
-      .select('tenant_id')
-      .eq('user_id', user.id)
-      .single()
+      .from("tenant_users")
+      .select("tenant_id")
+      .eq("user_id", user.id)
+      .single();
 
     if (tenantError || !tenantData?.tenant_id) {
-      throw new Error('User tenant not found')
+      throw new Error("User tenant not found");
     }
 
-    const tenantId = tenantData.tenant_id
+    const tenantId = tenantData.tenant_id;
 
-    const googleApiKey = Deno.env.get('GOOGLE_API_KEY')
+    const googleApiKey = Deno.env.get("GOOGLE_API_KEY");
     if (!googleApiKey) {
-      throw new Error('Google API key not configured')
+      throw new Error("Google API key not configured");
     }
 
-    const sheetRange = !range || String(range).trim() === '' ? 'Sheet1!A:J' : String(range).trim()
+    const sheetRange =
+      !range || String(range).trim() === ""
+        ? "Sheet1!A:J"
+        : String(range).trim();
 
     // Fetch data from Google Sheets
-    const sheetsUrl = `https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/${sheetRange}?key=${googleApiKey}`
-    const sheetsResponse = await fetch(sheetsUrl)
-    
+    const sheetsUrl = `https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/${sheetRange}?key=${googleApiKey}`;
+    const sheetsResponse = await fetch(sheetsUrl);
+
     if (!sheetsResponse.ok) {
-      const errorText = await sheetsResponse.text()
-      console.error('Google Sheets API error:', errorText)
-      throw new Error(`Failed to fetch from Google Sheets: ${sheetsResponse.statusText}`)
+      const errorText = await sheetsResponse.text();
+      console.error("Google Sheets API error:", errorText);
+      throw new Error(
+        `Failed to fetch from Google Sheets: ${sheetsResponse.statusText}`,
+      );
     }
 
-    const sheetsData = await sheetsResponse.json()
-    const rows = sheetsData.values as string[][]
+    const sheetsData = await sheetsResponse.json();
+    const rows = sheetsData.values as string[][];
 
     if (!rows || rows.length === 0) {
-      throw new Error('No data found in the sheet')
+      throw new Error("No data found in the sheet");
     }
 
     // First row is headers
-    const headers = rows[0].map((h: string) => h.toLowerCase().trim())
-    const dataRows = rows.slice(1)
+    const headers = rows[0].map((h: string) => h.toLowerCase().trim());
+    const dataRows = rows.slice(1);
 
     // Create service role client for inserting
     const serviceClient = createClient(
-      Deno.env.get('SUPABASE_URL') ?? '',
-      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '',
-    )
+      Deno.env.get("SUPABASE_URL") ?? "",
+      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "",
+    );
 
-    const clients: SheetRow[] = []
-    const errors: string[] = []
+    const clients: SheetRow[] = [];
+    const errors: string[] = [];
 
     // Map rows to client objects
     for (let i = 0; i < dataRows.length; i++) {
-      const row = dataRows[i]
-      if (!row || row.length === 0) continue
+      const row = dataRows[i];
+      if (!row || row.length === 0) continue;
 
-      const client: SheetRow = {}
-      
+      const client: SheetRow = {};
+
       headers.forEach((header: string, index: number) => {
-        const value = row[index]?.trim() || null
-        
+        const value = row[index]?.trim() || null;
+
         switch (header) {
-          case 'name':
-          case 'שם':
-          case 'שם עסק':
-            client.name = value
-            break
-          case 'agency_id':
-          case 'מזהה סוכנות':
-          case 'סוכנות':
-            client.agency_id = value
-            break
-          case 'phone':
-          case 'טלפון':
-            client.phone = value
-            break
-          case 'email':
-          case 'אימייל':
-            client.email = value
-            break
-          case 'folder_link':
-          case 'קישור לתיקיה':
-            client.folder_link = value
-            break
-          case 'monthly_budget':
-          case 'תקציב חודשי':
-            client.monthly_budget = value
-            break
-          case 'website':
-          case 'אתר':
-            client.website = value
-            break
-          case 'notes':
-          case 'הערות':
-            client.notes = value
-            break
-          case 'tier':
-          case 'רמת חשיבות':
+          case "name":
+          case "שם":
+          case "שם עסק":
+            client.name = value;
+            break;
+          case "agency_id":
+          case "מזהה סוכנות":
+          case "סוכנות":
+            client.agency_id = value;
+            break;
+          case "phone":
+          case "טלפון":
+            client.phone = value;
+            break;
+          case "email":
+          case "אימייל":
+            client.email = value;
+            break;
+          case "folder_link":
+          case "קישור לתיקיה":
+            client.folder_link = value;
+            break;
+          case "monthly_budget":
+          case "תקציב חודשי":
+            client.monthly_budget = value;
+            break;
+          case "website":
+          case "אתר":
+            client.website = value;
+            break;
+          case "notes":
+          case "הערות":
+            client.notes = value;
+            break;
+          case "tier":
+          case "רמת חשיבות":
             // Accept A, B, C only
-            if (value && ['A', 'B', 'C'].includes(value.toUpperCase())) {
-              client.tier = value.toUpperCase()
+            if (value && ["A", "B", "C"].includes(value.toUpperCase())) {
+              client.tier = value.toUpperCase();
             }
-            break
-          case 'platform':
-          case 'פלטפורמה':
-          case 'פלפרמה':
-            client.services = mapPlatformToServices(value)
-            break
-          case 'meta_ads_account_id':
-          case 'חשבון מודעות meta':
-          case 'חשבון מודעות META':
-            client.meta_ads_account_id = value
-            break
-          case 'google_ads_account_id':
-          case 'חשבון google':
-          case ' חשבון google':
-          case 'חשבון GOOGLE':
-          case ' חשבון GOOGLE':
-            client.google_ads_account_id = value
-            break
+            break;
+          case "platform":
+          case "פלטפורמה":
+          case "פלפרמה":
+            client.services = mapPlatformToServices(value);
+            break;
+          case "meta_ads_account_id":
+          case "חשבון מודעות meta":
+          case "חשבון מודעות META":
+            client.meta_ads_account_id = value;
+            break;
+          case "google_ads_account_id":
+          case "חשבון google":
+          case " חשבון google":
+          case "חשבון GOOGLE":
+          case " חשבון GOOGLE":
+            client.google_ads_account_id = value;
+            break;
         }
-      })
+      });
 
       if (!client.name) {
-        errors.push(`Row ${i + 2}: Missing client name`)
-        continue
+        errors.push(`Row ${i + 2}: Missing client name`);
+        continue;
       }
 
       if (!client.agency_id) {
-        errors.push(`Row ${i + 2}: Missing agency ID for client ${client.name}`)
-        continue
+        errors.push(
+          `Row ${i + 2}: Missing agency ID for client ${client.name}`,
+        );
+        continue;
       }
 
-      clients.push(client)
+      clients.push(client);
     }
 
     // Insert clients into database with tenant_id
     const { data, error } = await serviceClient
-      .from('clients')
-      .insert(clients.map(c => ({
-        name: c.name,
-        agency_id: c.agency_id,
-        phone: c.phone || null,
-        email: c.email || null,
-        folder_link: c.folder_link || null,
-        monthly_budget: c.monthly_budget ? parseFloat(c.monthly_budget) : null,
-        website: c.website || null,
-        notes: c.notes || null,
-        tier: c.tier || null,
-        services: c.services && c.services.length > 0 ? c.services : null,
-        meta_ads_account_id: c.meta_ads_account_id || null,
-        google_ads_account_id: c.google_ads_account_id || null,
-        tenant_id: tenantId,
-      })))
-      .select()
+      .from("clients")
+      .insert(
+        clients.map((c) => ({
+          name: c.name,
+          agency_id: c.agency_id,
+          phone: c.phone || null,
+          email: c.email || null,
+          folder_link: c.folder_link || null,
+          monthly_budget: c.monthly_budget
+            ? parseFloat(c.monthly_budget)
+            : null,
+          website: c.website || null,
+          notes: c.notes || null,
+          tier: c.tier || null,
+          services: c.services && c.services.length > 0 ? c.services : null,
+          meta_ads_account_id: c.meta_ads_account_id || null,
+          google_ads_account_id: c.google_ads_account_id || null,
+          tenant_id: tenantId,
+        })),
+      )
+      .select();
 
     if (error) {
-      console.error('Database error:', error)
-      throw error
+      console.error("Database error:", error);
+      throw error;
     }
 
     return new Response(
@@ -256,20 +271,21 @@ Deno.serve(async (req) => {
         imported: data?.length || 0,
         errors: errors,
       }),
-      { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-    )
+      { headers: { ...corsHeaders, "Content-Type": "application/json" } },
+    );
   } catch (error) {
-    console.error('Error in import-clients-from-sheets:', error)
-    const errorMessage = error instanceof Error ? error.message : 'Unknown error'
+    console.error("Error in import-clients-from-sheets:", error);
+    const errorMessage =
+      error instanceof Error ? error.message : "Unknown error";
     return new Response(
-      JSON.stringify({ 
-        success: false, 
-        error: errorMessage 
+      JSON.stringify({
+        success: false,
+        error: errorMessage,
       }),
       {
         status: 400,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      }
-    )
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      },
+    );
   }
-})
+});

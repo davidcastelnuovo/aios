@@ -10,7 +10,9 @@ export type MetaWhatsAppErrorInfo = {
   retryable: boolean;
 };
 
-export function extractMetaErrorCodeFromMessage(message: unknown): string | null {
+export function extractMetaErrorCodeFromMessage(
+  message: unknown,
+): string | null {
   const text = String(message ?? "");
   const match =
     text.match(/\(קוד\s*(\d+)\)/) ||
@@ -19,9 +21,17 @@ export function extractMetaErrorCodeFromMessage(message: unknown): string | null
   return match?.[1] ?? null;
 }
 
-export function classifyMetaWhatsAppErrorMessage(message: unknown): MetaWhatsAppErrorInfo | null {
+export function classifyMetaWhatsAppErrorMessage(
+  message: unknown,
+): MetaWhatsAppErrorInfo | null {
   const code = extractMetaErrorCodeFromMessage(message);
-  if (!code && !String(message ?? "").toLowerCase().includes("meta")) return null;
+  if (
+    !code &&
+    !String(message ?? "")
+      .toLowerCase()
+      .includes("meta")
+  )
+    return null;
 
   const table: Record<string, Omit<MetaWhatsAppErrorInfo, "code">> = {
     "131049": {
@@ -32,7 +42,8 @@ export function classifyMetaWhatsAppErrorMessage(message: unknown): MetaWhatsApp
     },
     "131042": {
       labelHe: "בעיית תשלום Meta",
-      opsHintHe: "Meta Business → WhatsApp Manager → Billing — תקנו אמצעי תשלום/חוב.",
+      opsHintHe:
+        "Meta Business → WhatsApp Manager → Billing — תקנו אמצעי תשלום/חוב.",
       retryable: false,
     },
     "131026": {
@@ -69,14 +80,22 @@ export function classifyMetaWhatsAppErrorMessage(message: unknown): MetaWhatsApp
 export function summarizeMetaFailureClasses(
   logs: Array<{ success: boolean | null; error_message?: string | null }>,
 ): { code: string; labelHe: string; count: number; retryable: boolean }[] {
-  const counts = new Map<string, { labelHe: string; count: number; retryable: boolean }>();
+  const counts = new Map<
+    string,
+    { labelHe: string; count: number; retryable: boolean }
+  >();
   for (const log of logs) {
     if (log.success !== false) continue;
     const info = classifyMetaWhatsAppErrorMessage(log.error_message);
     if (!info?.code) continue;
     const prev = counts.get(info.code);
     if (prev) prev.count += 1;
-    else counts.set(info.code, { labelHe: info.labelHe, count: 1, retryable: info.retryable });
+    else
+      counts.set(info.code, {
+        labelHe: info.labelHe,
+        count: 1,
+        retryable: info.retryable,
+      });
   }
   return [...counts.entries()]
     .map(([code, v]) => ({ code, ...v }))

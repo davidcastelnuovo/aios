@@ -61,13 +61,25 @@ export function SeoMonthlyLandingPage({
         <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-3">
           <div className="flex min-w-0 flex-wrap items-center gap-2 sm:gap-3">
             {!captureMode && headerAction}
-            <div className={cn("min-w-0", !captureMode && headerAction && "hidden sm:block")}>
-              <p className="text-xs font-bold tracking-[0.18em] text-[#0f766e]">AIOS SEO</p>
-              <p className="truncate text-sm text-slate-500">{snapshot.monthLabel}</p>
+            <div
+              className={cn(
+                "min-w-0",
+                !captureMode && headerAction && "hidden sm:block",
+              )}
+            >
+              <p className="text-xs font-bold tracking-[0.18em] text-[#0f766e]">
+                AIOS SEO
+              </p>
+              <p className="truncate text-sm text-slate-500">
+                {snapshot.monthLabel}
+              </p>
             </div>
           </div>
           {!captureMode && (
-            <nav className="hidden items-center gap-5 text-xs text-slate-500 lg:flex" aria-label="תוכן הדוח">
+            <nav
+              className="hidden items-center gap-5 text-xs text-slate-500 lg:flex"
+              aria-label="תוכן הדוח"
+            >
               {sections.map((section, index) => (
                 <a
                   key={section.kind}

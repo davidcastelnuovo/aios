@@ -11,9 +11,13 @@ const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
  * Returns user id when an authenticated user, "service" for service role,
  * or null when unauthorized.
  */
-export async function requireAuth(req: Request): Promise<{ kind: "user" | "service"; userId: string | null } | null> {
-  const authHeader = req.headers.get("Authorization") ?? req.headers.get("authorization");
-  if (!authHeader || !authHeader.toLowerCase().startsWith("bearer ")) return null;
+export async function requireAuth(
+  req: Request,
+): Promise<{ kind: "user" | "service"; userId: string | null } | null> {
+  const authHeader =
+    req.headers.get("Authorization") ?? req.headers.get("authorization");
+  if (!authHeader || !authHeader.toLowerCase().startsWith("bearer "))
+    return null;
   const token = authHeader.slice(7).trim();
   if (!token) return null;
   if (token === SUPABASE_SERVICE_ROLE_KEY) {
@@ -29,14 +33,17 @@ export async function requireAuth(req: Request): Promise<{ kind: "user" | "servi
   }
 }
 
-export async function hmacSha256Hex(secret: string, message: string): Promise<string> {
+export async function hmacSha256Hex(
+  secret: string,
+  message: string,
+): Promise<string> {
   const enc = new TextEncoder();
   const key = await crypto.subtle.importKey(
     "raw",
     enc.encode(secret),
     { name: "HMAC", hash: "SHA-256" },
     false,
-    ["sign"]
+    ["sign"],
   );
   const sig = await crypto.subtle.sign("HMAC", key, enc.encode(message));
   return Array.from(new Uint8Array(sig))

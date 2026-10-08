@@ -1,13 +1,34 @@
 import { useState, useMemo } from "react";
-import { useElementorSubmissions, ElementorSubmission } from "@/hooks/useElementorSubmissions";
+import {
+  useElementorSubmissions,
+  ElementorSubmission,
+} from "@/hooks/useElementorSubmissions";
 import { useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+} from "@/components/ui/sheet";
 import { Loader2, RefreshCw, AlertCircle, ExternalLink } from "lucide-react";
 import { format } from "date-fns";
 import { he } from "date-fns/locale";
@@ -27,9 +48,11 @@ const SOURCE_LABELS: Record<string, string> = {
 };
 
 const SOURCE_COLORS: Record<string, string> = {
-  google_ads: "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400",
+  google_ads:
+    "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400",
   google: "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400",
-  facebook: "bg-indigo-100 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-400",
+  facebook:
+    "bg-indigo-100 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-400",
   organic: "bg-cyan-100 text-cyan-700 dark:bg-cyan-900/30 dark:text-cyan-400",
   direct: "bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300",
   test: "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400",
@@ -43,7 +66,8 @@ export function SubmissionsFullView({ siteId }: Props) {
 
   const { data, isLoading, isFetching } = useElementorSubmissions(siteId, days);
 
-  const refresh = () => qc.invalidateQueries({ queryKey: ["elementor-submissions", siteId] });
+  const refresh = () =>
+    qc.invalidateQueries({ queryKey: ["elementor-submissions", siteId] });
 
   const formSubmissions: ElementorSubmission[] = useMemo(() => {
     if (!selectedFormId || !data?.submissions) return [];
@@ -51,7 +75,8 @@ export function SubmissionsFullView({ siteId }: Props) {
   }, [selectedFormId, data]);
 
   const selectedFormName =
-    data?.per_form?.find((f) => f.form_id === selectedFormId)?.form_name || "טופס";
+    data?.per_form?.find((f) => f.form_id === selectedFormId)?.form_name ||
+    "טופס";
 
   if (isLoading) {
     return (
@@ -66,9 +91,18 @@ export function SubmissionsFullView({ siteId }: Props) {
       <Card>
         <CardContent className="py-12 text-center space-y-2">
           <AlertCircle className="h-10 w-10 text-muted-foreground/40 mx-auto" />
-          <p className="text-sm font-medium">{data?.error || "שגיאה בטעינת Submissions"}</p>
-          {data?.hint && <p className="text-xs text-muted-foreground">{data.hint}</p>}
-          <Button size="sm" variant="outline" onClick={refresh} className="mt-2">
+          <p className="text-sm font-medium">
+            {data?.error || "שגיאה בטעינת Submissions"}
+          </p>
+          {data?.hint && (
+            <p className="text-xs text-muted-foreground">{data.hint}</p>
+          )}
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={refresh}
+            className="mt-2"
+          >
             נסה שוב
           </Button>
         </CardContent>
@@ -85,7 +119,10 @@ export function SubmissionsFullView({ siteId }: Props) {
       {/* Controls */}
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-2">
-          <Select value={String(days)} onValueChange={(v) => setDays(Number(v))}>
+          <Select
+            value={String(days)}
+            onValueChange={(v) => setDays(Number(v))}
+          >
             <SelectTrigger className="w-40">
               <SelectValue />
             </SelectTrigger>
@@ -97,7 +134,12 @@ export function SubmissionsFullView({ siteId }: Props) {
             </SelectContent>
           </Select>
         </div>
-        <Button size="sm" variant="outline" onClick={refresh} disabled={isFetching}>
+        <Button
+          size="sm"
+          variant="outline"
+          onClick={refresh}
+          disabled={isFetching}
+        >
           {isFetching ? (
             <Loader2 className="h-3.5 w-3.5 animate-spin me-1" />
           ) : (
@@ -124,11 +166,15 @@ export function SubmissionsFullView({ siteId }: Props) {
         <TabsContent value="forms" className="mt-3">
           <Card>
             <CardHeader className="py-3">
-              <CardTitle className="text-base">טפסים ({perForm.length})</CardTitle>
+              <CardTitle className="text-base">
+                טפסים ({perForm.length})
+              </CardTitle>
             </CardHeader>
             <CardContent className="p-0">
               {perForm.length === 0 ? (
-                <p className="text-sm text-muted-foreground text-center py-8">אין נתונים בטווח הזה</p>
+                <p className="text-sm text-muted-foreground text-center py-8">
+                  אין נתונים בטווח הזה
+                </p>
               ) : (
                 <Table>
                   <TableHeader>
@@ -148,10 +194,18 @@ export function SubmissionsFullView({ siteId }: Props) {
                         className="cursor-pointer"
                         onClick={() => setSelectedFormId(f.form_id)}
                       >
-                        <TableCell className="font-medium">{f.form_name}</TableCell>
-                        <TableCell className="text-center font-bold">{f.total}</TableCell>
-                        <TableCell className="text-center">{f.last_7_days}</TableCell>
-                        <TableCell className="text-center">{f.last_30_days}</TableCell>
+                        <TableCell className="font-medium">
+                          {f.form_name}
+                        </TableCell>
+                        <TableCell className="text-center font-bold">
+                          {f.total}
+                        </TableCell>
+                        <TableCell className="text-center">
+                          {f.last_7_days}
+                        </TableCell>
+                        <TableCell className="text-center">
+                          {f.last_30_days}
+                        </TableCell>
                         <TableCell>
                           <div className="flex flex-wrap gap-1">
                             {Object.entries(f.sources)
@@ -169,7 +223,11 @@ export function SubmissionsFullView({ siteId }: Props) {
                         </TableCell>
                         <TableCell className="text-xs text-muted-foreground">
                           {f.last_submission_at
-                            ? format(new Date(f.last_submission_at), "dd/MM/yyyy HH:mm", { locale: he })
+                            ? format(
+                                new Date(f.last_submission_at),
+                                "dd/MM/yyyy HH:mm",
+                                { locale: he },
+                              )
                             : "—"}
                         </TableCell>
                       </TableRow>
@@ -184,12 +242,15 @@ export function SubmissionsFullView({ siteId }: Props) {
         <TabsContent value="campaigns" className="mt-3">
           <Card>
             <CardHeader className="py-3">
-              <CardTitle className="text-base">לפי קמפיין Google Ads ({perCampaign.length})</CardTitle>
+              <CardTitle className="text-base">
+                לפי קמפיין Google Ads ({perCampaign.length})
+              </CardTitle>
             </CardHeader>
             <CardContent className="p-0">
               {perCampaign.length === 0 ? (
                 <p className="text-sm text-muted-foreground text-center py-8">
-                  לא זוהו קמפיינים — ודא ש-gad_campaignid מוזרם דרך ה-URL של עמוד הנחיתה
+                  לא זוהו קמפיינים — ודא ש-gad_campaignid מוזרם דרך ה-URL של
+                  עמוד הנחיתה
                 </p>
               ) : (
                 <Table>
@@ -203,8 +264,12 @@ export function SubmissionsFullView({ siteId }: Props) {
                   <TableBody>
                     {perCampaign.map((c) => (
                       <TableRow key={c.gad_campaignid}>
-                        <TableCell className="font-mono text-xs">{c.gad_campaignid}</TableCell>
-                        <TableCell className="text-center font-bold">{c.submissions}</TableCell>
+                        <TableCell className="font-mono text-xs">
+                          {c.gad_campaignid}
+                        </TableCell>
+                        <TableCell className="text-center font-bold">
+                          {c.submissions}
+                        </TableCell>
                         <TableCell className="text-xs text-muted-foreground">
                           {c.forms.join(", ")}
                         </TableCell>
@@ -219,10 +284,19 @@ export function SubmissionsFullView({ siteId }: Props) {
       </Tabs>
 
       {/* Drawer with submissions detail */}
-      <Sheet open={!!selectedFormId} onOpenChange={(open) => !open && setSelectedFormId(null)}>
-        <SheetContent side="left" className="w-full sm:max-w-2xl overflow-y-auto" dir="rtl">
+      <Sheet
+        open={!!selectedFormId}
+        onOpenChange={(open) => !open && setSelectedFormId(null)}
+      >
+        <SheetContent
+          side="left"
+          className="w-full sm:max-w-2xl overflow-y-auto"
+          dir="rtl"
+        >
           <SheetHeader>
-            <SheetTitle>{selectedFormName} — {formSubmissions.length} Submissions</SheetTitle>
+            <SheetTitle>
+              {selectedFormName} — {formSubmissions.length} Submissions
+            </SheetTitle>
           </SheetHeader>
           <div className="mt-4 space-y-3">
             {formSubmissions.map((s) => (
@@ -239,7 +313,9 @@ export function SubmissionsFullView({ siteId }: Props) {
                     </span>
                   </div>
                   <p className="text-xs text-muted-foreground">
-                    {format(new Date(s.created_at), "dd/MM/yyyy HH:mm", { locale: he })}
+                    {format(new Date(s.created_at), "dd/MM/yyyy HH:mm", {
+                      locale: he,
+                    })}
                   </p>
                   {s.referer && (
                     <a
@@ -256,10 +332,14 @@ export function SubmissionsFullView({ siteId }: Props) {
                   <div className="flex flex-wrap gap-1 text-xs">
                     {s.gclid && <Badge variant="outline">gclid</Badge>}
                     {s.gad_campaignid && (
-                      <Badge variant="outline">campaign: {s.gad_campaignid}</Badge>
+                      <Badge variant="outline">
+                        campaign: {s.gad_campaignid}
+                      </Badge>
                     )}
                     {s.fbclid && <Badge variant="outline">fbclid</Badge>}
-                    {s.utm_source && <Badge variant="outline">utm: {s.utm_source}</Badge>}
+                    {s.utm_source && (
+                      <Badge variant="outline">utm: {s.utm_source}</Badge>
+                    )}
                   </div>
                 </CardContent>
               </Card>
@@ -284,10 +364,10 @@ function Kpi({
     tone === "primary"
       ? "text-primary"
       : tone === "success"
-      ? "text-green-600 dark:text-green-400"
-      : tone === "info"
-      ? "text-blue-600 dark:text-blue-400"
-      : "text-amber-600 dark:text-amber-400";
+        ? "text-green-600 dark:text-green-400"
+        : tone === "info"
+          ? "text-blue-600 dark:text-blue-400"
+          : "text-amber-600 dark:text-amber-400";
   return (
     <Card>
       <CardContent className="p-4 text-center">

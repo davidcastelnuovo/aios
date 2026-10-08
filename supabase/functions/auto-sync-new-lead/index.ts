@@ -1,24 +1,45 @@
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.75.0';
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2.75.0";
 
 const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Headers":
+    "authorization, x-client-info, apikey, content-type",
 };
 
 // Custom field name for phone number in ManyChat (must be created manually in ManyChat)
-const PHONE_CUSTOM_FIELD_NAME = 'phone_number';
+const PHONE_CUSTOM_FIELD_NAME = "phone_number";
 
 // Check if phone is international (non-Israeli)
 function isInternationalPhone(phone: string): boolean {
   if (!phone) return false;
   const trimmed = phone.trim();
-  if (trimmed.startsWith('+') && !trimmed.startsWith('+972')) return true;
-  if (trimmed.startsWith('00') && !trimmed.startsWith('00972')) return true;
-  const digits = trimmed.replace(/\D/g, '');
-  if (digits.length >= 10 && !digits.startsWith('972') && !digits.startsWith('0')) {
-    const intlPrefixes = ['1', '44', '49', '43', '33', '39', '34', '31', '32', '41', '61', '81', '86', '91'];
+  if (trimmed.startsWith("+") && !trimmed.startsWith("+972")) return true;
+  if (trimmed.startsWith("00") && !trimmed.startsWith("00972")) return true;
+  const digits = trimmed.replace(/\D/g, "");
+  if (
+    digits.length >= 10 &&
+    !digits.startsWith("972") &&
+    !digits.startsWith("0")
+  ) {
+    const intlPrefixes = [
+      "1",
+      "44",
+      "49",
+      "43",
+      "33",
+      "39",
+      "34",
+      "31",
+      "32",
+      "41",
+      "61",
+      "81",
+      "86",
+      "91",
+    ];
     for (const prefix of intlPrefixes) {
-      if (digits.startsWith(prefix) && digits.length >= prefix.length + 8) return true;
+      if (digits.startsWith(prefix) && digits.length >= prefix.length + 8)
+        return true;
     }
   }
   return false;
@@ -26,19 +47,20 @@ function isInternationalPhone(phone: string): boolean {
 
 function formatInternationalPhone(phone: string): string {
   const trimmed = phone.trim();
-  if (trimmed.startsWith('+')) return trimmed.replace(/[^\d+]/g, '');
-  if (trimmed.startsWith('00')) return '+' + trimmed.slice(2).replace(/\D/g, '');
-  return '+' + trimmed.replace(/\D/g, '');
+  if (trimmed.startsWith("+")) return trimmed.replace(/[^\d+]/g, "");
+  if (trimmed.startsWith("00"))
+    return "+" + trimmed.slice(2).replace(/\D/g, "");
+  return "+" + trimmed.replace(/\D/g, "");
 }
 
 // Phone normalization helper (for Israeli phones)
 function normalizePhone(phone: string): string {
-  if (!phone) return '';
-  let cleaned = phone.replace(/\D/g, '');
-  if (cleaned.startsWith('972')) {
+  if (!phone) return "";
+  let cleaned = phone.replace(/\D/g, "");
+  if (cleaned.startsWith("972")) {
     cleaned = cleaned.slice(3);
   }
-  if (cleaned.startsWith('0')) {
+  if (cleaned.startsWith("0")) {
     cleaned = cleaned.slice(1);
   }
   return cleaned;
@@ -48,7 +70,7 @@ function normalizePhone(phone: string): string {
 function formatPhoneForManyChat(phone: string): string {
   if (isInternationalPhone(phone)) {
     const formatted = formatInternationalPhone(phone);
-    return formatted.startsWith('+') ? formatted.slice(1) : formatted;
+    return formatted.startsWith("+") ? formatted.slice(1) : formatted;
   }
   const cleaned = normalizePhone(phone);
   return `972${cleaned}`;
@@ -58,27 +80,26 @@ function formatPhoneForManyChat(phone: string): string {
 function getPhoneLookupCandidates(phone: string): string[] {
   if (isInternationalPhone(phone)) {
     const formatted = formatInternationalPhone(phone);
-    const withoutPlus = formatted.startsWith('+') ? formatted.slice(1) : formatted;
+    const withoutPlus = formatted.startsWith("+")
+      ? formatted.slice(1)
+      : formatted;
     return [formatted, withoutPlus].filter(Boolean);
   }
-  
+
   const cleaned = normalizePhone(phone);
   if (!cleaned) return [];
 
   const withCountry = `972${cleaned}`;
-  return [
-    `+${withCountry}`,
-    withCountry,
-    `0${cleaned}`,
-    cleaned,
-  ].filter(Boolean);
+  return [`+${withCountry}`, withCountry, `0${cleaned}`, cleaned].filter(
+    Boolean,
+  );
 }
 
 // Safe JSON parsing helper
 async function safeJson(res: Response): Promise<any> {
-  const contentType = res.headers.get('content-type') || '';
+  const contentType = res.headers.get("content-type") || "";
   const text = await res.text();
-  if (!contentType.includes('application/json')) {
+  if (!contentType.includes("application/json")) {
     return { __nonJson: true, status: res.status, text: text.slice(0, 500) };
   }
   try {
@@ -90,13 +111,17 @@ async function safeJson(res: Response): Promise<any> {
 
 // Get Custom Field ID from ManyChat API
 // This is required because findByCustomField needs field_id (numeric), not field_name
-async function getPhoneNumberFieldId(apiKey: string, supabase: any, tenantId: string): Promise<number | null> {
+async function getPhoneNumberFieldId(
+  apiKey: string,
+  supabase: any,
+  tenantId: string,
+): Promise<number | null> {
   // First, try to get cached field_id from tenant_integrations.settings
   const { data: integration } = await supabase
-    .from('tenant_integrations')
-    .select('settings')
-    .eq('tenant_id', tenantId)
-    .eq('integration_type', 'manychat')
+    .from("tenant_integrations")
+    .select("settings")
+    .eq("tenant_id", tenantId)
+    .eq("integration_type", "manychat")
     .single();
 
   const settings = integration?.settings || {};
@@ -106,21 +131,25 @@ async function getPhoneNumberFieldId(apiKey: string, supabase: any, tenantId: st
 
   // If not cached, fetch from ManyChat API
   try {
-    const res = await fetch('https://api.manychat.com/fb/page/getCustomFields', {
-      method: 'GET',
-      headers: {
-        'Authorization': `Bearer ${apiKey}`,
-        'Content-Type': 'application/json',
+    const res = await fetch(
+      "https://api.manychat.com/fb/page/getCustomFields",
+      {
+        method: "GET",
+        headers: {
+          Authorization: `Bearer ${apiKey}`,
+          "Content-Type": "application/json",
+        },
       },
-    });
+    );
 
     const data = await safeJson(res);
 
-    if (data?.status === 'success' && Array.isArray(data?.data)) {
+    if (data?.status === "success" && Array.isArray(data?.data)) {
       // Find the phone_number field
-      const phoneField = data.data.find((field: any) => 
-        field.name === PHONE_CUSTOM_FIELD_NAME || 
-        field.name?.toLowerCase() === 'phone_number'
+      const phoneField = data.data.find(
+        (field: any) =>
+          field.name === PHONE_CUSTOM_FIELD_NAME ||
+          field.name?.toLowerCase() === "phone_number",
       );
 
       if (phoneField?.id) {
@@ -128,46 +157,49 @@ async function getPhoneNumberFieldId(apiKey: string, supabase: any, tenantId: st
 
         // Cache the field_id in tenant_integrations.settings
         await supabase
-          .from('tenant_integrations')
-          .update({ 
-            settings: { ...settings, phone_number_field_id: fieldId } 
+          .from("tenant_integrations")
+          .update({
+            settings: { ...settings, phone_number_field_id: fieldId },
           })
-          .eq('tenant_id', tenantId)
-          .eq('integration_type', 'manychat');
+          .eq("tenant_id", tenantId)
+          .eq("integration_type", "manychat");
 
         return fieldId;
       } else {
       }
     }
   } catch (e) {
-    console.error('Error fetching custom fields:', e);
+    console.error("Error fetching custom fields:", e);
   }
 
   return null;
 }
 
 // Find subscriber by phone in ManyChat (SEQUENTIAL to avoid rate limits)
-async function findSubscriberByPhone(apiKey: string, phoneCandidates: string[]): Promise<string | null> {
+async function findSubscriberByPhone(
+  apiKey: string,
+  phoneCandidates: string[],
+): Promise<string | null> {
   for (const candidate of phoneCandidates) {
     try {
       const url = `https://api.manychat.com/fb/subscriber/findBySystemField?phone=${encodeURIComponent(candidate)}`;
       const res = await fetch(url, {
-        method: 'GET',
+        method: "GET",
         headers: {
-          'Authorization': `Bearer ${apiKey}`,
-          'Content-Type': 'application/json',
+          Authorization: `Bearer ${apiKey}`,
+          "Content-Type": "application/json",
         },
       });
 
       const data = await safeJson(res);
 
-      if (data?.status === 'success' && data?.data?.id) {
+      if (data?.status === "success" && data?.data?.id) {
         return String(data.data.id);
       }
-      
+
       // If rate limited, wait and continue
-      if (res.status === 429 || data?.message?.includes('max rps')) {
-        await new Promise(r => setTimeout(r, 2000));
+      if (res.status === 429 || data?.message?.includes("max rps")) {
+        await new Promise((r) => setTimeout(r, 2000));
       }
     } catch (e) {
       console.error(`Error searching by phone ${candidate}:`, e);
@@ -177,22 +209,25 @@ async function findSubscriberByPhone(apiKey: string, phoneCandidates: string[]):
 }
 
 // Find subscriber by email in ManyChat
-async function findSubscriberByEmail(apiKey: string, email?: string | null): Promise<string | null> {
+async function findSubscriberByEmail(
+  apiKey: string,
+  email?: string | null,
+): Promise<string | null> {
   if (!email) return null;
-  
+
   try {
     const url = `https://api.manychat.com/fb/subscriber/findBySystemField?email=${encodeURIComponent(email)}`;
     const res = await fetch(url, {
-      method: 'GET',
+      method: "GET",
       headers: {
-        'Authorization': `Bearer ${apiKey}`,
-        'Content-Type': 'application/json',
+        Authorization: `Bearer ${apiKey}`,
+        "Content-Type": "application/json",
       },
     });
 
     const data = await safeJson(res);
 
-    if (data?.status === 'success' && data?.data?.id) {
+    if (data?.status === "success" && data?.data?.id) {
       return String(data.data.id);
     }
   } catch (e) {
@@ -204,31 +239,31 @@ async function findSubscriberByEmail(apiKey: string, email?: string | null): Pro
 // Find subscriber by Custom Field using field_id (NOT field_name!)
 // This is the CORRECT way according to ManyChat API docs
 async function findSubscriberByCustomField(
-  apiKey: string, 
-  fieldId: number, 
-  phoneCandidates: string[]
+  apiKey: string,
+  fieldId: number,
+  phoneCandidates: string[],
 ): Promise<string | null> {
   for (const candidate of phoneCandidates) {
     try {
       // IMPORTANT: Use field_id (numeric) not field_name
       const url = `https://api.manychat.com/fb/subscriber/findByCustomField?field_id=${fieldId}&field_value=${encodeURIComponent(candidate)}`;
       const res = await fetch(url, {
-        method: 'GET',
+        method: "GET",
         headers: {
-          'Authorization': `Bearer ${apiKey}`,
-          'Content-Type': 'application/json',
+          Authorization: `Bearer ${apiKey}`,
+          "Content-Type": "application/json",
         },
       });
 
       const data = await safeJson(res);
 
-      if (data?.status === 'success' && data?.data?.id) {
+      if (data?.status === "success" && data?.data?.id) {
         return String(data.data.id);
       }
-      
+
       // If rate limited, wait and continue
-      if (res.status === 429 || data?.message?.includes('max rps')) {
-        await new Promise(r => setTimeout(r, 2000));
+      if (res.status === 429 || data?.message?.includes("max rps")) {
+        await new Promise((r) => setTimeout(r, 2000));
       }
     } catch (e) {
       console.error(`Error finding by custom field ${candidate}:`, e);
@@ -238,14 +273,18 @@ async function findSubscriberByCustomField(
 }
 
 // Set custom field value for a subscriber using field_name (this still works)
-async function setPhoneCustomField(apiKey: string, subscriberId: string, phoneValue: string): Promise<boolean> {
+async function setPhoneCustomField(
+  apiKey: string,
+  subscriberId: string,
+  phoneValue: string,
+): Promise<boolean> {
   try {
-    const url = 'https://api.manychat.com/fb/subscriber/setCustomFieldByName';
+    const url = "https://api.manychat.com/fb/subscriber/setCustomFieldByName";
     const res = await fetch(url, {
-      method: 'POST',
+      method: "POST",
       headers: {
-        'Authorization': `Bearer ${apiKey}`,
-        'Content-Type': 'application/json',
+        Authorization: `Bearer ${apiKey}`,
+        "Content-Type": "application/json",
       },
       body: JSON.stringify({
         subscriber_id: subscriberId,
@@ -256,9 +295,9 @@ async function setPhoneCustomField(apiKey: string, subscriberId: string, phoneVa
 
     const data = await safeJson(res);
 
-    return data?.status === 'success';
+    return data?.status === "success";
   } catch (e) {
-    console.error('Error setting custom field:', e);
+    console.error("Error setting custom field:", e);
     return false;
   }
 }
@@ -266,12 +305,17 @@ async function setPhoneCustomField(apiKey: string, subscriberId: string, phoneVa
 // Create new subscriber in ManyChat
 async function createManyChatSubscriber(
   apiKey: string,
-  lead: { contact_name?: string | null; company_name: string; phone: string; email?: string | null }
+  lead: {
+    contact_name?: string | null;
+    company_name: string;
+    phone: string;
+    email?: string | null;
+  },
 ): Promise<{ id: string } | null> {
   const formattedPhone = formatPhoneForManyChat(lead.phone);
-  const nameParts = (lead.contact_name || '').split(' ');
-  const firstName = nameParts[0] || lead.company_name || 'Lead';
-  const lastName = nameParts.slice(1).join(' ') || '';
+  const nameParts = (lead.contact_name || "").split(" ");
+  const firstName = nameParts[0] || lead.company_name || "Lead";
+  const lastName = nameParts.slice(1).join(" ") || "";
 
   // Some ManyChat accounts deny importing phone to system fields.
   // We first try with phone+whatsapp_phone, then retry without phone if needed.
@@ -283,26 +327,29 @@ async function createManyChatSubscriber(
     has_opt_in_sms: true,
     // Some ManyChat accounts deny importing email. Don't attempt it on create.
     has_opt_in_email: false,
-    consent_phrase: 'אני מאשר קבלת הודעות ודיוור פרסומי'
+    consent_phrase: "אני מאשר קבלת הודעות ודיוור פרסומי",
   };
 
-  let createRes = await fetch('https://api.manychat.com/fb/subscriber/createSubscriber', {
-    method: 'POST',
-    headers: {
-      'Authorization': `Bearer ${apiKey}`,
-      'Content-Type': 'application/json',
+  let createRes = await fetch(
+    "https://api.manychat.com/fb/subscriber/createSubscriber",
+    {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(payloadWithPhone),
     },
-    body: JSON.stringify(payloadWithPhone),
-  });
+  );
 
   let createData = await safeJson(createRes);
 
   // Check if first attempt SUCCEEDED (status=success with id) vs FAILED with permission error
   const createStr = JSON.stringify(createData);
-  const isSuccess = createData?.status === 'success' && createData?.data?.id;
-  
+  const isSuccess = createData?.status === "success" && createData?.data?.id;
+
   // Only retry WITHOUT phone if first attempt actually FAILED (not just warning on success)
-  if (!isSuccess && createStr.includes('Permission denied to import phone')) {
+  if (!isSuccess && createStr.includes("Permission denied to import phone")) {
     const payloadNoPhone: any = {
       first_name: firstName,
       last_name: lastName,
@@ -310,26 +357,32 @@ async function createManyChatSubscriber(
       has_opt_in_sms: true,
       // Some ManyChat accounts deny importing email. Don't attempt it on create.
       has_opt_in_email: false,
-      consent_phrase: 'אני מאשר קבלת הודעות ודיוור פרסומי'
+      consent_phrase: "אני מאשר קבלת הודעות ודיוור פרסומי",
     };
-    createRes = await fetch('https://api.manychat.com/fb/subscriber/createSubscriber', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${apiKey}`,
-        'Content-Type': 'application/json',
+    createRes = await fetch(
+      "https://api.manychat.com/fb/subscriber/createSubscriber",
+      {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${apiKey}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(payloadNoPhone),
       },
-      body: JSON.stringify(payloadNoPhone),
-    });
+    );
     createData = await safeJson(createRes);
-  } else if (isSuccess && createStr.includes('Permission denied to import phone')) {
+  } else if (
+    isSuccess &&
+    createStr.includes("Permission denied to import phone")
+  ) {
   }
 
-  if (createData.status === 'success' && createData.data?.id) {
+  if (createData.status === "success" && createData.data?.id) {
     const subscriberId = String(createData.data.id);
-    
+
     // IMPORTANT: Save phone to custom field for future lookups
     await setPhoneCustomField(apiKey, subscriberId, `+${formattedPhone}`);
-    
+
     return { id: subscriberId };
   }
 
@@ -337,103 +390,123 @@ async function createManyChatSubscriber(
 }
 
 // Add tag to subscriber
-async function addTagToSubscriber(apiKey: string, subscriberId: string, tagId: number): Promise<boolean> {
+async function addTagToSubscriber(
+  apiKey: string,
+  subscriberId: string,
+  tagId: number,
+): Promise<boolean> {
   try {
-    const tagRes = await fetch('https://api.manychat.com/fb/subscriber/addTag', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${apiKey}`,
-        'Content-Type': 'application/json',
+    const tagRes = await fetch(
+      "https://api.manychat.com/fb/subscriber/addTag",
+      {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${apiKey}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          subscriber_id: subscriberId,
+          tag_id: tagId,
+        }),
       },
-      body: JSON.stringify({
-        subscriber_id: subscriberId,
-        tag_id: tagId,
-      }),
-    });
+    );
 
     const tagData = await safeJson(tagRes);
 
-    return tagData?.status === 'success';
+    return tagData?.status === "success";
   } catch (e) {
-    console.error('Error adding tag:', e);
+    console.error("Error adding tag:", e);
     return false;
   }
 }
 
 Deno.serve(async (req) => {
-  if (req.method === 'OPTIONS') {
+  if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
   }
 
   try {
-    const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
-    const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+    const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
+    const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
     const { lead_id } = await req.json();
-    
+
     if (!lead_id) {
-      console.error('Missing lead_id parameter');
+      console.error("Missing lead_id parameter");
       return new Response(
-        JSON.stringify({ error: 'Missing lead_id parameter' }),
-        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        JSON.stringify({ error: "Missing lead_id parameter" }),
+        {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        },
       );
     }
 
-
     // Fetch the lead
     const { data: lead, error: leadError } = await supabase
-      .from('leads')
-      .select('id, phone, company_name, contact_name, email, tenant_id')
-      .eq('id', lead_id)
+      .from("leads")
+      .select("id, phone, company_name, contact_name, email, tenant_id")
+      .eq("id", lead_id)
       .single();
 
     if (leadError || !lead) {
-      console.error('Lead not found:', leadError);
+      console.error("Lead not found:", leadError);
       return new Response(
-        JSON.stringify({ error: 'Lead not found', details: leadError }),
-        { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        JSON.stringify({ error: "Lead not found", details: leadError }),
+        {
+          status: 404,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        },
       );
     }
 
     // Check if lead has a phone number
     if (!lead.phone) {
       return new Response(
-        JSON.stringify({ message: 'Lead has no phone number', synced: false }),
-        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        JSON.stringify({ message: "Lead has no phone number", synced: false }),
+        { headers: { ...corsHeaders, "Content-Type": "application/json" } },
       );
     }
 
     // Fetch ManyChat integration settings
     const { data: integration, error: integrationError } = await supabase
-      .from('tenant_integrations')
-      .select('api_key, is_active, settings')
-      .eq('tenant_id', lead.tenant_id)
-      .eq('integration_type', 'manychat')
+      .from("tenant_integrations")
+      .select("api_key, is_active, settings")
+      .eq("tenant_id", lead.tenant_id)
+      .eq("integration_type", "manychat")
       .single();
 
     if (integrationError || !integration) {
       return new Response(
-        JSON.stringify({ message: 'ManyChat integration not configured', synced: false }),
-        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        JSON.stringify({
+          message: "ManyChat integration not configured",
+          synced: false,
+        }),
+        { headers: { ...corsHeaders, "Content-Type": "application/json" } },
       );
     }
 
     if (!integration.is_active) {
       return new Response(
-        JSON.stringify({ message: 'ManyChat integration is not active', synced: false }),
-        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        JSON.stringify({
+          message: "ManyChat integration is not active",
+          synced: false,
+        }),
+        { headers: { ...corsHeaders, "Content-Type": "application/json" } },
       );
     }
 
     const apiKey = integration.api_key;
-    const settings = integration.settings as { defaultTagId?: number; phone_number_field_id?: number } | null;
+    const settings = integration.settings as {
+      defaultTagId?: number;
+      phone_number_field_id?: number;
+    } | null;
     const defaultTagId = settings?.defaultTagId || 79380109;
 
     const phoneCandidates = getPhoneLookupCandidates(lead.phone);
     const formattedPhone = formatPhoneForManyChat(lead.phone);
-    const leadName = lead.contact_name || lead.company_name || 'Unknown';
-
+    const leadName = lead.contact_name || lead.company_name || "Unknown";
 
     // STEP 1: Try to find existing subscriber by phone (SEQUENTIAL)
     let subscriberId = await findSubscriberByPhone(apiKey, phoneCandidates);
@@ -453,13 +526,24 @@ Deno.serve(async (req) => {
 
     // STEP 3: Try to find by Custom Field (phone_number) using field_id
     if (!subscriberId) {
-      
       // Get the field_id (cached or from API)
-      const fieldId = await getPhoneNumberFieldId(apiKey, supabase, lead.tenant_id);
-      
+      const fieldId = await getPhoneNumberFieldId(
+        apiKey,
+        supabase,
+        lead.tenant_id,
+      );
+
       if (fieldId) {
-        const customFieldCandidates = [`+${formattedPhone}`, formattedPhone, ...phoneCandidates];
-        subscriberId = await findSubscriberByCustomField(apiKey, fieldId, customFieldCandidates);
+        const customFieldCandidates = [
+          `+${formattedPhone}`,
+          formattedPhone,
+          ...phoneCandidates,
+        ];
+        subscriberId = await findSubscriberByCustomField(
+          apiKey,
+          fieldId,
+          customFieldCandidates,
+        );
         if (subscriberId) {
           wasExisting = true;
         }
@@ -473,40 +557,56 @@ Deno.serve(async (req) => {
         contact_name: lead.contact_name,
         company_name: lead.company_name,
         phone: lead.phone,
-        email: lead.email
+        email: lead.email,
       });
 
       if (newSubscriber?.id) {
         subscriberId = newSubscriber.id;
 
         // STEP 5: Add tag to trigger automation (only for new subscribers)
-        const tagAdded = await addTagToSubscriber(apiKey, subscriberId, defaultTagId);
+        const tagAdded = await addTagToSubscriber(
+          apiKey,
+          subscriberId,
+          defaultTagId,
+        );
         if (tagAdded) {
         } else {
         }
       } else {
         // Check if creation failed due to "WhatsApp ID already exists"
-        
+
         // Wait a bit to avoid rate limiting
-        await new Promise(r => setTimeout(r, 2000));
-        
+        await new Promise((r) => setTimeout(r, 2000));
+
         // Retry phone lookup (only valid method - not wa_id or whatsapp_phone)
         subscriberId = await findSubscriberByPhone(apiKey, phoneCandidates);
-        
+
         // Retry email lookup
         if (!subscriberId) {
           subscriberId = await findSubscriberByEmail(apiKey, lead.email);
         }
-        
+
         // Retry custom field lookup
         if (!subscriberId) {
-          const fieldId = await getPhoneNumberFieldId(apiKey, supabase, lead.tenant_id);
+          const fieldId = await getPhoneNumberFieldId(
+            apiKey,
+            supabase,
+            lead.tenant_id,
+          );
           if (fieldId) {
-            const customFieldCandidates = [`+${formattedPhone}`, formattedPhone, ...phoneCandidates];
-            subscriberId = await findSubscriberByCustomField(apiKey, fieldId, customFieldCandidates);
+            const customFieldCandidates = [
+              `+${formattedPhone}`,
+              formattedPhone,
+              ...phoneCandidates,
+            ];
+            subscriberId = await findSubscriberByCustomField(
+              apiKey,
+              fieldId,
+              customFieldCandidates,
+            );
           }
         }
-        
+
         if (subscriberId) {
           wasExisting = true;
         } else {
@@ -519,59 +619,74 @@ Deno.serve(async (req) => {
     // STEP 5.5: If subscriber was found (not created), ensure phone_number custom field is set
     if (subscriberId && wasExisting) {
       const formattedPhoneForCustomField = `+${formattedPhone}`;
-      await setPhoneCustomField(apiKey, subscriberId, formattedPhoneForCustomField);
+      await setPhoneCustomField(
+        apiKey,
+        subscriberId,
+        formattedPhoneForCustomField,
+      );
     }
 
     // STEP 6: Update lead with subscriber ID
     if (subscriberId) {
       const { error: updateError } = await supabase
-        .from('leads')
+        .from("leads")
         .update({ manychat_subscriber_id: subscriberId })
-        .eq('id', lead.id);
+        .eq("id", lead.id);
 
       if (updateError) {
-        console.error('Error updating lead:', updateError);
+        console.error("Error updating lead:", updateError);
         return new Response(
-          JSON.stringify({ error: 'Error updating lead', details: updateError }),
-          { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          JSON.stringify({
+            error: "Error updating lead",
+            details: updateError,
+          }),
+          {
+            status: 500,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          },
         );
       }
 
       return new Response(
-        JSON.stringify({ 
-          message: 'Lead synced successfully', 
+        JSON.stringify({
+          message: "Lead synced successfully",
           synced: true,
           lead_id: lead.id,
           subscriber_id: subscriberId,
-          was_existing: wasExisting
+          was_existing: wasExisting,
         }),
-        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        { headers: { ...corsHeaders, "Content-Type": "application/json" } },
       );
     } else {
       // Mark as EXISTING_WA_SUBSCRIBER to indicate the ManyChat limitation
       // This is more specific than NEEDS_MANUAL_LINK
       await supabase
-        .from('leads')
-        .update({ manychat_subscriber_id: 'EXISTING_WA_SUBSCRIBER' })
-        .eq('id', lead.id);
+        .from("leads")
+        .update({ manychat_subscriber_id: "EXISTING_WA_SUBSCRIBER" })
+        .eq("id", lead.id);
 
       return new Response(
-        JSON.stringify({ 
-          message: 'המנוי קיים ב-ManyChat אך נוצר דרך וואטסאפ ללא שדה טלפון. יש ליצור Flow ב-ManyChat שמעתיק את whatsapp_phone לשדה phone_number', 
+        JSON.stringify({
+          message:
+            "המנוי קיים ב-ManyChat אך נוצר דרך וואטסאפ ללא שדה טלפון. יש ליצור Flow ב-ManyChat שמעתיק את whatsapp_phone לשדה phone_number",
           synced: false,
-          status: 'EXISTING_WA_SUBSCRIBER',
-          solution: 'Create a Flow in ManyChat: Trigger "New Subscriber" -> Action "Set Custom Field phone_number = {{whatsapp_phone}}"'
+          status: "EXISTING_WA_SUBSCRIBER",
+          solution:
+            'Create a Flow in ManyChat: Trigger "New Subscriber" -> Action "Set Custom Field phone_number = {{whatsapp_phone}}"',
         }),
-        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        { headers: { ...corsHeaders, "Content-Type": "application/json" } },
       );
     }
-
   } catch (error) {
-    console.error('Auto-sync error:', error);
-    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    console.error("Auto-sync error:", error);
+    const errorMessage =
+      error instanceof Error ? error.message : "Unknown error";
     return new Response(
-      JSON.stringify({ error: 'Internal server error', details: errorMessage }),
-      { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      JSON.stringify({ error: "Internal server error", details: errorMessage }),
+      {
+        status: 500,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      },
     );
   }
 });

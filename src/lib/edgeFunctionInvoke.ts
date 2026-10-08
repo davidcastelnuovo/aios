@@ -6,7 +6,12 @@ export async function invokeEdgeFunction<T = Record<string, unknown>>(
   body?: Record<string, unknown>,
 ): Promise<T> {
   const { data, error } = await supabase.functions.invoke(name, { body });
-  if (data && typeof data === "object" && "error" in data && (data as { error?: unknown }).error) {
+  if (
+    data &&
+    typeof data === "object" &&
+    "error" in data &&
+    (data as { error?: unknown }).error
+  ) {
     throw new Error(String((data as { error: unknown }).error));
   }
   if (error) {
@@ -17,7 +22,8 @@ export async function invokeEdgeFunction<T = Record<string, unknown>>(
         if (payload?.error) throw new Error(String(payload.error));
         if (payload?.message) throw new Error(String(payload.message));
       } catch (inner) {
-        if (inner instanceof Error && inner.message !== error.message) throw inner;
+        if (inner instanceof Error && inner.message !== error.message)
+          throw inner;
       }
     }
     throw new Error(error.message || `קריאה ל-${name} נכשלה`);

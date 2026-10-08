@@ -146,24 +146,31 @@ export function CampaignLauncher({
       if (platform === "meta") {
         // Create a new campaign via Meta Graph API through fb-campaign-control
         // First we need to create a campaign (not just update) — use the Graph API directly
-        const account = filteredAccounts.find((a) => a.id === selectedAccountId) ?? filteredAccounts[0];
+        const account =
+          filteredAccounts.find((a) => a.id === selectedAccountId) ??
+          filteredAccounts[0];
         if (!account) throw new Error("לא נמצא חשבון Meta Ads מחובר");
 
-        const { data, error } = await supabase.functions.invoke("fb-campaign-control", {
-          body: {
-            tenant_id: tenantId,
-            action: "create_campaign",
-            ad_account_id: account.account_id,
-            name: name,
-            objective,
-            daily_budget: parseFloat(dailyBudget),
-            status: "PAUSED", // Start paused — user activates manually
-            special_ad_categories: [],
+        const { data, error } = await supabase.functions.invoke(
+          "fb-campaign-control",
+          {
+            body: {
+              tenant_id: tenantId,
+              action: "create_campaign",
+              ad_account_id: account.account_id,
+              name: name,
+              objective,
+              daily_budget: parseFloat(dailyBudget),
+              status: "PAUSED", // Start paused — user activates manually
+              special_ad_categories: [],
+            },
           },
-        });
+        );
 
         if (error || data?.error) {
-          throw new Error(data?.error ?? error?.message ?? "שגיאה בהשקת קמפיין Meta");
+          throw new Error(
+            data?.error ?? error?.message ?? "שגיאה בהשקת קמפיין Meta",
+          );
         }
 
         // Save campaign reference to work item payload
@@ -181,26 +188,39 @@ export function CampaignLauncher({
           })
           .eq("id", workItemId);
 
-        setResult({ platform: "meta", success: true, campaign_id: data.campaign_id });
+        setResult({
+          platform: "meta",
+          success: true,
+          campaign_id: data.campaign_id,
+        });
         toast.success("קמפיין Meta הושק בהצלחה! (במצב מושהה)");
       } else {
         // Google Ads — invoke google-ads-auth with create_campaign action
-        const account = filteredAccounts.find((a) => a.id === selectedAccountId) ?? filteredAccounts[0];
+        const account =
+          filteredAccounts.find((a) => a.id === selectedAccountId) ??
+          filteredAccounts[0];
         if (!account) throw new Error("לא נמצא חשבון Google Ads מחובר");
 
-        const { data, error } = await supabase.functions.invoke("google-ads-auth", {
-          body: {
-            action: "create_campaign",
-            customer_id: account.account_id,
-            name,
-            advertising_channel_type: objective,
-            daily_budget_micros: Math.round(parseFloat(dailyBudget) * 1_000_000),
-            status: "PAUSED",
+        const { data, error } = await supabase.functions.invoke(
+          "google-ads-auth",
+          {
+            body: {
+              action: "create_campaign",
+              customer_id: account.account_id,
+              name,
+              advertising_channel_type: objective,
+              daily_budget_micros: Math.round(
+                parseFloat(dailyBudget) * 1_000_000,
+              ),
+              status: "PAUSED",
+            },
           },
-        });
+        );
 
         if (error || data?.error) {
-          throw new Error(data?.error ?? error?.message ?? "שגיאה בהשקת קמפיין Google");
+          throw new Error(
+            data?.error ?? error?.message ?? "שגיאה בהשקת קמפיין Google",
+          );
         }
 
         await supabase
@@ -217,7 +237,11 @@ export function CampaignLauncher({
           })
           .eq("id", workItemId);
 
-        setResult({ platform: "google", success: true, campaign_id: data.campaign_id ?? data.resource_name });
+        setResult({
+          platform: "google",
+          success: true,
+          campaign_id: data.campaign_id ?? data.resource_name,
+        });
         toast.success("קמפיין Google Ads הושק בהצלחה! (במצב מושהה)");
       }
     } catch (err: any) {
@@ -233,7 +257,10 @@ export function CampaignLauncher({
 
   if (result?.success) {
     return (
-      <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-right" dir="rtl">
+      <div
+        className="rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-right"
+        dir="rtl"
+      >
         <div className="flex items-center gap-2 text-emerald-700">
           <CheckCircle2 className="h-5 w-5 shrink-0" />
           <span className="font-semibold">
@@ -241,7 +268,8 @@ export function CampaignLauncher({
           </span>
         </div>
         <p className="mt-1 text-sm text-emerald-600">
-          הקמפיין נוצר במצב <strong>מושהה</strong> — כנס לממשק הפרסום כדי להפעיל אותו.
+          הקמפיין נוצר במצב <strong>מושהה</strong> — כנס לממשק הפרסום כדי להפעיל
+          אותו.
         </p>
         {result.campaign_id && (
           <div className="mt-2 flex items-center gap-2">
@@ -282,7 +310,9 @@ export function CampaignLauncher({
         </div>
         <div>
           <p className="text-sm font-semibold">השקת קמפיין ממומן</p>
-          <p className="text-xs text-muted-foreground">בחר פלטפורמה, חשבון ותקציב</p>
+          <p className="text-xs text-muted-foreground">
+            בחר פלטפורמה, חשבון ותקציב
+          </p>
         </div>
       </div>
 
@@ -293,17 +323,25 @@ export function CampaignLauncher({
         {(["meta", "google"] as Platform[]).map((p) => (
           <button
             key={p}
-            onClick={() => { setPlatform(p); setSelectedAccountId(""); setObjective(p === "meta" ? "OUTCOME_LEADS" : "SEARCH"); }}
+            onClick={() => {
+              setPlatform(p);
+              setSelectedAccountId("");
+              setObjective(p === "meta" ? "OUTCOME_LEADS" : "SEARCH");
+            }}
             className={cn(
               "flex flex-1 items-center justify-center gap-2 rounded-lg border py-2 text-sm font-medium transition-all",
               platform === p
                 ? p === "meta"
                   ? "border-blue-500 bg-blue-50 text-blue-700"
                   : "border-orange-400 bg-orange-50 text-orange-700"
-                : "border-border text-muted-foreground hover:border-muted-foreground/50"
+                : "border-border text-muted-foreground hover:border-muted-foreground/50",
             )}
           >
-            {p === "meta" ? <Facebook className="h-4 w-4" /> : <Globe className="h-4 w-4" />}
+            {p === "meta" ? (
+              <Facebook className="h-4 w-4" />
+            ) : (
+              <Globe className="h-4 w-4" />
+            )}
             {p === "meta" ? "Meta Ads" : "Google Ads"}
           </button>
         ))}
@@ -319,14 +357,19 @@ export function CampaignLauncher({
         <div className="flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-700">
           <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
           <span>
-            לא נמצא חשבון {platform === "meta" ? "Meta Ads" : "Google Ads"} מחובר לטנאנט.
-            חבר חשבון בהגדרות האינטגרציות.
+            לא נמצא חשבון {platform === "meta" ? "Meta Ads" : "Google Ads"}{" "}
+            מחובר לטנאנט. חבר חשבון בהגדרות האינטגרציות.
           </span>
         </div>
       ) : (
         <div>
-          <label className="mb-1 block text-xs text-muted-foreground">חשבון פרסום</label>
-          <Select value={selectedAccountId} onValueChange={setSelectedAccountId}>
+          <label className="mb-1 block text-xs text-muted-foreground">
+            חשבון פרסום
+          </label>
+          <Select
+            value={selectedAccountId}
+            onValueChange={setSelectedAccountId}
+          >
             <SelectTrigger>
               <SelectValue placeholder="בחר חשבון..." />
             </SelectTrigger>
@@ -343,30 +386,42 @@ export function CampaignLauncher({
 
       {/* Campaign name */}
       <div>
-        <label className="mb-1 block text-xs text-muted-foreground">שם הקמפיין</label>
-        <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="שם הקמפיין..." />
+        <label className="mb-1 block text-xs text-muted-foreground">
+          שם הקמפיין
+        </label>
+        <Input
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          placeholder="שם הקמפיין..."
+        />
       </div>
 
       {/* Objective */}
       <div>
-        <label className="mb-1 block text-xs text-muted-foreground">מטרת הקמפיין</label>
+        <label className="mb-1 block text-xs text-muted-foreground">
+          מטרת הקמפיין
+        </label>
         <Select value={objective} onValueChange={setObjective}>
           <SelectTrigger>
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
-            {(platform === "meta" ? META_OBJECTIVES : GOOGLE_OBJECTIVES).map((o) => (
-              <SelectItem key={o.value} value={o.value}>
-                {o.label}
-              </SelectItem>
-            ))}
+            {(platform === "meta" ? META_OBJECTIVES : GOOGLE_OBJECTIVES).map(
+              (o) => (
+                <SelectItem key={o.value} value={o.value}>
+                  {o.label}
+                </SelectItem>
+              ),
+            )}
           </SelectContent>
         </Select>
       </div>
 
       {/* Budget */}
       <div>
-        <label className="mb-1 block text-xs text-muted-foreground">תקציב יומי (₪)</label>
+        <label className="mb-1 block text-xs text-muted-foreground">
+          תקציב יומי (₪)
+        </label>
         <Input
           type="number"
           min="5"
@@ -380,12 +435,20 @@ export function CampaignLauncher({
       {/* Content preview */}
       {(copyText || imageUrl) && (
         <div className="rounded-lg bg-muted/50 p-3">
-          <p className="mb-1 text-xs font-medium text-muted-foreground">תוכן שיצורף לקמפיין</p>
+          <p className="mb-1 text-xs font-medium text-muted-foreground">
+            תוכן שיצורף לקמפיין
+          </p>
           {imageUrl && (
-            <img src={imageUrl} alt="" className="mb-2 h-20 w-full rounded object-cover" />
+            <img
+              src={imageUrl}
+              alt=""
+              className="mb-2 h-20 w-full rounded object-cover"
+            />
           )}
           {copyText && (
-            <p className="line-clamp-3 text-xs text-muted-foreground">{copyText}</p>
+            <p className="line-clamp-3 text-xs text-muted-foreground">
+              {copyText}
+            </p>
           )}
         </div>
       )}
@@ -394,14 +457,21 @@ export function CampaignLauncher({
       <Button
         className="w-full gap-2"
         onClick={handleLaunch}
-        disabled={launching || (filteredAccounts.length > 0 && !selectedAccountId && filteredAccounts.length > 1)}
+        disabled={
+          launching ||
+          (filteredAccounts.length > 0 &&
+            !selectedAccountId &&
+            filteredAccounts.length > 1)
+        }
       >
         {launching ? (
           <Loader2 className="h-4 w-4 animate-spin" />
         ) : (
           <Zap className="h-4 w-4" />
         )}
-        {launching ? "מקים קמפיין..." : `השק קמפיין ${platform === "meta" ? "Meta" : "Google"}`}
+        {launching
+          ? "מקים קמפיין..."
+          : `השק קמפיין ${platform === "meta" ? "Meta" : "Google"}`}
       </Button>
 
       <p className="text-center text-[10px] text-muted-foreground">

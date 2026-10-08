@@ -35,7 +35,10 @@ test("clients use the same unified phone identity filter", () => {
 });
 
 test("entity ids and short numbers never act as a phone identity", () => {
-  assert.equal(normalizeChatThreadPhone("f29112f1-4a1b-4c0e-9a11-76224905317b"), "");
+  assert.equal(
+    normalizeChatThreadPhone("f29112f1-4a1b-4c0e-9a11-76224905317b"),
+    "",
+  );
   assert.equal(normalizeChatThreadPhone("12345"), "");
   assert.equal(
     buildChatThreadFilter({

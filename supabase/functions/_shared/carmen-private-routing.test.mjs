@@ -161,7 +161,10 @@ test("inbound LID digits come from LID fields, never from a real-phone `from`", 
 });
 
 test("payload real phone wins over the LID for the counterpart", () => {
-  assert.equal(pickPayloadRealPhone([null, `${davidLid}@lid`, davidPhone], davidLid), davidPhone);
+  assert.equal(
+    pickPayloadRealPhone([null, `${davidLid}@lid`, davidPhone], davidLid),
+    davidPhone,
+  );
   assert.equal(pickPayloadRealPhone([davidLid], davidLid), "");
 });
 
@@ -191,13 +194,17 @@ test("two WhatsApp accounts on one device never teach wa_lid_map a phone key", (
   // same phone, so Manus mirrors their chat and the Green-API pairing step tried to
   // learn `lid = from`. With a real phone in `from` that produced the poisoned row.
   const learnedFromMirror =
-    pickInboundLidDigits({ fromRaw: davidPhone, chatIdRaw: `${davidLid}@lid`, senderLidRaw: davidLid }) ||
-    davidPhone;
+    pickInboundLidDigits({
+      fromRaw: davidPhone,
+      chatIdRaw: `${davidLid}@lid`,
+      senderLidRaw: davidLid,
+    }) || davidPhone;
   assert.equal(learnedFromMirror, davidLid);
   assert.equal(isUsableLidKey(learnedFromMirror), true);
 
   // No LID field at all: the phone must not be stored as a key.
-  const learnedWithoutLid = pickInboundLidDigits({ fromRaw: davidPhone }) || davidPhone;
+  const learnedWithoutLid =
+    pickInboundLidDigits({ fromRaw: davidPhone }) || davidPhone;
   assert.equal(learnedWithoutLid, davidPhone);
   assert.equal(isUsableLidKey(learnedWithoutLid), false);
 });

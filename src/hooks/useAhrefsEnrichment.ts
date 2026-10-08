@@ -38,15 +38,15 @@ export function useAhrefsEnrichment() {
     country: string,
     accessToken: string,
     anonKey: string,
-    projectId: string
+    projectId: string,
   ): Promise<AhrefsKeyword[]> => {
     const url = `https://${projectId}.supabase.co/functions/v1/ahrefs-auth?action=fetch-keywords`;
     const resp = await fetch(url, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        "Authorization": `Bearer ${accessToken || anonKey}`,
-        "apikey": anonKey,
+        Authorization: `Bearer ${accessToken || anonKey}`,
+        apikey: anonKey,
       },
       body: JSON.stringify({
         target: domain,
@@ -64,9 +64,9 @@ export function useAhrefsEnrichment() {
 
     const result = await resp.json();
     // Handle structured quota-exceeded response (returns 200 with success:false)
-    if (result?.success === false && result?.error === 'quota_exceeded') {
-      const err = new Error(result.message || 'מכסת ה-API של Ahrefs נגמרה');
-      (err as Error & { code?: string }).code = 'quota_exceeded';
+    if (result?.success === false && result?.error === "quota_exceeded") {
+      const err = new Error(result.message || "מכסת ה-API של Ahrefs נגמרה");
+      (err as Error & { code?: string }).code = "quota_exceeded";
       throw err;
     }
     return result.data?.keywords || [];
@@ -76,78 +76,108 @@ export function useAhrefsEnrichment() {
     const map = new Map<string, AhrefsKeyword>();
     for (const kw of keywords) {
       // Ahrefs may return rows with keyword=null (e.g. anonymized/aggregated rows). Skip them.
-      if (!kw || typeof kw.keyword !== 'string' || !kw.keyword.trim()) continue;
+      if (!kw || typeof kw.keyword !== "string" || !kw.keyword.trim()) continue;
       map.set(kw.keyword.toLowerCase().trim(), kw);
     }
     return map;
   };
 
-  const fetchComparisons = useCallback(async (
-    domain: string,
-    reportDate?: string,
-    limit = 1000,
-    country = "il"
-  ) => {
-    setIsLoading(true);
-    try {
-      const projectId = import.meta.env.VITE_SUPABASE_PROJECT_ID;
-      const anonKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
-      const session = (await supabase.auth.getSession()).data.session;
-      const token = session?.access_token || anonKey;
+  const fetchComparisons = useCallback(
+    async (
+      domain: string,
+      reportDate?: string,
+      limit = 1000,
+      country = "il",
+    ) => {
+      setIsLoading(true);
+      try {
+        const projectId = import.meta.env.VITE_SUPABASE_PROJECT_ID;
+        const anonKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
+        const session = (await supabase.auth.getSession()).data.session;
+        const token = session?.access_token || anonKey;
 
-      // Safe base date: never use future dates (Ahrefs has no data for them).
-      // Use the report date if it's in the past, otherwise fall back to 7 days ago
-      // (Ahrefs typically has data with a few days lag).
-      const today = new Date();
-      const safeRecentDate = new Date(today);
-      safeRecentDate.setDate(safeRecentDate.getDate() - 7);
+        // Safe base date: never use future dates (Ahrefs has no data for them).
+        // Use the report date if it's in the past, otherwise fall back to 7 days ago
+        // (Ahrefs typically has data with a few days lag).
+        const today = new Date();
+        const safeRecentDate = new Date(today);
+        safeRecentDate.setDate(safeRecentDate.getDate() - 7);
 
-      let baseDate: Date;
-      if (reportDate) {
-        const reportDateObj = new Date(reportDate);
-        baseDate = reportDateObj > safeRecentDate ? safeRecentDate : reportDateObj;
-      } else {
-        baseDate = safeRecentDate;
+        let baseDate: Date;
+        if (reportDate) {
+          const reportDateObj = new Date(reportDate);
+          baseDate =
+            reportDateObj > safeRecentDate ? safeRecentDate : reportDateObj;
+        } else {
+          baseDate = safeRecentDate;
+        }
+        const currentDate = baseDate.toISOString().split("T")[0];
+
+        // Calculate comparison dates (3 months back and 1 year back from base date)
+        const threeMonthsAgo = new Date(baseDate);
+        threeMonthsAgo.setMonth(threeMonthsAgo.getMonth() - 3);
+        const oneYearAgo = new Date(baseDate);
+        oneYearAgo.setFullYear(oneYearAgo.getFullYear() - 1);
+
+        const date3m = threeMonthsAgo.toISOString().split("T")[0];
+        const date1y = oneYearAgo.toISOString().split("T")[0];
+
+        console.log("[Ahrefs Enrichment] Date range:", {
+          currentDate,
+          date3m,
+          date1y,
+          originalReportDate: reportDate,
+        });
+
+        // Fetch both periods in parallel
+        const [threeMonthKw, yearlyKw] = await Promise.all([
+          fetchKeywordsForPeriod(
+            domain,
+            currentDate,
+            date3m,
+            limit,
+            country,
+            token,
+            anonKey,
+            projectId,
+          ),
+          fetchKeywordsForPeriod(
+            domain,
+            currentDate,
+            date1y,
+            limit,
+            country,
+            token,
+            anonKey,
+            projectId,
+          ),
+        ]);
+
+        const data: AhrefsComparisonData = {
+          threeMonth: buildMap(threeMonthKw),
+          yearly: buildMap(yearlyKw),
+        };
+        setComparisonData(data);
+        toast.success(
+          `סונכרנו ${threeMonthKw.length} ביטויים (3 חודשים + שנה)`,
+        );
+        return data;
+      } catch (err: unknown) {
+        const code = (err as Error & { code?: string })?.code;
+        const message =
+          err instanceof Error ? err.message : "שגיאה בשליפת נתונים מ-Ahrefs";
+        if (code === "quota_exceeded") {
+          toast.error(message, { duration: 6000 });
+        } else {
+          toast.error(message);
+        }
+        return null;
+      } finally {
+        setIsLoading(false);
       }
-      const currentDate = baseDate.toISOString().split("T")[0];
-
-      // Calculate comparison dates (3 months back and 1 year back from base date)
-      const threeMonthsAgo = new Date(baseDate);
-      threeMonthsAgo.setMonth(threeMonthsAgo.getMonth() - 3);
-      const oneYearAgo = new Date(baseDate);
-      oneYearAgo.setFullYear(oneYearAgo.getFullYear() - 1);
-
-      const date3m = threeMonthsAgo.toISOString().split("T")[0];
-      const date1y = oneYearAgo.toISOString().split("T")[0];
-
-      console.log('[Ahrefs Enrichment] Date range:', { currentDate, date3m, date1y, originalReportDate: reportDate });
-
-      // Fetch both periods in parallel
-      const [threeMonthKw, yearlyKw] = await Promise.all([
-        fetchKeywordsForPeriod(domain, currentDate, date3m, limit, country, token, anonKey, projectId),
-        fetchKeywordsForPeriod(domain, currentDate, date1y, limit, country, token, anonKey, projectId),
-      ]);
-
-      const data: AhrefsComparisonData = {
-        threeMonth: buildMap(threeMonthKw),
-        yearly: buildMap(yearlyKw),
-      };
-      setComparisonData(data);
-      toast.success(`סונכרנו ${threeMonthKw.length} ביטויים (3 חודשים + שנה)`);
-      return data;
-    } catch (err: unknown) {
-      const code = (err as Error & { code?: string })?.code;
-      const message = err instanceof Error ? err.message : "שגיאה בשליפת נתונים מ-Ahrefs";
-      if (code === 'quota_exceeded') {
-        toast.error(message, { duration: 6000 });
-      } else {
-        toast.error(message);
-      }
-      return null;
-    } finally {
-      setIsLoading(false);
-    }
-  }, []);
+    },
+    [],
+  );
 
   const resetComparisonData = useCallback(() => {
     setComparisonData({ threeMonth: new Map(), yearly: new Map() });

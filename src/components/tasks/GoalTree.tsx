@@ -7,8 +7,20 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
-import { Target, ChevronDown, ChevronLeft, Plus, CheckCircle2, Pause, X } from "lucide-react";
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "@/components/ui/collapsible";
+import {
+  Target,
+  ChevronDown,
+  ChevronLeft,
+  Plus,
+  CheckCircle2,
+  Pause,
+  X,
+} from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 
@@ -70,13 +82,11 @@ export function GoalTree() {
   const createGoalMutation = useMutation({
     mutationFn: async (parentId?: string) => {
       if (!newGoalTitle.trim() || !tenantId) return;
-      const { error } = await (supabase as any)
-        .from("goals")
-        .insert({
-          tenant_id: tenantId,
-          title: newGoalTitle.trim(),
-          parent_goal_id: parentId || null,
-        });
+      const { error } = await (supabase as any).from("goals").insert({
+        tenant_id: tenantId,
+        title: newGoalTitle.trim(),
+        parent_goal_id: parentId || null,
+      });
       if (error) throw error;
     },
     onSuccess: () => {
@@ -89,7 +99,13 @@ export function GoalTree() {
   });
 
   const updateGoalStatusMutation = useMutation({
-    mutationFn: async ({ goalId, status }: { goalId: string; status: string }) => {
+    mutationFn: async ({
+      goalId,
+      status,
+    }: {
+      goalId: string;
+      status: string;
+    }) => {
       const { error } = await (supabase as any)
         .from("goals")
         .update({ status })
@@ -103,7 +119,7 @@ export function GoalTree() {
   });
 
   const toggleExpand = (goalId: string) => {
-    setExpandedGoals(prev => {
+    setExpandedGoals((prev) => {
       const next = new Set(prev);
       next.has(goalId) ? next.delete(goalId) : next.add(goalId);
       return next;
@@ -111,15 +127,20 @@ export function GoalTree() {
   };
 
   // Build tree
-  const rootGoals = goals.filter(g => !g.parent_goal_id);
-  const getChildren = (parentId: string) => goals.filter(g => g.parent_goal_id === parentId);
+  const rootGoals = goals.filter((g) => !g.parent_goal_id);
+  const getChildren = (parentId: string) =>
+    goals.filter((g) => g.parent_goal_id === parentId);
 
   const getStatusIcon = (status: string) => {
     switch (status) {
-      case "completed": return <CheckCircle2 className="h-4 w-4 text-green-500" />;
-      case "paused": return <Pause className="h-4 w-4 text-yellow-500" />;
-      case "cancelled": return <X className="h-4 w-4 text-red-500" />;
-      default: return <Target className="h-4 w-4 text-primary" />;
+      case "completed":
+        return <CheckCircle2 className="h-4 w-4 text-green-500" />;
+      case "paused":
+        return <Pause className="h-4 w-4 text-yellow-500" />;
+      case "cancelled":
+        return <X className="h-4 w-4 text-red-500" />;
+      default:
+        return <Target className="h-4 w-4 text-primary" />;
     }
   };
 
@@ -127,22 +148,39 @@ export function GoalTree() {
     const children = getChildren(goal.id);
     const isExpanded = expandedGoals.has(goal.id);
     const taskCount = goalTaskCounts[goal.id];
-    const progress = taskCount ? Math.round((taskCount.done / taskCount.total) * 100) : goal.progress_percent || 0;
+    const progress = taskCount
+      ? Math.round((taskCount.done / taskCount.total) * 100)
+      : goal.progress_percent || 0;
 
     return (
-      <div className={cn("space-y-1", depth > 0 && "mr-4 border-r-2 border-muted pr-3")}>
+      <div
+        className={cn(
+          "space-y-1",
+          depth > 0 && "mr-4 border-r-2 border-muted pr-3",
+        )}
+      >
         <div className="flex items-center gap-2 p-2 rounded-lg hover:bg-accent/50 group">
           {children.length > 0 ? (
             <button onClick={() => toggleExpand(goal.id)} className="shrink-0">
-              {isExpanded ? <ChevronDown className="h-4 w-4" /> : <ChevronLeft className="h-4 w-4" />}
+              {isExpanded ? (
+                <ChevronDown className="h-4 w-4" />
+              ) : (
+                <ChevronLeft className="h-4 w-4" />
+              )}
             </button>
           ) : (
             <div className="w-4" />
           )}
-          
+
           {getStatusIcon(goal.status)}
-          
-          <span className={cn("text-sm font-medium flex-1", goal.status === "completed" && "line-through text-muted-foreground")}>
+
+          <span
+            className={cn(
+              "text-sm font-medium flex-1",
+              goal.status === "completed" &&
+                "line-through text-muted-foreground",
+            )}
+          >
             {goal.title}
           </span>
 
@@ -155,15 +193,22 @@ export function GoalTree() {
             <div className="w-16">
               <Progress value={progress} className="h-1.5" />
             </div>
-            <span className="text-[10px] text-muted-foreground w-8">{progress}%</span>
-            
+            <span className="text-[10px] text-muted-foreground w-8">
+              {progress}%
+            </span>
+
             <div className="opacity-0 group-hover:opacity-100 flex gap-1 transition-opacity">
               {goal.status === "active" && (
                 <Button
                   variant="ghost"
                   size="icon"
                   className="h-6 w-6"
-                  onClick={() => updateGoalStatusMutation.mutate({ goalId: goal.id, status: "completed" })}
+                  onClick={() =>
+                    updateGoalStatusMutation.mutate({
+                      goalId: goal.id,
+                      status: "completed",
+                    })
+                  }
                 >
                   <CheckCircle2 className="h-3.5 w-3.5 text-green-500" />
                 </Button>
@@ -173,7 +218,12 @@ export function GoalTree() {
                   variant="ghost"
                   size="icon"
                   className="h-6 w-6"
-                  onClick={() => updateGoalStatusMutation.mutate({ goalId: goal.id, status: "active" })}
+                  onClick={() =>
+                    updateGoalStatusMutation.mutate({
+                      goalId: goal.id,
+                      status: "active",
+                    })
+                  }
                 >
                   <Target className="h-3.5 w-3.5" />
                 </Button>
@@ -184,7 +234,7 @@ export function GoalTree() {
 
         {isExpanded && children.length > 0 && (
           <div className="space-y-1">
-            {children.map(child => (
+            {children.map((child) => (
               <GoalNode key={child.id} goal={child} depth={depth + 1} />
             ))}
           </div>
@@ -202,9 +252,15 @@ export function GoalTree() {
           <CardTitle className="text-base flex items-center gap-2">
             <Target className="h-4 w-4" />
             יעדים
-            <Badge variant="secondary" className="text-xs">{goals.filter(g => g.status === "active").length}</Badge>
+            <Badge variant="secondary" className="text-xs">
+              {goals.filter((g) => g.status === "active").length}
+            </Badge>
           </CardTitle>
-          <Button variant="outline" size="sm" onClick={() => setAddingGoal(!addingGoal)}>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setAddingGoal(!addingGoal)}
+          >
             <Plus className="h-4 w-4 ml-1" />
             יעד חדש
           </Button>
@@ -218,9 +274,15 @@ export function GoalTree() {
               onChange={(e) => setNewGoalTitle(e.target.value)}
               placeholder="שם היעד..."
               className="flex-1"
-              onKeyDown={(e) => e.key === "Enter" && createGoalMutation.mutate(undefined)}
+              onKeyDown={(e) =>
+                e.key === "Enter" && createGoalMutation.mutate(undefined)
+              }
             />
-            <Button size="sm" onClick={() => createGoalMutation.mutate(undefined)} disabled={!newGoalTitle.trim()}>
+            <Button
+              size="sm"
+              onClick={() => createGoalMutation.mutate(undefined)}
+              disabled={!newGoalTitle.trim()}
+            >
               צור
             </Button>
           </div>
@@ -232,7 +294,7 @@ export function GoalTree() {
           </p>
         )}
 
-        {rootGoals.map(goal => (
+        {rootGoals.map((goal) => (
           <GoalNode key={goal.id} goal={goal} />
         ))}
       </CardContent>

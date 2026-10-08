@@ -35,7 +35,11 @@ export async function startRealtimeVoice(
 ): Promise<RealtimeHandle> {
   const pc = new RTCPeerConnection();
   const mic = await navigator.mediaDevices.getUserMedia({
-    audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
+    audio: {
+      echoCancellation: true,
+      noiseSuppression: true,
+      autoGainControl: true,
+    },
   });
   mic.getTracks().forEach((t) => pc.addTrack(t, mic));
 
@@ -59,7 +63,10 @@ export async function startRealtimeVoice(
       if (stopped) return;
       analyser.getByteTimeDomainData(buf);
       let sum = 0;
-      for (let i = 0; i < buf.length; i++) { const v = (buf[i] - 128) / 128; sum += v * v; }
+      for (let i = 0; i < buf.length; i++) {
+        const v = (buf[i] - 128) / 128;
+        sum += v * v;
+      }
       const rms = Math.sqrt(sum / buf.length);
       cb.audioLevelRef.current = Math.min(1, rms * 4);
       const nowSpeaking = rms > 0.015;
@@ -84,17 +91,24 @@ export async function startRealtimeVoice(
     if (stopped || dc.readyState !== "open") return;
     const clean = text.trim().slice(0, 4000);
     if (!clean) return;
-    dc.send(JSON.stringify({
-      type: "response.create",
-      response: {
-        instructions:
-          "Say the following to the user in warm Israeli Hebrew, verbatim, with no extra commentary:\n\n" + clean,
-      },
-    }));
+    dc.send(
+      JSON.stringify({
+        type: "response.create",
+        response: {
+          instructions:
+            "Say the following to the user in warm Israeli Hebrew, verbatim, with no extra commentary:\n\n" +
+            clean,
+        },
+      }),
+    );
   };
   dc.onmessage = async (e) => {
     let ev: any;
-    try { ev = JSON.parse(e.data); } catch { return; }
+    try {
+      ev = JSON.parse(e.data);
+    } catch {
+      return;
+    }
     switch (ev.type) {
       case "response.created":
         responseActive = true;
@@ -102,7 +116,10 @@ export async function startRealtimeVoice(
       // GA and beta event names for the spoken-answer transcript
       case "response.output_audio_transcript.delta":
       case "response.audio_transcript.delta":
-        if (typeof ev.delta === "string") { assistantBuf += ev.delta; cb.onAssistantDelta(ev.delta); }
+        if (typeof ev.delta === "string") {
+          assistantBuf += ev.delta;
+          cb.onAssistantDelta(ev.delta);
+        }
         break;
       case "response.done":
         responseActive = false;
@@ -118,19 +135,34 @@ export async function startRealtimeVoice(
         }
         break;
       case "conversation.item.input_audio_transcription.completed":
-        if (typeof ev.transcript === "string" && ev.transcript.trim()) cb.onUserTranscript(ev.transcript.trim());
+        if (typeof ev.transcript === "string" && ev.transcript.trim())
+          cb.onUserTranscript(ev.transcript.trim());
         break;
       case "response.output_item.done": {
         const item = ev.item;
-        if (item?.type === "function_call" && item.name === "ask_carmen" && !stopped) {
+        if (
+          item?.type === "function_call" &&
+          item.name === "ask_carmen" &&
+          !stopped
+        ) {
           let question = "";
-          try { question = JSON.parse(item.arguments)?.question ?? ""; } catch { /* malformed args */ }
+          try {
+            question = JSON.parse(item.arguments)?.question ?? "";
+          } catch {
+            /* malformed args */
+          }
           const answer = await cb.onToolCall(question);
           if (stopped) break;
-          dc.send(JSON.stringify({
-            type: "conversation.item.create",
-            item: { type: "function_call_output", call_id: item.call_id, output: answer.slice(0, 8000) },
-          }));
+          dc.send(
+            JSON.stringify({
+              type: "conversation.item.create",
+              item: {
+                type: "function_call_output",
+                call_id: item.call_id,
+                output: answer.slice(0, 8000),
+              },
+            }),
+          );
           if (responseActive) pendingResponseCreate = true;
           else dc.send(JSON.stringify({ type: "response.create" }));
         }
@@ -146,29 +178,42 @@ export async function startRealtimeVoice(
   // otherwise the session looks alive while no audio ever flows
   pc.onconnectionstatechange = () => {
     if (stopped) return;
-    if (pc.connectionState === "failed" || pc.connectionState === "disconnected") {
+    if (
+      pc.connectionState === "failed" ||
+      pc.connectionState === "disconnected"
+    ) {
       cb.onError(`WebRTC connection ${pc.connectionState}`);
     }
   };
 
   const offer = await pc.createOffer();
   await pc.setLocalDescription(offer);
-  const resp = await fetch(`https://api.openai.com/v1/realtime/calls?model=${encodeURIComponent(model)}`, {
-    method: "POST",
-    headers: { Authorization: `Bearer ${clientSecret}`, "Content-Type": "application/sdp" },
-    body: offer.sdp,
-  });
+  const resp = await fetch(
+    `https://api.openai.com/v1/realtime/calls?model=${encodeURIComponent(model)}`,
+    {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${clientSecret}`,
+        "Content-Type": "application/sdp",
+      },
+      body: offer.sdp,
+    },
+  );
   if (!resp.ok) {
     const detail = await resp.text().catch(() => "");
     mic.getTracks().forEach((t) => t.stop());
     pc.close();
-    throw new Error(`Realtime handshake failed (${resp.status}): ${detail.slice(0, 300)}`);
+    throw new Error(
+      `Realtime handshake failed (${resp.status}): ${detail.slice(0, 300)}`,
+    );
   }
   await pc.setRemoteDescription({ type: "answer", sdp: await resp.text() });
 
   return {
     setMicMuted: (muted: boolean) => {
-      mic.getAudioTracks().forEach((t) => { t.enabled = !muted; });
+      mic.getAudioTracks().forEach((t) => {
+        t.enabled = !muted;
+      });
     },
     setOutputMuted: (muted: boolean) => {
       audioEl.muted = muted;
@@ -181,8 +226,16 @@ export async function startRealtimeVoice(
     stop: () => {
       stopped = true;
       cancelAnimationFrame(raf);
-      try { dc.close(); } catch { /* already closed */ }
-      try { pc.close(); } catch { /* already closed */ }
+      try {
+        dc.close();
+      } catch {
+        /* already closed */
+      }
+      try {
+        pc.close();
+      } catch {
+        /* already closed */
+      }
       mic.getTracks().forEach((t) => t.stop());
       audioEl.srcObject = null;
       audioCtx?.close().catch(() => {});

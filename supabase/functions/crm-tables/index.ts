@@ -1,11 +1,12 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.75.0";
-import { syncClientCardFromReportTable } from '../_shared/client-report-sync.ts';
+import { syncClientCardFromReportTable } from "../_shared/client-report-sync.ts";
 
 const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-  'Access-Control-Allow-Methods': 'GET, POST, PATCH, DELETE, OPTIONS',
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Headers":
+    "authorization, x-client-info, apikey, content-type",
+  "Access-Control-Allow-Methods": "GET, POST, PATCH, DELETE, OPTIONS",
 };
 
 interface CampaignerScope {
@@ -15,41 +16,48 @@ interface CampaignerScope {
 }
 
 async function userHasSeoScope(admin: any, userId: string): Promise<boolean> {
-  const { data: hasScope, error } = await admin.rpc('user_has_seo_scope', { _user_id: userId });
+  const { data: hasScope, error } = await admin.rpc("user_has_seo_scope", {
+    _user_id: userId,
+  });
   if (!error) return !!hasScope;
 
   const [{ data: seoRole }, { data: isSeoStaff }] = await Promise.all([
     admin
-      .from('user_roles')
-      .select('role')
-      .eq('user_id', userId)
-      .eq('role', 'seo')
+      .from("user_roles")
+      .select("role")
+      .eq("user_id", userId)
+      .eq("role", "seo")
       .limit(1)
       .maybeSingle(),
-    admin.rpc('is_seo_staff', { _user_id: userId }),
+    admin.rpc("is_seo_staff", { _user_id: userId }),
   ]);
   if (seoRole || isSeoStaff) return true;
 
   const { data: profileRow } = await admin
-    .from('profiles')
-    .select('campaigner_id')
-    .eq('id', userId)
+    .from("profiles")
+    .select("campaigner_id")
+    .eq("id", userId)
     .maybeSingle();
   if (!profileRow?.campaigner_id) return false;
 
   const { data: campaignerRow } = await admin
-    .from('campaigners')
-    .select('role')
-    .eq('id', profileRow.campaigner_id)
+    .from("campaigners")
+    .select("role")
+    .eq("id", profileRow.campaigner_id)
     .maybeSingle();
   const tags = Array.isArray(campaignerRow?.role) ? campaignerRow.role : [];
-  return tags.includes('SEO');
+  return tags.includes("SEO");
 }
 
-async function getSeoClientIds(admin: any, userId: string): Promise<Set<string> | null> {
+async function getSeoClientIds(
+  admin: any,
+  userId: string,
+): Promise<Set<string> | null> {
   if (!(await userHasSeoScope(admin, userId))) return null;
 
-  const { data: clientIds } = await admin.rpc('get_user_client_ids', { _user_id: userId });
+  const { data: clientIds } = await admin.rpc("get_user_client_ids", {
+    _user_id: userId,
+  });
   return new Set((clientIds || []).filter(Boolean));
 }
 
@@ -57,32 +65,35 @@ async function getSeoClientIds(admin: any, userId: string): Promise<Set<string> 
 // + the clients they're on (client_team). crm_tables has no INSERT/UPDATE RLS
 // policies for campaigners, so the service-role fallbacks below authorize
 // against this scope explicitly instead of widening RLS.
-async function getCampaignerScope(admin: any, userId: string): Promise<CampaignerScope | null> {
+async function getCampaignerScope(
+  admin: any,
+  userId: string,
+): Promise<CampaignerScope | null> {
   const [{ data: campaignerRole }, { data: profileRow }] = await Promise.all([
     admin
-      .from('user_roles')
-      .select('role')
-      .eq('user_id', userId)
-      .eq('role', 'campaigner')
+      .from("user_roles")
+      .select("role")
+      .eq("user_id", userId)
+      .eq("role", "campaigner")
       .limit(1)
       .maybeSingle(),
     admin
-      .from('profiles')
-      .select('campaigner_id')
-      .eq('id', userId)
+      .from("profiles")
+      .select("campaigner_id")
+      .eq("id", userId)
       .maybeSingle(),
   ]);
   if (!campaignerRole || !profileRow?.campaigner_id) return null;
 
   const [{ data: agencyRows }, { data: teamRows }] = await Promise.all([
     admin
-      .from('campaigner_agencies')
-      .select('agency_id')
-      .eq('campaigner_id', profileRow.campaigner_id),
+      .from("campaigner_agencies")
+      .select("agency_id")
+      .eq("campaigner_id", profileRow.campaigner_id),
     admin
-      .from('client_team')
-      .select('client_id')
-      .eq('campaigner_id', profileRow.campaigner_id),
+      .from("client_team")
+      .select("client_id")
+      .eq("campaigner_id", profileRow.campaigner_id),
   ]);
   return {
     campaignerId: profileRow.campaigner_id,
@@ -91,20 +102,24 @@ async function getCampaignerScope(admin: any, userId: string): Promise<Campaigne
   };
 }
 
-async function isClientInCampaignerScope(admin: any, clientId: string, scope: CampaignerScope): Promise<boolean> {
+async function isClientInCampaignerScope(
+  admin: any,
+  clientId: string,
+  scope: CampaignerScope,
+): Promise<boolean> {
   if (scope.clientIds.has(clientId)) return true;
   const { data: clientRow } = await admin
-    .from('clients')
-    .select('id, agency_id')
-    .eq('id', clientId)
+    .from("clients")
+    .select("id, agency_id")
+    .eq("id", clientId)
     .maybeSingle();
   return !!clientRow?.agency_id && scope.agencyIds.has(clientRow.agency_id);
 }
 
 function serviceRoleClient() {
   return createClient(
-    Deno.env.get('SUPABASE_URL') ?? '',
-    Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
+    Deno.env.get("SUPABASE_URL") ?? "",
+    Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "",
   );
 }
 
@@ -117,103 +132,118 @@ function applyClientIdFilter(query: any, clientIdFilter: string) {
 
 function tableMatchesClientFilter(table: any, clientIdFilter: string): boolean {
   if (!clientIdFilter) return true;
-  const settings = (table?.integration_settings || {}) as Record<string, unknown>;
+  const settings = (table?.integration_settings || {}) as Record<
+    string,
+    unknown
+  >;
   const settingsClientId = settings.clientId ?? settings.client_id;
-  return table?.client_id === clientIdFilter || settingsClientId === clientIdFilter;
+  return (
+    table?.client_id === clientIdFilter || settingsClientId === clientIdFilter
+  );
 }
 
-async function syncClientCardAfterTableChange(tableRow: Record<string, unknown> | null | undefined) {
+async function syncClientCardAfterTableChange(
+  tableRow: Record<string, unknown> | null | undefined,
+) {
   if (!tableRow?.client_id || !tableRow?.integration_type) return;
   try {
     await syncClientCardFromReportTable(serviceRoleClient(), tableRow as any);
   } catch (err) {
-    console.error('[crm-tables] client card sync failed:', err);
+    console.error("[crm-tables] client card sync failed:", err);
   }
 }
 
 serve(async (req) => {
-  if (req.method === 'OPTIONS') {
+  if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
   }
 
   try {
     const supabase = createClient(
-      Deno.env.get('SUPABASE_URL') ?? '',
-      Deno.env.get('SUPABASE_ANON_KEY') ?? '',
+      Deno.env.get("SUPABASE_URL") ?? "",
+      Deno.env.get("SUPABASE_ANON_KEY") ?? "",
       {
         global: {
-          headers: { Authorization: req.headers.get('Authorization')! },
+          headers: { Authorization: req.headers.get("Authorization")! },
         },
-      }
+      },
     );
 
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
+    const {
+      data: { user },
+      error: authError,
+    } = await supabase.auth.getUser();
     if (authError || !user) {
-      return new Response(JSON.stringify({ error: 'Unauthorized' }), {
+      return new Response(JSON.stringify({ error: "Unauthorized" }), {
         status: 401,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
     const url = new URL(req.url);
-    const agencyIdFilter = url.searchParams.get('agency_id');
-    const slugFilter = url.searchParams.get('slug');
-    const clientIdFilter = url.searchParams.get('client_id');
+    const agencyIdFilter = url.searchParams.get("agency_id");
+    const slugFilter = url.searchParams.get("slug");
+    const clientIdFilter = url.searchParams.get("client_id");
 
     switch (req.method) {
-      case 'GET': {
+      case "GET": {
         // Prefer the tenant the client UI is actually showing (validated
         // against membership) over the global user_active_tenant row — that
         // row is shared across the user's devices, so a session on another
         // machine pointing at a different tenant must not scope this one.
         let tenantId: string | null = null;
-        const requestedTenantId = url.searchParams.get('tenant_id');
+        const requestedTenantId = url.searchParams.get("tenant_id");
         if (requestedTenantId) {
           const { data: membership } = await supabase
-            .from('tenant_users')
-            .select('tenant_id')
-            .eq('user_id', user.id)
-            .eq('tenant_id', requestedTenantId)
+            .from("tenant_users")
+            .select("tenant_id")
+            .eq("user_id", user.id)
+            .eq("tenant_id", requestedTenantId)
             .maybeSingle();
           if (membership) tenantId = requestedTenantId;
         }
         if (!tenantId) {
-          const { data: fallbackTenantId } = await supabase
-            .rpc('get_user_tenant_id', { _user_id: user.id });
+          const { data: fallbackTenantId } = await supabase.rpc(
+            "get_user_tenant_id",
+            { _user_id: user.id },
+          );
           tenantId = fallbackTenantId;
         }
 
         // Foreign agencies shared into our tenant
         const { data: sharedAgencies } = await supabase
-          .from('agency_tenant_access')
-          .select('agency_id')
-          .eq('accessing_tenant_id', tenantId);
-        const sharedAgencyIds = sharedAgencies?.map(sa => sa.agency_id) || [];
+          .from("agency_tenant_access")
+          .select("agency_id")
+          .eq("accessing_tenant_id", tenantId);
+        const sharedAgencyIds = sharedAgencies?.map((sa) => sa.agency_id) || [];
 
         // Agencies OWNED by our tenant (to catch tables created in another tenant
         // but linked to one of our agencies — e.g. cross-tenant user added a table
         // from their own tenant context but assigned it to our agency).
         const { data: ownedAgencies } = await supabase
-          .from('agencies')
-          .select('id')
-          .eq('tenant_id', tenantId);
-        const ownedAgencyIds = ownedAgencies?.map(a => a.id) || [];
+          .from("agencies")
+          .select("id")
+          .eq("tenant_id", tenantId);
+        const ownedAgencyIds = ownedAgencies?.map((a) => a.id) || [];
 
         let allTables: any[] = [];
 
         // 1) Tables from user's own tenant
         let ownQuery = supabase
-          .from('crm_tables')
-          .select('*')
-          .eq('tenant_id', tenantId)
-          .order('category', { ascending: true, nullsFirst: false })
-          .order('created_at', { ascending: false });
+          .from("crm_tables")
+          .select("*")
+          .eq("tenant_id", tenantId)
+          .order("category", { ascending: true, nullsFirst: false })
+          .order("created_at", { ascending: false });
 
-        if (agencyIdFilter && agencyIdFilter !== 'all') {
-          ownQuery = ownQuery.or(`agency_id.eq.${agencyIdFilter},agency_id.is.null`);
+        if (agencyIdFilter && agencyIdFilter !== "all") {
+          ownQuery = ownQuery.or(
+            `agency_id.eq.${agencyIdFilter},agency_id.is.null`,
+          );
         }
-        if (slugFilter) ownQuery = ownQuery.eq('slug', slugFilter);
-        if (clientIdFilter) ownQuery = applyClientIdFilter(ownQuery, clientIdFilter);
+        if (slugFilter) ownQuery = ownQuery.eq("slug", slugFilter);
+        if (clientIdFilter)
+          ownQuery = applyClientIdFilter(ownQuery, clientIdFilter);
 
         const { data: ownTables, error: ownError } = await ownQuery;
         if (ownError) throw ownError;
@@ -222,22 +252,23 @@ serve(async (req) => {
         // 2) Tables in foreign tenants from shared agencies
         if (sharedAgencyIds.length > 0) {
           let sharedQuery = supabase
-            .from('crm_tables')
-            .select('*')
-            .neq('tenant_id', tenantId)
-            .in('agency_id', sharedAgencyIds)
-            .order('category', { ascending: true, nullsFirst: false })
-            .order('created_at', { ascending: false });
+            .from("crm_tables")
+            .select("*")
+            .neq("tenant_id", tenantId)
+            .in("agency_id", sharedAgencyIds)
+            .order("category", { ascending: true, nullsFirst: false })
+            .order("created_at", { ascending: false });
 
-          if (agencyIdFilter && agencyIdFilter !== 'all') {
-            sharedQuery = sharedQuery.eq('agency_id', agencyIdFilter);
+          if (agencyIdFilter && agencyIdFilter !== "all") {
+            sharedQuery = sharedQuery.eq("agency_id", agencyIdFilter);
           }
-          if (slugFilter) sharedQuery = sharedQuery.eq('slug', slugFilter);
-          if (clientIdFilter) sharedQuery = applyClientIdFilter(sharedQuery, clientIdFilter);
+          if (slugFilter) sharedQuery = sharedQuery.eq("slug", slugFilter);
+          if (clientIdFilter)
+            sharedQuery = applyClientIdFilter(sharedQuery, clientIdFilter);
 
           const { data: sharedTables, error: sharedError } = await sharedQuery;
           if (sharedError) {
-            console.error('Error fetching shared tables:', sharedError);
+            console.error("Error fetching shared tables:", sharedError);
           } else if (sharedTables) {
             allTables = [...allTables, ...sharedTables];
           }
@@ -246,22 +277,34 @@ serve(async (req) => {
         // 3) Tables in foreign tenants linked to agencies WE own
         if (ownedAgencyIds.length > 0) {
           let ownedForeignQuery = supabase
-            .from('crm_tables')
-            .select('*')
-            .neq('tenant_id', tenantId)
-            .in('agency_id', ownedAgencyIds)
-            .order('category', { ascending: true, nullsFirst: false })
-            .order('created_at', { ascending: false });
+            .from("crm_tables")
+            .select("*")
+            .neq("tenant_id", tenantId)
+            .in("agency_id", ownedAgencyIds)
+            .order("category", { ascending: true, nullsFirst: false })
+            .order("created_at", { ascending: false });
 
-          if (agencyIdFilter && agencyIdFilter !== 'all') {
-            ownedForeignQuery = ownedForeignQuery.eq('agency_id', agencyIdFilter);
+          if (agencyIdFilter && agencyIdFilter !== "all") {
+            ownedForeignQuery = ownedForeignQuery.eq(
+              "agency_id",
+              agencyIdFilter,
+            );
           }
-          if (slugFilter) ownedForeignQuery = ownedForeignQuery.eq('slug', slugFilter);
-          if (clientIdFilter) ownedForeignQuery = applyClientIdFilter(ownedForeignQuery, clientIdFilter);
+          if (slugFilter)
+            ownedForeignQuery = ownedForeignQuery.eq("slug", slugFilter);
+          if (clientIdFilter)
+            ownedForeignQuery = applyClientIdFilter(
+              ownedForeignQuery,
+              clientIdFilter,
+            );
 
-          const { data: ownedForeignTables, error: ownedForeignError } = await ownedForeignQuery;
+          const { data: ownedForeignTables, error: ownedForeignError } =
+            await ownedForeignQuery;
           if (ownedForeignError) {
-            console.error('Error fetching owned-agency foreign tables:', ownedForeignError);
+            console.error(
+              "Error fetching owned-agency foreign tables:",
+              ownedForeignError,
+            );
           } else if (ownedForeignTables) {
             allTables = [...allTables, ...ownedForeignTables];
           }
@@ -270,31 +313,48 @@ serve(async (req) => {
         // 4) Foreign-tenant tables linked (by client_id) to a client whose agency
         // is owned-by or shared-with our tenant — covers rows where the table's
         // own agency_id is NULL but the client clearly belongs to one of our agencies.
-        const accessibleAgencyIds = Array.from(new Set([...ownedAgencyIds, ...sharedAgencyIds]));
+        const accessibleAgencyIds = Array.from(
+          new Set([...ownedAgencyIds, ...sharedAgencyIds]),
+        );
         if (accessibleAgencyIds.length > 0) {
           const { data: relevantClients, error: clientsErr } = await supabase
-            .from('clients')
-            .select('id')
-            .in('agency_id', accessibleAgencyIds);
+            .from("clients")
+            .select("id")
+            .in("agency_id", accessibleAgencyIds);
           if (clientsErr) {
-            console.error('Error fetching clients for foreign-by-client lookup:', clientsErr);
+            console.error(
+              "Error fetching clients for foreign-by-client lookup:",
+              clientsErr,
+            );
           } else {
             const clientIds = (relevantClients || []).map((c: any) => c.id);
             if (clientIds.length > 0) {
               let foreignByClientQuery = supabase
-                .from('crm_tables')
-                .select('*')
-                .neq('tenant_id', tenantId)
-                .in('client_id', clientIds)
-                .order('category', { ascending: true, nullsFirst: false })
-                .order('created_at', { ascending: false });
+                .from("crm_tables")
+                .select("*")
+                .neq("tenant_id", tenantId)
+                .in("client_id", clientIds)
+                .order("category", { ascending: true, nullsFirst: false })
+                .order("created_at", { ascending: false });
 
-              if (slugFilter) foreignByClientQuery = foreignByClientQuery.eq('slug', slugFilter);
-              if (clientIdFilter) foreignByClientQuery = applyClientIdFilter(foreignByClientQuery, clientIdFilter);
+              if (slugFilter)
+                foreignByClientQuery = foreignByClientQuery.eq(
+                  "slug",
+                  slugFilter,
+                );
+              if (clientIdFilter)
+                foreignByClientQuery = applyClientIdFilter(
+                  foreignByClientQuery,
+                  clientIdFilter,
+                );
 
-              const { data: foreignByClient, error: foreignByClientErr } = await foreignByClientQuery;
+              const { data: foreignByClient, error: foreignByClientErr } =
+                await foreignByClientQuery;
               if (foreignByClientErr) {
-                console.error('Error fetching foreign tables by client:', foreignByClientErr);
+                console.error(
+                  "Error fetching foreign tables by client:",
+                  foreignByClientErr,
+                );
               } else if (foreignByClient) {
                 allTables = [...allTables, ...foreignByClient];
               }
@@ -304,39 +364,51 @@ serve(async (req) => {
 
         // Dedupe by id; when scoping to a client, keep legacy settings-only links too.
         const seen = new Set<string>();
-        allTables = allTables.filter(t => {
-          if (clientIdFilter && !tableMatchesClientFilter(t, clientIdFilter)) return false;
+        allTables = allTables.filter((t) => {
+          if (clientIdFilter && !tableMatchesClientFilter(t, clientIdFilter))
+            return false;
           if (seen.has(t.id)) return false;
           seen.add(t.id);
           return true;
         });
 
         return new Response(JSON.stringify(allTables), {
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
 
-      case 'POST': {
+      case "POST": {
         const body = await req.json();
-        const { name, slug, description, icon, category, integration_type, integration_settings } = body;
+        const {
+          name,
+          slug,
+          description,
+          icon,
+          category,
+          integration_type,
+          integration_settings,
+        } = body;
         let agency_id = body.agency_id ?? body.agencyId ?? null;
         let client_id = body.client_id ?? body.clientId ?? null;
 
         // If client provided but agency missing, derive agency from client
         if (!agency_id && client_id) {
           const { data: clientRow } = await supabase
-            .from('clients')
-            .select('agency_id')
-            .eq('id', client_id)
+            .from("clients")
+            .select("agency_id")
+            .eq("id", client_id)
             .maybeSingle();
           agency_id = clientRow?.agency_id ?? null;
         }
 
         if (!name || !slug) {
-          return new Response(JSON.stringify({ error: 'Name and slug are required' }), {
-            status: 400,
-            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-          });
+          return new Response(
+            JSON.stringify({ error: "Name and slug are required" }),
+            {
+              status: 400,
+              headers: { ...corsHeaders, "Content-Type": "application/json" },
+            },
+          );
         }
 
         // Resolve tenant_id: prefer the owning tenant of the selected agency, so a table
@@ -345,23 +417,27 @@ serve(async (req) => {
         let tenantId: string | null = null;
         if (agency_id) {
           const { data: agencyRow } = await supabase
-            .from('agencies')
-            .select('tenant_id')
-            .eq('id', agency_id)
+            .from("agencies")
+            .select("tenant_id")
+            .eq("id", agency_id)
             .maybeSingle();
           tenantId = agencyRow?.tenant_id ?? null;
         }
         if (!tenantId) {
-          const { data: fallbackTenantId, error: tenantError } = await supabase
-            .rpc('get_user_tenant_id', { _user_id: user.id });
+          const { data: fallbackTenantId, error: tenantError } =
+            await supabase.rpc("get_user_tenant_id", { _user_id: user.id });
           if (tenantError || !fallbackTenantId) {
-            console.error('Tenant lookup error:', tenantError);
-            return new Response(JSON.stringify({
-              error: 'User tenant not found. Please ensure you are assigned to a tenant.'
-            }), {
-              status: 400,
-              headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-            });
+            console.error("Tenant lookup error:", tenantError);
+            return new Response(
+              JSON.stringify({
+                error:
+                  "User tenant not found. Please ensure you are assigned to a tenant.",
+              }),
+              {
+                status: 400,
+                headers: { ...corsHeaders, "Content-Type": "application/json" },
+              },
+            );
           }
           tenantId = fallbackTenantId;
         }
@@ -381,7 +457,7 @@ serve(async (req) => {
         };
 
         const { data: table, error } = await supabase
-          .from('crm_tables')
+          .from("crm_tables")
           .insert(insertPayload)
           .select()
           .single();
@@ -389,7 +465,7 @@ serve(async (req) => {
         if (!error) {
           await syncClientCardAfterTableChange(table);
           return new Response(JSON.stringify(table), {
-            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
           });
         }
 
@@ -398,52 +474,63 @@ serve(async (req) => {
         // verify explicitly and insert with the service role.
         const admin = serviceRoleClient();
         const scope = await getCampaignerScope(admin, user.id);
-        const seoClientIds = scope ? null : await getSeoClientIds(admin, user.id);
+        const seoClientIds = scope
+          ? null
+          : await getSeoClientIds(admin, user.id);
 
         if (!scope && !seoClientIds) throw error;
 
         const inScope = scope
-          ? (
-            (client_id && (await isClientInCampaignerScope(admin, client_id, scope))) ||
+          ? (client_id &&
+              (await isClientInCampaignerScope(admin, client_id, scope))) ||
             (agency_id && scope.agencyIds.has(agency_id))
-          )
-          : (
-            (client_id && seoClientIds!.has(client_id)) ||
-            false
-          );
+          : (client_id && seoClientIds!.has(client_id)) || false;
         if (!inScope) {
-          return new Response(JSON.stringify({
-            error: 'אין לך הרשאה ליצור טבלה שאינה משויכת ללקוח או לסוכנות שלך',
-          }), {
-            status: 403,
-            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-          });
+          return new Response(
+            JSON.stringify({
+              error:
+                "אין לך הרשאה ליצור טבלה שאינה משויכת ללקוח או לסוכנות שלך",
+            }),
+            {
+              status: 403,
+              headers: { ...corsHeaders, "Content-Type": "application/json" },
+            },
+          );
         }
 
-        const { data: campaignerTable, error: campaignerInsertError } = await admin
-          .from('crm_tables')
-          .insert(insertPayload)
-          .select()
-          .single();
+        const { data: campaignerTable, error: campaignerInsertError } =
+          await admin
+            .from("crm_tables")
+            .insert(insertPayload)
+            .select()
+            .single();
         if (campaignerInsertError) throw campaignerInsertError;
 
         await syncClientCardAfterTableChange(campaignerTable);
         return new Response(JSON.stringify(campaignerTable), {
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
 
-      case 'PATCH': {
+      case "PATCH": {
         const body = await req.json();
-        const { name, slug, description, icon, category, integration_settings, campaign_active } = body;
+        const {
+          name,
+          slug,
+          description,
+          icon,
+          category,
+          integration_settings,
+          campaign_active,
+        } = body;
         const table_id = body.table_id ?? body.tableId;
         const agency_id = body.agency_id ?? body.agencyId;
         const client_id = body.client_id ?? body.clientId;
 
         if (!table_id) {
-          return new Response(JSON.stringify({ error: 'Table ID required' }), {
+          return new Response(JSON.stringify({ error: "Table ID required" }), {
             status: 400,
-            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
           });
         }
 
@@ -455,15 +542,18 @@ serve(async (req) => {
         if (category !== undefined) updateData.category = category;
         if (agency_id !== undefined) updateData.agency_id = agency_id || null;
         if (client_id !== undefined) updateData.client_id = client_id || null;
-        if (campaign_active !== undefined) updateData.campaign_active = !!campaign_active;
+        if (campaign_active !== undefined)
+          updateData.campaign_active = !!campaign_active;
         let existingSettings: Record<string, unknown> = {};
         if (integration_settings !== undefined || client_id !== undefined) {
           const { data: existingTable } = await supabase
-            .from('crm_tables')
-            .select('integration_settings')
-            .eq('id', table_id)
+            .from("crm_tables")
+            .select("integration_settings")
+            .eq("id", table_id)
             .single();
-          existingSettings = (existingTable?.integration_settings as Record<string, unknown>) || {};
+          existingSettings =
+            (existingTable?.integration_settings as Record<string, unknown>) ||
+            {};
         }
 
         if (integration_settings !== undefined) {
@@ -481,17 +571,19 @@ serve(async (req) => {
           };
         } else if (client_id === undefined && updateData.integration_settings) {
           const settingsClientId =
-            (updateData.integration_settings as Record<string, unknown>).clientId
-            ?? (updateData.integration_settings as Record<string, unknown>).client_id;
-          if (typeof settingsClientId === 'string' && settingsClientId) {
+            (updateData.integration_settings as Record<string, unknown>)
+              .clientId ??
+            (updateData.integration_settings as Record<string, unknown>)
+              .client_id;
+          if (typeof settingsClientId === "string" && settingsClientId) {
             updateData.client_id = settingsClientId;
           }
         }
 
         const { data: table, error } = await supabase
-          .from('crm_tables')
+          .from("crm_tables")
           .update(updateData)
-          .eq('id', table_id)
+          .eq("id", table_id)
           .select()
           .maybeSingle();
 
@@ -500,7 +592,7 @@ serve(async (req) => {
         if (table) {
           await syncClientCardAfterTableChange(table);
           return new Response(JSON.stringify({ table }), {
-            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
           });
         }
 
@@ -510,53 +602,56 @@ serve(async (req) => {
         // before applying the narrow update with the service role.
         const isScopedTableUpdate =
           (client_id !== undefined || campaign_active !== undefined) &&
-          name === undefined && slug === undefined && description === undefined &&
-          icon === undefined && category === undefined &&
-          integration_settings === undefined && agency_id === undefined;
+          name === undefined &&
+          slug === undefined &&
+          description === undefined &&
+          icon === undefined &&
+          category === undefined &&
+          integration_settings === undefined &&
+          agency_id === undefined;
 
         const forbidden = (msg: string) =>
           new Response(JSON.stringify({ error: msg }), {
             status: 403,
-            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
           });
 
         if (!isScopedTableUpdate) {
-          return forbidden('אין לך הרשאה לעדכן את הטבלה הזו');
+          return forbidden("אין לך הרשאה לעדכן את הטבלה הזו");
         }
 
         const admin = serviceRoleClient();
 
         const { data: tableRow, error: tableErr } = await admin
-          .from('crm_tables')
-          .select('id, tenant_id, agency_id, client_id')
-          .eq('id', table_id)
+          .from("crm_tables")
+          .select("id, tenant_id, agency_id, client_id")
+          .eq("id", table_id)
           .maybeSingle();
         if (tableErr) throw tableErr;
         if (!tableRow) {
-          return new Response(JSON.stringify({ error: 'Table not found' }), {
+          return new Response(JSON.stringify({ error: "Table not found" }), {
             status: 404,
-            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
           });
         }
 
         const scope = await getCampaignerScope(admin, user.id);
-        const seoClientIds = scope ? null : await getSeoClientIds(admin, user.id);
+        const seoClientIds = scope
+          ? null
+          : await getSeoClientIds(admin, user.id);
         if (!scope && !seoClientIds) {
-          return forbidden('אין לך הרשאה לעדכן את הטבלה הזו');
+          return forbidden("אין לך הרשאה לעדכן את הטבלה הזו");
         }
 
         const canTouchTable = scope
-          ? (
-            (tableRow.client_id && scope.clientIds.has(tableRow.client_id)) ||
+          ? (tableRow.client_id && scope.clientIds.has(tableRow.client_id)) ||
             (tableRow.agency_id && scope.agencyIds.has(tableRow.agency_id)) ||
             (!tableRow.client_id && !tableRow.agency_id)
-          )
-          : (
-            !tableRow.client_id || seoClientIds!.has(tableRow.client_id)
-          );
+          : !tableRow.client_id || seoClientIds!.has(tableRow.client_id);
 
         // When linking, the target client must also be within their scope.
-        const newClientId = client_id === undefined ? tableRow.client_id : (client_id || null);
+        const newClientId =
+          client_id === undefined ? tableRow.client_id : client_id || null;
         let canTouchTarget = true;
         if (client_id !== undefined && newClientId) {
           canTouchTarget = scope
@@ -565,59 +660,59 @@ serve(async (req) => {
         }
 
         if (!canTouchTable || !canTouchTarget) {
-          return forbidden('אין לך הרשאה לעדכן את הטבלה הזו');
+          return forbidden("אין לך הרשאה לעדכן את הטבלה הזו");
         }
 
         const { data: linkedTable, error: linkErr } = await admin
-          .from('crm_tables')
+          .from("crm_tables")
           .update(updateData)
-          .eq('id', table_id)
+          .eq("id", table_id)
           .select()
           .single();
         if (linkErr) throw linkErr;
 
         await syncClientCardAfterTableChange(linkedTable);
         return new Response(JSON.stringify({ table: linkedTable }), {
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
 
-      case 'DELETE': {
+      case "DELETE": {
         const body = await req.json();
         const { table_id } = body;
-        
+
         if (!table_id) {
-          return new Response(JSON.stringify({ error: 'Table ID required' }), {
+          return new Response(JSON.stringify({ error: "Table ID required" }), {
             status: 400,
-            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
           });
         }
 
         const { error } = await supabase
-          .from('crm_tables')
+          .from("crm_tables")
           .delete()
-          .eq('id', table_id);
+          .eq("id", table_id);
 
         if (error) throw error;
 
-
         return new Response(JSON.stringify({ success: true }), {
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
 
       default:
-        return new Response(JSON.stringify({ error: 'Method not allowed' }), {
+        return new Response(JSON.stringify({ error: "Method not allowed" }), {
           status: 405,
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
     }
   } catch (error) {
-    console.error('Error in crm-tables function:', error);
-    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    console.error("Error in crm-tables function:", error);
+    const errorMessage =
+      error instanceof Error ? error.message : "Unknown error";
     return new Response(JSON.stringify({ error: errorMessage }), {
       status: 500,
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   }
 });

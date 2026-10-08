@@ -4,17 +4,33 @@
  */
 
 import { mcpRequestDevTask } from "./cursor-task-queue.ts";
-import { trackCursorTaskSession, cursorSessionDisplayName } from "./cursor-session-tracker.ts";
+import {
+  trackCursorTaskSession,
+  cursorSessionDisplayName,
+} from "./cursor-session-tracker.ts";
 
 export const DEV_TASK_STATUSES = [
-  "draft", "approved", "sent_to_cursor", "in_progress", "blocked",
-  "pr_opened", "ready_for_review", "done", "cancelled",
+  "draft",
+  "approved",
+  "sent_to_cursor",
+  "in_progress",
+  "blocked",
+  "pr_opened",
+  "ready_for_review",
+  "done",
+  "cancelled",
 ] as const;
 
-export type DevTaskStatus = typeof DEV_TASK_STATUSES[number];
+export type DevTaskStatus = (typeof DEV_TASK_STATUSES)[number];
 
 export const OPEN_DEV_STATUSES: DevTaskStatus[] = [
-  "draft", "approved", "sent_to_cursor", "in_progress", "blocked", "pr_opened", "ready_for_review",
+  "draft",
+  "approved",
+  "sent_to_cursor",
+  "in_progress",
+  "blocked",
+  "pr_opened",
+  "ready_for_review",
 ];
 
 export type DevTaskBrief = {
@@ -62,7 +78,9 @@ export function normalizeTitle(title: string): string {
     .trim();
 }
 
-export function extractDevTaskId(context: string | null | undefined): string | null {
+export function extractDevTaskId(
+  context: string | null | undefined,
+): string | null {
   const m = String(context || "").match(/dev_task_id:\s*([0-9a-f-]{36})/i);
   return m ? m[1] : null;
 }
@@ -96,7 +114,9 @@ export function matchDispatchRowToDevTask(
   const ctxId = extractDevTaskId(row.context);
   if (ctxId && ctxId === taskId) return true;
   if (ctxId && ctxId !== taskId) return false;
-  return normalizeTitle(String(row.request_text || "")) === normalizeTitle(taskTitle);
+  return (
+    normalizeTitle(String(row.request_text || "")) === normalizeTitle(taskTitle)
+  );
 }
 
 export function matchSessionRowToDevTask(
@@ -110,7 +130,9 @@ export function matchSessionRowToDevTask(
   if (linked && linked !== taskId) return false;
   if (linked === taskId) return true;
   const titleNorm = normalizeTitle(taskTitle);
-  const display = normalizeTitle(String(row.display_name || "").replace(/^aios\s*·\s*/i, ""));
+  const display = normalizeTitle(
+    String(row.display_name || "").replace(/^aios\s*·\s*/i, ""),
+  );
   const taskTitleField = normalizeTitle(String(row.task_title || ""));
   return display === titleNorm || taskTitleField === titleNorm;
 }
@@ -130,7 +152,9 @@ function sleep(ms: number): Promise<void> {
 
 function isDispatchTimeoutError(message: string): boolean {
   const m = message.toLowerCase();
-  return m.includes("timeout") || m.includes("timed out") || m.includes("aborterror");
+  return (
+    m.includes("timeout") || m.includes("timed out") || m.includes("aborterror")
+  );
 }
 
 /** After a dispatch tool error, verify Cursor actually received the task via durable logs. */
@@ -153,7 +177,12 @@ export async function reconcileDevTaskCursorDelivery(
 
 async function tryReconcileDevTaskCursorDeliveryOnce(
   supabase: { from: (t: string) => any },
-  args: { tenantId: string; taskId: string; taskTitle: string; sinceIso: string },
+  args: {
+    tenantId: string;
+    taskId: string;
+    taskTitle: string;
+    sinceIso: string;
+  },
 ): Promise<ReconciledCursorDelivery | null> {
   const { tenantId, taskId, taskTitle, sinceIso } = args;
 
@@ -167,12 +196,19 @@ async function tryReconcileDevTaskCursorDeliveryOnce(
     .order("created_at", { ascending: false })
     .limit(25);
   if (dispErr) {
-    console.warn("[dev-tasks] reconcile cursor_dispatches query failed:", dispErr.message);
+    console.warn(
+      "[dev-tasks] reconcile cursor_dispatches query failed:",
+      dispErr.message,
+    );
   } else {
     for (const row of dispatches || []) {
-      if (!matchDispatchRowToDevTask(row as CursorDispatchRow, taskId, taskTitle)) continue;
+      if (
+        !matchDispatchRowToDevTask(row as CursorDispatchRow, taskId, taskTitle)
+      )
+        continue;
       const cursorAgentId = String(row.cursor_agent_id || "").trim();
-      const sessionUrl = String(row.session_url || "").trim() ||
+      const sessionUrl =
+        String(row.session_url || "").trim() ||
         `https://cursor.com/agents/${cursorAgentId}`;
       return { cursorAgentId, sessionUrl, source: "cursor_dispatches" };
     }
@@ -180,22 +216,30 @@ async function tryReconcileDevTaskCursorDeliveryOnce(
 
   const { data: sessions, error: sessErr } = await supabase
     .from("cursor_task_sessions")
-    .select("cursor_agent_id, session_url, display_name, task_title, dev_task_id, source_tool, created_at")
+    .select(
+      "cursor_agent_id, session_url, display_name, task_title, dev_task_id, source_tool, created_at",
+    )
     .eq("tenant_id", tenantId)
     .gte("created_at", sinceIso)
     .order("created_at", { ascending: false })
     .limit(25);
   if (sessErr) {
-    console.warn("[dev-tasks] reconcile cursor_task_sessions query failed:", sessErr.message);
+    console.warn(
+      "[dev-tasks] reconcile cursor_task_sessions query failed:",
+      sessErr.message,
+    );
     return null;
   }
 
   for (const row of sessions || []) {
     const tool = String((row as CursorSessionRow).source_tool || "");
-    if (tool && tool !== "request_dev_task" && tool !== "dev-task-center") continue;
-    if (!matchSessionRowToDevTask(row as CursorSessionRow, taskId, taskTitle)) continue;
+    if (tool && tool !== "request_dev_task" && tool !== "dev-task-center")
+      continue;
+    if (!matchSessionRowToDevTask(row as CursorSessionRow, taskId, taskTitle))
+      continue;
     const cursorAgentId = String(row.cursor_agent_id || "").trim();
-    const sessionUrl = String(row.session_url || "").trim() ||
+    const sessionUrl =
+      String(row.session_url || "").trim() ||
       `https://cursor.com/agents/${cursorAgentId}`;
     return { cursorAgentId, sessionUrl, source: "cursor_task_sessions" };
   }
@@ -243,31 +287,49 @@ function buildDispatchUserStatus(args: {
 
 /** Jaccard word overlap — simple dedup without embeddings. */
 export function titleSimilarity(a: string, b: string): number {
-  const wa = new Set(normalizeTitle(a).split(" ").filter((w) => w.length > 2));
-  const wb = new Set(normalizeTitle(b).split(" ").filter((w) => w.length > 2));
-  if (!wa.size || !wb.size) return normalizeTitle(a) === normalizeTitle(b) ? 1 : 0;
+  const wa = new Set(
+    normalizeTitle(a)
+      .split(" ")
+      .filter((w) => w.length > 2),
+  );
+  const wb = new Set(
+    normalizeTitle(b)
+      .split(" ")
+      .filter((w) => w.length > 2),
+  );
+  if (!wa.size || !wb.size)
+    return normalizeTitle(a) === normalizeTitle(b) ? 1 : 0;
   let inter = 0;
   for (const w of wa) if (wb.has(w)) inter++;
   return inter / Math.max(wa.size, wb.size);
 }
 
-export function buildDevTaskPrompt(task: DevTaskRow): { task: string; context: string } {
+export function buildDevTaskPrompt(task: DevTaskRow): {
+  task: string;
+  context: string;
+} {
   const lines = [
     task.title,
     task.problem ? `Problem:\n${task.problem}` : "",
     task.current_behavior ? `Current behavior:\n${task.current_behavior}` : "",
-    task.expected_behavior ? `Expected behavior:\n${task.expected_behavior}` : "",
+    task.expected_behavior
+      ? `Expected behavior:\n${task.expected_behavior}`
+      : "",
     task.scope ? `Scope:\n${task.scope}` : "",
     task.affected_areas ? `Likely areas:\n${task.affected_areas}` : "",
     task.constraints ? `Constraints:\n${task.constraints}` : "",
-    task.acceptance_criteria ? `Acceptance criteria:\n${task.acceptance_criteria}` : "",
+    task.acceptance_criteria
+      ? `Acceptance criteria:\n${task.acceptance_criteria}`
+      : "",
   ].filter(Boolean);
 
   return {
     task: task.title,
     context: [
       `dev_task_id: ${task.id}`,
-      task.source_conversation_id ? `conversation_id: ${task.source_conversation_id}` : "",
+      task.source_conversation_id
+        ? `conversation_id: ${task.source_conversation_id}`
+        : "",
       `Base branch: ${task.base_branch || "develop"}`,
       `Environment: ${task.environment || "staging"}`,
       `Requested by: ${task.requested_by || "Carmen"}`,
@@ -317,7 +379,10 @@ export async function findDuplicateDevTasks(
     .limit(50);
   if (error) throw error;
   return (data || [])
-    .map((row: DevTaskRow) => ({ task: row, score: titleSimilarity(title, row.title) }))
+    .map((row: DevTaskRow) => ({
+      task: row,
+      score: titleSimilarity(title, row.title),
+    }))
     .filter((x: { score: number }) => x.score >= threshold)
     .sort((a: { score: number }, b: { score: number }) => b.score - a.score);
 }
@@ -360,7 +425,11 @@ export async function createDevTask(
     goal_id: args.goalId ?? null,
     brief: args.brief,
   };
-  const { data, error } = await supabase.from("dev_tasks").insert(row).select("*").single();
+  const { data, error } = await supabase
+    .from("dev_tasks")
+    .insert(row)
+    .select("*")
+    .single();
   if (error) throw error;
   await logDevTaskEvent(supabase, {
     devTaskId: data.id,
@@ -426,12 +495,15 @@ export async function dispatchDevTask(
 
   const agent = String(task.assigned_agent || "cursor").toLowerCase();
   if (agent !== "cursor") {
-    throw new Error(`Dispatch for agent "${agent}" is not wired yet — use cursor or update manually.`);
+    throw new Error(
+      `Dispatch for agent "${agent}" is not wired yet — use cursor or update manually.`,
+    );
   }
 
   const supabaseUrl = Deno.env.get("SUPABASE_URL") || "";
   const bearer = Deno.env.get("CURSOR_MCP_BEARER") || "";
-  if (!supabaseUrl || !bearer) throw new Error("SUPABASE_URL / CURSOR_MCP_BEARER missing");
+  if (!supabaseUrl || !bearer)
+    throw new Error("SUPABASE_URL / CURSOR_MCP_BEARER missing");
 
   const { task: prompt, context } = buildDevTaskPrompt(task as DevTaskRow);
   const dispatchStartedAt = new Date(Date.now() - 60_000).toISOString();
@@ -460,7 +532,10 @@ export async function dispatchDevTask(
   } catch (e: unknown) {
     dispatchError = e instanceof Error ? e.message : String(e);
     timedOut = isDispatchTimeoutError(dispatchError);
-    console.warn("[dev-tasks] dispatch error (may reconcile later):", dispatchError);
+    console.warn(
+      "[dev-tasks] dispatch error (may reconcile later):",
+      dispatchError,
+    );
   }
 
   if (!cursorAgentId && dispatchError) {
@@ -483,9 +558,10 @@ export async function dispatchDevTask(
 
   const delivered = Boolean(cursorAgentId);
   const verificationFailed = Boolean(dispatchError && !delivered);
-  const dispatchErrorStored = delivered && dispatchError
-    ? `[verified_delivered] ${dispatchError}`
-    : dispatchError;
+  const dispatchErrorStored =
+    delivered && dispatchError
+      ? `[verified_delivered] ${dispatchError}`
+      : dispatchError;
 
   const patch: Record<string, unknown> = {
     status: delivered ? "sent_to_cursor" : "approved",
@@ -495,7 +571,8 @@ export async function dispatchDevTask(
   };
   if (cursorAgentId) {
     patch.cursor_session_id = cursorAgentId;
-    patch.cursor_session_url = sessionUrl || `https://cursor.com/agents/${cursorAgentId}`;
+    patch.cursor_session_url =
+      sessionUrl || `https://cursor.com/agents/${cursorAgentId}`;
   }
 
   const { data: updated, error: upErr } = await supabase
@@ -512,7 +589,10 @@ export async function dispatchDevTask(
       tenantId: args.tenantId,
       cursorAgentId,
       sessionUrl: patch.cursor_session_url as string,
-      displayName: cursorSessionDisplayName({ taskTitle: task.title, sourceTool: "dev-task-center" }),
+      displayName: cursorSessionDisplayName({
+        taskTitle: task.title,
+        sourceTool: "dev-task-center",
+      }),
       taskTitle: task.title,
       sourceTool: "dev-task-center",
     });
@@ -561,11 +641,18 @@ export async function dispatchDevTask(
 }
 
 export const COMPLETABLE_DEV_STATUSES: DevTaskStatus[] = [
-  "approved", "sent_to_cursor", "in_progress", "blocked", "pr_opened", "ready_for_review",
+  "approved",
+  "sent_to_cursor",
+  "in_progress",
+  "blocked",
+  "pr_opened",
+  "ready_for_review",
 ];
 
 export function extractPrUrlFromAgentReply(content: string): string | null {
-  const m = String(content || "").match(/https:\/\/github\.com\/[^\s)>"]+\/pull\/\d+/i);
+  const m = String(content || "").match(
+    /https:\/\/github\.com\/[^\s)>"]+\/pull\/\d+/i,
+  );
   return m ? m[0].replace(/[.,;]+$/, "") : null;
 }
 
@@ -587,7 +674,10 @@ export async function resolveDevTaskForAgentReply(
       .eq("id", hint)
       .eq("tenant_id", args.tenantId)
       .maybeSingle();
-    if (data && COMPLETABLE_DEV_STATUSES.includes(data.status as DevTaskStatus)) {
+    if (
+      data &&
+      COMPLETABLE_DEV_STATUSES.includes(data.status as DevTaskStatus)
+    ) {
       return data as DevTaskRow;
     }
   }
@@ -611,7 +701,10 @@ export async function resolveDevTaskForAgentReply(
       .eq("id", contentId)
       .eq("tenant_id", args.tenantId)
       .maybeSingle();
-    if (data && COMPLETABLE_DEV_STATUSES.includes(data.status as DevTaskStatus)) {
+    if (
+      data &&
+      COMPLETABLE_DEV_STATUSES.includes(data.status as DevTaskStatus)
+    ) {
       return data as DevTaskRow;
     }
   }
@@ -637,7 +730,10 @@ export async function resolveDevTaskForAgentReply(
       .eq("id", devTaskId)
       .eq("tenant_id", args.tenantId)
       .maybeSingle();
-    if (task && COMPLETABLE_DEV_STATUSES.includes(task.status as DevTaskStatus)) {
+    if (
+      task &&
+      COMPLETABLE_DEV_STATUSES.includes(task.status as DevTaskStatus)
+    ) {
       return task as DevTaskRow;
     }
   }
@@ -689,7 +785,9 @@ export async function completeDevTaskFromAgentReply(
     },
   });
 
-  console.log(`[dev-tasks] completed from agent reply dev_task_id=${task.id} conversation=${args.conversationId}`);
+  console.log(
+    `[dev-tasks] completed from agent reply dev_task_id=${task.id} conversation=${args.conversationId}`,
+  );
   return { completed: true, devTaskId: task.id };
 }
 
@@ -712,7 +810,8 @@ export async function completeDevTaskById(
   if (loadErr) throw loadErr;
   if (!task) throw new Error("dev_task not found");
 
-  const prUrl = args.prUrl || extractPrUrlFromAgentReply(args.summary || "") || null;
+  const prUrl =
+    args.prUrl || extractPrUrlFromAgentReply(args.summary || "") || null;
   const patch: Record<string, unknown> = {
     status: "done",
     updated_at: new Date().toISOString(),
@@ -733,7 +832,11 @@ export async function completeDevTaskById(
     tenantId: args.tenantId,
     eventType: "done",
     actor: args.actor ?? "cursor",
-    detail: { source: "complete_dev_task", summary: args.summary || null, pr_url: prUrl },
+    detail: {
+      source: "complete_dev_task",
+      summary: args.summary || null,
+      pr_url: prUrl,
+    },
   });
   return updated as DevTaskRow;
 }
@@ -748,7 +851,8 @@ export async function attachDevTaskSession(
     actorUserId?: string | null;
   },
 ): Promise<DevTaskRow> {
-  const url = args.cursorSessionUrl ||
+  const url =
+    args.cursorSessionUrl ||
     `https://cursor.com/agents/${args.cursorSessionId.replace(/^bc-/, "bc-")}`;
   const { data, error } = await supabase
     .from("dev_tasks")

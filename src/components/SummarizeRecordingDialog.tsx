@@ -1,15 +1,34 @@
 import { useState, useEffect, useRef, useCallback } from "react";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Progress } from "@/components/ui/progress";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { useTenant } from "@/contexts/TenantContext";
-import { Loader2, FileText, Sparkles, Download, ExternalLink, Mic, RotateCcw } from "lucide-react";
+import {
+  Loader2,
+  FileText,
+  Sparkles,
+  Download,
+  ExternalLink,
+  Mic,
+  RotateCcw,
+} from "lucide-react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useCrossTenantAgencyIds } from "@/hooks/useCrossTenantAgencyIds";
 import ReactMarkdown from "react-markdown";
@@ -43,18 +62,24 @@ export default function SummarizeRecordingDialog({
   const queryClient = useQueryClient();
 
   const [transcript, setTranscript] = useState("");
-  const [focusPoints, setFocusPoints] = useState<string[]>(["decisions", "action_items", "next_steps"]);
+  const [focusPoints, setFocusPoints] = useState<string[]>([
+    "decisions",
+    "action_items",
+    "next_steps",
+  ]);
   const [customFocus, setCustomFocus] = useState("");
-  const [targetType, setTargetType] = useState<"client" | "lead" | "campaigner" | "agency">(
+  const [targetType, setTargetType] = useState<
+    "client" | "lead" | "campaigner" | "agency"
+  >(
     recording?.client_id
       ? "client"
       : recording?.lead_id
-      ? "lead"
-      : recording?.campaigner_ids?.length
-      ? "campaigner"
-      : recording?.agency_id
-      ? "agency"
-      : "agency"
+        ? "lead"
+        : recording?.campaigner_ids?.length
+          ? "campaigner"
+          : recording?.agency_id
+            ? "agency"
+            : "agency",
   );
   const [targetId, setTargetId] = useState<string>(
     recording?.client_id ||
@@ -66,9 +91,16 @@ export default function SummarizeRecordingDialog({
   const [isGenerating, setIsGenerating] = useState(false);
   const [isTranscribing, setIsTranscribing] = useState(false);
   const [isPolling, setIsPolling] = useState(false);
-  const [transcribeProgress, setTranscribeProgress] = useState<{ current: number; total: number } | null>(null);
+  const [transcribeProgress, setTranscribeProgress] = useState<{
+    current: number;
+    total: number;
+  } | null>(null);
   const [failedError, setFailedError] = useState<string | null>(null);
-  const [result, setResult] = useState<{ summary: string; file_url: string; file_name: string } | null>(null);
+  const [result, setResult] = useState<{
+    summary: string;
+    file_url: string;
+    file_name: string;
+  } | null>(null);
   const pollingRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   // ── Auto-populate transcript from DB on open ──
@@ -77,22 +109,25 @@ export default function SummarizeRecordingDialog({
       // Check if recording already has a completed transcription
       const checkExisting = async () => {
         const { data } = await supabase
-          .from('zoom_recordings')
-          .select('transcription, transcription_status')
-          .eq('id', recording.id)
+          .from("zoom_recordings")
+          .select("transcription, transcription_status")
+          .eq("id", recording.id)
           .single();
-        
-      if (data?.transcription && !transcript) {
+
+        if (data?.transcription && !transcript) {
           setTranscript(data.transcription);
           // If status is stuck on processing but text exists, fix it
-          if (data.transcription_status === 'processing') {
+          if (data.transcription_status === "processing") {
             await supabase
-              .from('zoom_recordings')
-              .update({ transcription_status: 'completed', transcription_error: null } as any)
-              .eq('id', recording.id);
+              .from("zoom_recordings")
+              .update({
+                transcription_status: "completed",
+                transcription_error: null,
+              } as any)
+              .eq("id", recording.id);
           }
           toast({ title: "תמלול קיים נטען אוטומטית" });
-        } else if (data?.transcription_status === 'processing') {
+        } else if (data?.transcription_status === "processing") {
           // Resume polling
           setIsTranscribing(true);
           setIsPolling(true);
@@ -120,71 +155,93 @@ export default function SummarizeRecordingDialog({
     setIsTranscribing(false);
   }, []);
 
-  const handleRetryTranscription = useCallback(async (recordingId: string) => {
-    if (!recordingId) return;
-    setFailedError(null);
-    setIsPolling(false);
+  const handleRetryTranscription = useCallback(
+    async (recordingId: string) => {
+      if (!recordingId) return;
+      setFailedError(null);
+      setIsPolling(false);
 
-    await supabase
-      .from('zoom_recordings')
-      .update({ transcription_status: null, transcription_error: null } as any)
-      .eq('id', recordingId);
+      await supabase
+        .from("zoom_recordings")
+        .update({
+          transcription_status: null,
+          transcription_error: null,
+        } as any)
+        .eq("id", recordingId);
 
-    stopPolling();
-    void handleTranscribe();
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [stopPolling]);
+      stopPolling();
+      void handleTranscribe();
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+    },
+    [stopPolling],
+  );
 
-  const startPolling = useCallback((recordingId: string) => {
-    if (pollingRef.current) clearInterval(pollingRef.current);
-    const startedAt = Date.now();
-    
-    pollingRef.current = setInterval(async () => {
-      try {
-        const { data } = await supabase
-          .from('zoom_recordings')
-          .select('transcription, transcription_status, transcription_error, updated_at')
-          .eq('id', recordingId)
-          .single();
+  const startPolling = useCallback(
+    (recordingId: string) => {
+      if (pollingRef.current) clearInterval(pollingRef.current);
+      const startedAt = Date.now();
 
-        if (data?.transcription_status === 'completed' && data?.transcription) {
-          setTranscript(data.transcription);
-          stopPolling();
-          queryClient.invalidateQueries({ queryKey: ['recordings', currentTenantId] });
-          toast({ title: "התמלול הושלם בהצלחה!" });
-        } else if (data?.transcription_status === 'failed') {
-          stopPolling();
-          setFailedError(data.transcription_error || "שגיאה לא ידועה");
-          toast({
-            title: "התמלול נכשל",
-            description: data.transcription_error || "נסה שוב או הדבק תמלול ידנית",
-            variant: "destructive",
-          });
-        } else if (data?.transcription_status === 'processing') {
-          // Stale detection: if processing for >5 minutes, assume crash
-          const updatedAt = data.updated_at ? new Date(data.updated_at).getTime() : startedAt;
-          const elapsed = Date.now() - updatedAt;
-          if (elapsed > 3 * 60 * 1000) {
+      pollingRef.current = setInterval(async () => {
+        try {
+          const { data } = await supabase
+            .from("zoom_recordings")
+            .select(
+              "transcription, transcription_status, transcription_error, updated_at",
+            )
+            .eq("id", recordingId)
+            .single();
+
+          if (
+            data?.transcription_status === "completed" &&
+            data?.transcription
+          ) {
+            setTranscript(data.transcription);
             stopPolling();
-            const errMsg = 'התמלול נתקע (timeout - מעל 3 דקות)';
-            setFailedError(errMsg);
-            // Mark as failed in DB
-            await supabase
-              .from('zoom_recordings')
-              .update({ transcription_status: 'failed', transcription_error: errMsg } as any)
-              .eq('id', recordingId);
+            queryClient.invalidateQueries({
+              queryKey: ["recordings", currentTenantId],
+            });
+            toast({ title: "התמלול הושלם בהצלחה!" });
+          } else if (data?.transcription_status === "failed") {
+            stopPolling();
+            setFailedError(data.transcription_error || "שגיאה לא ידועה");
             toast({
-              title: "נראה שהתמלול נתקע",
-              description: "ניתן לנסות שוב",
+              title: "התמלול נכשל",
+              description:
+                data.transcription_error || "נסה שוב או הדבק תמלול ידנית",
               variant: "destructive",
             });
+          } else if (data?.transcription_status === "processing") {
+            // Stale detection: if processing for >5 minutes, assume crash
+            const updatedAt = data.updated_at
+              ? new Date(data.updated_at).getTime()
+              : startedAt;
+            const elapsed = Date.now() - updatedAt;
+            if (elapsed > 3 * 60 * 1000) {
+              stopPolling();
+              const errMsg = "התמלול נתקע (timeout - מעל 3 דקות)";
+              setFailedError(errMsg);
+              // Mark as failed in DB
+              await supabase
+                .from("zoom_recordings")
+                .update({
+                  transcription_status: "failed",
+                  transcription_error: errMsg,
+                } as any)
+                .eq("id", recordingId);
+              toast({
+                title: "נראה שהתמלול נתקע",
+                description: "ניתן לנסות שוב",
+                variant: "destructive",
+              });
+            }
           }
+        } catch {
+          // Silently ignore polling errors
         }
-      } catch {
-        // Silently ignore polling errors
-      }
-    }, 5000);
-  }, [toast, stopPolling]);
+      }, 5000);
+    },
+    [toast, stopPolling],
+  );
 
   const { crossTenantAgencyIds } = useCrossTenantAgencyIds();
 
@@ -194,7 +251,9 @@ export default function SummarizeRecordingDialog({
       if (!currentTenantId) return [];
       let query = supabase.from("clients").select("id, name");
       if (crossTenantAgencyIds.length > 0) {
-        query = query.or(`tenant_id.eq.${currentTenantId},agency_id.in.(${crossTenantAgencyIds.join(",")})`);
+        query = query.or(
+          `tenant_id.eq.${currentTenantId},agency_id.in.(${crossTenantAgencyIds.join(",")})`,
+        );
       } else {
         query = query.eq("tenant_id", currentTenantId);
       }
@@ -208,7 +267,11 @@ export default function SummarizeRecordingDialog({
     queryKey: ["leads-summary", currentTenantId],
     queryFn: async () => {
       if (!currentTenantId) return [];
-      const { data } = await supabase.from("leads").select("id, company_name").eq("tenant_id", currentTenantId).order("company_name");
+      const { data } = await supabase
+        .from("leads")
+        .select("id, company_name")
+        .eq("tenant_id", currentTenantId)
+        .order("company_name");
       return data || [];
     },
     enabled: !!currentTenantId && open,
@@ -247,17 +310,23 @@ export default function SummarizeRecordingDialog({
 
   useEffect(() => {
     if (targetType === "agency" && !targetId && agencies.length > 0) {
-      setTargetId(agencies.find((agency) => agency.is_default)?.id || agencies[0].id);
+      setTargetId(
+        agencies.find((agency) => agency.is_default)?.id || agencies[0].id,
+      );
     }
   }, [agencies, targetId, targetType]);
 
   const toggleFocus = (key: string) => {
     setFocusPoints((prev) =>
-      prev.includes(key) ? prev.filter((f) => f !== key) : [...prev, key]
+      prev.includes(key) ? prev.filter((f) => f !== key) : [...prev, key],
     );
   };
 
-  const hasAudioSource = !!(recording?.file_path || recording?.recording_url || recording?.download_url);
+  const hasAudioSource = !!(
+    recording?.file_path ||
+    recording?.recording_url ||
+    recording?.download_url
+  );
 
   // ── Transcribe handler ─────────────
   const handleTranscribe = async () => {
@@ -268,27 +337,43 @@ export default function SummarizeRecordingDialog({
     setFailedError(null);
 
     try {
-      const { data, error } = await supabase.functions.invoke("transcribe-recording", {
-        body: { recording_id: recording.id },
-      });
+      const { data, error } = await supabase.functions.invoke(
+        "transcribe-recording",
+        {
+          body: { recording_id: recording.id },
+        },
+      );
 
       if (error) {
-        const errMsg = typeof error === 'object' && error.message ? error.message : String(error);
+        const errMsg =
+          typeof error === "object" && error.message
+            ? error.message
+            : String(error);
         // On network/timeout failures, fall back to polling — Gemini may still be running in the background
-        const isTimeoutLike = errMsg.includes('Failed to fetch') || errMsg.includes('network') || errMsg.includes('timeout') || errMsg.includes('AbortError') || errMsg.includes('non-2xx');
+        const isTimeoutLike =
+          errMsg.includes("Failed to fetch") ||
+          errMsg.includes("network") ||
+          errMsg.includes("timeout") ||
+          errMsg.includes("AbortError") ||
+          errMsg.includes("non-2xx");
         if (isTimeoutLike) {
           setIsPolling(true);
           startPolling(recording.id);
-          toast({ title: "התמלול רץ ברקע", description: "ניתן להמשיך לעבוד, התוצאה תופיע כשתהיה מוכנה" });
+          toast({
+            title: "התמלול רץ ברקע",
+            description: "ניתן להמשיך לעבוד, התוצאה תופיע כשתהיה מוכנה",
+          });
           return;
         }
         throw new Error(errMsg);
       }
 
-      if (data?.error === 'invalid_media') {
+      if (data?.error === "invalid_media") {
         toast({
           title: "תוכן לא תקין",
-          description: data.message || "ייתכן שפג תוקף הקישור להקלטה. נסה למשוך הקלטות מחדש.",
+          description:
+            data.message ||
+            "ייתכן שפג תוקף הקישור להקלטה. נסה למשוך הקלטות מחדש.",
           variant: "destructive",
         });
         setIsTranscribing(false);
@@ -296,22 +381,33 @@ export default function SummarizeRecordingDialog({
       }
 
       if (data?.error) {
-        throw new Error(typeof data.message === 'string' ? data.message : data.error);
+        throw new Error(
+          typeof data.message === "string" ? data.message : data.error,
+        );
       }
 
       if (data?.text) {
         setTranscript(data.text);
-        queryClient.invalidateQueries({ queryKey: ['recordings', currentTenantId] });
+        queryClient.invalidateQueries({
+          queryKey: ["recordings", currentTenantId],
+        });
         toast({ title: "התמלול הושלם בהצלחה!" });
         setIsTranscribing(false);
         return;
       }
     } catch (err: any) {
-      const errMsg = err.message || '';
-      if (errMsg.includes('Failed to fetch') || errMsg.includes('network') || errMsg.includes('timeout')) {
+      const errMsg = err.message || "";
+      if (
+        errMsg.includes("Failed to fetch") ||
+        errMsg.includes("network") ||
+        errMsg.includes("timeout")
+      ) {
         setIsPolling(true);
         startPolling(recording.id);
-        toast({ title: "התמלול רץ ברקע", description: "ניתן להמשיך לעבוד, התוצאה תופיע כשתהיה מוכנה" });
+        toast({
+          title: "התמלול רץ ברקע",
+          description: "ניתן להמשיך לעבוד, התוצאה תופיע כשתהיה מוכנה",
+        });
         return;
       }
       setFailedError(err.message || "שגיאה לא ידועה");
@@ -328,7 +424,6 @@ export default function SummarizeRecordingDialog({
 
   const handleTranscribeFromStorage = handleTranscribe;
 
-
   const onTranscribeClick = () => {
     if (recording?.file_path) {
       handleTranscribeFromStorage();
@@ -341,7 +436,10 @@ export default function SummarizeRecordingDialog({
 
   const handleGenerate = async () => {
     if (!transcript.trim()) {
-      toast({ title: "נא להזין תמלול או הערות מהפגישה", variant: "destructive" });
+      toast({
+        title: "נא להזין תמלול או הערות מהפגישה",
+        variant: "destructive",
+      });
       return;
     }
     if (!targetId) {
@@ -353,23 +451,31 @@ export default function SummarizeRecordingDialog({
     setResult(null);
 
     try {
-      const { data, error } = await supabase.functions.invoke("summarize-recording", {
-        body: {
-          recording_id: recording?.id,
-          transcript,
-          focus_points: focusPoints,
-          custom_focus: customFocus,
-          target_type: targetType,
-          target_id: targetId,
-          tenant_id: currentTenantId,
+      const { data, error } = await supabase.functions.invoke(
+        "summarize-recording",
+        {
+          body: {
+            recording_id: recording?.id,
+            transcript,
+            focus_points: focusPoints,
+            custom_focus: customFocus,
+            target_type: targetType,
+            target_id: targetId,
+            tenant_id: currentTenantId,
+          },
         },
-      });
+      );
 
       if (error) throw error;
       if (data?.error) throw new Error(data.error);
       if (data?.pending) {
-        queryClient.invalidateQueries({ queryKey: ['recordings', currentTenantId] });
-        toast({ title: "הסיכום נשלח לקרסר ישיר", description: "הוא יישמר על ההקלטה כשיחזור" });
+        queryClient.invalidateQueries({
+          queryKey: ["recordings", currentTenantId],
+        });
+        toast({
+          title: "הסיכום נשלח לקרסר ישיר",
+          description: "הוא יישמר על ההקלטה כשיחזור",
+        });
         return;
       }
 
@@ -379,7 +485,9 @@ export default function SummarizeRecordingDialog({
         file_name: data.file_name,
       });
 
-      queryClient.invalidateQueries({ queryKey: ['recordings', currentTenantId] });
+      queryClient.invalidateQueries({
+        queryKey: ["recordings", currentTenantId],
+      });
       toast({ title: "הסיכום נוצר בהצלחה!", description: "הקובץ נשמר ושויך" });
     } catch (err: any) {
       toast({
@@ -395,15 +503,18 @@ export default function SummarizeRecordingDialog({
   const handleClose = () => {
     // If transcription is running in background, notify
     if (isPolling && isTranscribing) {
-      toast({ title: "התמלול ממשיך ברקע", description: "כשתפתח שוב את הדיאלוג, התוצאה תיטען אוטומטית" });
+      toast({
+        title: "התמלול ממשיך ברקע",
+        description: "כשתפתח שוב את הדיאלוג, התוצאה תיטען אוטומטית",
+      });
     }
-    
+
     // Stop polling when closing
     if (pollingRef.current) {
       clearInterval(pollingRef.current);
       pollingRef.current = null;
     }
-    
+
     onOpenChange(false);
     setTimeout(() => {
       setTranscript("");
@@ -433,14 +544,18 @@ export default function SummarizeRecordingDialog({
 
         {recording && (
           <div className="bg-muted/50 rounded-lg p-3 text-sm">
-            <span className="font-medium">{recording.meeting_topic || "הקלטה"}</span>
+            <span className="font-medium">
+              {recording.meeting_topic || "הקלטה"}
+            </span>
             {recording.start_time && (
               <span className="text-muted-foreground mr-2">
                 • {new Date(recording.start_time).toLocaleDateString("he-IL")}
               </span>
             )}
             {recording.duration && (
-              <span className="text-muted-foreground mr-2">• {recording.duration} דק׳</span>
+              <span className="text-muted-foreground mr-2">
+                • {recording.duration} דק׳
+              </span>
             )}
           </div>
         )}
@@ -449,7 +564,9 @@ export default function SummarizeRecordingDialog({
           {/* Transcript Input */}
           <div className="space-y-2">
             <div className="flex items-center justify-between">
-              <Label className="text-base font-medium">תמלול / הערות מהפגישה *</Label>
+              <Label className="text-base font-medium">
+                תמלול / הערות מהפגישה *
+              </Label>
               {hasAudioSource && (
                 <Button
                   variant="outline"
@@ -463,8 +580,8 @@ export default function SummarizeRecordingDialog({
                       {isPolling
                         ? "מתמלל ברקע..."
                         : transcribeProgress
-                        ? `מתמלל חלק ${transcribeProgress.current}/${transcribeProgress.total}...`
-                        : "מתמלל..."}
+                          ? `מתמלל חלק ${transcribeProgress.current}/${transcribeProgress.total}...`
+                          : "מתמלל..."}
                     </>
                   ) : (
                     <>
@@ -481,7 +598,8 @@ export default function SummarizeRecordingDialog({
               <div className="space-y-1">
                 <Progress value={progressPct} className="h-2" />
                 <p className="text-xs text-muted-foreground text-center">
-                  מתמלל חלק {transcribeProgress.current} מתוך {transcribeProgress.total} ({progressPct}%)
+                  מתמלל חלק {transcribeProgress.current} מתוך{" "}
+                  {transcribeProgress.total} ({progressPct}%)
                 </p>
               </div>
             )}
@@ -499,7 +617,9 @@ export default function SummarizeRecordingDialog({
             {/* Failed with Retry + Refresh buttons */}
             {failedError && !isTranscribing && (
               <div className="bg-destructive/10 rounded-lg p-3 space-y-2">
-                <p className="text-sm text-destructive font-medium">התמלול נכשל: {failedError}</p>
+                <p className="text-sm text-destructive font-medium">
+                  התמלול נכשל: {failedError}
+                </p>
                 <div className="flex gap-2 flex-wrap">
                   <Button
                     variant="outline"
@@ -510,7 +630,12 @@ export default function SummarizeRecordingDialog({
                     <RotateCcw className="h-3 w-3 ml-1" />
                     נסה שוב
                   </Button>
-                  {(failedError.includes('Zoom') || failedError.includes('unauthorized') || failedError.includes('הרשאות') || failedError.includes('expired') || failedError.includes('download') || failedError.includes('media')) && (
+                  {(failedError.includes("Zoom") ||
+                    failedError.includes("unauthorized") ||
+                    failedError.includes("הרשאות") ||
+                    failedError.includes("expired") ||
+                    failedError.includes("download") ||
+                    failedError.includes("media")) && (
                     <Button
                       variant="outline"
                       size="sm"
@@ -519,34 +644,61 @@ export default function SummarizeRecordingDialog({
                           setIsTranscribing(true);
                           setFailedError(null);
                           toast({ title: "מרענן קישורי הקלטות..." });
-                          
+
                           // Refresh URLs via fetch-zoom-recordings
-                          const startTime = recording?.start_time ? new Date(recording.start_time) : new Date();
-                          const fromDate = new Date(startTime.getTime() - 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
-                          const toDate = new Date(startTime.getTime() + 1 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
-                          
-                          const { error: refreshError } = await supabase.functions.invoke('fetch-zoom-recordings', {
-                            body: { tenant_id: currentTenantId, from_date: fromDate, to_date: toDate },
-                          });
-                          
+                          const startTime = recording?.start_time
+                            ? new Date(recording.start_time)
+                            : new Date();
+                          const fromDate = new Date(
+                            startTime.getTime() - 7 * 24 * 60 * 60 * 1000,
+                          )
+                            .toISOString()
+                            .split("T")[0];
+                          const toDate = new Date(
+                            startTime.getTime() + 1 * 24 * 60 * 60 * 1000,
+                          )
+                            .toISOString()
+                            .split("T")[0];
+
+                          const { error: refreshError } =
+                            await supabase.functions.invoke(
+                              "fetch-zoom-recordings",
+                              {
+                                body: {
+                                  tenant_id: currentTenantId,
+                                  from_date: fromDate,
+                                  to_date: toDate,
+                                },
+                              },
+                            );
+
                           if (refreshError) throw refreshError;
-                          
+
                           toast({ title: "קישורים רוענו, מנסה שוב..." });
-                          queryClient.invalidateQueries({ queryKey: ['recordings', currentTenantId] });
-                          
+                          queryClient.invalidateQueries({
+                            queryKey: ["recordings", currentTenantId],
+                          });
+
                           // Reset status and retry
                           await supabase
-                            .from('zoom_recordings')
-                            .update({ transcription_status: null, transcription_error: null } as any)
-                            .eq('id', recording.id);
-                          
+                            .from("zoom_recordings")
+                            .update({
+                              transcription_status: null,
+                              transcription_error: null,
+                            } as any)
+                            .eq("id", recording.id);
+
                           // Small delay to let DB update
-                          await new Promise(r => setTimeout(r, 1000));
+                          await new Promise((r) => setTimeout(r, 1000));
                           void handleTranscribe();
                         } catch (err: any) {
                           setIsTranscribing(false);
-                          setFailedError(err.message || 'שגיאה ברענון');
-                          toast({ title: "שגיאה ברענון קישורים", description: err.message, variant: "destructive" });
+                          setFailedError(err.message || "שגיאה ברענון");
+                          toast({
+                            title: "שגיאה ברענון קישורים",
+                            description: err.message,
+                            variant: "destructive",
+                          });
                         }
                       }}
                       className="text-primary border-primary hover:bg-primary/10"
@@ -605,16 +757,22 @@ export default function SummarizeRecordingDialog({
             <div className="flex gap-3">
               <Select
                 value={targetType}
-                onValueChange={(val: "client" | "lead" | "campaigner" | "agency") => {
+                onValueChange={(
+                  val: "client" | "lead" | "campaigner" | "agency",
+                ) => {
                   setTargetType(val);
                   setTargetId(
                     val === "agency"
-                      ? agencies.find((agency) => agency.is_default)?.id || agencies[0]?.id || ""
+                      ? agencies.find((agency) => agency.is_default)?.id ||
+                          agencies[0]?.id ||
+                          ""
                       : "",
                   );
                 }}
               >
-                <SelectTrigger className="w-[180px]"><SelectValue /></SelectTrigger>
+                <SelectTrigger className="w-[180px]">
+                  <SelectValue />
+                </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="client">לקוח</SelectItem>
                   <SelectItem value="lead">ליד</SelectItem>
@@ -622,25 +780,51 @@ export default function SummarizeRecordingDialog({
                   <SelectItem value="agency">סוכנות — סיכום כללי</SelectItem>
                 </SelectContent>
               </Select>
-              <Select value={targetId || "none"} onValueChange={(val) => setTargetId(val === "none" ? "" : val)}>
-                <SelectTrigger className="flex-1"><SelectValue placeholder="בחר..." /></SelectTrigger>
+              <Select
+                value={targetId || "none"}
+                onValueChange={(val) => setTargetId(val === "none" ? "" : val)}
+              >
+                <SelectTrigger className="flex-1">
+                  <SelectValue placeholder="בחר..." />
+                </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="none">בחר...</SelectItem>
                   {targetType === "client" &&
-                    clients.map((c: any) => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}
+                    clients.map((c: any) => (
+                      <SelectItem key={c.id} value={c.id}>
+                        {c.name}
+                      </SelectItem>
+                    ))}
                   {targetType === "lead" &&
-                    leads.map((l: any) => <SelectItem key={l.id} value={l.id}>{l.company_name}</SelectItem>)}
+                    leads.map((l: any) => (
+                      <SelectItem key={l.id} value={l.id}>
+                        {l.company_name}
+                      </SelectItem>
+                    ))}
                   {targetType === "campaigner" &&
-                    campaigners.map((c: any) => <SelectItem key={c.id} value={c.id}>{c.full_name}</SelectItem>)}
+                    campaigners.map((c: any) => (
+                      <SelectItem key={c.id} value={c.id}>
+                        {c.full_name}
+                      </SelectItem>
+                    ))}
                   {targetType === "agency" &&
-                    agencies.map((a: any) => <SelectItem key={a.id} value={a.id}>{a.name}</SelectItem>)}
+                    agencies.map((a: any) => (
+                      <SelectItem key={a.id} value={a.id}>
+                        {a.name}
+                      </SelectItem>
+                    ))}
                 </SelectContent>
               </Select>
             </div>
           </div>
 
           {/* Generate Button */}
-          <Button onClick={handleGenerate} disabled={isGenerating || !transcript.trim()} className="w-full" size="lg">
+          <Button
+            onClick={handleGenerate}
+            disabled={isGenerating || !transcript.trim()}
+            className="w-full"
+            size="lg"
+          >
             {isGenerating ? (
               <>
                 <Loader2 className="h-4 w-4 ml-2 animate-spin" />
@@ -666,13 +850,19 @@ export default function SummarizeRecordingDialog({
                 dir="rtl"
               >
                 <div className={SUMMARY_PROSE_CLASS}>
-                  <ReactMarkdown remarkPlugins={[remarkGfm]}>{result.summary}</ReactMarkdown>
+                  <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                    {result.summary}
+                  </ReactMarkdown>
                 </div>
               </div>
               {result.file_url && (
                 <div className="flex gap-2">
                   <Button variant="outline" size="sm" asChild>
-                    <a href={result.file_url} target="_blank" rel="noopener noreferrer">
+                    <a
+                      href={result.file_url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                    >
                       <ExternalLink className="h-3 w-3 ml-1" />
                       פתח קובץ
                     </a>

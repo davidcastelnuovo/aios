@@ -2,13 +2,33 @@ import { useState, useMemo, useEffect, useRef } from "react";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { Card, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import {
+  Card,
+  CardHeader,
+  CardTitle,
+  CardDescription,
+} from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 
-import { FileSpreadsheet, ExternalLink, LayoutDashboard, X, Plus, Maximize2, ChevronDown, Settings, Power } from "lucide-react";
+import {
+  FileSpreadsheet,
+  ExternalLink,
+  LayoutDashboard,
+  X,
+  Plus,
+  Maximize2,
+  ChevronDown,
+  Settings,
+  Power,
+} from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { useTenantPath } from "@/hooks/useTenantPath";
 import { useCurrentTenant } from "@/hooks/useCurrentTenant";
@@ -18,8 +38,14 @@ import { ClientDashboardPanel } from "@/components/clients/ClientDashboardPanel"
 import { ClientReportScheduleSettings } from "@/components/clients/ClientReportScheduleSettings";
 import { getIntegrationIcon } from "@/lib/integrationIcons";
 import { fetchAccessibleDashboards } from "@/lib/crmDashboards";
-import { reportQueryOptions, refetchOnMountIfEmpty } from "@/lib/reportQueryOptions";
-import { prefetchDashboardView, prefetchReportTableView } from "@/lib/prefetchReportChunks";
+import {
+  reportQueryOptions,
+  refetchOnMountIfEmpty,
+} from "@/lib/reportQueryOptions";
+import {
+  prefetchDashboardView,
+  prefetchReportTableView,
+} from "@/lib/prefetchReportChunks";
 import { toast } from "sonner";
 
 interface ClientTablesTabProps {
@@ -27,7 +53,10 @@ interface ClientTablesTabProps {
   clientName: string;
 }
 
-export function ClientTablesTab({ clientId, clientName }: ClientTablesTabProps) {
+export function ClientTablesTab({
+  clientId,
+  clientName,
+}: ClientTablesTabProps) {
   const navigate = useNavigate();
   const { buildPath } = useTenantPath();
   const { tenantId } = useCurrentTenant();
@@ -37,10 +66,15 @@ export function ClientTablesTab({ clientId, clientName }: ClientTablesTabProps) 
   const [showDashboardDropdown, setShowDashboardDropdown] = useState(false);
   const [tableSearch, setTableSearch] = useState("");
   const [showTableDropdown, setShowTableDropdown] = useState(false);
-  const [viewDashboard, setViewDashboard] = useState<{ id: string; name: string } | null>(null);
+  const [viewDashboard, setViewDashboard] = useState<{
+    id: string;
+    name: string;
+  } | null>(null);
   const [showLinkSection, setShowLinkSection] = useState(false);
   const [activeTabId, setActiveTabId] = useState<string | null>(null);
-  const [contentKind, setContentKind] = useState<"table" | "dashboard">("table");
+  const [contentKind, setContentKind] = useState<"table" | "dashboard">(
+    "table",
+  );
   const userSelectedRef = useRef(false);
 
   // Tables linked to this client (server-filtered)
@@ -49,7 +83,7 @@ export function ClientTablesTab({ clientId, clientName }: ClientTablesTabProps) 
     queryFn: async () => {
       const response = await supabase.functions.invoke(
         `crm-tables?tenant_id=${tenantId}&client_id=${clientId}`,
-        { method: "GET" }
+        { method: "GET" },
       );
       if (response.error) throw response.error;
       return Array.isArray(response.data) ? response.data : [];
@@ -66,7 +100,7 @@ export function ClientTablesTab({ clientId, clientName }: ClientTablesTabProps) 
     queryFn: async () => {
       const response = await supabase.functions.invoke(
         `crm-tables?tenant_id=${tenantId}`,
-        { method: "GET" }
+        { method: "GET" },
       );
       if (response.error) throw response.error;
       return Array.isArray(response.data) ? response.data : [];
@@ -130,7 +164,9 @@ export function ClientTablesTab({ clientId, clientName }: ClientTablesTabProps) 
     try {
       const details = await error?.context?.json();
       if (details?.error) return details.error as string;
-    } catch { /* keep fallback */ }
+    } catch {
+      /* keep fallback */
+    }
     return fallback;
   };
 
@@ -139,9 +175,14 @@ export function ClientTablesTab({ clientId, clientName }: ClientTablesTabProps) 
       method: "PATCH",
       body: { table_id: tableId, client_id: clientId },
     });
-    if (error) { toast.error(await serverErrorMessage(error, "שגיאה בשיוך הטבלה")); return; }
+    if (error) {
+      toast.error(await serverErrorMessage(error, "שגיאה בשיוך הטבלה"));
+      return;
+    }
     toast.success("טבלה שויכה בהצלחה");
-    queryClient.invalidateQueries({ queryKey: ["client-crm-tables", tenantId, clientId] });
+    queryClient.invalidateQueries({
+      queryKey: ["client-crm-tables", tenantId, clientId],
+    });
     queryClient.invalidateQueries({ queryKey: ["all-crm-tables", tenantId] });
     setTableSearch("");
     setShowTableDropdown(false);
@@ -152,9 +193,14 @@ export function ClientTablesTab({ clientId, clientName }: ClientTablesTabProps) 
       method: "PATCH",
       body: { table_id: tableId, client_id: null },
     });
-    if (error) { toast.error(await serverErrorMessage(error, "שגיאה בהסרת השיוך")); return; }
+    if (error) {
+      toast.error(await serverErrorMessage(error, "שגיאה בהסרת השיוך"));
+      return;
+    }
     toast.success("שיוך הטבלה הוסר");
-    queryClient.invalidateQueries({ queryKey: ["client-crm-tables", tenantId, clientId] });
+    queryClient.invalidateQueries({
+      queryKey: ["client-crm-tables", tenantId, clientId],
+    });
     queryClient.invalidateQueries({ queryKey: ["all-crm-tables", tenantId] });
   };
 
@@ -168,10 +214,14 @@ export function ClientTablesTab({ clientId, clientName }: ClientTablesTabProps) 
       toast.error(await serverErrorMessage(error, "עדכון מצב הקמפיין נכשל"));
       return;
     }
-    toast.success(next
-      ? "הקמפיין דלוק — כרמן תכלול אותו בדיווחים"
-      : "הקמפיין כבוי — כרמן לא תדווח עליו");
-    queryClient.invalidateQueries({ queryKey: ["client-crm-tables", tenantId, clientId] });
+    toast.success(
+      next
+        ? "הקמפיין דלוק — כרמן תכלול אותו בדיווחים"
+        : "הקמפיין כבוי — כרמן לא תדווח עליו",
+    );
+    queryClient.invalidateQueries({
+      queryKey: ["client-crm-tables", tenantId, clientId],
+    });
     queryClient.invalidateQueries({ queryKey: ["all-crm-tables", tenantId] });
   };
 
@@ -181,9 +231,14 @@ export function ClientTablesTab({ clientId, clientName }: ClientTablesTabProps) 
       .from("crm_dashboards")
       .update({ client_id: clientId })
       .eq("id", dashboardId);
-    if (error) { toast.error("שגיאה בשיוך הדשבורד"); return; }
+    if (error) {
+      toast.error("שגיאה בשיוך הדשבורד");
+      return;
+    }
     toast.success("דשבורד שויך בהצלחה");
-    queryClient.invalidateQueries({ queryKey: ["client-dashboards", tenantId, clientId] });
+    queryClient.invalidateQueries({
+      queryKey: ["client-dashboards", tenantId, clientId],
+    });
     queryClient.invalidateQueries({ queryKey: ["all-dashboards", tenantId] });
     setDashboardSearch("");
     setShowDashboardDropdown(false);
@@ -194,13 +249,19 @@ export function ClientTablesTab({ clientId, clientName }: ClientTablesTabProps) 
       .from("crm_dashboards")
       .update({ client_id: null })
       .eq("id", dashboardId);
-    if (error) { toast.error("שגיאה בהסרת השיוך"); return; }
+    if (error) {
+      toast.error("שגיאה בהסרת השיוך");
+      return;
+    }
     toast.success("שיוך הדשבורד הוסר");
-    queryClient.invalidateQueries({ queryKey: ["client-dashboards", tenantId, clientId] });
+    queryClient.invalidateQueries({
+      queryKey: ["client-dashboards", tenantId, clientId],
+    });
     queryClient.invalidateQueries({ queryKey: ["all-dashboards", tenantId] });
   };
 
-  const renderTableIcon = (table: any) => getIntegrationIcon(table?.integration_type);
+  const renderTableIcon = (table: any) =>
+    getIntegrationIcon(table?.integration_type);
 
   const allItems = useMemo(() => {
     const dashItems = dashboards.map((d: any) => ({
@@ -227,8 +288,10 @@ export function ClientTablesTab({ clientId, clientName }: ClientTablesTabProps) 
 
   useEffect(() => {
     if (items.length > 0) return;
-    if (contentKind === "table" && dashboards.length > 0) setContentKind("dashboard");
-    if (contentKind === "dashboard" && tables.length > 0) setContentKind("table");
+    if (contentKind === "table" && dashboards.length > 0)
+      setContentKind("dashboard");
+    if (contentKind === "dashboard" && tables.length > 0)
+      setContentKind("table");
   }, [contentKind, dashboards.length, items.length, tables.length]);
 
   useEffect(() => {
@@ -277,11 +340,19 @@ export function ClientTablesTab({ clientId, clientName }: ClientTablesTabProps) 
           dir="rtl"
         >
           <TabsList className="grid w-full grid-cols-2">
-            <TabsTrigger value="table" disabled={tables.length === 0} className="gap-2">
+            <TabsTrigger
+              value="table"
+              disabled={tables.length === 0}
+              className="gap-2"
+            >
               <FileSpreadsheet className="h-4 w-4" />
               דוחות נפרדים ({tables.length})
             </TabsTrigger>
-            <TabsTrigger value="dashboard" disabled={dashboards.length === 0} className="gap-2">
+            <TabsTrigger
+              value="dashboard"
+              disabled={dashboards.length === 0}
+              className="gap-2"
+            >
               <LayoutDashboard className="h-4 w-4" />
               דשבורדים ({dashboards.length})
             </TabsTrigger>
@@ -299,12 +370,21 @@ export function ClientTablesTab({ clientId, clientName }: ClientTablesTabProps) 
         >
           <Settings className="h-3.5 w-3.5" />
           ניהול שיוכים
-          <ChevronDown className={`h-3 w-3 transition-transform ${showLinkSection ? 'rotate-180' : ''}`} />
+          <ChevronDown
+            className={`h-3 w-3 transition-transform ${showLinkSection ? "rotate-180" : ""}`}
+          />
         </Button>
 
         {hasActiveKindContent && (
           <div className="flex-1 min-w-0">
-            <Tabs value={activeItem?.id} onValueChange={(id) => { userSelectedRef.current = true; setActiveTabId(id); }} dir="rtl">
+            <Tabs
+              value={activeItem?.id}
+              onValueChange={(id) => {
+                userSelectedRef.current = true;
+                setActiveTabId(id);
+              }}
+              dir="rtl"
+            >
               <TabsList className="h-9 w-full justify-start overflow-x-auto flex-nowrap">
                 {items.map((it) => (
                   <TabsTrigger
@@ -335,28 +415,37 @@ export function ClientTablesTab({ clientId, clientName }: ClientTablesTabProps) 
               <Input
                 placeholder="חפש טבלה לשיוך..."
                 value={tableSearch}
-                onChange={(e) => { setTableSearch(e.target.value); setShowTableDropdown(true); }}
+                onChange={(e) => {
+                  setTableSearch(e.target.value);
+                  setShowTableDropdown(true);
+                }}
                 onFocus={() => setShowTableDropdown(true)}
-                onBlur={() => setTimeout(() => setShowTableDropdown(false), 200)}
+                onBlur={() =>
+                  setTimeout(() => setShowTableDropdown(false), 200)
+                }
                 className="h-7 text-xs text-right"
                 dir="rtl"
               />
               {showTableDropdown && (
                 <div className="absolute z-50 top-full mt-1 w-full bg-popover border rounded-md shadow-md max-h-[200px] overflow-y-auto">
-                  {availableTables.length > 0 ? availableTables.map((t: any) => (
-                    <button
-                      key={t.id}
-                      className="w-full text-right px-3 py-1.5 text-xs hover:bg-accent transition-colors flex items-center justify-between"
-                      onClick={() => linkTable(t.id)}
-                    >
-                      <Plus className="h-3 w-3 text-muted-foreground shrink-0" />
-                      <div className="flex items-center gap-1.5 truncate">
-                        {renderTableIcon(t)}
-                        <span className="truncate">{t.name}</span>
-                      </div>
-                    </button>
-                  )) : (
-                    <div className="px-3 py-2 text-xs text-muted-foreground text-center">אין טבלאות זמינות</div>
+                  {availableTables.length > 0 ? (
+                    availableTables.map((t: any) => (
+                      <button
+                        key={t.id}
+                        className="w-full text-right px-3 py-1.5 text-xs hover:bg-accent transition-colors flex items-center justify-between"
+                        onClick={() => linkTable(t.id)}
+                      >
+                        <Plus className="h-3 w-3 text-muted-foreground shrink-0" />
+                        <div className="flex items-center gap-1.5 truncate">
+                          {renderTableIcon(t)}
+                          <span className="truncate">{t.name}</span>
+                        </div>
+                      </button>
+                    ))
+                  ) : (
+                    <div className="px-3 py-2 text-xs text-muted-foreground text-center">
+                      אין טבלאות זמינות
+                    </div>
                   )}
                 </div>
               )}
@@ -373,25 +462,34 @@ export function ClientTablesTab({ clientId, clientName }: ClientTablesTabProps) 
               <Input
                 placeholder="חפש דשבורד לשיוך..."
                 value={dashboardSearch}
-                onChange={(e) => { setDashboardSearch(e.target.value); setShowDashboardDropdown(true); }}
+                onChange={(e) => {
+                  setDashboardSearch(e.target.value);
+                  setShowDashboardDropdown(true);
+                }}
                 onFocus={() => setShowDashboardDropdown(true)}
-                onBlur={() => setTimeout(() => setShowDashboardDropdown(false), 200)}
+                onBlur={() =>
+                  setTimeout(() => setShowDashboardDropdown(false), 200)
+                }
                 className="h-7 text-xs text-right"
                 dir="rtl"
               />
               {showDashboardDropdown && (
                 <div className="absolute z-50 top-full mt-1 w-full bg-popover border rounded-md shadow-md max-h-[200px] overflow-y-auto">
-                  {availableDashboards.length > 0 ? availableDashboards.map((d: any) => (
-                    <button
-                      key={d.id}
-                      className="w-full text-right px-3 py-1.5 text-xs hover:bg-accent transition-colors flex items-center justify-between"
-                      onClick={() => linkDashboard(d.id)}
-                    >
-                      <Plus className="h-3 w-3 text-muted-foreground shrink-0" />
-                      <span className="truncate">{d.name}</span>
-                    </button>
-                  )) : (
-                    <div className="px-3 py-2 text-xs text-muted-foreground text-center">אין דשבורדים זמינים</div>
+                  {availableDashboards.length > 0 ? (
+                    availableDashboards.map((d: any) => (
+                      <button
+                        key={d.id}
+                        className="w-full text-right px-3 py-1.5 text-xs hover:bg-accent transition-colors flex items-center justify-between"
+                        onClick={() => linkDashboard(d.id)}
+                      >
+                        <Plus className="h-3 w-3 text-muted-foreground shrink-0" />
+                        <span className="truncate">{d.name}</span>
+                      </button>
+                    ))
+                  ) : (
+                    <div className="px-3 py-2 text-xs text-muted-foreground text-center">
+                      אין דשבורדים זמינים
+                    </div>
                   )}
                 </div>
               )}
@@ -410,14 +508,20 @@ export function ClientTablesTab({ clientId, clientName }: ClientTablesTabProps) 
                 activeItem.raw.integration_type === "google_ads") && (
                 <Button
                   type="button"
-                  variant={(activeItem.raw.campaign_active ?? true) ? "default" : "outline"}
+                  variant={
+                    (activeItem.raw.campaign_active ?? true)
+                      ? "default"
+                      : "outline"
+                  }
                   size="sm"
                   className="h-7 gap-1.5"
                   onClick={() => toggleCampaignActive(activeItem.raw)}
                   title="קובע אם כרמן תכלול את הקמפיין בעדכונים ובבדיקות התקינות"
                 >
                   <Power className="h-3.5 w-3.5" />
-                  {(activeItem.raw.campaign_active ?? true) ? "קמפיין דלוק" : "קמפיין כבוי"}
+                  {(activeItem.raw.campaign_active ?? true)
+                    ? "קמפיין דלוק"
+                    : "קמפיין כבוי"}
                 </Button>
               )}
               <Button
@@ -432,7 +536,9 @@ export function ClientTablesTab({ clientId, clientName }: ClientTablesTabProps) 
                 variant="ghost"
                 size="icon"
                 className="h-6 w-6 shrink-0"
-                onClick={() => navigate(buildPath(`/dashboard/${activeItem.raw.id}`))}
+                onClick={() =>
+                  navigate(buildPath(`/dashboard/${activeItem.raw.id}`))
+                }
               >
                 <Maximize2 className="h-3 w-3" />
               </Button>
@@ -469,7 +575,9 @@ export function ClientTablesTab({ clientId, clientName }: ClientTablesTabProps) 
                 variant="ghost"
                 size="icon"
                 className="h-6 w-6 shrink-0"
-                onClick={() => navigate(buildPath(`/table/${activeItem.raw.slug}`))}
+                onClick={() =>
+                  navigate(buildPath(`/table/${activeItem.raw.slug}`))
+                }
               >
                 <ExternalLink className="h-3 w-3" />
               </Button>
@@ -477,13 +585,15 @@ export function ClientTablesTab({ clientId, clientName }: ClientTablesTabProps) 
             <div className="flex items-center gap-2 text-sm font-medium">
               {renderTableIcon(activeItem.raw)}
               <span>{activeItem.raw.name}</span>
-              {(activeItem.raw.integration_type === "facebook_insights" || activeItem.raw.integration_type === "facebook_ecommerce" || activeItem.raw.integration_type === "google_ads") && (
-                (activeItem.raw.integration_settings?.ad_account_id || activeItem.raw.integration_settings?.customer_id) ? (
+              {(activeItem.raw.integration_type === "facebook_insights" ||
+                activeItem.raw.integration_type === "facebook_ecommerce" ||
+                activeItem.raw.integration_type === "google_ads") &&
+                (activeItem.raw.integration_settings?.ad_account_id ||
+                activeItem.raw.integration_settings?.customer_id ? (
                   <span className="text-green-600 text-xs">✓ מחובר</span>
                 ) : (
                   <span className="text-amber-600 text-xs">ממתין לחיבור</span>
-                )
-              )}
+                ))}
             </div>
           </div>
           <div className="border-t p-3">

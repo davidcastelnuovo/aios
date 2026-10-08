@@ -17,7 +17,8 @@ export const VOICE_STATUSES = Object.freeze({
   EMPTY: "empty",
 });
 
-const PLACEHOLDER_RE = /^\[(?:הודעת קול|מדיה|קובץ מדיה|הודעה)(?:\s*[·•|].*)?\]$/;
+const PLACEHOLDER_RE =
+  /^\[(?:הודעת קול|מדיה|קובץ מדיה|הודעה)(?:\s*[·•|].*)?\]$/;
 
 export function stripVoiceMarker(text) {
   return String(text || "")
@@ -71,7 +72,8 @@ export function buildVoiceMeta({
   return {
     status,
     is_voice: !!isVoice,
-    transcript: isVoice && status === VOICE_STATUSES.OK ? stripVoiceMarker(text) : null,
+    transcript:
+      isVoice && status === VOICE_STATUSES.OK ? stripVoiceMarker(text) : null,
     source,
     message_id: messageId || null,
     audio_url: audioUrl || null,
@@ -82,8 +84,16 @@ export function buildVoiceMeta({
 
 export function pickAudioUrlFromContainers(containers) {
   const fields = [
-    "media_url", "mediaUrl", "url", "fileUrl", "file_url",
-    "downloadUrl", "downloadURL", "mediaLink", "media_link", "link",
+    "media_url",
+    "mediaUrl",
+    "url",
+    "fileUrl",
+    "file_url",
+    "downloadUrl",
+    "downloadURL",
+    "mediaLink",
+    "media_link",
+    "link",
   ];
   for (const c of containers || []) {
     if (!c || typeof c !== "object") continue;
@@ -112,7 +122,7 @@ export function buildVoiceCapabilityPromptRule() {
   return (
     "\n\n🎧 **הודעות קול בוואטסאפ (חובה — מבוסס מציאות):**\n" +
     "• הודעה שמתחילה ב-🎤 היא תמלול אוטומטי של הודעת קול — את *כן* קוראת הודעות קול דרך התמלול.\n" +
-    "• אם נשאלת \"את מצליחה לקרוא הודעות קול?\" ועכשיו יש 🎤 בהודעה הנוכחית או בהיסטוריה — עני שכן (תמלול אוטומטי), לא \"אני לא קוראת\".\n" +
+    '• אם נשאלת "את מצליחה לקרוא הודעות קול?" ועכשיו יש 🎤 בהודעה הנוכחית או בהיסטוריה — עני שכן (תמלול אוטומטי), לא "אני לא קוראת".\n' +
     "• אם מופיע `[הודעת קול · no_audio_url]` / `transcription_failed` / `download_failed` — אמרי שלא הצלחת לתמלל *בפעם הזו* וצייני את הסטטוס; אל תכריזי שאת לא יודעת לקרוא קול בכלל.\n" +
     "• תמלולים עלולים לכלול שגיאות הומופונים — פרשי לפי הקשר; שאלי הבהרה רק אם זה משנה פעולה."
   );

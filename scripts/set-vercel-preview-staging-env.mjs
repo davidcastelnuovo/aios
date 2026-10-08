@@ -89,13 +89,18 @@ function touchesProduction(entry) {
 }
 
 async function main() {
-  const listed = await vercel("GET", `/v10/projects/${encodeURIComponent(projectId)}/env`);
+  const listed = await vercel(
+    "GET",
+    `/v10/projects/${encodeURIComponent(projectId)}/env`,
+  );
   const existing = listed.envs || listed || [];
   if (!Array.isArray(existing)) {
     throw new Error("unexpected env list response");
   }
 
-  console.log(`project ok; existing env rows: ${existing.length}; branch=${gitBranch}; dryRun=${DRY_RUN}`);
+  console.log(
+    `project ok; existing env rows: ${existing.length}; branch=${gitBranch}; dryRun=${DRY_RUN}`,
+  );
 
   for (const [key, value] of desired) {
     const rows = existing.filter((e) => e.key === key);
@@ -103,32 +108,46 @@ async function main() {
     const previewDev = rows.find(isPreviewDevelop);
 
     if (prodRows.length) {
-      console.log(`${key}: leaving ${prodRows.length} Production row(s) unchanged`);
+      console.log(
+        `${key}: leaving ${prodRows.length} Production row(s) unchanged`,
+      );
     }
 
     if (previewDev) {
-      console.log(`${key}: ${DRY_RUN ? "would update" : "updating"} existing Preview+${gitBranch} row`);
+      console.log(
+        `${key}: ${DRY_RUN ? "would update" : "updating"} existing Preview+${gitBranch} row`,
+      );
       if (!DRY_RUN) {
-        await vercel("PATCH", `/v9/projects/${encodeURIComponent(projectId)}/env/${encodeURIComponent(previewDev.id)}`, {
-          value,
-          type: "encrypted",
-          target: ["preview"],
-          gitBranch,
-        });
+        await vercel(
+          "PATCH",
+          `/v9/projects/${encodeURIComponent(projectId)}/env/${encodeURIComponent(previewDev.id)}`,
+          {
+            value,
+            type: "encrypted",
+            target: ["preview"],
+            gitBranch,
+          },
+        );
       }
       continue;
     }
 
-    console.log(`${key}: ${DRY_RUN ? "would create" : "creating"} Preview+${gitBranch} row`);
+    console.log(
+      `${key}: ${DRY_RUN ? "would create" : "creating"} Preview+${gitBranch} row`,
+    );
     if (!DRY_RUN) {
-      await vercel("POST", `/v10/projects/${encodeURIComponent(projectId)}/env`, {
-        key,
-        value,
-        type: "encrypted",
-        target: ["preview"],
-        gitBranch,
-        comment: "Staging Preview; do not copy onto Production",
-      });
+      await vercel(
+        "POST",
+        `/v10/projects/${encodeURIComponent(projectId)}/env`,
+        {
+          key,
+          value,
+          type: "encrypted",
+          target: ["preview"],
+          gitBranch,
+          comment: "Staging Preview; do not copy onto Production",
+        },
+      );
     }
   }
 

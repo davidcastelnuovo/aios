@@ -3,12 +3,29 @@ import { useNavigate } from "react-router-dom";
 import { useCurrentTenant } from "@/hooks/useCurrentTenant";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
 import { useTenantPath } from "@/hooks/useTenantPath";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
 import { Checkbox } from "@/components/ui/checkbox";
-import { MessageCircle, Webhook, Settings, CheckCircle2, XCircle, Users, Shield, Share2, Copy, Link2 } from "lucide-react";
+import {
+  MessageCircle,
+  Webhook,
+  Settings,
+  CheckCircle2,
+  XCircle,
+  Users,
+  Shield,
+  Share2,
+  Copy,
+  Link2,
+} from "lucide-react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
@@ -19,7 +36,7 @@ export default function ChatIntegrations() {
   const { buildPath } = useTenantPath();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
-  
+
   const [permissionsDialog, setPermissionsDialog] = useState<{
     open: boolean;
     integrationId: string;
@@ -27,20 +44,20 @@ export default function ChatIntegrations() {
     integrationOwnerId?: string | null;
   }>({
     open: false,
-    integrationId: '',
-    integrationName: '',
+    integrationId: "",
+    integrationName: "",
     integrationOwnerId: null,
   });
 
   // Fetch ManyChat integration (organization-level)
   const { data: manychatIntegration } = useQuery({
-    queryKey: ['integration-manychat', tenantId],
+    queryKey: ["integration-manychat", tenantId],
     queryFn: async () => {
       const { data, error } = await supabase
-        .from('tenant_integrations')
-        .select('*')
-        .eq('tenant_id', tenantId)
-        .eq('integration_type', 'manychat')
+        .from("tenant_integrations")
+        .select("*")
+        .eq("tenant_id", tenantId)
+        .eq("integration_type", "manychat")
         .maybeSingle();
 
       if (error) throw error;
@@ -51,16 +68,16 @@ export default function ChatIntegrations() {
 
   // Fetch Green API integration (user-specific)
   const { data: greenApiIntegration } = useQuery({
-    queryKey: ['integration-green-api', tenantId, userId],
+    queryKey: ["integration-green-api", tenantId, userId],
     queryFn: async () => {
       if (!userId) return null;
-      
+
       const { data, error } = await supabase
-        .from('tenant_integrations')
-        .select('*')
-        .eq('tenant_id', tenantId)
-        .eq('user_id', userId)
-        .eq('integration_type', 'green_api')
+        .from("tenant_integrations")
+        .select("*")
+        .eq("tenant_id", tenantId)
+        .eq("user_id", userId)
+        .eq("integration_type", "green_api")
         .maybeSingle();
 
       if (error) throw error;
@@ -71,15 +88,15 @@ export default function ChatIntegrations() {
 
   // Fetch Manus WhatsApp integration (user-specific)
   const { data: manusWaIntegration } = useQuery({
-    queryKey: ['integration-manus-wa', tenantId, userId],
+    queryKey: ["integration-manus-wa", tenantId, userId],
     queryFn: async () => {
       if (!userId) return null;
       const { data, error } = await supabase
-        .from('tenant_integrations')
-        .select('*')
-        .eq('tenant_id', tenantId)
-        .eq('user_id', userId)
-        .eq('integration_type', 'manus_wa')
+        .from("tenant_integrations")
+        .select("*")
+        .eq("tenant_id", tenantId)
+        .eq("user_id", userId)
+        .eq("integration_type", "manus_wa")
         .maybeSingle();
       if (error) throw error;
       return data;
@@ -88,14 +105,14 @@ export default function ChatIntegrations() {
   });
 
   const { data: metaWhatsAppIntegration } = useQuery({
-    queryKey: ['integration-meta-whatsapp', tenantId],
+    queryKey: ["integration-meta-whatsapp", tenantId],
     queryFn: async () => {
       const { data, error } = await supabase
-        .from('tenant_integrations')
-        .select('id,user_id,display_name,is_active,settings')
-        .eq('tenant_id', tenantId)
-        .eq('integration_type', 'meta_whatsapp')
-        .order('created_at')
+        .from("tenant_integrations")
+        .select("id,user_id,display_name,is_active,settings")
+        .eq("tenant_id", tenantId)
+        .eq("integration_type", "meta_whatsapp")
+        .order("created_at")
         .limit(1);
       if (error) throw error;
       return data?.[0] || null;
@@ -105,51 +122,54 @@ export default function ChatIntegrations() {
 
   // Fetch Green API integrations the user has permission to use (from other users)
   const { data: permittedGreenApiIntegrations = [] } = useQuery({
-    queryKey: ['permitted-green-api-integrations', tenantId, userId],
+    queryKey: ["permitted-green-api-integrations", tenantId, userId],
     queryFn: async () => {
       if (!tenantId || !userId) return [];
-      
+
       // First get permissions granted to the current user
       const { data: permissions, error: permError } = await supabase
-        .from('integration_user_permissions')
-        .select('integration_id')
-        .eq('user_id', userId);
-      
+        .from("integration_user_permissions")
+        .select("integration_id")
+        .eq("user_id", userId);
+
       if (permError) {
-        console.error('Error fetching permissions:', permError);
+        console.error("Error fetching permissions:", permError);
         return [];
       }
-      
+
       if (!permissions?.length) return [];
-      
-      const integrationIds = permissions.map(p => p.integration_id);
-      
+
+      const integrationIds = permissions.map((p) => p.integration_id);
+
       // Fetch the integrations with owner profile info
       const { data: integrations, error: intError } = await supabase
-        .from('tenant_integrations')
-        .select('*')
-        .in('id', integrationIds)
-        .eq('integration_type', 'green_api');
-      
+        .from("tenant_integrations")
+        .select("*")
+        .in("id", integrationIds)
+        .eq("integration_type", "green_api");
+
       if (intError) {
-        console.error('Error fetching permitted integrations:', intError);
+        console.error("Error fetching permitted integrations:", intError);
         return [];
       }
-      
+
       if (!integrations?.length) return [];
-      
+
       // Get owner profiles
-      const ownerIds = [...new Set(integrations.map(i => i.user_id).filter(Boolean))];
-      if (ownerIds.length === 0) return integrations.map(i => ({ ...i, owner_profile: null }));
-      
+      const ownerIds = [
+        ...new Set(integrations.map((i) => i.user_id).filter(Boolean)),
+      ];
+      if (ownerIds.length === 0)
+        return integrations.map((i) => ({ ...i, owner_profile: null }));
+
       const { data: profiles } = await supabase
-        .from('profiles')
-        .select('id, full_name, email')
-        .in('id', ownerIds);
-      
-      const profileMap = new Map((profiles || []).map(p => [p.id, p]));
-      
-      return integrations.map(i => ({
+        .from("profiles")
+        .select("id, full_name, email")
+        .in("id", ownerIds);
+
+      const profileMap = new Map((profiles || []).map((p) => [p.id, p]));
+
+      return integrations.map((i) => ({
         ...i,
         owner_profile: i.user_id ? profileMap.get(i.user_id) : null,
       }));
@@ -159,15 +179,15 @@ export default function ChatIntegrations() {
 
   // Fetch WhatsApp groups
   const { data: whatsappGroups = [], isLoading: groupsLoading } = useQuery({
-    queryKey: ['whatsapp-groups', tenantId],
+    queryKey: ["whatsapp-groups", tenantId],
     queryFn: async () => {
       if (!tenantId) return [];
-      
+
       const { data, error } = await supabase
-        .from('whatsapp_groups')
-        .select('*, agencies(name)')
-        .eq('tenant_id', tenantId)
-        .order('group_name');
+        .from("whatsapp_groups")
+        .select("*, agencies(name)")
+        .eq("tenant_id", tenantId)
+        .order("group_name");
 
       if (error) throw error;
       return data || [];
@@ -177,48 +197,56 @@ export default function ChatIntegrations() {
 
   // Toggle provider mutation
   const toggleProviderMutation = useMutation({
-    mutationFn: async ({ providerId, isActive }: { providerId: string; isActive: boolean }) => {
-      if (!tenantId) throw new Error('No tenant');
+    mutationFn: async ({
+      providerId,
+      isActive,
+    }: {
+      providerId: string;
+      isActive: boolean;
+    }) => {
+      if (!tenantId) throw new Error("No tenant");
 
       // For Green API: user-specific connection
-      if (providerId === 'green_api') {
-        if (!userId) throw new Error('User not authenticated');
-        
+      if (providerId === "green_api") {
+        if (!userId) throw new Error("User not authenticated");
+
         const integration = greenApiIntegration;
         if (!integration) {
-          throw new Error('אין חיבור Green API. יש להגדיר חיבור תחילה.');
+          throw new Error("אין חיבור Green API. יש להגדיר חיבור תחילה.");
         }
 
         const { error } = await supabase
-          .from('tenant_integrations')
+          .from("tenant_integrations")
           .update({ is_active: isActive })
-          .eq('id', integration.id)
-          .eq('user_id', userId);
+          .eq("id", integration.id)
+          .eq("user_id", userId);
 
         if (error) throw error;
         return;
       }
 
       // For Manus WA: user-specific connection
-      if (providerId === 'manus_wa') {
-        if (!userId) throw new Error('User not authenticated');
+      if (providerId === "manus_wa") {
+        if (!userId) throw new Error("User not authenticated");
         const integration = manusWaIntegration;
-        if (!integration) throw new Error('אין חיבור Manus WhatsApp. יש להגדיר חיבור תחילה.');
+        if (!integration)
+          throw new Error("אין חיבור Manus WhatsApp. יש להגדיר חיבור תחילה.");
         const { error } = await supabase
-          .from('tenant_integrations')
+          .from("tenant_integrations")
           .update({ is_active: isActive })
-          .eq('id', integration.id)
-          .eq('user_id', userId);
+          .eq("id", integration.id)
+          .eq("user_id", userId);
         if (error) throw error;
         return;
       }
 
-      if (providerId === 'meta_whatsapp') {
-        if (!metaWhatsAppIntegration) throw new Error('אין חיבור Meta WhatsApp. יש להגדיר חיבור תחילה.');
+      if (providerId === "meta_whatsapp") {
+        if (!metaWhatsAppIntegration)
+          throw new Error("אין חיבור Meta WhatsApp. יש להגדיר חיבור תחילה.");
         const { error } = await supabase
-          .from('tenant_integrations')
+          .from("tenant_integrations")
           .update({ is_active: isActive })
-          .eq('id', metaWhatsAppIntegration.id);
+          .eq("id", metaWhatsAppIntegration.id);
         if (error) throw error;
         return;
       }
@@ -227,18 +255,18 @@ export default function ChatIntegrations() {
       if (isActive) {
         // Deactivate all other organization-level providers
         await supabase
-          .from('tenant_integrations')
+          .from("tenant_integrations")
           .update({ is_active: false })
-          .eq('tenant_id', tenantId)
-          .eq('integration_type', 'manychat');
+          .eq("tenant_id", tenantId)
+          .eq("integration_type", "manychat");
 
         // Then activate the selected provider
         const integration = manychatIntegration;
         if (integration) {
           const { error } = await supabase
-            .from('tenant_integrations')
+            .from("tenant_integrations")
             .update({ is_active: true })
-            .eq('id', integration.id);
+            .eq("id", integration.id);
 
           if (error) throw error;
         }
@@ -247,119 +275,141 @@ export default function ChatIntegrations() {
         const integration = manychatIntegration;
         if (integration) {
           const { error } = await supabase
-            .from('tenant_integrations')
+            .from("tenant_integrations")
             .update({ is_active: false })
-            .eq('id', integration.id);
+            .eq("id", integration.id);
 
           if (error) throw error;
         }
       }
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['integration-manychat', tenantId] });
-      queryClient.invalidateQueries({ queryKey: ['integration-green-api', tenantId, userId] });
-      queryClient.invalidateQueries({ queryKey: ['integration-manus-wa', tenantId, userId] });
-      queryClient.invalidateQueries({ queryKey: ['integration-meta-whatsapp', tenantId] });
-      toast.success('סטטוס חיבור עודכן');
+      queryClient.invalidateQueries({
+        queryKey: ["integration-manychat", tenantId],
+      });
+      queryClient.invalidateQueries({
+        queryKey: ["integration-green-api", tenantId, userId],
+      });
+      queryClient.invalidateQueries({
+        queryKey: ["integration-manus-wa", tenantId, userId],
+      });
+      queryClient.invalidateQueries({
+        queryKey: ["integration-meta-whatsapp", tenantId],
+      });
+      toast.success("סטטוס חיבור עודכן");
     },
     onError: (error: any) => {
-      console.error('Toggle error:', error);
-      toast.error('שגיאה בעדכון סטטוס האינטגרציה');
+      console.error("Toggle error:", error);
+      toast.error("שגיאה בעדכון סטטוס האינטגרציה");
     },
   });
 
   // Toggle group blocking mutation
   const toggleGroupMutation = useMutation({
-    mutationFn: async ({ groupId, isBlocked }: { groupId: string; isBlocked: boolean }) => {
+    mutationFn: async ({
+      groupId,
+      isBlocked,
+    }: {
+      groupId: string;
+      isBlocked: boolean;
+    }) => {
       const { error } = await supabase
-        .from('whatsapp_groups')
+        .from("whatsapp_groups")
         .update({ is_blocked: isBlocked })
-        .eq('id', groupId);
+        .eq("id", groupId);
 
       if (error) throw error;
     },
     onSuccess: () => {
-      toast.success('סטטוס קבוצה עודכן בהצלחה');
-      queryClient.invalidateQueries({ queryKey: ['whatsapp-groups', tenantId] });
-      queryClient.invalidateQueries({ queryKey: ['chat-contacts', tenantId] });
-      queryClient.invalidateQueries({ queryKey: ['unknown-contacts', tenantId] });
+      toast.success("סטטוס קבוצה עודכן בהצלחה");
+      queryClient.invalidateQueries({
+        queryKey: ["whatsapp-groups", tenantId],
+      });
+      queryClient.invalidateQueries({ queryKey: ["chat-contacts", tenantId] });
+      queryClient.invalidateQueries({
+        queryKey: ["unknown-contacts", tenantId],
+      });
     },
     onError: (error) => {
-      toast.error('שגיאה בעדכון סטטוס קבוצה');
-      console.error('Toggle group error:', error);
+      toast.error("שגיאה בעדכון סטטוס קבוצה");
+      console.error("Toggle group error:", error);
     },
   });
 
   const providers = [
     {
-      id: 'meta_whatsapp',
-      name: 'Meta WhatsApp הרשמי',
-      description: 'WhatsApp Business Platform הרשמי, בחיבור ישיר ומאובטח דרך Meta.',
+      id: "meta_whatsapp",
+      name: "Meta WhatsApp הרשמי",
+      description:
+        "WhatsApp Business Platform הרשמי, בחיבור ישיר ומאובטח דרך Meta.",
       icon: MessageCircle,
-      color: 'from-emerald-500 to-green-700',
+      color: "from-emerald-500 to-green-700",
       features: [
-        'Embedded Signup רשמי של Meta',
-        'מספר חדש או Coexistence עם WhatsApp Business',
-        'שליחה וקבלת הודעות בזמן אמת',
-        'סנכרון היסטוריה במספר קיים',
+        "Embedded Signup רשמי של Meta",
+        "מספר חדש או Coexistence עם WhatsApp Business",
+        "שליחה וקבלת הודעות בזמן אמת",
+        "סנכרון היסטוריה במספר קיים",
       ],
       integration: metaWhatsAppIntegration,
-      status: metaWhatsAppIntegration?.is_active ? 'active' : 'inactive',
+      status: metaWhatsAppIntegration?.is_active ? "active" : "inactive",
       hasApiKey: !!metaWhatsAppIntegration,
-      settingsPath: '/meta-whatsapp-settings',
-      badge: 'רשמי',
+      settingsPath: "/meta-whatsapp-settings",
+      badge: "רשמי",
     },
     {
-      id: 'manychat',
-      name: 'ManyChat',
-      description: 'פלטפורמת צ\'אט והודעות עם אוטומציות מתקדמות ותמיכה ב-Facebook Messenger',
+      id: "manychat",
+      name: "ManyChat",
+      description:
+        "פלטפורמת צ'אט והודעות עם אוטומציות מתקדמות ותמיכה ב-Facebook Messenger",
       icon: MessageCircle,
-      color: 'from-blue-500 to-blue-600',
+      color: "from-blue-500 to-blue-600",
       features: [
-        'אינטגרציה עם Facebook Messenger',
-        'סנכרון אוטומטי של contacts',
-        'תמיכה בטאגים ואוטומציות',
-        'שליחת הודעות ותבניות',
+        "אינטגרציה עם Facebook Messenger",
+        "סנכרון אוטומטי של contacts",
+        "תמיכה בטאגים ואוטומציות",
+        "שליחת הודעות ותבניות",
       ],
       integration: manychatIntegration,
-      status: manychatIntegration?.is_active ? 'active' : 'inactive',
+      status: manychatIntegration?.is_active ? "active" : "inactive",
       hasApiKey: !!manychatIntegration?.api_key,
-      settingsPath: '/manychat-settings',
+      settingsPath: "/manychat-settings",
     },
     {
-      id: 'green_api',
-      name: 'Green API (אישי)',
-      description: 'חבר את חשבון Green API האישי שלך. כל משתמש מחבר את החשבון שלו באופן עצמאי.',
+      id: "green_api",
+      name: "Green API (אישי)",
+      description:
+        "חבר את חשבון Green API האישי שלך. כל משתמש מחבר את החשבון שלו באופן עצמאי.",
       icon: Webhook,
-      color: 'from-green-500 to-green-600',
+      color: "from-green-500 to-green-600",
       features: [
-        'חיבור ישיר ל-WhatsApp Business',
-        'שליחת הודעות ותמונות',
-        'קבלת הודעות בזמן אמת',
-        'תמיכה בקבוצות ורשימות שידור',
+        "חיבור ישיר ל-WhatsApp Business",
+        "שליחת הודעות ותמונות",
+        "קבלת הודעות בזמן אמת",
+        "תמיכה בקבוצות ורשימות שידור",
       ],
       integration: greenApiIntegration,
-      status: greenApiIntegration?.is_active ? 'active' : 'inactive',
+      status: greenApiIntegration?.is_active ? "active" : "inactive",
       hasApiKey: !!greenApiIntegration?.api_key,
-      settingsPath: '/green-api-settings',
-      badge: 'חדש',
+      settingsPath: "/green-api-settings",
+      badge: "חדש",
     },
     {
-      id: 'manus_wa',
-      name: 'Manus WhatsApp',
-      description: 'חיבור WhatsApp דרך ה-Gateway של Manus. לכל משתמש instance עצמאי.',
+      id: "manus_wa",
+      name: "Manus WhatsApp",
+      description:
+        "חיבור WhatsApp דרך ה-Gateway של Manus. לכל משתמש instance עצמאי.",
       icon: Webhook,
-      color: 'from-emerald-500 to-teal-600',
+      color: "from-emerald-500 to-teal-600",
       features: [
-        'שליחת טקסט / תמונות / קבצים',
-        'קבלת הודעות נכנסות ו-ACKs',
-        'Webhook מאובטח בסוד פרטי',
+        "שליחת טקסט / תמונות / קבצים",
+        "קבלת הודעות נכנסות ו-ACKs",
+        "Webhook מאובטח בסוד פרטי",
       ],
       integration: manusWaIntegration,
-      status: manusWaIntegration?.is_active ? 'active' : 'inactive',
+      status: manusWaIntegration?.is_active ? "active" : "inactive",
       hasApiKey: !!manusWaIntegration?.api_key,
-      settingsPath: '/manus-wa-settings',
-      badge: 'חדש',
+      settingsPath: "/manus-wa-settings",
+      badge: "חדש",
     },
   ];
 
@@ -375,28 +425,38 @@ export default function ChatIntegrations() {
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         {providers.map((provider) => {
           const Icon = provider.icon;
-          const isActive = provider.status === 'active';
+          const isActive = provider.status === "active";
 
           return (
             <Card key={provider.id} className="relative overflow-hidden">
               {provider.badge && (
                 <div className="absolute top-4 left-4 z-10">
-                  <Badge variant="secondary" className="bg-primary/10 text-primary">
+                  <Badge
+                    variant="secondary"
+                    className="bg-primary/10 text-primary"
+                  >
                     {provider.badge}
                   </Badge>
                 </div>
               )}
 
-              <div className={`absolute top-0 left-0 right-0 h-1 bg-gradient-to-r ${provider.color}`} />
+              <div
+                className={`absolute top-0 left-0 right-0 h-1 bg-gradient-to-r ${provider.color}`}
+              />
 
               <CardHeader>
                 <div className="flex items-start justify-between mb-4">
-                  <div className={`p-3 rounded-lg bg-gradient-to-br ${provider.color} shadow-lg`}>
+                  <div
+                    className={`p-3 rounded-lg bg-gradient-to-br ${provider.color} shadow-lg`}
+                  >
                     <Icon className="h-6 w-6 text-white" />
                   </div>
                   <div className="flex items-center gap-2">
                     {isActive ? (
-                      <Badge variant="default" className="bg-green-500/10 text-green-700 dark:text-green-400">
+                      <Badge
+                        variant="default"
+                        className="bg-green-500/10 text-green-700 dark:text-green-400"
+                      >
                         <CheckCircle2 className="h-3 w-3 ml-1" />
                         פעיל
                       </Badge>
@@ -418,10 +478,15 @@ export default function ChatIntegrations() {
               <CardContent>
                 <div className="space-y-4">
                   <div>
-                    <h4 className="font-semibold mb-2 text-sm">תכונות עיקריות:</h4>
+                    <h4 className="font-semibold mb-2 text-sm">
+                      תכונות עיקריות:
+                    </h4>
                     <ul className="space-y-2">
                       {provider.features.map((feature, index) => (
-                        <li key={index} className="flex items-start gap-2 text-sm text-muted-foreground">
+                        <li
+                          key={index}
+                          className="flex items-start gap-2 text-sm text-muted-foreground"
+                        >
                           <CheckCircle2 className="h-4 w-4 text-primary mt-0.5 flex-shrink-0" />
                           <span>{feature}</span>
                         </li>
@@ -435,13 +500,18 @@ export default function ChatIntegrations() {
                       <div className="flex flex-col gap-1">
                         <span className="font-medium text-sm">הפעלת ספק</span>
                         <span className="text-xs text-muted-foreground">
-                          {isActive ? 'הספק פעיל כעת' : 'הפעל ספק זה לשליחת הודעות'}
+                          {isActive
+                            ? "הספק פעיל כעת"
+                            : "הפעל ספק זה לשליחת הודעות"}
                         </span>
                       </div>
                       <Switch
                         checked={isActive}
-                        onCheckedChange={(checked) => 
-                          toggleProviderMutation.mutate({ providerId: provider.id, isActive: checked })
+                        onCheckedChange={(checked) =>
+                          toggleProviderMutation.mutate({
+                            providerId: provider.id,
+                            isActive: checked,
+                          })
                         }
                         disabled={toggleProviderMutation.isPending}
                       />
@@ -455,17 +525,19 @@ export default function ChatIntegrations() {
                       variant={provider.hasApiKey ? "outline" : "default"}
                     >
                       <Settings className="h-4 w-4 ml-2" />
-                      {provider.hasApiKey ? 'ניהול הגדרות' : 'הגדר עכשיו'}
+                      {provider.hasApiKey ? "ניהול הגדרות" : "הגדר עכשיו"}
                     </Button>
-                    
+
                     {provider.hasApiKey && provider.integration && (
                       <Button
-                        onClick={() => setPermissionsDialog({
-                          open: true,
-                          integrationId: provider.integration.id,
-                          integrationName: provider.name,
-                          integrationOwnerId: provider.integration.user_id,
-                        })}
+                        onClick={() =>
+                          setPermissionsDialog({
+                            open: true,
+                            integrationId: provider.integration.id,
+                            integrationName: provider.name,
+                            integrationOwnerId: provider.integration.user_id,
+                          })
+                        }
                         variant="outline"
                         className="flex-shrink-0"
                       >
@@ -500,7 +572,7 @@ export default function ChatIntegrations() {
           <CardContent>
             <div className="space-y-3">
               {permittedGreenApiIntegrations.map((integration: any) => (
-                <div 
+                <div
                   key={integration.id}
                   className="flex items-center justify-between p-4 rounded-lg border bg-card hover:bg-accent/50 transition-colors"
                 >
@@ -511,11 +583,17 @@ export default function ChatIntegrations() {
                     <div>
                       <div className="flex items-center gap-2">
                         <span className="font-medium">Green API</span>
-                        <Badge variant="secondary" className="bg-primary/10 text-primary">
+                        <Badge
+                          variant="secondary"
+                          className="bg-primary/10 text-primary"
+                        >
                           גישה משותפת
                         </Badge>
                         {integration.is_active ? (
-                          <Badge variant="default" className="bg-green-500/10 text-green-700 dark:text-green-400">
+                          <Badge
+                            variant="default"
+                            className="bg-green-500/10 text-green-700 dark:text-green-400"
+                          >
                             <CheckCircle2 className="h-3 w-3 ml-1" />
                             פעיל
                           </Badge>
@@ -527,7 +605,10 @@ export default function ChatIntegrations() {
                         )}
                       </div>
                       <p className="text-sm text-muted-foreground mt-1">
-                        שותף על ידי: {integration.owner_profile?.full_name || integration.owner_profile?.email || 'משתמש לא ידוע'}
+                        שותף על ידי:{" "}
+                        {integration.owner_profile?.full_name ||
+                          integration.owner_profile?.email ||
+                          "משתמש לא ידוע"}
                       </p>
                     </div>
                   </div>
@@ -542,7 +623,9 @@ export default function ChatIntegrations() {
       {/* Permissions Dialog */}
       <ManageIntegrationPermissionsDialog
         open={permissionsDialog.open}
-        onOpenChange={(open) => setPermissionsDialog({ ...permissionsDialog, open })}
+        onOpenChange={(open) =>
+          setPermissionsDialog({ ...permissionsDialog, open })
+        }
         integrationId={permissionsDialog.integrationId}
         integrationName={permissionsDialog.integrationName}
         integrationOwnerId={permissionsDialog.integrationOwnerId}
@@ -558,24 +641,29 @@ export default function ChatIntegrations() {
             <div>
               <CardTitle>ניהול קבוצות WhatsApp</CardTitle>
               <CardDescription>
-                בחר אילו קבוצות יופיעו בצ'אט. קבוצות לא מסומנות לא יישמרו בדטה-בייס
+                בחר אילו קבוצות יופיעו בצ'אט. קבוצות לא מסומנות לא יישמרו
+                בדטה-בייס
               </CardDescription>
             </div>
           </div>
         </CardHeader>
         <CardContent>
           {groupsLoading ? (
-            <div className="text-center py-8 text-muted-foreground">טוען קבוצות...</div>
+            <div className="text-center py-8 text-muted-foreground">
+              טוען קבוצות...
+            </div>
           ) : whatsappGroups.length === 0 ? (
             <div className="text-center py-8 text-muted-foreground">
               <Users className="h-12 w-12 mx-auto mb-4 opacity-50" />
               <p>לא נמצאו קבוצות</p>
-              <p className="text-sm mt-2">קבוצות יווצרו אוטומטית כאשר תגיע הודעה מקבוצה חדשה</p>
+              <p className="text-sm mt-2">
+                קבוצות יווצרו אוטומטית כאשר תגיע הודעה מקבוצה חדשה
+              </p>
             </div>
           ) : (
             <div className="space-y-3">
               {whatsappGroups.map((group: any) => (
-                <div 
+                <div
                   key={group.id}
                   className="flex items-center justify-between p-4 rounded-lg border bg-card hover:bg-accent/50 transition-colors"
                 >
@@ -596,14 +684,22 @@ export default function ChatIntegrations() {
                       className="flex-1 min-w-0 cursor-pointer"
                     >
                       <div className="flex items-center gap-2">
-                        <span className="font-medium truncate">{group.group_name}</span>
+                        <span className="font-medium truncate">
+                          {group.group_name}
+                        </span>
                         {!group.is_blocked ? (
-                          <Badge variant="default" className="bg-green-500/10 text-green-600 flex-shrink-0">
+                          <Badge
+                            variant="default"
+                            className="bg-green-500/10 text-green-600 flex-shrink-0"
+                          >
                             <CheckCircle2 className="h-3 w-3 ml-1" />
                             פעיל
                           </Badge>
                         ) : (
-                          <Badge variant="secondary" className="bg-red-500/10 text-red-600 flex-shrink-0">
+                          <Badge
+                            variant="secondary"
+                            className="bg-red-500/10 text-red-600 flex-shrink-0"
+                          >
                             <XCircle className="h-3 w-3 ml-1" />
                             חסום
                           </Badge>
@@ -631,11 +727,15 @@ export default function ChatIntegrations() {
                           }}
                         >
                           <Link2 className="h-3 w-3 shrink-0" />
-                          <span className="truncate" dir="ltr">{group.invite_link}</span>
+                          <span className="truncate" dir="ltr">
+                            {group.invite_link}
+                          </span>
                           <Copy className="h-3 w-3 shrink-0" />
                         </button>
                       ) : (
-                        <p className="text-xs text-muted-foreground mt-1">אין קישור הזמנה שמור</p>
+                        <p className="text-xs text-muted-foreground mt-1">
+                          אין קישור הזמנה שמור
+                        </p>
                       )}
                     </label>
                   </div>

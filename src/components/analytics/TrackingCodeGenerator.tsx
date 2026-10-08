@@ -1,12 +1,31 @@
 import { useState } from "react";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
 import { toast } from "sonner";
 import { Code, Copy, Check, Plus, Globe, BarChart3 } from "lucide-react";
 
@@ -85,7 +104,7 @@ export function TrackingCodeGenerator({
 
   // Get clients that don't have tracking yet
   const availableClients = clients.filter(
-    (c) => !trackingConfigs.some((tc) => tc.client_id === c.id)
+    (c) => !trackingConfigs.some((tc) => tc.client_id === c.id),
   );
 
   return (
@@ -116,7 +135,10 @@ export function TrackingCodeGenerator({
               <div className="space-y-4 pt-4">
                 <div className="space-y-2">
                   <Label>לקוח</Label>
-                  <Select value={selectedClient} onValueChange={setSelectedClient}>
+                  <Select
+                    value={selectedClient}
+                    onValueChange={setSelectedClient}
+                  >
                     <SelectTrigger>
                       <SelectValue placeholder="בחר לקוח" />
                     </SelectTrigger>
@@ -138,8 +160,8 @@ export function TrackingCodeGenerator({
                     dir="ltr"
                   />
                 </div>
-                <Button 
-                  className="w-full" 
+                <Button
+                  className="w-full"
                   onClick={handleCreate}
                   disabled={!selectedClient || isCreating}
                 >
@@ -175,7 +197,9 @@ export function TrackingCodeGenerator({
                         {config.clients?.name || "לקוח לא ידוע"}
                       </CardTitle>
                       {config.website_domain && (
-                        <CardDescription>{config.website_domain}</CardDescription>
+                        <CardDescription>
+                          {config.website_domain}
+                        </CardDescription>
                       )}
                     </div>
                   </div>
@@ -201,14 +225,22 @@ export function TrackingCodeGenerator({
                 <div className="space-y-3">
                   <Label className="text-sm font-medium">קוד להטמעה</Label>
                   <div className="relative">
-                    <pre className="bg-muted p-4 rounded-lg text-xs overflow-x-auto" dir="ltr">
+                    <pre
+                      className="bg-muted p-4 rounded-lg text-xs overflow-x-auto"
+                      dir="ltr"
+                    >
                       {generateEmbedCode(config.tracking_id)}
                     </pre>
                     <Button
                       size="sm"
                       variant="secondary"
                       className="absolute top-2 left-2"
-                      onClick={() => copyToClipboard(generateEmbedCode(config.tracking_id), config.id)}
+                      onClick={() =>
+                        copyToClipboard(
+                          generateEmbedCode(config.tracking_id),
+                          config.id,
+                        )
+                      }
                     >
                       {copiedId === config.id ? (
                         <>
@@ -248,7 +280,8 @@ export function TrackingCodeGenerator({
           <div className="space-y-2">
             <h4 className="font-medium">2. הדבק באתר</h4>
             <p className="text-sm text-muted-foreground">
-              הדבק את הקוד בתוך תג &lt;head&gt; או לפני סגירת &lt;/body&gt; בכל דפי האתר
+              הדבק את הקוד בתוך תג &lt;head&gt; או לפני סגירת &lt;/body&gt; בכל
+              דפי האתר
             </p>
           </div>
           <div className="space-y-2">
@@ -258,7 +291,9 @@ export function TrackingCodeGenerator({
             </p>
           </div>
           <div className="space-y-2">
-            <h4 className="font-medium">מעקב אירועים מותאם אישית (אופציונלי)</h4>
+            <h4 className="font-medium">
+              מעקב אירועים מותאם אישית (אופציונלי)
+            </h4>
             <pre className="bg-muted p-3 rounded text-xs" dir="ltr">
               {`// שלח אירוע מותאם אישית
 MCAnalytics.track('button_click', { 

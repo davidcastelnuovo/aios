@@ -19,7 +19,13 @@ import {
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { useMutation, useQueryClient, useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
@@ -58,15 +64,17 @@ export default function EditProductDialog({
   const { data: tenantId } = useQuery({
     queryKey: ["user-tenant-id"],
     queryFn: async () => {
-      const { data: { user } } = await supabase.auth.getUser();
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
       if (!user) return null;
-      
+
       const { data } = await supabase
         .from("tenant_users")
         .select("tenant_id")
         .eq("user_id", user.id)
         .maybeSingle();
-      
+
       return data?.tenant_id || null;
     },
   });
@@ -159,12 +167,7 @@ export default function EditProductDialog({
                   <FormItem>
                     <FormLabel>מחיר *</FormLabel>
                     <FormControl>
-                      <Input
-                        type="number"
-                        step="0.01"
-                        min="0"
-                        {...field}
-                      />
+                      <Input type="number" step="0.01" min="0" {...field} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -178,14 +181,21 @@ export default function EditProductDialog({
               render={({ field }) => (
                 <FormItem>
                   <FormLabel>סוכנות (אופציונלי)</FormLabel>
-                  <Select onValueChange={(value) => field.onChange(value === "__none__" ? "" : value)} value={field.value || "__none__"}>
+                  <Select
+                    onValueChange={(value) =>
+                      field.onChange(value === "__none__" ? "" : value)
+                    }
+                    value={field.value || "__none__"}
+                  >
                     <FormControl>
                       <SelectTrigger>
                         <SelectValue placeholder="בחר סוכנות או השאר כללי" />
                       </SelectTrigger>
                     </FormControl>
                     <SelectContent>
-                      <SelectItem value="__none__">כללי (ללא סוכנות)</SelectItem>
+                      <SelectItem value="__none__">
+                        כללי (ללא סוכנות)
+                      </SelectItem>
                       {agencies?.map((agency: any) => (
                         <SelectItem key={agency.id} value={agency.id}>
                           {agency.name}

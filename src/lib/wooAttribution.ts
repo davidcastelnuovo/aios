@@ -13,21 +13,24 @@ export type WooOrderAttribution = {
 };
 
 const ATTRIBUTION_META_KEYS = {
-  source_type: '_wc_order_attribution_source_type',
-  utm_source: '_wc_order_attribution_utm_source',
-  utm_medium: '_wc_order_attribution_utm_medium',
-  utm_campaign: '_wc_order_attribution_utm_campaign',
-  utm_content: '_wc_order_attribution_utm_content',
-  utm_term: '_wc_order_attribution_utm_term',
-  referrer: '_wc_order_attribution_referrer',
-  session_entry: '_wc_order_attribution_session_entry',
-  device_type: '_wc_order_attribution_device_type',
+  source_type: "_wc_order_attribution_source_type",
+  utm_source: "_wc_order_attribution_utm_source",
+  utm_medium: "_wc_order_attribution_utm_medium",
+  utm_campaign: "_wc_order_attribution_utm_campaign",
+  utm_content: "_wc_order_attribution_utm_content",
+  utm_term: "_wc_order_attribution_utm_term",
+  referrer: "_wc_order_attribution_referrer",
+  session_entry: "_wc_order_attribution_session_entry",
+  device_type: "_wc_order_attribution_device_type",
 } as const;
 
-const metaValue = (meta: Array<{ key?: string; value?: unknown }> | undefined, key: string): string | null => {
+const metaValue = (
+  meta: Array<{ key?: string; value?: unknown }> | undefined,
+  key: string,
+): string | null => {
   const row = (meta || []).find((m) => m.key === key);
   const value = row?.value;
-  if (value === null || value === undefined || value === '') return null;
+  if (value === null || value === undefined || value === "") return null;
   return String(value);
 };
 
@@ -42,7 +45,10 @@ export function extractWooOrderAttribution(
   const utm_content = metaValue(metaData, ATTRIBUTION_META_KEYS.utm_content);
   const utm_term = metaValue(metaData, ATTRIBUTION_META_KEYS.utm_term);
   const referrer = metaValue(metaData, ATTRIBUTION_META_KEYS.referrer);
-  const session_entry = metaValue(metaData, ATTRIBUTION_META_KEYS.session_entry);
+  const session_entry = metaValue(
+    metaData,
+    ATTRIBUTION_META_KEYS.session_entry,
+  );
   const device_type = metaValue(metaData, ATTRIBUTION_META_KEYS.device_type);
 
   if (!source_type && !utm_source && !referrer && !session_entry) return null;
@@ -62,43 +68,50 @@ export function extractWooOrderAttribution(
 }
 
 /** Human-readable Hebrew label for dashboard grouping. */
-export function buildWooAttributionLabel(attr: {
-  source_type?: string | null;
-  utm_source?: string | null;
-  utm_medium?: string | null;
-  referrer?: string | null;
-  session_entry?: string | null;
-} | null): string {
-  if (!attr) return 'לא ידוע';
+export function buildWooAttributionLabel(
+  attr: {
+    source_type?: string | null;
+    utm_source?: string | null;
+    utm_medium?: string | null;
+    referrer?: string | null;
+    session_entry?: string | null;
+  } | null,
+): string {
+  if (!attr) return "לא ידוע";
 
-  const src = (attr.utm_source || '').toLowerCase();
-  const med = (attr.utm_medium || '').toLowerCase();
-  const ref = (attr.referrer || '').toLowerCase();
-  const entry = (attr.session_entry || '').toLowerCase();
+  const src = (attr.utm_source || "").toLowerCase();
+  const med = (attr.utm_medium || "").toLowerCase();
+  const ref = (attr.referrer || "").toLowerCase();
+  const entry = (attr.session_entry || "").toLowerCase();
 
   const looksFacebook =
-    src === 'fb' ||
-    src === 'facebook' ||
-    ref.includes('facebook') ||
-    ref.includes('fb.com') ||
-    entry.includes('fbclid');
+    src === "fb" ||
+    src === "facebook" ||
+    ref.includes("facebook") ||
+    ref.includes("fb.com") ||
+    entry.includes("fbclid");
 
   if (looksFacebook) {
-    return med === 'paid' || med === 'cpc' ? 'Facebook ממומן' : 'Facebook';
+    return med === "paid" || med === "cpc" ? "Facebook ממומן" : "Facebook";
   }
 
   const looksGoogle =
-    src === 'google' ||
-    src.includes('google') ||
-    ref.includes('google') ||
-    entry.includes('gclid');
+    src === "google" ||
+    src.includes("google") ||
+    ref.includes("google") ||
+    entry.includes("gclid");
 
   if (looksGoogle) {
-    return med === 'paid' || med === 'cpc' || med === 'ppc' || med === 'paidsearch' ? 'Google Ads' : 'Google אורגני';
+    return med === "paid" ||
+      med === "cpc" ||
+      med === "ppc" ||
+      med === "paidsearch"
+      ? "Google Ads"
+      : "Google אורגני";
   }
 
-  if (src === '(direct)' || attr.source_type === 'typein') {
-    return 'ישיר / Direct';
+  if (src === "(direct)" || attr.source_type === "typein") {
+    return "ישיר / Direct";
   }
 
   if (attr.utm_source && attr.utm_medium) {
@@ -106,7 +119,7 @@ export function buildWooAttributionLabel(attr: {
   }
   if (attr.utm_source) return attr.utm_source;
 
-  return 'אחר';
+  return "אחר";
 }
 
 export type WooAttributionBreakdownRow = {
@@ -122,64 +135,74 @@ export type WooGoogleAttributionSummary = {
   organicRevenue: number;
 };
 
-const VALID_WOO_ORDER_STATUSES = ['completed', 'processing', 'on-hold'] as const;
+const VALID_WOO_ORDER_STATUSES = [
+  "completed",
+  "processing",
+  "on-hold",
+] as const;
 
 const isValidWooOrderStatus = (status?: string | null): boolean =>
-  VALID_WOO_ORDER_STATUSES.includes((status || '') as typeof VALID_WOO_ORDER_STATUSES[number]);
+  VALID_WOO_ORDER_STATUSES.includes(
+    (status || "") as (typeof VALID_WOO_ORDER_STATUSES)[number],
+  );
 
 /** True when WooCommerce attributes the order to paid Google traffic (Ads / gclid). */
-export function isGooglePaidWooAttribution(attr: WooOrderAttribution | null | undefined): boolean {
+export function isGooglePaidWooAttribution(
+  attr: WooOrderAttribution | null | undefined,
+): boolean {
   if (!attr) return false;
 
-  const src = (attr.utm_source || '').toLowerCase();
-  const med = (attr.utm_medium || '').toLowerCase();
-  const entry = (attr.session_entry || '').toLowerCase();
-  const ref = (attr.referrer || '').toLowerCase();
+  const src = (attr.utm_source || "").toLowerCase();
+  const med = (attr.utm_medium || "").toLowerCase();
+  const entry = (attr.session_entry || "").toLowerCase();
+  const ref = (attr.referrer || "").toLowerCase();
 
   const looksGoogle =
-    src === 'google' ||
-    src === 'googleads' ||
-    src === 'adwords' ||
-    src.includes('google') ||
-    ref.includes('google') ||
-    entry.includes('gclid') ||
-    entry.includes('gad_source');
+    src === "google" ||
+    src === "googleads" ||
+    src === "adwords" ||
+    src.includes("google") ||
+    ref.includes("google") ||
+    entry.includes("gclid") ||
+    entry.includes("gad_source");
 
   if (!looksGoogle) return false;
 
   return (
-    med === 'paid' ||
-    med === 'cpc' ||
-    med === 'ppc' ||
-    med === 'paidsearch' ||
-    entry.includes('gclid') ||
-    attr.label === 'Google Ads' ||
-    attr.label === 'Google ממומן'
+    med === "paid" ||
+    med === "cpc" ||
+    med === "ppc" ||
+    med === "paidsearch" ||
+    entry.includes("gclid") ||
+    attr.label === "Google Ads" ||
+    attr.label === "Google ממומן"
   );
 }
 
 /** True when WooCommerce attributes the order to organic Google traffic. */
-export function isGoogleOrganicWooAttribution(attr: WooOrderAttribution | null | undefined): boolean {
+export function isGoogleOrganicWooAttribution(
+  attr: WooOrderAttribution | null | undefined,
+): boolean {
   if (!attr || isGooglePaidWooAttribution(attr)) return false;
 
-  const src = (attr.utm_source || '').toLowerCase();
-  const med = (attr.utm_medium || '').toLowerCase();
-  const entry = (attr.session_entry || '').toLowerCase();
-  const ref = (attr.referrer || '').toLowerCase();
+  const src = (attr.utm_source || "").toLowerCase();
+  const med = (attr.utm_medium || "").toLowerCase();
+  const entry = (attr.session_entry || "").toLowerCase();
+  const ref = (attr.referrer || "").toLowerCase();
 
   return (
-    src === 'google' ||
-    src.includes('google') ||
-    ref.includes('google') ||
-    med === 'organic' ||
-    attr.label === 'Google אורגני' ||
-    attr.label === 'Google'
+    src === "google" ||
+    src.includes("google") ||
+    ref.includes("google") ||
+    med === "organic" ||
+    attr.label === "Google אורגני" ||
+    attr.label === "Google"
   );
 }
 
 /** אביאלי — Google Ads conversion value is unreliable; Woo attribution is the source of truth there. */
 export const GOOGLE_WOO_ATTRIBUTION_CLIENT_IDS = new Set([
-  '0117effa-063f-4579-989c-cdf8ec923fb9',
+  "0117effa-063f-4579-989c-cdf8ec923fb9",
 ]);
 
 /**
@@ -198,7 +221,11 @@ export function shouldUseGoogleWooAttributionOverlay(
 
 /** Summarize Google-attributed WooCommerce orders for Ads dashboard overlays. */
 export function summarizeGoogleAttributedWooOrders(
-  orders: Array<{ total?: number | string; status?: string; attribution?: WooOrderAttribution | null }>,
+  orders: Array<{
+    total?: number | string;
+    status?: string;
+    attribution?: WooOrderAttribution | null;
+  }>,
 ): WooGoogleAttributionSummary {
   const summary: WooGoogleAttributionSummary = {
     paidOrders: 0,
@@ -224,13 +251,20 @@ export function summarizeGoogleAttributedWooOrders(
 
 /** Group valid orders by attribution label for dashboard tables. */
 export function aggregateOrdersByAttribution(
-  orders: Array<{ total?: number | string; status?: string; attribution?: WooOrderAttribution | null }>,
+  orders: Array<{
+    total?: number | string;
+    status?: string;
+    attribution?: WooOrderAttribution | null;
+  }>,
 ): WooAttributionBreakdownRow[] {
   const map: Record<string, WooAttributionBreakdownRow> = {};
 
   orders.forEach((order) => {
     if (!isValidWooOrderStatus(order.status)) return;
-    const label = order.attribution?.label || buildWooAttributionLabel(order.attribution) || 'לא ידוע';
+    const label =
+      order.attribution?.label ||
+      buildWooAttributionLabel(order.attribution) ||
+      "לא ידוע";
     if (!map[label]) map[label] = { label, orders: 0, revenue: 0 };
     map[label].orders += 1;
     map[label].revenue += Number(order.total || 0);

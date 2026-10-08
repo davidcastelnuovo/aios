@@ -1,10 +1,23 @@
 import { useState } from "react";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
-import { ArrowLeft, Brain, CheckCircle, AlertCircle, Webhook, Loader2 } from "lucide-react";
+import {
+  ArrowLeft,
+  Brain,
+  CheckCircle,
+  AlertCircle,
+  Webhook,
+  Loader2,
+} from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { useTenantPath } from "@/hooks/useTenantPath";
 import { useTenant } from "@/contexts/TenantContext";
@@ -21,14 +34,14 @@ export default function ManusSettings() {
   const [testing, setTesting] = useState(false);
 
   const { data: integration, isLoading } = useQuery({
-    queryKey: ['manus-integration', currentTenantId],
+    queryKey: ["manus-integration", currentTenantId],
     queryFn: async () => {
       if (!currentTenantId) return null;
       const { data } = await supabase
-        .from('tenant_integrations')
-        .select('*')
-        .eq('tenant_id', currentTenantId)
-        .eq('integration_type', 'manus')
+        .from("tenant_integrations")
+        .select("*")
+        .eq("tenant_id", currentTenantId)
+        .eq("integration_type", "manus")
         .maybeSingle();
       return data;
     },
@@ -44,27 +57,27 @@ export default function ManusSettings() {
 
       if (integration) {
         const { error } = await supabase
-          .from('tenant_integrations')
+          .from("tenant_integrations")
           .update({
             settings: { ...settings, api_key: apiKey.trim() },
             is_active: true,
           })
-          .eq('id', integration.id);
+          .eq("id", integration.id);
         if (error) throw error;
       } else {
-        const { error } = await supabase
-          .from('tenant_integrations')
-          .insert({
-            tenant_id: currentTenantId,
-            integration_type: 'manus',
-            settings: { api_key: apiKey.trim() },
-            is_active: true,
-          });
+        const { error } = await supabase.from("tenant_integrations").insert({
+          tenant_id: currentTenantId,
+          integration_type: "manus",
+          settings: { api_key: apiKey.trim() },
+          is_active: true,
+        });
         if (error) throw error;
       }
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['manus-integration', currentTenantId] });
+      queryClient.invalidateQueries({
+        queryKey: ["manus-integration", currentTenantId],
+      });
       toast.success("מפתח API של Manus נשמר בהצלחה");
       setApiKey("");
     },
@@ -77,8 +90,8 @@ export default function ManusSettings() {
     if (!currentTenantId) return;
     setTesting(true);
     try {
-      const { data, error } = await supabase.functions.invoke('manus-api', {
-        body: { action: 'test_connection', tenantId: currentTenantId },
+      const { data, error } = await supabase.functions.invoke("manus-api", {
+        body: { action: "test_connection", tenantId: currentTenantId },
       });
       if (error) throw error;
       if (data?.error) throw new Error(data.error);
@@ -93,12 +106,14 @@ export default function ManusSettings() {
   const registerWebhook = async () => {
     if (!currentTenantId) return;
     try {
-      const { data, error } = await supabase.functions.invoke('manus-api', {
-        body: { action: 'register_webhook', tenantId: currentTenantId },
+      const { data, error } = await supabase.functions.invoke("manus-api", {
+        body: { action: "register_webhook", tenantId: currentTenantId },
       });
       if (error) throw error;
       if (data?.error) throw new Error(data.error);
-      queryClient.invalidateQueries({ queryKey: ['manus-integration', currentTenantId] });
+      queryClient.invalidateQueries({
+        queryKey: ["manus-integration", currentTenantId],
+      });
       toast.success("Webhook נרשם בהצלחה!");
     } catch (err: any) {
       toast.error(`שגיאה ברישום webhook: ${err.message}`);
@@ -108,25 +123,35 @@ export default function ManusSettings() {
   const disconnect = async () => {
     if (!integration) return;
     const { error } = await supabase
-      .from('tenant_integrations')
+      .from("tenant_integrations")
       .update({ is_active: false })
-      .eq('id', integration.id);
+      .eq("id", integration.id);
     if (error) {
       toast.error("שגיאה בניתוק");
     } else {
-      queryClient.invalidateQueries({ queryKey: ['manus-integration', currentTenantId] });
+      queryClient.invalidateQueries({
+        queryKey: ["manus-integration", currentTenantId],
+      });
       toast.success("Manus נותק בהצלחה");
     }
   };
 
   if (isLoading) {
-    return <div className="container mx-auto p-6"><Loader2 className="h-6 w-6 animate-spin" /></div>;
+    return (
+      <div className="container mx-auto p-6">
+        <Loader2 className="h-6 w-6 animate-spin" />
+      </div>
+    );
   }
 
   return (
     <div className="container mx-auto p-6 space-y-6">
       <div className="flex items-center gap-4">
-        <Button variant="ghost" size="icon" onClick={() => navigate(buildPath("integrations"))}>
+        <Button
+          variant="ghost"
+          size="icon"
+          onClick={() => navigate(buildPath("integrations"))}
+        >
           <ArrowLeft className="h-5 w-5" />
         </Button>
         <div>
@@ -135,7 +160,8 @@ export default function ManusSettings() {
             Manus AI
           </h1>
           <p className="text-muted-foreground mt-1">
-            סוכן AI מתקדם לביצוע משימות מורכבות — מחקר, יצירת מצגות, ניתוח נתונים ועוד
+            סוכן AI מתקדם לביצוע משימות מורכבות — מחקר, יצירת מצגות, ניתוח
+            נתונים ועוד
           </p>
         </div>
       </div>
@@ -145,7 +171,10 @@ export default function ManusSettings() {
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             סטטוס חיבור
-            <Badge variant={isConnected ? "default" : "secondary"} className={isConnected ? "bg-green-500" : ""}>
+            <Badge
+              variant={isConnected ? "default" : "secondary"}
+              className={isConnected ? "bg-green-500" : ""}
+            >
               {isConnected ? "מחובר" : "לא מחובר"}
             </Badge>
           </CardTitle>
@@ -168,7 +197,12 @@ export default function ManusSettings() {
               </div>
             )}
             <div className="flex gap-2 pt-2">
-              <Button variant="outline" size="sm" onClick={testConnection} disabled={testing}>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={testConnection}
+                disabled={testing}
+              >
                 {testing && <Loader2 className="h-4 w-4 animate-spin ml-2" />}
                 בדוק חיבור
               </Button>
@@ -189,10 +223,17 @@ export default function ManusSettings() {
       {/* API Key Setup */}
       <Card>
         <CardHeader>
-          <CardTitle>{isConnected ? "עדכון מפתח API" : "חיבור Manus"}</CardTitle>
+          <CardTitle>
+            {isConnected ? "עדכון מפתח API" : "חיבור Manus"}
+          </CardTitle>
           <CardDescription>
             ניתן להשיג את מפתח ה-API מ-
-            <a href="https://manus.im/app?show_settings=integrations&app_name=api" target="_blank" rel="noopener noreferrer" className="text-primary hover:underline mr-1">
+            <a
+              href="https://manus.im/app?show_settings=integrations&app_name=api"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-primary hover:underline mr-1"
+            >
               הגדרות Manus
             </a>
           </CardDescription>
@@ -207,8 +248,13 @@ export default function ManusSettings() {
               onChange={(e) => setApiKey(e.target.value)}
             />
           </div>
-          <Button onClick={() => saveMutation.mutate()} disabled={!apiKey.trim() || saveMutation.isPending}>
-            {saveMutation.isPending && <Loader2 className="h-4 w-4 animate-spin ml-2" />}
+          <Button
+            onClick={() => saveMutation.mutate()}
+            disabled={!apiKey.trim() || saveMutation.isPending}
+          >
+            {saveMutation.isPending && (
+              <Loader2 className="h-4 w-4 animate-spin ml-2" />
+            )}
             {isConnected ? "עדכן מפתח" : "חבר את Manus"}
           </Button>
         </CardContent>
@@ -221,12 +267,22 @@ export default function ManusSettings() {
         </CardHeader>
         <CardContent>
           <ul className="space-y-2 text-sm text-muted-foreground">
-            <li className="flex items-center gap-2">• מחקר מעמיק ואיסוף מידע מהאינטרנט</li>
+            <li className="flex items-center gap-2">
+              • מחקר מעמיק ואיסוף מידע מהאינטרנט
+            </li>
             <li className="flex items-center gap-2">• יצירת מצגות ומסמכים</li>
-            <li className="flex items-center gap-2">• ניתוח נתונים ויצירת דוחות</li>
-            <li className="flex items-center gap-2">• בניית אתרים ואפליקציות פשוטות</li>
-            <li className="flex items-center gap-2">• עיצוב גרפי ויצירת תמונות</li>
-            <li className="flex items-center gap-2">• אוטומציה של תהליכים מורכבים</li>
+            <li className="flex items-center gap-2">
+              • ניתוח נתונים ויצירת דוחות
+            </li>
+            <li className="flex items-center gap-2">
+              • בניית אתרים ואפליקציות פשוטות
+            </li>
+            <li className="flex items-center gap-2">
+              • עיצוב גרפי ויצירת תמונות
+            </li>
+            <li className="flex items-center gap-2">
+              • אוטומציה של תהליכים מורכבים
+            </li>
           </ul>
         </CardContent>
       </Card>

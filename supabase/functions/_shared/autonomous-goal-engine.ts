@@ -7,15 +7,32 @@ import { createUnifiedGoal, logGoalEvent } from "./goal-execution.ts";
 import { modelRouterJSON, type ModelProfile } from "./model-router.ts";
 
 export const ENGINE_STATUSES = [
-  "PLANNING", "EXECUTING", "VERIFYING", "REPLANNING", "BLOCKED", "COMPLETED", "AWAITING_BRAIN",
+  "PLANNING",
+  "EXECUTING",
+  "VERIFYING",
+  "REPLANNING",
+  "BLOCKED",
+  "COMPLETED",
+  "AWAITING_BRAIN",
 ] as const;
-export type EngineStatus = typeof ENGINE_STATUSES[number];
+export type EngineStatus = (typeof ENGINE_STATUSES)[number];
 
-export const CRITERION_STATUSES = ["PASS", "FAIL", "UNKNOWN", "NOT_TESTED"] as const;
-export type CriterionStatus = typeof CRITERION_STATUSES[number];
+export const CRITERION_STATUSES = [
+  "PASS",
+  "FAIL",
+  "UNKNOWN",
+  "NOT_TESTED",
+] as const;
+export type CriterionStatus = (typeof CRITERION_STATUSES)[number];
 
-export const RISK_LEVELS = ["READ", "SAFE_WRITE", "REVERSIBLE", "PRODUCTION", "DESTRUCTIVE"] as const;
-export type RiskLevel = typeof RISK_LEVELS[number];
+export const RISK_LEVELS = [
+  "READ",
+  "SAFE_WRITE",
+  "REVERSIBLE",
+  "PRODUCTION",
+  "DESTRUCTIVE",
+] as const;
+export type RiskLevel = (typeof RISK_LEVELS)[number];
 
 export type SuccessCriterionInput = {
   key?: string;
@@ -108,7 +125,12 @@ export function buildContextPackage(state: {
   goal: AutonomousGoalRow;
   criteria: GoalCriterionRow[];
   planSteps: GoalPlanStepRow[];
-  recentActions: Array<{ action_type: string; tool_name?: string | null; status: string; input_hash?: string | null }>;
+  recentActions: Array<{
+    action_type: string;
+    tool_name?: string | null;
+    status: string;
+    input_hash?: string | null;
+  }>;
   blockers: Array<{ title: string; status: string; requires_human?: boolean }>;
 }): Record<string, unknown> {
   return {
@@ -145,11 +167,19 @@ export function checkCompletionGate(criteria: GoalCriterionRow[]): {
   const required = criteria.filter((c) => c.required);
   const pending = required.filter((c) => c.status !== "PASS");
   const failed = required.filter((c) => c.status === "FAIL");
-  return { complete: pending.length === 0 && required.length > 0, pending, failed };
+  return {
+    complete: pending.length === 0 && required.length > 0,
+    pending,
+    failed,
+  };
 }
 
 export function detectStuckPatterns(
-  recentActions: Array<{ input_hash?: string | null; status: string; error?: string | null }>,
+  recentActions: Array<{
+    input_hash?: string | null;
+    status: string;
+    error?: string | null;
+  }>,
   previousStuckScore: number,
 ): { stuck: boolean; score: number; reason?: string } {
   let score = previousStuckScore;
@@ -160,7 +190,10 @@ export function detectStuckPatterns(
   if (hashes.length >= 3 && new Set(hashes).size === 1) {
     score += 2;
   }
-  const errors = last5.filter((a) => a.status === "failed").map((a) => a.error).filter(Boolean);
+  const errors = last5
+    .filter((a) => a.status === "failed")
+    .map((a) => a.error)
+    .filter(Boolean);
   if (errors.length >= 3 && new Set(errors).size === 1) {
     score += 2;
   }
@@ -195,23 +228,33 @@ export async function seedSuccessCriteria(
       .map((description) => ({ description, required: true }));
   }
   if (!criteria.length) {
-    criteria = [{ description: `היעד "${args.title}" הושלם במלואו עם הוכחה`, required: true }];
+    criteria = [
+      {
+        description: `היעד "${args.title}" הושלם במלואו עם הוכחה`,
+        required: true,
+      },
+    ];
   }
 
   for (const [i, c] of criteria.entries()) {
     const key = c.key || slugifyKey(c.description, i);
-    const { data: row, error: cErr } = await supabase.from("goal_success_criteria").insert({
-      tenant_id: args.tenantId,
-      goal_id: args.goalId,
-      criterion_key: key,
-      description: c.description,
-      required: c.required ?? true,
-      verification_type: c.verification_type ?? "manual",
-      verification_config: c.verification_config ?? {},
-      evidence_required: c.evidence_required ?? "הוכחה ברורה שהקריטריון מתקיים",
-      status: "NOT_TESTED",
-      sort_order: i,
-    }).select("*").single();
+    const { data: row, error: cErr } = await supabase
+      .from("goal_success_criteria")
+      .insert({
+        tenant_id: args.tenantId,
+        goal_id: args.goalId,
+        criterion_key: key,
+        description: c.description,
+        required: c.required ?? true,
+        verification_type: c.verification_type ?? "manual",
+        verification_config: c.verification_config ?? {},
+        evidence_required:
+          c.evidence_required ?? "הוכחה ברורה שהקריטריון מתקיים",
+        status: "NOT_TESTED",
+        sort_order: i,
+      })
+      .select("*")
+      .single();
     if (cErr) throw cErr;
     criteriaRows.push(row);
   }
@@ -251,7 +294,10 @@ export async function createAutonomousGoal(
     priority: args.priority,
     autonomous: true,
   });
-  return { goal: goal as AutonomousGoalRow, criteria: (criteria || []) as GoalCriterionRow[] };
+  return {
+    goal: goal as AutonomousGoalRow,
+    criteria: (criteria || []) as GoalCriterionRow[],
+  };
 }
 
 export async function loadGoalState(
@@ -265,17 +311,45 @@ export async function loadGoalState(
   recentActions: any[];
   blockers: any[];
 } | null> {
-  const { data: goal, error } = await supabase.from("goals").select("*")
-    .eq("id", goalId).eq("tenant_id", tenantId).eq("autonomous_mode", true).maybeSingle();
+  const { data: goal, error } = await supabase
+    .from("goals")
+    .select("*")
+    .eq("id", goalId)
+    .eq("tenant_id", tenantId)
+    .eq("autonomous_mode", true)
+    .maybeSingle();
   if (error) throw error;
   if (!goal) return null;
 
-  const [{ data: criteria }, { data: planSteps }, { data: recentActions }, { data: blockers }] = await Promise.all([
-    supabase.from("goal_success_criteria").select("*").eq("goal_id", goalId).order("sort_order"),
-    supabase.from("goal_plan_steps").select("*").eq("goal_id", goalId).order("sort_order"),
-    supabase.from("goal_actions").select("id, action_type, tool_name, status, input_hash, error, started_at")
-      .eq("goal_id", goalId).order("started_at", { ascending: false }).limit(12),
-    supabase.from("goal_blockers").select("*").eq("goal_id", goalId).order("created_at", { ascending: false }),
+  const [
+    { data: criteria },
+    { data: planSteps },
+    { data: recentActions },
+    { data: blockers },
+  ] = await Promise.all([
+    supabase
+      .from("goal_success_criteria")
+      .select("*")
+      .eq("goal_id", goalId)
+      .order("sort_order"),
+    supabase
+      .from("goal_plan_steps")
+      .select("*")
+      .eq("goal_id", goalId)
+      .order("sort_order"),
+    supabase
+      .from("goal_actions")
+      .select(
+        "id, action_type, tool_name, status, input_hash, error, started_at",
+      )
+      .eq("goal_id", goalId)
+      .order("started_at", { ascending: false })
+      .limit(12),
+    supabase
+      .from("goal_blockers")
+      .select("*")
+      .eq("goal_id", goalId)
+      .order("created_at", { ascending: false }),
   ]);
 
   return {
@@ -317,9 +391,15 @@ async function planGoalIfNeeded(
   supabase: SupabaseLike,
   state: Awaited<ReturnType<typeof loadGoalState>>,
   iterationId: string,
-): Promise<{ awaiting_brain?: boolean; dispatched?: boolean; fallback?: boolean }> {
+): Promise<{
+  awaiting_brain?: boolean;
+  dispatched?: boolean;
+  fallback?: boolean;
+}> {
   if (!state) return {};
-  const pendingSteps = state.planSteps.filter((s) => s.status === "pending" || s.status === "in_progress");
+  const pendingSteps = state.planSteps.filter(
+    (s) => s.status === "pending" || s.status === "in_progress",
+  );
   if (pendingSteps.length > 0) return {};
 
   const {
@@ -329,7 +409,11 @@ async function planGoalIfNeeded(
   } = await import("./goal-cursor-brain.ts");
   const { buildPlanBrainPrompt } = await import("./goal-brain-apply.ts");
 
-  const inflight = await getInFlightBrainRequest(supabase, state.goal.id, "plan");
+  const inflight = await getInFlightBrainRequest(
+    supabase,
+    state.goal.id,
+    "plan",
+  );
   if (inflight) return { awaiting_brain: true };
 
   const ctx = buildContextPackage(state);
@@ -350,15 +434,17 @@ async function planGoalIfNeeded(
     throw new Error(queued.reason || "cursor_direct_brain_unavailable");
   }
 
-  const result = await modelRouterJSON<{ plan_steps?: Array<{
-    title: string;
-    description?: string;
-    action_type?: string;
-    priority?: number;
-    parallel_track?: boolean;
-    sub_project_key?: string;
-    sub_project_label?: string;
-  }> }>("DEEP_REASON", prompt);
+  const result = await modelRouterJSON<{
+    plan_steps?: Array<{
+      title: string;
+      description?: string;
+      action_type?: string;
+      priority?: number;
+      parallel_track?: boolean;
+      sub_project_key?: string;
+      sub_project_label?: string;
+    }>;
+  }>("DEEP_REASON", prompt);
   await recordModelEvent(supabase, {
     tenantId: state.goal.tenant_id,
     goalId: state.goal.id,
@@ -372,10 +458,20 @@ async function planGoalIfNeeded(
 
   const steps = result.data.plan_steps.slice(0, 8);
   for (const [i, step] of steps.entries()) {
-    const actionType = ["model", "cursor", "verify", "observe", "tool"].includes(step.action_type || "")
+    const actionType = [
+      "model",
+      "cursor",
+      "verify",
+      "observe",
+      "tool",
+    ].includes(step.action_type || "")
       ? step.action_type!
       : "model";
-    const parallelTrack = !!(step.parallel_track && actionType === "cursor" && step.sub_project_key);
+    const parallelTrack = !!(
+      step.parallel_track &&
+      actionType === "cursor" &&
+      step.sub_project_key
+    );
     await supabase.from("goal_plan_steps").insert({
       tenant_id: state.goal.tenant_id,
       goal_id: state.goal.id,
@@ -387,15 +483,20 @@ async function planGoalIfNeeded(
       sort_order: i,
       parallel_track: parallelTrack,
       sub_project_key: parallelTrack ? step.sub_project_key : null,
-      sub_project_label: parallelTrack ? (step.sub_project_label || step.title) : null,
+      sub_project_label: parallelTrack
+        ? step.sub_project_label || step.title
+        : null,
       metadata: parallelTrack ? { parallel_track: true } : {},
     });
   }
-  await supabase.from("goals").update({
-    plan: steps,
-    engine_status: "EXECUTING",
-    updated_at: new Date().toISOString(),
-  }).eq("id", state.goal.id);
+  await supabase
+    .from("goals")
+    .update({
+      plan: steps,
+      engine_status: "EXECUTING",
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", state.goal.id);
   return { fallback: true };
 }
 
@@ -403,20 +504,32 @@ async function monitorInProgressCursorSteps(
   supabase: SupabaseLike,
   state: NonNullable<Awaited<ReturnType<typeof loadGoalState>>>,
 ): Promise<number> {
-  const { selectInProgressCursorTracks } = await import("./goal-parallel-orchestration.ts");
+  const { selectInProgressCursorTracks } =
+    await import("./goal-parallel-orchestration.ts");
   const tracks = selectInProgressCursorTracks(state.planSteps);
   let completed = 0;
   for (const step of tracks) {
-    const devTaskId = (step.metadata as Record<string, unknown>)?.dev_task_id as string | undefined;
+    const devTaskId = (step.metadata as Record<string, unknown>)
+      ?.dev_task_id as string | undefined;
     if (!devTaskId) continue;
-    const { data: dt } = await supabase.from("dev_tasks")
-      .select("status, pr_url").eq("id", devTaskId).maybeSingle();
+    const { data: dt } = await supabase
+      .from("dev_tasks")
+      .select("status, pr_url")
+      .eq("id", devTaskId)
+      .maybeSingle();
     if (dt && ["pr_opened", "ready_for_review", "done"].includes(dt.status)) {
-      await supabase.from("goal_plan_steps").update({
-        status: "done",
-        completed_at: new Date().toISOString(),
-        metadata: { ...step.metadata, pr_url: dt.pr_url, completed_via: "dev_task_status" },
-      }).eq("id", step.id);
+      await supabase
+        .from("goal_plan_steps")
+        .update({
+          status: "done",
+          completed_at: new Date().toISOString(),
+          metadata: {
+            ...step.metadata,
+            pr_url: dt.pr_url,
+            completed_via: "dev_task_status",
+          },
+        })
+        .eq("id", step.id);
       completed++;
     }
   }
@@ -428,34 +541,54 @@ async function executePlanStep(
   state: NonNullable<Awaited<ReturnType<typeof loadGoalState>>>,
   step: GoalPlanStepRow,
   iterationId: string,
-): Promise<{ done: boolean; blocked?: boolean; blockerTitle?: string; monitoring?: boolean; dispatched?: boolean }> {
-  const input = { step_id: step.id, title: step.title, action_type: step.action_type };
+): Promise<{
+  done: boolean;
+  blocked?: boolean;
+  blockerTitle?: string;
+  monitoring?: boolean;
+  dispatched?: boolean;
+}> {
+  const input = {
+    step_id: step.id,
+    title: step.title,
+    action_type: step.action_type,
+  };
   const inputHash = hashInput(input);
 
-  const { data: action } = await supabase.from("goal_actions").insert({
-    tenant_id: state.goal.tenant_id,
-    goal_id: state.goal.id,
-    iteration_id: iterationId,
-    step_id: step.id,
-    action_type: step.action_type,
-    input_hash: inputHash,
-    input,
-    status: "running",
-  }).select("*").single();
+  const { data: action } = await supabase
+    .from("goal_actions")
+    .insert({
+      tenant_id: state.goal.tenant_id,
+      goal_id: state.goal.id,
+      iteration_id: iterationId,
+      step_id: step.id,
+      action_type: step.action_type,
+      input_hash: inputHash,
+      input,
+      status: "running",
+    })
+    .select("*")
+    .single();
 
-  await supabase.from("goal_plan_steps").update({
-    status: "in_progress",
-    started_at: new Date().toISOString(),
-  }).eq("id", step.id);
+  await supabase
+    .from("goal_plan_steps")
+    .update({
+      status: "in_progress",
+      started_at: new Date().toISOString(),
+    })
+    .eq("id", step.id);
 
   try {
     if (step.action_type === "cursor") {
-      const parallelTrack = step.parallel_track || !!(step.metadata as Record<string, unknown>)?.parallel_track;
+      const parallelTrack =
+        step.parallel_track ||
+        !!(step.metadata as Record<string, unknown>)?.parallel_track;
       if (step.status === "in_progress" && step.cursor_agent_id) {
         return { done: false, monitoring: true };
       }
 
-      const { dispatchToGoalCursor } = await import("./goal-cursor-dispatch.ts");
+      const { dispatchToGoalCursor } =
+        await import("./goal-cursor-dispatch.ts");
       const { OPEN_DEV_STATUSES } = await import("./dev-tasks.ts");
       const acceptance = state.criteria.map((c) => c.description).join("\n");
 
@@ -475,19 +608,30 @@ async function executePlanStep(
       });
 
       // Parallel tracks: one dev_task per sub-project. Single-track: one per goal.
-      let devTaskId = (step.metadata as Record<string, unknown>)?.dev_task_id as string | undefined;
-      const { createDevTask, attachDevTaskSession } = await import("./dev-tasks.ts");
+      let devTaskId = (step.metadata as Record<string, unknown>)
+        ?.dev_task_id as string | undefined;
+      const { createDevTask, attachDevTaskSession } =
+        await import("./dev-tasks.ts");
 
       if (!devTaskId && !parallelTrack) {
-        const { data: existingDev } = await supabase.from("dev_tasks").select("id, cursor_session_id")
-          .eq("goal_id", state.goal.id).eq("tenant_id", state.goal.tenant_id)
-          .in("status", OPEN_DEV_STATUSES).order("created_at", { ascending: false }).limit(1).maybeSingle();
+        const { data: existingDev } = await supabase
+          .from("dev_tasks")
+          .select("id, cursor_session_id")
+          .eq("goal_id", state.goal.id)
+          .eq("tenant_id", state.goal.tenant_id)
+          .in("status", OPEN_DEV_STATUSES)
+          .order("created_at", { ascending: false })
+          .limit(1)
+          .maybeSingle();
         if (existingDev?.id) devTaskId = existingDev.id;
       }
 
       if (devTaskId) {
-        const { data: dt } = await supabase.from("dev_tasks").select("cursor_session_id")
-          .eq("id", devTaskId).maybeSingle();
+        const { data: dt } = await supabase
+          .from("dev_tasks")
+          .select("cursor_session_id")
+          .eq("id", devTaskId)
+          .maybeSingle();
         if (!dt?.cursor_session_id) {
           await attachDevTaskSession(supabase, {
             tenantId: state.goal.tenant_id,
@@ -500,13 +644,18 @@ async function executePlanStep(
         const devTask = await createDevTask(supabase, {
           tenantId: state.goal.tenant_id,
           brief: {
-            title: parallelTrack ? `${state.goal.title} · ${step.sub_project_label || step.title}` : state.goal.title,
-            problem: step.description || state.goal.objective || state.goal.title,
+            title: parallelTrack
+              ? `${state.goal.title} · ${step.sub_project_label || step.title}`
+              : state.goal.title,
+            problem:
+              step.description || state.goal.objective || state.goal.title,
             acceptance_criteria: acceptance,
             requested_by: "carmen_autonomous_goal",
             environment: "staging",
             base_branch: "develop",
-            scope: parallelTrack ? `sub_project:${step.sub_project_key}` : undefined,
+            scope: parallelTrack
+              ? `sub_project:${step.sub_project_key}`
+              : undefined,
           },
           goalId: state.goal.id,
           assignedAgent: "cursor",
@@ -521,40 +670,55 @@ async function executePlanStep(
         });
       }
 
-      await supabase.from("goal_actions").update({
-        status: "completed",
-        result: {
-          dev_task_id: devTaskId,
-          cursor_agent_id: cursorResult.cursorAgentId,
-          cursor_session_url: cursorResult.sessionUrl,
-          reused_session: cursorResult.reused,
-        },
-        completed_at: new Date().toISOString(),
-      }).eq("id", action.id);
+      await supabase
+        .from("goal_actions")
+        .update({
+          status: "completed",
+          result: {
+            dev_task_id: devTaskId,
+            cursor_agent_id: cursorResult.cursorAgentId,
+            cursor_session_url: cursorResult.sessionUrl,
+            reused_session: cursorResult.reused,
+          },
+          completed_at: new Date().toISOString(),
+        })
+        .eq("id", action.id);
       const stepStatus = parallelTrack ? "in_progress" : "done";
-      await supabase.from("goal_plan_steps").update({
-        status: stepStatus,
-        completed_at: parallelTrack ? null : new Date().toISOString(),
-        metadata: {
-          dev_task_id: devTaskId,
-          cursor_agent_id: cursorResult.cursorAgentId,
-          parallel_track: parallelTrack,
-        },
-      }).eq("id", step.id);
+      await supabase
+        .from("goal_plan_steps")
+        .update({
+          status: stepStatus,
+          completed_at: parallelTrack ? null : new Date().toISOString(),
+          metadata: {
+            dev_task_id: devTaskId,
+            cursor_agent_id: cursorResult.cursorAgentId,
+            parallel_track: parallelTrack,
+          },
+        })
+        .eq("id", step.id);
       return { done: !parallelTrack, dispatched: parallelTrack };
     }
 
     if (step.action_type === "verify") {
-      await supabase.from("goals").update({ engine_status: "VERIFYING" }).eq("id", state.goal.id);
-      await supabase.from("goal_actions").update({
-        status: "completed",
-        result: { phase: "verify_requested" },
-        completed_at: new Date().toISOString(),
-      }).eq("id", action.id);
-      await supabase.from("goal_plan_steps").update({
-        status: "done",
-        completed_at: new Date().toISOString(),
-      }).eq("id", step.id);
+      await supabase
+        .from("goals")
+        .update({ engine_status: "VERIFYING" })
+        .eq("id", state.goal.id);
+      await supabase
+        .from("goal_actions")
+        .update({
+          status: "completed",
+          result: { phase: "verify_requested" },
+          completed_at: new Date().toISOString(),
+        })
+        .eq("id", action.id);
+      await supabase
+        .from("goal_plan_steps")
+        .update({
+          status: "done",
+          completed_at: new Date().toISOString(),
+        })
+        .eq("id", step.id);
       return { done: true };
     }
 
@@ -565,14 +729,23 @@ async function executePlanStep(
       queueBrainRequest,
       goalBrainApiFallbackEnabled,
     } = await import("./goal-cursor-brain.ts");
-    const { buildStepExecuteBrainPrompt } = await import("./goal-brain-apply.ts");
+    const { buildStepExecuteBrainPrompt } =
+      await import("./goal-brain-apply.ts");
 
-    const inflight = await getInFlightBrainRequest(supabase, state.goal.id, "step_execute");
+    const inflight = await getInFlightBrainRequest(
+      supabase,
+      state.goal.id,
+      "step_execute",
+    );
     if (inflight && inflight.step_id === step.id) {
       return { done: false, monitoring: true };
     }
 
-    const prompt = buildStepExecuteBrainPrompt(step.title, step.description || "", ctx);
+    const prompt = buildStepExecuteBrainPrompt(
+      step.title,
+      step.description || "",
+      ctx,
+    );
     const queued = await queueBrainRequest(supabase, {
       tenantId: state.goal.tenant_id,
       goalId: state.goal.id,
@@ -593,8 +766,16 @@ async function executePlanStep(
 
     const result = await modelRouterJSON<{
       summary?: string;
-      evidence?: Array<{ criterion_key?: string; type: string; content: Record<string, unknown> }>;
-      criterion_updates?: Array<{ key: string; status: CriterionStatus; reason?: string }>;
+      evidence?: Array<{
+        criterion_key?: string;
+        type: string;
+        content: Record<string, unknown>;
+      }>;
+      criterion_updates?: Array<{
+        key: string;
+        status: CriterionStatus;
+        reason?: string;
+      }>;
     }>("FAST_REASON", prompt);
     await recordModelEvent(supabase, {
       tenantId: state.goal.tenant_id,
@@ -603,10 +784,13 @@ async function executePlanStep(
       profile: "FAST_REASON",
       result,
     });
-    if (!result.ok) throw new Error(result.failoverReason || "model_step_failed");
+    if (!result.ok)
+      throw new Error(result.failoverReason || "model_step_failed");
 
     for (const ev of result.data?.evidence || []) {
-      const criterion = state.criteria.find((c) => c.criterion_key === ev.criterion_key);
+      const criterion = state.criteria.find(
+        (c) => c.criterion_key === ev.criterion_key,
+      );
       await supabase.from("goal_evidence").insert({
         tenant_id: state.goal.tenant_id,
         goal_id: state.goal.id,
@@ -619,31 +803,47 @@ async function executePlanStep(
     for (const upd of result.data?.criterion_updates || []) {
       const criterion = state.criteria.find((c) => c.criterion_key === upd.key);
       if (!criterion) continue;
-      if (!["PASS", "FAIL", "UNKNOWN", "NOT_TESTED"].includes(upd.status)) continue;
-      await supabase.from("goal_success_criteria").update({
-        status: upd.status,
-        last_verified_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-      }).eq("id", criterion.id);
+      if (!["PASS", "FAIL", "UNKNOWN", "NOT_TESTED"].includes(upd.status))
+        continue;
+      await supabase
+        .from("goal_success_criteria")
+        .update({
+          status: upd.status,
+          last_verified_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", criterion.id);
     }
-    await supabase.from("goal_actions").update({
-      status: "completed",
-      result: result.data,
-      completed_at: new Date().toISOString(),
-    }).eq("id", action.id);
-    await supabase.from("goal_plan_steps").update({
-      status: "done",
-      completed_at: new Date().toISOString(),
-    }).eq("id", step.id);
+    await supabase
+      .from("goal_actions")
+      .update({
+        status: "completed",
+        result: result.data,
+        completed_at: new Date().toISOString(),
+      })
+      .eq("id", action.id);
+    await supabase
+      .from("goal_plan_steps")
+      .update({
+        status: "done",
+        completed_at: new Date().toISOString(),
+      })
+      .eq("id", step.id);
     return { done: true };
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
-    await supabase.from("goal_actions").update({
-      status: "failed",
-      error: msg,
-      completed_at: new Date().toISOString(),
-    }).eq("id", action.id);
-    await supabase.from("goal_plan_steps").update({ status: "failed" }).eq("id", step.id);
+    await supabase
+      .from("goal_actions")
+      .update({
+        status: "failed",
+        error: msg,
+        completed_at: new Date().toISOString(),
+      })
+      .eq("id", action.id);
+    await supabase
+      .from("goal_plan_steps")
+      .update({ status: "failed" })
+      .eq("id", step.id);
     return { done: false };
   }
 }
@@ -656,22 +856,37 @@ export async function acquireGoalLock(
 ): Promise<boolean> {
   const until = new Date(Date.now() + ttlSeconds * 1000).toISOString();
   const now = new Date().toISOString();
-  const { data } = await supabase.from("goals").select("id, lock_until, lock_holder")
-    .eq("id", goalId).maybeSingle();
+  const { data } = await supabase
+    .from("goals")
+    .select("id, lock_until, lock_holder")
+    .eq("id", goalId)
+    .maybeSingle();
   if (!data) return false;
-  if (data.lock_until && data.lock_until > now && data.lock_holder !== holder) return false;
-  const { error } = await supabase.from("goals").update({
-    lock_until: until,
-    lock_holder: holder,
-  }).eq("id", goalId);
+  if (data.lock_until && data.lock_until > now && data.lock_holder !== holder)
+    return false;
+  const { error } = await supabase
+    .from("goals")
+    .update({
+      lock_until: until,
+      lock_holder: holder,
+    })
+    .eq("id", goalId);
   return !error;
 }
 
-export async function releaseGoalLock(supabase: SupabaseLike, goalId: string, holder: string): Promise<void> {
-  await supabase.from("goals").update({
-    lock_until: null,
-    lock_holder: null,
-  }).eq("id", goalId).eq("lock_holder", holder);
+export async function releaseGoalLock(
+  supabase: SupabaseLike,
+  goalId: string,
+  holder: string,
+): Promise<void> {
+  await supabase
+    .from("goals")
+    .update({
+      lock_until: null,
+      lock_holder: null,
+    })
+    .eq("id", goalId)
+    .eq("lock_holder", holder);
 }
 
 export async function runGoalIteration(
@@ -696,42 +911,58 @@ export async function runGoalIteration(
     const { getInFlightBrainRequest } = await import("./goal-cursor-brain.ts");
     const brainInflight = await getInFlightBrainRequest(supabase, goalId);
     if (brainInflight || goal.engine_status === "AWAITING_BRAIN") {
-      return { status: "AWAITING_BRAIN", summary: `awaiting_brain:${brainInflight?.request_type || "unknown"}` };
+      return {
+        status: "AWAITING_BRAIN",
+        summary: `awaiting_brain:${brainInflight?.request_type || "unknown"}`,
+      };
     }
 
     const iterationNumber = (goal.iteration_count || 0) + 1;
-    const { data: iteration, error: iterErr } = await supabase.from("goal_loop_iterations").insert({
-      tenant_id: tenantId,
-      goal_id: goalId,
-      iteration_number: iterationNumber,
-      phase: goal.engine_status,
-      status: "running",
-      context_snapshot: buildContextPackage(state),
-    }).select("id").single();
+    const { data: iteration, error: iterErr } = await supabase
+      .from("goal_loop_iterations")
+      .insert({
+        tenant_id: tenantId,
+        goal_id: goalId,
+        iteration_number: iterationNumber,
+        phase: goal.engine_status,
+        status: "running",
+        context_snapshot: buildContextPackage(state),
+      })
+      .select("id")
+      .single();
     if (iterErr) throw iterErr;
     iterationId = iteration.id;
 
     // Completion Gate
     const gate = checkCompletionGate(state.criteria);
     if (gate.complete) {
-      await supabase.from("goals").update({
-        engine_status: "COMPLETED",
-        status: "completed",
-        progress_percent: 100,
-        next_run_at: null,
-        iteration_count: iterationNumber,
-        last_iteration_at: new Date().toISOString(),
-      }).eq("id", goalId);
-      await supabase.from("goal_loop_iterations").update({
-        status: "completed",
-        summary: "completion_gate_passed",
-        completed_at: new Date().toISOString(),
-      }).eq("id", iterationId);
+      await supabase
+        .from("goals")
+        .update({
+          engine_status: "COMPLETED",
+          status: "completed",
+          progress_percent: 100,
+          next_run_at: null,
+          iteration_count: iterationNumber,
+          last_iteration_at: new Date().toISOString(),
+        })
+        .eq("id", goalId);
+      await supabase
+        .from("goal_loop_iterations")
+        .update({
+          status: "completed",
+          summary: "completion_gate_passed",
+          completed_at: new Date().toISOString(),
+        })
+        .eq("id", iterationId);
       await logGoalEvent(supabase, {
-        goalId, tenantId, eventType: "autonomous_goal_completed",
+        goalId,
+        tenantId,
+        eventType: "autonomous_goal_completed",
         detail: { iteration: iterationNumber },
       });
-      const { notifyDavidStagingReady } = await import("./goal-parallel-orchestration.ts");
+      const { notifyDavidStagingReady } =
+        await import("./goal-parallel-orchestration.ts");
       await notifyDavidStagingReady(supabase, {
         tenantId,
         goalId,
@@ -750,13 +981,19 @@ export async function runGoalIteration(
     // Stuck detection
     const stuck = detectStuckPatterns(state.recentActions, goal.stuck_score);
     if (stuck.stuck) {
-      await supabase.from("goals").update({
-        engine_status: "REPLANNING",
-        stuck_score: stuck.score,
-        plan: [],
-      }).eq("id", goalId);
-      await supabase.from("goal_plan_steps").update({ status: "skipped" })
-        .eq("goal_id", goalId).in("status", ["pending", "in_progress"]);
+      await supabase
+        .from("goals")
+        .update({
+          engine_status: "REPLANNING",
+          stuck_score: stuck.score,
+          plan: [],
+        })
+        .eq("id", goalId);
+      await supabase
+        .from("goal_plan_steps")
+        .update({ status: "skipped" })
+        .eq("goal_id", goalId)
+        .in("status", ["pending", "in_progress"]);
       await supabase.from("goal_blockers").insert({
         tenant_id: tenantId,
         goal_id: goalId,
@@ -768,18 +1005,26 @@ export async function runGoalIteration(
     }
 
     // Planning phase — Cursor Direct brain (async callback applies plan)
-    if (goal.engine_status === "PLANNING" || goal.engine_status === "REPLANNING") {
+    if (
+      goal.engine_status === "PLANNING" ||
+      goal.engine_status === "REPLANNING"
+    ) {
       const planOutcome = await planGoalIfNeeded(
         supabase,
         await loadGoalState(supabase, tenantId, goalId),
         iterationId,
       );
       if (planOutcome.awaiting_brain) {
-        await supabase.from("goal_loop_iterations").update({
-          status: "completed",
-          summary: planOutcome.dispatched ? "brain_plan_dispatched" : "brain_plan_awaiting",
-          completed_at: new Date().toISOString(),
-        }).eq("id", iterationId);
+        await supabase
+          .from("goal_loop_iterations")
+          .update({
+            status: "completed",
+            summary: planOutcome.dispatched
+              ? "brain_plan_dispatched"
+              : "brain_plan_awaiting",
+            completed_at: new Date().toISOString(),
+          })
+          .eq("id", iterationId);
         return { status: "AWAITING_BRAIN", summary: "brain_plan_dispatched" };
       }
     }
@@ -799,7 +1044,9 @@ export async function runGoalIteration(
     const parallelBatch = selectParallelDispatchBatch(freshState.planSteps);
     if (parallelBatch.length >= 2) {
       const results = await Promise.all(
-        parallelBatch.map((s) => executePlanStep(supabase, freshState, s, iterationId)),
+        parallelBatch.map((s) =>
+          executePlanStep(supabase, freshState, s, iterationId),
+        ),
       );
       const ok = results.filter((r) => r.dispatched || r.done).length;
       summary = `parallel_dispatch:${ok}/${parallelBatch.length}`;
@@ -808,12 +1055,20 @@ export async function runGoalIteration(
       if (inProgress.length > 0 && summary === "noop") {
         summary = `monitoring:${inProgress.length}_tracks`;
       } else {
-        const nextStep = selectNextSequentialStep(freshState.planSteps)
-          || freshState.planSteps
+        const nextStep =
+          selectNextSequentialStep(freshState.planSteps) ||
+          freshState.planSteps
             .filter((s) => s.status === "pending")
-            .sort((a, b) => a.priority - b.priority || a.sort_order - b.sort_order)[0];
+            .sort(
+              (a, b) => a.priority - b.priority || a.sort_order - b.sort_order,
+            )[0];
         if (nextStep) {
-          const exec = await executePlanStep(supabase, freshState, nextStep, iterationId);
+          const exec = await executePlanStep(
+            supabase,
+            freshState,
+            nextStep,
+            iterationId,
+          );
           summary = exec.dispatched
             ? `dispatched:${nextStep.title}`
             : exec.monitoring
@@ -835,7 +1090,8 @@ export async function runGoalIteration(
     let awaitingBrain = false;
 
     if (!finalGate.complete) {
-      const { runPostIterationEfficiencyReview } = await import("./goal-efficiency-review.ts");
+      const { runPostIterationEfficiencyReview } =
+        await import("./goal-efficiency-review.ts");
       const eff = await runPostIterationEfficiencyReview(supabase, {
         tenantId,
         goalId,
@@ -862,26 +1118,39 @@ export async function runGoalIteration(
       ? "COMPLETED"
       : awaitingBrain
         ? "AWAITING_BRAIN"
-        : (afterState?.goal.engine_status === "VERIFYING" ? "VERIFYING" : "EXECUTING");
+        : afterState?.goal.engine_status === "VERIFYING"
+          ? "VERIFYING"
+          : "EXECUTING";
 
-    await supabase.from("goals").update({
-      engine_status: nextStatus,
-      status: finalGate.complete ? "completed" : "in_progress",
-      progress_percent: finalGate.complete ? 100 : Math.min(95, iterationNumber * 5),
-      iteration_count: iterationNumber,
-      last_iteration_at: new Date().toISOString(),
-      next_run_at: finalGate.complete ? null : new Date(Date.now() + 60_000).toISOString(),
-      stuck_score: stuck.score,
-    }).eq("id", goalId);
+    await supabase
+      .from("goals")
+      .update({
+        engine_status: nextStatus,
+        status: finalGate.complete ? "completed" : "in_progress",
+        progress_percent: finalGate.complete
+          ? 100
+          : Math.min(95, iterationNumber * 5),
+        iteration_count: iterationNumber,
+        last_iteration_at: new Date().toISOString(),
+        next_run_at: finalGate.complete
+          ? null
+          : new Date(Date.now() + 60_000).toISOString(),
+        stuck_score: stuck.score,
+      })
+      .eq("id", goalId);
 
-    await supabase.from("goal_loop_iterations").update({
-      status: "completed",
-      summary,
-      completed_at: new Date().toISOString(),
-    }).eq("id", iterationId);
+    await supabase
+      .from("goal_loop_iterations")
+      .update({
+        status: "completed",
+        summary,
+        completed_at: new Date().toISOString(),
+      })
+      .eq("id", iterationId);
 
     if (finalGate.complete) {
-      const { notifyDavidStagingReady } = await import("./goal-parallel-orchestration.ts");
+      const { notifyDavidStagingReady } =
+        await import("./goal-parallel-orchestration.ts");
       await notifyDavidStagingReady(supabase, {
         tenantId,
         goalId,
@@ -896,20 +1165,33 @@ export async function runGoalIteration(
       });
     }
 
-    return { status: finalGate.complete ? "COMPLETED" : (awaitingBrain ? "AWAITING_BRAIN" : nextStatus), summary };
+    return {
+      status: finalGate.complete
+        ? "COMPLETED"
+        : awaitingBrain
+          ? "AWAITING_BRAIN"
+          : nextStatus,
+      summary,
+    };
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
     if (iterationId) {
-      await supabase.from("goal_loop_iterations").update({
-        status: "failed",
-        error_message: msg,
-        completed_at: new Date().toISOString(),
-      }).eq("id", iterationId);
+      await supabase
+        .from("goal_loop_iterations")
+        .update({
+          status: "failed",
+          error_message: msg,
+          completed_at: new Date().toISOString(),
+        })
+        .eq("id", iterationId);
     }
-    await supabase.from("goals").update({
-      engine_status: "BLOCKED",
-      next_run_at: new Date(Date.now() + 5 * 60_000).toISOString(),
-    }).eq("id", goalId);
+    await supabase
+      .from("goals")
+      .update({
+        engine_status: "BLOCKED",
+        next_run_at: new Date(Date.now() + 5 * 60_000).toISOString(),
+      })
+      .eq("id", goalId);
     return { status: "BLOCKED", summary: msg };
   } finally {
     await releaseGoalLock(supabase, goalId, lockHolder);
@@ -924,12 +1206,20 @@ export async function getAutonomousGoalStatus(
   const state = await loadGoalState(supabase, tenantId, goalId);
   if (!state) return null;
   const gate = checkCompletionGate(state.criteria);
-  const { data: iterations } = await supabase.from("goal_loop_iterations")
-    .select("id, iteration_number, phase, status, summary, started_at, completed_at")
-    .eq("goal_id", goalId).order("iteration_number", { ascending: false }).limit(5);
-  const { data: evidence } = await supabase.from("goal_evidence")
+  const { data: iterations } = await supabase
+    .from("goal_loop_iterations")
+    .select(
+      "id, iteration_number, phase, status, summary, started_at, completed_at",
+    )
+    .eq("goal_id", goalId)
+    .order("iteration_number", { ascending: false })
+    .limit(5);
+  const { data: evidence } = await supabase
+    .from("goal_evidence")
     .select("id, criterion_id, evidence_type, verified_at")
-    .eq("goal_id", goalId).order("verified_at", { ascending: false }).limit(10);
+    .eq("goal_id", goalId)
+    .order("verified_at", { ascending: false })
+    .limit(10);
   const parallelTracks = state.planSteps
     .filter((s) => s.parallel_track || s.sub_project_key)
     .map((s) => ({
@@ -941,11 +1231,13 @@ export async function getAutonomousGoalStatus(
       cursor_session_url: s.cursor_session_url,
     }));
 
-  const { data: brainSession } = await supabase.from("goal_orchestrator_brain")
+  const { data: brainSession } = await supabase
+    .from("goal_orchestrator_brain")
     .select("cursor_session_id, cursor_session_url, session_source, updated_at")
     .eq("tenant_id", tenantId)
     .maybeSingle();
-  const { data: brainRequests } = await supabase.from("goal_brain_requests")
+  const { data: brainRequests } = await supabase
+    .from("goal_brain_requests")
     .select("id, request_type, status, created_at, completed_at")
     .eq("goal_id", goalId)
     .order("created_at", { ascending: false })
@@ -970,7 +1262,9 @@ export async function listDueAutonomousGoals(
   limit = 10,
 ): Promise<AutonomousGoalRow[]> {
   const now = new Date().toISOString();
-  const { data, error } = await supabase.from("goals").select("*")
+  const { data, error } = await supabase
+    .from("goals")
+    .select("*")
     .eq("autonomous_mode", true)
     .neq("engine_status", "COMPLETED")
     .or(`next_run_at.is.null,next_run_at.lte.${now}`)
@@ -979,7 +1273,8 @@ export async function listDueAutonomousGoals(
   if (error) throw error;
   return (data || []).filter((g: AutonomousGoalRow) => {
     if (g.engine_status === "COMPLETED") return false;
-    if (g.engine_status === "BLOCKED" && g.next_run_at && g.next_run_at > now) return false;
+    if (g.engine_status === "BLOCKED" && g.next_run_at && g.next_run_at > now)
+      return false;
     return true;
   });
 }

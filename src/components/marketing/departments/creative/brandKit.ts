@@ -30,47 +30,78 @@ export interface ClientAttachment {
   type?: string;
 }
 
-const asString = (value: unknown) => typeof value === "string" ? value : undefined;
+const asString = (value: unknown) =>
+  typeof value === "string" ? value : undefined;
 
 const asColors = (value: unknown) =>
-  Array.isArray(value) ? value.filter((item): item is string => typeof item === "string" && /^#([0-9a-fA-F]{3,8})$/.test(item)) : [];
+  Array.isArray(value)
+    ? value.filter(
+        (item): item is string =>
+          typeof item === "string" && /^#([0-9a-fA-F]{3,8})$/.test(item),
+      )
+    : [];
 
-export const getBrandKit = (payload: Record<string, unknown> | null | undefined): CreativeBrandKit => {
-  const book = payload?.brand_book && typeof payload.brand_book === "object"
-    ? payload.brand_book as Record<string, unknown>
-    : null;
+export const getBrandKit = (
+  payload: Record<string, unknown> | null | undefined,
+): CreativeBrandKit => {
+  const book =
+    payload?.brand_book && typeof payload.brand_book === "object"
+      ? (payload.brand_book as Record<string, unknown>)
+      : null;
   const refs = payload?.style_references;
   return {
     logoUrl: asString(payload?.logo_url),
     website: asString(payload?.client_website),
-    brandBook: book ? {
-      name: asString(book.name),
-      colors: asColors(book.colors),
-      fonts: Array.isArray(book.fonts) ? book.fonts.filter((item): item is string => typeof item === "string") : undefined,
-      voice: asString(book.voice),
-      notes: asString(book.notes) ?? "",
-      source: book.source === "upload" || book.source === "manual" || book.source === "auto" ? book.source : "manual",
-      fileUrl: asString(book.fileUrl),
-      fileName: asString(book.fileName),
-    } : undefined,
+    brandBook: book
+      ? {
+          name: asString(book.name),
+          colors: asColors(book.colors),
+          fonts: Array.isArray(book.fonts)
+            ? book.fonts.filter(
+                (item): item is string => typeof item === "string",
+              )
+            : undefined,
+          voice: asString(book.voice),
+          notes: asString(book.notes) ?? "",
+          source:
+            book.source === "upload" ||
+            book.source === "manual" ||
+            book.source === "auto"
+              ? book.source
+              : "manual",
+          fileUrl: asString(book.fileUrl),
+          fileName: asString(book.fileName),
+        }
+      : undefined,
     styleReferences: Array.isArray(refs)
-      ? refs.filter((item): item is StyleReference => !!item && typeof item === "object" && typeof (item as StyleReference).url === "string")
+      ? refs.filter(
+          (item): item is StyleReference =>
+            !!item &&
+            typeof item === "object" &&
+            typeof (item as StyleReference).url === "string",
+        )
       : [],
   };
 };
 
-export const brandKitPrompt = (kit: CreativeBrandKit, options?: { talentLock?: boolean }) => {
+export const brandKitPrompt = (
+  kit: CreativeBrandKit,
+  options?: { talentLock?: boolean },
+) => {
   const lines = [
     kit.brandBook?.name && `Brand: ${kit.brandBook.name}`,
     kit.brandBook?.colors.length
       ? `BRAND COLOR LOCK: use ONLY these logo/brand colors (plus black, white, or paper): ${kit.brandBook.colors.join(", ")}. No extra neon, no random primaries that fight the logo.`
       : undefined,
     kit.brandBook?.voice && `Brand voice: ${kit.brandBook.voice}`,
-    kit.website && `Brand website: ${kit.website}. Match that commercial world (color temperature, materials, locations) without copying UI chrome or inventing a logo.`,
-    kit.logoUrl && "A logo asset exists. Download and ATTACH that file, then paint the real mark into the PNG. The app will not overlay a watermark. Never default to a bottom-corner sticker. If no clean pocket, omit it. Do not redraw or invent a logo.",
-    kit.styleReferences.length > 0 && (options?.talentLock
-      ? "A talent still is attached. Keep that spokesman. Do not copy the source board's layout, lettering, or logo."
-      : `${kit.styleReferences.length} STYLE REFERENCE(s) from project settings are attached. Match the reference ad design system: palette dominance, layout bands (hero + footer/wave), icon row, CTA pill zone, logo zone, lighting, material, and grade. New scene and new people in the hero. Do not photocopy faces or reference lettering. Do not ignore these refs.`),
+    kit.website &&
+      `Brand website: ${kit.website}. Match that commercial world (color temperature, materials, locations) without copying UI chrome or inventing a logo.`,
+    kit.logoUrl &&
+      "A logo asset exists. Download and ATTACH that file, then paint the real mark into the PNG. The app will not overlay a watermark. Never default to a bottom-corner sticker. If no clean pocket, omit it. Do not redraw or invent a logo.",
+    kit.styleReferences.length > 0 &&
+      (options?.talentLock
+        ? "A talent still is attached. Keep that spokesman. Do not copy the source board's layout, lettering, or logo."
+        : `${kit.styleReferences.length} STYLE REFERENCE(s) from project settings are attached. Match the reference ad design system: palette dominance, layout bands (hero + footer/wave), icon row, CTA pill zone, logo zone, lighting, material, and grade. New scene and new people in the hero. Do not photocopy faces or reference lettering. Do not ignore these refs.`),
   ].filter(Boolean);
   return lines.join("\n");
 };
@@ -88,7 +119,11 @@ export const sampleColorsFromImageData = (data: Uint8ClampedArray) => {
     if (a < 180) continue;
     const brightness = (r + g + b) / 3;
     if (brightness > 245 || brightness < 12) continue;
-    const key = toHex(Math.round(r / 32) * 32, Math.round(g / 32) * 32, Math.round(b / 32) * 32);
+    const key = toHex(
+      Math.round(r / 32) * 32,
+      Math.round(g / 32) * 32,
+      Math.round(b / 32) * 32,
+    );
     buckets.set(key, (buckets.get(key) ?? 0) + 1);
   }
   return [...buckets.entries()]
@@ -114,19 +149,32 @@ export const deriveBrandBook = ({
   colors?: string[];
   existing?: BrandBook;
 }): BrandBook => {
-  const palette = colors?.length ? colors : existing?.colors ?? [];
-  const voice = existing?.voice
-    || brief?.split("\n").map((line) => line.trim()).find((line) => line.length > 8)?.slice(0, 140)
-    || copy?.split("\n").map((line) => line.trim()).find((line) => line.length > 8)?.slice(0, 140);
+  const palette = colors?.length ? colors : (existing?.colors ?? []);
+  const voice =
+    existing?.voice ||
+    brief
+      ?.split("\n")
+      .map((line) => line.trim())
+      .find((line) => line.length > 8)
+      ?.slice(0, 140) ||
+    copy
+      ?.split("\n")
+      .map((line) => line.trim())
+      .find((line) => line.length > 8)
+      ?.slice(0, 140);
   const notes = [
     `# ברנדבוק — ${clientName || existing?.name || "המותג"}`,
     industry && `תחום: ${industry}`,
     website && `אתר: ${website}`,
-    palette.length ? `צבעים: ${palette.join(" · ")}` : "צבעים: ייגזרו מהלוגו ומהבריף — בלי פלטת סטוק גנרית.",
+    palette.length
+      ? `צבעים: ${palette.join(" · ")}`
+      : "צבעים: ייגזרו מהלוגו ומהבריף — בלי פלטת סטוק גנרית.",
     voice && `טון: ${voice}`,
     brief && `בריף:\n${brief.slice(0, 500)}`,
     "כללים: לא ממציאים לוגו, לא משבשים עברית, שומרים היררכיה כותרת → הצעה → CTA, שוליים בטוחים 6%.",
-  ].filter(Boolean).join("\n\n");
+  ]
+    .filter(Boolean)
+    .join("\n\n");
   return {
     name: clientName || existing?.name,
     colors: palette,
@@ -137,7 +185,8 @@ export const deriveBrandBook = ({
   };
 };
 
-const sanitizeFileName = (name: string) => name.replace(/[^\w.\u0590-\u05FF-]+/g, "_").slice(0, 80);
+const sanitizeFileName = (name: string) =>
+  name.replace(/[^\w.\u0590-\u05FF-]+/g, "_").slice(0, 80);
 
 export const uploadCreativeAsset = async ({
   supabase,
@@ -153,14 +202,22 @@ export const uploadCreativeAsset = async ({
   kind: "logo" | "reference" | "brandbook";
 }) => {
   const path = `${tenantId}/creative/${itemId}/${kind}/${Date.now()}_${sanitizeFileName(file.name)}`;
-  const { error } = await supabase.storage.from("entity-attachments").upload(path, file);
+  const { error } = await supabase.storage
+    .from("entity-attachments")
+    .upload(path, file);
   if (error) throw error;
-  const { data } = supabase.storage.from("entity-attachments").getPublicUrl(path);
+  const { data } = supabase.storage
+    .from("entity-attachments")
+    .getPublicUrl(path);
   return { path, url: data.publicUrl, name: file.name };
 };
 
 export const sampleColorsFromFile = async (file: File): Promise<string[]> => {
-  if (typeof createImageBitmap !== "function" || typeof document === "undefined") return [];
+  if (
+    typeof createImageBitmap !== "function" ||
+    typeof document === "undefined"
+  )
+    return [];
   const bitmap = await createImageBitmap(file);
   const canvas = document.createElement("canvas");
   const max = 64;
@@ -178,49 +235,72 @@ export const sampleColorsFromFile = async (file: File): Promise<string[]> => {
   return sampleColorsFromImageData(data);
 };
 
-export const filesFromAttachments = (attachments: unknown): ClientAttachment[] => {
+export const filesFromAttachments = (
+  attachments: unknown,
+): ClientAttachment[] => {
   if (!Array.isArray(attachments)) return [];
   return attachments.flatMap((file) => {
     if (!file || typeof file !== "object") return [];
     const rec = file as Record<string, unknown>;
     const name = typeof rec.name === "string" ? rec.name : "";
     if (!name) return [];
-    return [{
-      name,
-      path: typeof rec.path === "string" ? rec.path : undefined,
-      size: typeof rec.size === "number" ? rec.size : undefined,
-      type: typeof rec.type === "string" ? rec.type : undefined,
-    }];
+    return [
+      {
+        name,
+        path: typeof rec.path === "string" ? rec.path : undefined,
+        size: typeof rec.size === "number" ? rec.size : undefined,
+        type: typeof rec.type === "string" ? rec.type : undefined,
+      },
+    ];
   });
 };
 
 export const isImageAttachment = (file: ClientAttachment) =>
-  (file.type?.startsWith("image/") ?? false) || /\.(png|jpe?g|webp|gif|svg)$/i.test(file.name);
+  (file.type?.startsWith("image/") ?? false) ||
+  /\.(png|jpe?g|webp|gif|svg)$/i.test(file.name);
 
 export const websiteHref = (website?: string | null) => {
   if (!website) return undefined;
   return /^https?:\/\//i.test(website) ? website : `https://${website}`;
 };
 
-export const mergeStyleReferences = (current: StyleReference[], incoming: StyleReference[]) => {
+export const mergeStyleReferences = (
+  current: StyleReference[],
+  incoming: StyleReference[],
+) => {
   const seen = new Set(current.map((item) => item.url));
-  return [...current, ...incoming.filter((item) => item.url && !seen.has(item.url))];
+  return [
+    ...current,
+    ...incoming.filter((item) => item.url && !seen.has(item.url)),
+  ];
 };
 
-export const styleRefsFromClientFiles = (supabase: SupabaseClient, attachments: unknown): StyleReference[] =>
+export const styleRefsFromClientFiles = (
+  supabase: SupabaseClient,
+  attachments: unknown,
+): StyleReference[] =>
   filesFromAttachments(attachments)
     .filter((file) => !!file.path && isImageAttachment(file))
     .map((file) => ({
-      url: supabase.storage.from("entity-attachments").getPublicUrl(file.path!).data.publicUrl,
+      url: supabase.storage.from("entity-attachments").getPublicUrl(file.path!)
+        .data.publicUrl,
       name: file.name,
     }));
 
 export const GENERATION_ABORTED = "ABORTED";
 
 export const isGenerationAborted = (error: unknown) => {
-  if (error instanceof Error && error.message === GENERATION_ABORTED) return true;
-  if (typeof error === "object" && error && "name" in error && (error as { name?: string }).name === "AbortError") return true;
-  if (error instanceof Error && /aborted|AbortError/i.test(error.message)) return true;
+  if (error instanceof Error && error.message === GENERATION_ABORTED)
+    return true;
+  if (
+    typeof error === "object" &&
+    error &&
+    "name" in error &&
+    (error as { name?: string }).name === "AbortError"
+  )
+    return true;
+  if (error instanceof Error && /aborted|AbortError/i.test(error.message))
+    return true;
   return false;
 };
 

@@ -6,7 +6,8 @@ const resend = new Resend(Deno.env.get("RESEND_API_KEY"));
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+  "Access-Control-Allow-Headers":
+    "authorization, x-client-info, apikey, content-type",
 };
 
 function generateTemporaryPassword(): string {
@@ -34,7 +35,6 @@ const handler = async (req: Request): Promise<Response> => {
       throw new Error("Email is required");
     }
 
-
     // Create Supabase admin client
     const supabaseAdmin = createClient(
       Deno.env.get("SUPABASE_URL") ?? "",
@@ -44,27 +44,31 @@ const handler = async (req: Request): Promise<Response> => {
           autoRefreshToken: false,
           persistSession: false,
         },
-      }
+      },
     );
 
     // Check if user exists
-    const { data: userData, error: userError } = await supabaseAdmin.auth.admin.listUsers();
-    
+    const { data: userData, error: userError } =
+      await supabaseAdmin.auth.admin.listUsers();
+
     if (userError) {
       console.error("Error fetching users:", userError);
       throw new Error("Failed to fetch user data");
     }
 
-    const user = userData.users.find(u => u.email === email);
+    const user = userData.users.find((u) => u.email === email);
 
     if (!user) {
       // Return success even if user doesn't exist (security best practice)
       return new Response(
-        JSON.stringify({ success: true, message: "If the email exists, a temporary password has been sent." }),
+        JSON.stringify({
+          success: true,
+          message: "If the email exists, a temporary password has been sent.",
+        }),
         {
           status: 200,
           headers: { "Content-Type": "application/json", ...corsHeaders },
-        }
+        },
       );
     }
 
@@ -72,10 +76,10 @@ const handler = async (req: Request): Promise<Response> => {
     const temporaryPassword = generateTemporaryPassword();
 
     // Update user's password
-    const { error: updateError } = await supabaseAdmin.auth.admin.updateUserById(
-      user.id,
-      { password: temporaryPassword }
-    );
+    const { error: updateError } =
+      await supabaseAdmin.auth.admin.updateUserById(user.id, {
+        password: temporaryPassword,
+      });
 
     if (updateError) {
       console.error("Error updating password:", updateError);
@@ -115,29 +119,27 @@ const handler = async (req: Request): Promise<Response> => {
       `,
     });
 
-
     return new Response(
-      JSON.stringify({ 
-        success: true, 
-        message: "סיסמה זמנית נשלחה למייל שלך" 
+      JSON.stringify({
+        success: true,
+        message: "סיסמה זמנית נשלחה למייל שלך",
       }),
       {
         status: 200,
         headers: { "Content-Type": "application/json", ...corsHeaders },
-      }
+      },
     );
-
   } catch (error: any) {
     console.error("Error in send-temporary-password function:", error);
     return new Response(
-      JSON.stringify({ 
+      JSON.stringify({
         success: false,
-        error: error.message || "שגיאה בשליחת סיסמה זמנית" 
+        error: error.message || "שגיאה בשליחת סיסמה זמנית",
       }),
       {
         status: 500,
         headers: { "Content-Type": "application/json", ...corsHeaders },
-      }
+      },
     );
   }
 };

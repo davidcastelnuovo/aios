@@ -94,8 +94,12 @@ export function IntegrationVisibilitySelector({
       if (error) throw error;
     },
     onSuccess: (_, visibility) => {
-      queryClient.invalidateQueries({ queryKey: ["integration-visibility", integrationId, tenantId] });
-      queryClient.invalidateQueries({ queryKey: ["user-integrations", tenantId] });
+      queryClient.invalidateQueries({
+        queryKey: ["integration-visibility", integrationId, tenantId],
+      });
+      queryClient.invalidateQueries({
+        queryKey: ["user-integrations", tenantId],
+      });
       const labels: Record<Visibility, string> = {
         private: "פרטי",
         org: "כל הארגון",
@@ -141,9 +145,10 @@ export function IntegrationVisibilitySelector({
             key={opt.value}
             htmlFor={`vis-${opt.value}-${integrationId}`}
             className={`flex items-center gap-3 p-3 rounded-lg border cursor-pointer transition-colors
-              ${currentVisibility === opt.value
-                ? "border-primary bg-primary/5"
-                : "border-border hover:bg-accent/40"
+              ${
+                currentVisibility === opt.value
+                  ? "border-primary bg-primary/5"
+                  : "border-border hover:bg-accent/40"
               }
               ${updateVisibility.isPending ? "opacity-60 pointer-events-none" : ""}
             `}

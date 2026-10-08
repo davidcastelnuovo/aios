@@ -1,8 +1,5 @@
 import { isNonProduction, resolveFrontendAppEnv } from "@/lib/appEnv";
-import {
-  resolveBuildCommitSha,
-  resolveBuildGitBranch,
-} from "@/lib/buildInfo";
+import { resolveBuildCommitSha, resolveBuildGitBranch } from "@/lib/buildInfo";
 
 export function StagingBanner() {
   const env = resolveFrontendAppEnv();

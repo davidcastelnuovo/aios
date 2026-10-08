@@ -19,8 +19,14 @@ import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { useCurrentTenant } from "@/hooks/useCurrentTenant";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
-import { formatLastClientCall, type PulseSnapshotRow } from "@/lib/pulseDashboard";
-import { isClientCallUpdate, resolveClientUpdateType } from "@/lib/clientUpdateType";
+import {
+  formatLastClientCall,
+  type PulseSnapshotRow,
+} from "@/lib/pulseDashboard";
+import {
+  isClientCallUpdate,
+  resolveClientUpdateType,
+} from "@/lib/clientUpdateType";
 
 export type PulseClientCallTarget = {
   clientId: string;
@@ -62,14 +68,16 @@ export function PulseClientCallDialog({
       if (!target?.clientId) return [];
       const { data, error } = await supabase
         .from("client_updates")
-        .select(`
+        .select(
+          `
           id,
           content,
           update_type,
           created_at,
           user_id,
           profiles:user_id (full_name, email)
-        `)
+        `,
+        )
         .eq("client_id", target.clientId)
         .in("update_type", ["call", "weekly_update"])
         .order("created_at", { ascending: false })
@@ -138,7 +146,9 @@ export function PulseClientCallDialog({
     }
   };
 
-  const pulseCallLabel = target.pulse ? formatLastClientCall(target.pulse) : "—";
+  const pulseCallLabel = target.pulse
+    ? formatLastClientCall(target.pulse)
+    : "—";
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -171,22 +181,30 @@ export function PulseClientCallDialog({
                 טוען עדכונים...
               </div>
             ) : callUpdates.length === 0 ? (
-              <p className="text-sm text-muted-foreground py-2">אין עדיין עדכוני שיחה מתועדים.</p>
+              <p className="text-sm text-muted-foreground py-2">
+                אין עדיין עדכוני שיחה מתועדים.
+              </p>
             ) : (
               <div className="space-y-2 max-h-[200px] overflow-y-auto">
                 {callUpdates.map((update: any) => (
                   <Card key={update.id} className="bg-muted/50">
                     <CardContent className="p-3">
-                      <p className="text-sm whitespace-pre-wrap">{update.content}</p>
+                      <p className="text-sm whitespace-pre-wrap">
+                        {update.content}
+                      </p>
                       <div className="flex items-center gap-2 text-xs text-muted-foreground mt-2 flex-wrap">
                         <User className="h-3 w-3 shrink-0" />
                         <span>
-                          {update.profiles?.full_name || update.profiles?.email || "משתמש"}
+                          {update.profiles?.full_name ||
+                            update.profiles?.email ||
+                            "משתמש"}
                         </span>
                         <span>•</span>
                         <Calendar className="h-3 w-3 shrink-0" />
                         <span>
-                          {format(new Date(update.created_at), "d/M/yy HH:mm", { locale: he })}
+                          {format(new Date(update.created_at), "d/M/yy HH:mm", {
+                            locale: he,
+                          })}
                         </span>
                       </div>
                     </CardContent>
@@ -209,10 +227,19 @@ export function PulseClientCallDialog({
         </div>
 
         <DialogFooter className="gap-2 sm:justify-end">
-          <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={saving}>
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => onOpenChange(false)}
+            disabled={saving}
+          >
             ביטול
           </Button>
-          <Button type="button" onClick={handleSave} disabled={saving || !content.trim()}>
+          <Button
+            type="button"
+            onClick={handleSave}
+            disabled={saving || !content.trim()}
+          >
             {saving ? (
               <>
                 <Loader2 className="h-4 w-4 ml-1 animate-spin" />

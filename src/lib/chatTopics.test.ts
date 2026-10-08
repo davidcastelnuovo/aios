@@ -1,6 +1,12 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { composerLockedForChat, streamAppliesToActive, topicIsLive, topicModeLabel, topicTitle } from "./chatTopics.ts";
+import {
+  composerLockedForChat,
+  streamAppliesToActive,
+  topicIsLive,
+  topicModeLabel,
+  topicTitle,
+} from "./chatTopics.ts";
 
 test("topic title falls back and collapses whitespace", () => {
   assert.equal(topicTitle(null), "שיחה חדשה");
@@ -27,7 +33,28 @@ test("stream tokens only paint the chat they were sent from", () => {
 });
 
 test("composer locks only an in-flight stream, not a debating history row", () => {
-  assert.equal(composerLockedForChat({ conversationId: "a", liveStreamIds: ["a"], status: "idle" }), true);
-  assert.equal(composerLockedForChat({ conversationId: "b", liveStreamIds: ["a"], status: "idle" }), false);
-  assert.equal(composerLockedForChat({ conversationId: "b", liveStreamIds: [], status: "debating" }), false);
+  assert.equal(
+    composerLockedForChat({
+      conversationId: "a",
+      liveStreamIds: ["a"],
+      status: "idle",
+    }),
+    true,
+  );
+  assert.equal(
+    composerLockedForChat({
+      conversationId: "b",
+      liveStreamIds: ["a"],
+      status: "idle",
+    }),
+    false,
+  );
+  assert.equal(
+    composerLockedForChat({
+      conversationId: "b",
+      liveStreamIds: [],
+      status: "debating",
+    }),
+    false,
+  );
 });

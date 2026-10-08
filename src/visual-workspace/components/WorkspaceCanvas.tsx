@@ -13,7 +13,10 @@ export function WorkspaceCanvas() {
 
   return (
     <div className="flex flex-col h-full overflow-auto bg-gradient-to-br from-background via-background to-primary/5">
-      <header className="flex items-center gap-2 px-6 py-4 border-b bg-background/80 backdrop-blur sticky top-0 z-10" dir="rtl">
+      <header
+        className="flex items-center gap-2 px-6 py-4 border-b bg-background/80 backdrop-blur sticky top-0 z-10"
+        dir="rtl"
+      >
         <Sparkles className="h-5 w-5 text-primary" />
         <div className="flex-1">
           <h1 className="text-xl font-bold">Visual Workspace</h1>

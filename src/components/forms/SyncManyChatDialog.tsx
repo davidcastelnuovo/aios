@@ -12,7 +12,13 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
-import { RefreshCw, CheckCircle, Users, UserPlus, AlertCircle } from "lucide-react";
+import {
+  RefreshCw,
+  CheckCircle,
+  Users,
+  UserPlus,
+  AlertCircle,
+} from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 
 interface SyncResult {
@@ -30,14 +36,14 @@ export function SyncManyChatDialog() {
 
   // Count unique ManyChat contacts in chat messages
   const { data: manychatContactsCount } = useQuery({
-    queryKey: ['manychat-contacts', tenantId],
+    queryKey: ["manychat-contacts", tenantId],
     queryFn: async () => {
       const { count, error } = await supabase
-        .from('chat_messages')
-        .select('client_id', { count: 'exact', head: true })
-        .eq('tenant_id', tenantId)
-        .not('raw_provider_data', 'is', null);
-      
+        .from("chat_messages")
+        .select("client_id", { count: "exact", head: true })
+        .eq("tenant_id", tenantId)
+        .not("raw_provider_data", "is", null);
+
       if (error) throw error;
       return count || 0;
     },
@@ -46,20 +52,23 @@ export function SyncManyChatDialog() {
 
   const syncMutation = useMutation({
     mutationFn: async () => {
-      const { data, error } = await supabase.functions.invoke('sync-manychat-subscribers', {
-        body: { tenantId }
-      });
-      
+      const { data, error } = await supabase.functions.invoke(
+        "sync-manychat-subscribers",
+        {
+          body: { tenantId },
+        },
+      );
+
       if (error) throw error;
       return data as SyncResult;
     },
     onSuccess: (data) => {
       setSyncResult(data);
-      toast.success('הסנכרון הושלם בהצלחה');
+      toast.success("הסנכרון הושלם בהצלחה");
     },
     onError: (error: any) => {
-      console.error('Sync error:', error);
-      toast.error('שגיאה בסנכרון עם ManyChat');
+      console.error("Sync error:", error);
+      toast.error("שגיאה בסנכרון עם ManyChat");
     },
   });
 
@@ -107,7 +116,9 @@ export function SyncManyChatDialog() {
                 <li>בודק הודעות ManyChat שנשמרו במערכת</li>
                 <li>מתאים ללקוחות/לידים לפי מספר טלפון</li>
                 <li>עדכון subscriber_id - ללא כפילויות</li>
-                <li className="text-amber-600">רק מי ששלח הודעה דרך ManyChat יסונכרן</li>
+                <li className="text-amber-600">
+                  רק מי ששלח הודעה דרך ManyChat יסונכרן
+                </li>
               </ul>
             </AlertDescription>
           </Alert>
@@ -119,10 +130,16 @@ export function SyncManyChatDialog() {
                 <div className="font-semibold">הסנכרון הושלם בהצלחה</div>
                 <div className="text-sm space-y-1">
                   <div>• סה"כ הודעות: {syncResult.total}</div>
-                  <div className="text-green-600">✓ לקוחות: {syncResult.matched_clients}</div>
-                  <div className="text-green-600">✓ לידים: {syncResult.matched_leads}</div>
+                  <div className="text-green-600">
+                    ✓ לקוחות: {syncResult.matched_clients}
+                  </div>
+                  <div className="text-green-600">
+                    ✓ לידים: {syncResult.matched_leads}
+                  </div>
                   {syncResult.unmatched > 0 && (
-                    <div className="text-amber-600">ללא התאמה: {syncResult.unmatched}</div>
+                    <div className="text-amber-600">
+                      ללא התאמה: {syncResult.unmatched}
+                    </div>
                   )}
                 </div>
               </AlertDescription>
@@ -147,12 +164,9 @@ export function SyncManyChatDialog() {
                 </>
               )}
             </Button>
-            
+
             {syncResult && (
-              <Button
-                variant="outline"
-                onClick={() => setOpen(false)}
-              >
+              <Button variant="outline" onClick={() => setOpen(false)}>
                 סגור
               </Button>
             )}

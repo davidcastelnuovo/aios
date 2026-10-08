@@ -29,7 +29,11 @@ export function wantsStreamableHttp(req: Request, pathname: string): boolean {
 }
 
 function sessionIdFrom(req: Request): string {
-  return (req.headers.get("mcp-session-id") || req.headers.get("Mcp-Session-Id") || "").trim();
+  return (
+    req.headers.get("mcp-session-id") ||
+    req.headers.get("Mcp-Session-Id") ||
+    ""
+  ).trim();
 }
 
 function newSessionId(): string {
@@ -53,7 +57,9 @@ function jsonRpcResponse(
 
 function prefersJsonResponse(req: Request): boolean {
   const accept = (req.headers.get("accept") || "").toLowerCase();
-  return !accept || accept.includes("application/json") || accept.includes("*/*");
+  return (
+    !accept || accept.includes("application/json") || accept.includes("*/*")
+  );
 }
 
 export async function handleStreamableMcpRequest(
@@ -119,7 +125,11 @@ export async function handleStreamableMcpRequest(
 
   if (req.method !== "POST") {
     return jsonRpcResponse(
-      { jsonrpc: "2.0", id: null, error: { code: -32600, message: "Invalid Request" } },
+      {
+        jsonrpc: "2.0",
+        id: null,
+        error: { code: -32600, message: "Invalid Request" },
+      },
       sessionId,
       405,
     );
@@ -130,7 +140,11 @@ export async function handleStreamableMcpRequest(
     msg = await req.json();
   } catch {
     return jsonRpcResponse(
-      { jsonrpc: "2.0", id: null, error: { code: -32700, message: "Parse error" } },
+      {
+        jsonrpc: "2.0",
+        id: null,
+        error: { code: -32700, message: "Parse error" },
+      },
       sessionId,
     );
   }
@@ -183,7 +197,8 @@ export function compactToolsForGrok(tools: Array<Record<string, unknown>>) {
     }
     const schema = copy.inputSchema as Record<string, unknown> | undefined;
     if (schema && typeof schema === "object") {
-      const props = schema.properties as Record<string, Record<string, unknown>> | undefined;
+      const props = schema.properties as
+        Record<string, Record<string, unknown>> | undefined;
       if (props) {
         const nextProps: Record<string, Record<string, unknown>> = {};
         for (const [k, v] of Object.entries(props)) {

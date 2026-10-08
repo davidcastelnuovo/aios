@@ -18,9 +18,12 @@ export function CreativeDirectDock({ agentUrl, opening, onOpen }: Props) {
         <MessageCircle className="h-4 w-4" />
       </div>
       <div className="min-w-0 flex-1">
-        <p className="text-xs font-semibold text-foreground">{CREATIVE_DIRECT_LABEL_HE}</p>
+        <p className="text-xs font-semibold text-foreground">
+          {CREATIVE_DIRECT_LABEL_HE}
+        </p>
         <p className="text-[11px] text-muted-foreground">
-          כרמן ומחלקת קריאייטיב מבקשות תמונות כאן. הצ׳אט יוצר את הקריאייטיב ומעלה אותו לפרויקט.
+          כרמן ומחלקת קריאייטיב מבקשות תמונות כאן. הצ׳אט יוצר את הקריאייטיב
+          ומעלה אותו לפרויקט.
           {agentUrl ? " · הצ׳אט פתוח" : " · עדיין לא נפתח"}
         </p>
       </div>
@@ -32,8 +35,17 @@ export function CreativeDirectDock({ agentUrl, opening, onOpen }: Props) {
           </a>
         </Button>
       ) : (
-        <Button size="sm" className="gap-1.5 bg-pink-600 hover:bg-pink-700" onClick={onOpen} disabled={opening}>
-          {opening ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Sparkles className="h-3.5 w-3.5" />}
+        <Button
+          size="sm"
+          className="gap-1.5 bg-pink-600 hover:bg-pink-700"
+          onClick={onOpen}
+          disabled={opening}
+        >
+          {opening ? (
+            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+          ) : (
+            <Sparkles className="h-3.5 w-3.5" />
+          )}
           פתח צ׳אט
         </Button>
       )}

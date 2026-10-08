@@ -3,8 +3,25 @@ import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Megaphone, Phone, Mail, Briefcase, ChevronDown, ChevronUp, LayoutGrid, MessageSquare, Pencil } from "lucide-react";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import {
+  Megaphone,
+  Phone,
+  Mail,
+  Briefcase,
+  ChevronDown,
+  ChevronUp,
+  LayoutGrid,
+  MessageSquare,
+  Pencil,
+} from "lucide-react";
 import { AddCampaignerForm } from "@/components/forms/AddCampaignerForm";
 import { Button } from "@/components/ui/button";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
@@ -18,20 +35,30 @@ type ViewMode = "chat" | "grid";
 
 export default function Campaigners() {
   const [viewMode, setViewMode] = useState<ViewMode>("chat");
-  const [pendingChatCampaignerId, setPendingChatCampaignerId] = useState<string | null>(null);
+  const [pendingChatCampaignerId, setPendingChatCampaignerId] = useState<
+    string | null
+  >(null);
 
   // Editing a campaigner opens the chat view focused on that campaigner, instead of a modal dialog.
   const openCampaignerInChat = (campaignerId: string) => {
     setPendingChatCampaignerId(campaignerId);
     setViewMode("chat");
   };
-  const [expandedCampaigner, setExpandedCampaigner] = useState<string | null>(null);
+  const [expandedCampaigner, setExpandedCampaigner] = useState<string | null>(
+    null,
+  );
   const { tenantId } = useCurrentTenant();
   const { crossTenantAgencyIds } = useCrossTenantAgencyIds();
   const { selectedAgency } = useAgency();
 
   const { data: campaigners, isLoading } = useQuery({
-    queryKey: ["campaigners", tenantId, "grid", crossTenantAgencyIds.join(","), selectedAgency],
+    queryKey: [
+      "campaigners",
+      tenantId,
+      "grid",
+      crossTenantAgencyIds.join(","),
+      selectedAgency,
+    ],
     queryFn: async () => {
       if (!tenantId) return [];
 
@@ -42,12 +69,15 @@ export default function Campaigners() {
           .from("campaigner_agencies")
           .select("campaigner_id")
           .in("agency_id", crossTenantAgencyIds);
-        crossTenantCampaignerIds = Array.from(new Set((caRows || []).map((r: any) => r.campaigner_id)));
+        crossTenantCampaignerIds = Array.from(
+          new Set((caRows || []).map((r: any) => r.campaigner_id)),
+        );
       }
 
       let query = supabase
         .from("campaigners")
-        .select(`
+        .select(
+          `
           *,
           campaigner_agencies(
             agency_id,
@@ -60,11 +90,14 @@ export default function Campaigners() {
             campaigner_payment,
             clients(id, name, status, agency_id)
           )
-        `)
+        `,
+        )
         .order("created_at", { ascending: false });
 
       if (crossTenantCampaignerIds.length > 0) {
-        query = query.or(`tenant_id.eq.${tenantId},id.in.(${crossTenantCampaignerIds.join(",")})`);
+        query = query.or(
+          `tenant_id.eq.${tenantId},id.in.(${crossTenantCampaignerIds.join(",")})`,
+        );
       } else {
         query = query.eq("tenant_id", tenantId);
       }
@@ -72,11 +105,14 @@ export default function Campaigners() {
       const { data, error } = await query;
       if (error) throw error;
 
-      return data?.map(campaigner => ({
+      return data?.map((campaigner) => ({
         ...campaigner,
-        client_team: campaigner.client_team?.filter((ct: any) =>
-          ct.clients?.status === "active" || ct.clients?.status === "onboarding"
-        ) || [],
+        client_team:
+          campaigner.client_team?.filter(
+            (ct: any) =>
+              ct.clients?.status === "active" ||
+              ct.clients?.status === "onboarding",
+          ) || [],
       }));
     },
     enabled: viewMode === "grid" && !!tenantId,
@@ -84,14 +120,18 @@ export default function Campaigners() {
 
   const filteredCampaigners = useMemo(() => {
     if (!campaigners) return [];
-    if (!selectedAgency || selectedAgency === 'all') return campaigners;
+    if (!selectedAgency || selectedAgency === "all") return campaigners;
     return campaigners.filter((campaigner: any) =>
-      campaigner.campaigner_agencies?.some((ca: any) => ca.agency_id === selectedAgency)
+      campaigner.campaigner_agencies?.some(
+        (ca: any) => ca.agency_id === selectedAgency,
+      ),
     );
   }, [campaigners, selectedAgency]);
 
   const toggleCampaigner = (campaignerId: string) => {
-    setExpandedCampaigner(expandedCampaigner === campaignerId ? null : campaignerId);
+    setExpandedCampaigner(
+      expandedCampaigner === campaignerId ? null : campaignerId,
+    );
   };
 
   return (
@@ -127,29 +167,39 @@ export default function Campaigners() {
         <>
           <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
             {filteredCampaigners?.map((campaigner: any) => (
-              <Card key={campaigner.id} className="shadow-card hover:shadow-lg transition-all hover:scale-[1.02]">
+              <Card
+                key={campaigner.id}
+                className="shadow-card hover:shadow-lg transition-all hover:scale-[1.02]"
+              >
                 <CardHeader>
                   <div className="flex items-start justify-between">
                     <div className="flex items-center gap-3">
-                      <div className={`p-2 rounded-lg ${campaigner.active ? 'bg-success/10' : 'bg-muted'}`}>
-                        <Megaphone className={`h-5 w-5 ${campaigner.active ? 'text-success' : 'text-muted-foreground'}`} />
+                      <div
+                        className={`p-2 rounded-lg ${campaigner.active ? "bg-success/10" : "bg-muted"}`}
+                      >
+                        <Megaphone
+                          className={`h-5 w-5 ${campaigner.active ? "text-success" : "text-muted-foreground"}`}
+                        />
                       </div>
                       <div>
-                        <CardTitle className="text-lg">{campaigner.full_name}</CardTitle>
+                        <CardTitle className="text-lg">
+                          {campaigner.full_name}
+                        </CardTitle>
                         {campaigner.role && campaigner.role.length > 0 && (
                           <p className="text-sm text-muted-foreground flex items-center gap-1">
                             <Briefcase className="h-3 w-3" />
                             {campaigner.role.join(", ")}
                           </p>
                         )}
-                        {campaigner.campaigner_agencies && campaigner.campaigner_agencies.length > 0 && (
-                          <p className="text-xs text-muted-foreground mt-1">
-                            {(campaigner.campaigner_agencies || [])
-                              .map((ca: any) => ca?.agencies?.name)
-                              .filter(Boolean)
-                              .join(", ") || "—"}
-                          </p>
-                        )}
+                        {campaigner.campaigner_agencies &&
+                          campaigner.campaigner_agencies.length > 0 && (
+                            <p className="text-xs text-muted-foreground mt-1">
+                              {(campaigner.campaigner_agencies || [])
+                                .map((ca: any) => ca?.agencies?.name)
+                                .filter(Boolean)
+                                .join(", ") || "—"}
+                            </p>
+                          )}
                       </div>
                     </div>
                     <div className="flex items-center gap-2">
@@ -162,7 +212,14 @@ export default function Campaigners() {
                       >
                         <Pencil className="h-4 w-4" />
                       </Button>
-                      <Badge variant="outline" className={campaigner.active ? "bg-success/10 text-success border-success/20" : "bg-muted"}>
+                      <Badge
+                        variant="outline"
+                        className={
+                          campaigner.active
+                            ? "bg-success/10 text-success border-success/20"
+                            : "bg-muted"
+                        }
+                      >
                         {campaigner.active ? "פעיל" : "לא פעיל"}
                       </Badge>
                     </div>
@@ -180,7 +237,11 @@ export default function Campaigners() {
                     entityId={campaigner.id}
                     phone={campaigner.phone}
                     displayName={campaigner.full_name}
-                    roleTitle={Array.isArray(campaigner.role) ? campaigner.role.join(", ") : campaigner.role}
+                    roleTitle={
+                      Array.isArray(campaigner.role)
+                        ? campaigner.role.join(", ")
+                        : campaigner.role
+                    }
                   />
                   {campaigner.email && (
                     <div className="flex items-center gap-2 text-sm text-muted-foreground">
@@ -194,40 +255,49 @@ export default function Campaigners() {
                     </p>
                   )}
 
-                  {campaigner.client_team && campaigner.client_team.length > 0 && (
-                    <div className="mt-3 pt-3 border-t">
-                      <button
-                        className="w-full flex items-center justify-between p-2 hover:bg-muted/50 rounded text-foreground"
-                        onClick={() => toggleCampaigner(campaigner.id)}
-                      >
-                        <span className="text-sm font-semibold">לקוחות משויכים ({campaigner.client_team.length})</span>
-                        {expandedCampaigner === campaigner.id ? (
-                          <ChevronUp className="h-4 w-4" />
-                        ) : (
-                          <ChevronDown className="h-4 w-4" />
-                        )}
-                      </button>
+                  {campaigner.client_team &&
+                    campaigner.client_team.length > 0 && (
+                      <div className="mt-3 pt-3 border-t">
+                        <button
+                          className="w-full flex items-center justify-between p-2 hover:bg-muted/50 rounded text-foreground"
+                          onClick={() => toggleCampaigner(campaigner.id)}
+                        >
+                          <span className="text-sm font-semibold">
+                            לקוחות משויכים ({campaigner.client_team.length})
+                          </span>
+                          {expandedCampaigner === campaigner.id ? (
+                            <ChevronUp className="h-4 w-4" />
+                          ) : (
+                            <ChevronDown className="h-4 w-4" />
+                          )}
+                        </button>
 
-                      {expandedCampaigner === campaigner.id && (
-                        <div className="overflow-x-auto mt-2">
-                          <Table>
-                            <TableHeader>
-                              <TableRow>
-                                <TableHead className="text-right">שם לקוח</TableHead>
-                              </TableRow>
-                            </TableHeader>
-                            <TableBody>
-                              {campaigner.client_team.map((assignment: any) => (
-                                <TableRow key={assignment.id}>
-                                  <TableCell className="font-medium">{assignment.clients?.name ?? "—"}</TableCell>
+                        {expandedCampaigner === campaigner.id && (
+                          <div className="overflow-x-auto mt-2">
+                            <Table>
+                              <TableHeader>
+                                <TableRow>
+                                  <TableHead className="text-right">
+                                    שם לקוח
+                                  </TableHead>
                                 </TableRow>
-                              ))}
-                            </TableBody>
-                          </Table>
-                        </div>
-                      )}
-                    </div>
-                  )}
+                              </TableHeader>
+                              <TableBody>
+                                {campaigner.client_team.map(
+                                  (assignment: any) => (
+                                    <TableRow key={assignment.id}>
+                                      <TableCell className="font-medium">
+                                        {assignment.clients?.name ?? "—"}
+                                      </TableCell>
+                                    </TableRow>
+                                  ),
+                                )}
+                              </TableBody>
+                            </Table>
+                          </div>
+                        )}
+                      </div>
+                    )}
                 </CardContent>
               </Card>
             ))}
@@ -238,7 +308,9 @@ export default function Campaigners() {
               <CardContent className="flex flex-col items-center justify-center py-12">
                 <Megaphone className="h-12 w-12 text-muted-foreground mb-4" />
                 <h3 className="text-lg font-semibold mb-1">אין אנשי צוות</h3>
-                <p className="text-sm text-muted-foreground">התחל בהוספת איש צוות ראשון</p>
+                <p className="text-sm text-muted-foreground">
+                  התחל בהוספת איש צוות ראשון
+                </p>
               </CardContent>
             </Card>
           )}

@@ -12,9 +12,20 @@ const options = [
 ];
 
 test("search matches Hebrew/English names and descriptions", () => {
-  assert.deepEqual(filterEntityAssignmentOptions(options, "ארבע").map((item) => item.id), ["1"]);
-  assert.deepEqual(filterEntityAssignmentOptions(options, "bever").map((item) => item.id), ["2"]);
-  assert.deepEqual(filterEntityAssignmentOptions(options, "example.com").map((item) => item.id), ["3"]);
+  assert.deepEqual(
+    filterEntityAssignmentOptions(options, "ארבע").map((item) => item.id),
+    ["1"],
+  );
+  assert.deepEqual(
+    filterEntityAssignmentOptions(options, "bever").map((item) => item.id),
+    ["2"],
+  );
+  assert.deepEqual(
+    filterEntityAssignmentOptions(options, "example.com").map(
+      (item) => item.id,
+    ),
+    ["3"],
+  );
 });
 
 test("single assignment replaces the previous choice", () => {
@@ -25,4 +36,3 @@ test("multiple assignment toggles members independently", () => {
   assert.deepEqual(toggleEntityAssignmentId(["1"], "2", true), ["1", "2"]);
   assert.deepEqual(toggleEntityAssignmentId(["1", "2"], "1", true), ["2"]);
 });
-

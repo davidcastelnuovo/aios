@@ -1,27 +1,31 @@
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.75.0';
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2.75.0";
 
 const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Headers":
+    "authorization, x-client-info, apikey, content-type",
 };
 
 Deno.serve(async (req) => {
-  if (req.method === 'OPTIONS') {
+  if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
   }
 
   try {
-    const authHeader = req.headers.get('Authorization');
+    const authHeader = req.headers.get("Authorization");
     if (!authHeader) {
-      console.error('❌ Missing Authorization header');
-      return new Response(JSON.stringify({ error: 'Missing authorization header' }), {
-        status: 401,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      });
+      console.error("❌ Missing Authorization header");
+      return new Response(
+        JSON.stringify({ error: "Missing authorization header" }),
+        {
+          status: 401,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        },
+      );
     }
 
-    const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
-    const supabaseKey = Deno.env.get('SUPABASE_ANON_KEY')!;
+    const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
+    const supabaseKey = Deno.env.get("SUPABASE_ANON_KEY")!;
     const supabase = createClient(supabaseUrl, supabaseKey, {
       global: {
         headers: { Authorization: authHeader },
@@ -29,30 +33,48 @@ Deno.serve(async (req) => {
       auth: {
         persistSession: false,
         autoRefreshToken: false,
-      }
+      },
     });
 
     // Verify authentication
-    const token = authHeader.replace('Bearer ', '');
-    const { data: { user }, error: authError } = await supabase.auth.getUser(token);
+    const token = authHeader.replace("Bearer ", "");
+    const {
+      data: { user },
+      error: authError,
+    } = await supabase.auth.getUser(token);
     if (authError || !user) {
-      console.error('❌ Authentication failed:', authError);
-      return new Response(JSON.stringify({ 
-        error: 'Unauthorized',
-        details: authError?.message 
-      }), {
-        status: 401,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      });
+      console.error("❌ Authentication failed:", authError);
+      return new Response(
+        JSON.stringify({
+          error: "Unauthorized",
+          details: authError?.message,
+        }),
+        {
+          status: 401,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        },
+      );
     }
-    
 
-    const { clientId, leadId, message, channel = 'whatsapp', templateId, templateVariables } = await req.json();
+    const {
+      clientId,
+      leadId,
+      message,
+      channel = "whatsapp",
+      templateId,
+      templateVariables,
+    } = await req.json();
 
     if ((!clientId && !leadId) || (!message && !templateId)) {
       return new Response(
-        JSON.stringify({ error: 'clientId or leadId, and either message or templateId are required' }),
-        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        JSON.stringify({
+          error:
+            "clientId or leadId, and either message or templateId are required",
+        }),
+        {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        },
       );
     }
 
@@ -63,37 +85,39 @@ Deno.serve(async (req) => {
 
     if (clientId) {
       const { data: client, error: clientError } = await supabase
-        .from('clients')
-        .select('id, name, manychat_subscriber_id, tenant_id, agency_id')
-        .eq('id', clientId)
+        .from("clients")
+        .select("id, name, manychat_subscriber_id, tenant_id, agency_id")
+        .eq("id", clientId)
         .single();
 
       if (clientError || !client) {
-        console.error('Client fetch error:', clientError);
-        return new Response(JSON.stringify({ error: 'Client not found' }), {
+        console.error("Client fetch error:", clientError);
+        return new Response(JSON.stringify({ error: "Client not found" }), {
           status: 404,
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
       contact = client;
-      contactTable = 'clients';
+      contactTable = "clients";
       contactId = clientId;
     } else {
       const { data: lead, error: leadError } = await supabase
-        .from('leads')
-        .select('id, company_name as name, manychat_subscriber_id, tenant_id, agency_id')
-        .eq('id', leadId)
+        .from("leads")
+        .select(
+          "id, company_name as name, manychat_subscriber_id, tenant_id, agency_id",
+        )
+        .eq("id", leadId)
         .single();
 
       if (leadError || !lead) {
-        console.error('Lead fetch error:', leadError);
-        return new Response(JSON.stringify({ error: 'Lead not found' }), {
+        console.error("Lead fetch error:", leadError);
+        return new Response(JSON.stringify({ error: "Lead not found" }), {
           status: 404,
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
       contact = lead;
-      contactTable = 'leads';
+      contactTable = "leads";
       contactId = leadId;
     }
 
@@ -101,111 +125,129 @@ Deno.serve(async (req) => {
 
     // Verify user has access to this tenant
     const { data: tenantAccess, error: tenantAccessError } = await supabase
-      .from('tenant_users')
-      .select('tenant_id')
-      .eq('user_id', user.id)
-      .eq('tenant_id', tenantId)
+      .from("tenant_users")
+      .select("tenant_id")
+      .eq("user_id", user.id)
+      .eq("tenant_id", tenantId)
       .maybeSingle();
 
     if (tenantAccessError || !tenantAccess) {
-      return new Response(JSON.stringify({ error: 'Access denied' }), {
+      return new Response(JSON.stringify({ error: "Access denied" }), {
         status: 403,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
     if (!contact.manychat_subscriber_id) {
       return new Response(
-        JSON.stringify({ error: 'Contact does not have ManyChat subscriber ID configured' }),
-        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        JSON.stringify({
+          error: "Contact does not have ManyChat subscriber ID configured",
+        }),
+        {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        },
       );
     }
 
-    
     // Get template if templateId provided
     let template = null;
     if (templateId) {
       const { data: templateData, error: templateError } = await supabase
-        .from('manychat_templates')
-        .select('*')
-        .eq('id', templateId)
-        .eq('tenant_id', tenantId)
-        .eq('is_active', true)
+        .from("manychat_templates")
+        .select("*")
+        .eq("id", templateId)
+        .eq("tenant_id", tenantId)
+        .eq("is_active", true)
         .single();
-      
+
       if (templateError || !templateData) {
-        console.error('Template fetch error:', templateError);
+        console.error("Template fetch error:", templateError);
         return new Response(
-          JSON.stringify({ error: 'Template not found or inactive' }),
-          { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          JSON.stringify({ error: "Template not found or inactive" }),
+          {
+            status: 404,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          },
         );
       }
-      
+
       if (!templateData.automation_trigger_name) {
         return new Response(
-          JSON.stringify({ error: 'Template does not have automation trigger name configured' }),
-          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          JSON.stringify({
+            error: "Template does not have automation trigger name configured",
+          }),
+          {
+            status: 400,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          },
         );
       }
-      
+
       template = templateData;
     }
 
     // Get ManyChat API Key from tenant_integrations
     const { data: integration, error: integrationError } = await supabase
-      .from('tenant_integrations')
-      .select('api_key')
-      .eq('tenant_id', tenantId)
-      .eq('integration_type', 'manychat')
-      .eq('is_active', true)
+      .from("tenant_integrations")
+      .select("api_key")
+      .eq("tenant_id", tenantId)
+      .eq("integration_type", "manychat")
+      .eq("is_active", true)
       .single();
 
     if (integrationError || !integration || !integration.api_key) {
-      console.error('Integration error:', integrationError);
+      console.error("Integration error:", integrationError);
       return new Response(
-        JSON.stringify({ error: 'ManyChat integration not configured for this tenant' }),
-        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        JSON.stringify({
+          error: "ManyChat integration not configured for this tenant",
+        }),
+        {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        },
       );
     }
 
     // Send message via ManyChat API
     let manychatPayload: any;
     let manychatUrl: string;
-    
+
     if (template) {
       // Trigger automation with template
-      manychatUrl = 'https://api.manychat.com/fb/sending/sendContent';
+      manychatUrl = "https://api.manychat.com/fb/sending/sendContent";
       manychatPayload = {
         version: 1,
         subscriber_id: contact.manychat_subscriber_id,
         trigger_name: template.automation_trigger_name,
-        context: templateVariables || {}
+        context: templateVariables || {},
       };
     } else {
       // Send regular message
-      manychatUrl = 'https://api.manychat.com/fb/sending/sendContent';
+      manychatUrl = "https://api.manychat.com/fb/sending/sendContent";
       manychatPayload = {
         subscriber_id: contact.manychat_subscriber_id,
         data: {
-          version: 'v2',
+          version: "v2",
           content: {
             type: channel,
-            messages: [{
-              type: 'text',
-              text: message,
-            }],
+            messages: [
+              {
+                type: "text",
+                text: message,
+              },
+            ],
           },
         },
-        message_tag: 'ACCOUNT_UPDATE',
+        message_tag: "ACCOUNT_UPDATE",
       };
     }
 
-
     const manychatResponse = await fetch(manychatUrl, {
-      method: 'POST',
+      method: "POST",
       headers: {
-        'Authorization': `Bearer ${integration.api_key}`,
-        'Content-Type': 'application/json',
+        Authorization: `Bearer ${integration.api_key}`,
+        "Content-Type": "application/json",
       },
       body: JSON.stringify(manychatPayload),
     });
@@ -213,29 +255,32 @@ Deno.serve(async (req) => {
     const manychatData = await manychatResponse.json();
 
     if (!manychatResponse.ok) {
-      console.error('❌ ManyChat API error:', manychatData);
-      console.error('Subscriber ID used:', contact.manychat_subscriber_id);
-      console.error('Contact info:', { id: contact.id, name: contact.name });
+      console.error("❌ ManyChat API error:", manychatData);
+      console.error("Subscriber ID used:", contact.manychat_subscriber_id);
+      console.error("Contact info:", { id: contact.id, name: contact.name });
       return new Response(
-        JSON.stringify({ 
-          error: 'Failed to send message via ManyChat', 
+        JSON.stringify({
+          error: "Failed to send message via ManyChat",
           details: manychatData,
           subscriberId: contact.manychat_subscriber_id,
-          hint: 'The subscriber ID may be incorrect. Check if you need to use a different ID format or if the subscriber exists in ManyChat.'
+          hint: "The subscriber ID may be incorrect. Check if you need to use a different ID format or if the subscriber exists in ManyChat.",
         }),
-        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        {
+          status: 500,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        },
       );
     }
 
     // Save message to database
     const insertData: any = {
       tenant_id: tenantId,
-      direction: 'outbound',
-      message_text: template 
+      direction: "outbound",
+      message_text: template
         ? `[Template: ${template.display_name}] ${JSON.stringify(templateVariables || {})}`
         : message,
       channel,
-      provider: 'manychat',
+      provider: "manychat",
       sent_by_user_id: user.id,
       connection_user_id: user.id,
       raw_provider_data: manychatData,
@@ -248,23 +293,27 @@ Deno.serve(async (req) => {
     }
 
     const { error: saveError } = await supabase
-      .from('chat_messages')
+      .from("chat_messages")
       .insert(insertData);
 
     if (saveError) {
-      console.error('Save message error:', saveError);
+      console.error("Save message error:", saveError);
     }
 
     return new Response(
       JSON.stringify({ success: true, provider: manychatData }),
-      { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      { headers: { ...corsHeaders, "Content-Type": "application/json" } },
     );
   } catch (error) {
-    console.error('Send chat message error:', error);
-    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    console.error("Send chat message error:", error);
+    const errorMessage =
+      error instanceof Error ? error.message : "Unknown error";
     return new Response(
-      JSON.stringify({ error: 'Internal server error', details: errorMessage }),
-      { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      JSON.stringify({ error: "Internal server error", details: errorMessage }),
+      {
+        status: 500,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      },
     );
   }
 });

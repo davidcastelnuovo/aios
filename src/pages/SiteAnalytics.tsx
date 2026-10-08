@@ -4,12 +4,31 @@ import { supabase } from "@/integrations/supabase/client";
 import { useTenant } from "@/contexts/TenantContext";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { toast } from "sonner";
-import { BarChart3, Code, Globe, Users, MousePointer, TrendingUp, Eye } from "lucide-react";
+import {
+  BarChart3,
+  Code,
+  Globe,
+  Users,
+  MousePointer,
+  TrendingUp,
+  Eye,
+} from "lucide-react";
 import { AnalyticsDashboard } from "@/components/analytics/AnalyticsDashboard";
 import { TrackingCodeGenerator } from "@/components/analytics/TrackingCodeGenerator";
-import { DateRangeFilter, type DateRange, getDateRangeFromPreset, getComparisonRange } from "@/components/analytics/DateRangeFilter";
+import {
+  DateRangeFilter,
+  type DateRange,
+  getDateRangeFromPreset,
+  getComparisonRange,
+} from "@/components/analytics/DateRangeFilter";
 import { ImportAnalyticsDialog } from "@/components/analytics/ImportAnalyticsDialog";
 
 export default function SiteAnalytics() {
@@ -17,8 +36,12 @@ export default function SiteAnalytics() {
   const queryClient = useQueryClient();
   const [selectedClientId, setSelectedClientId] = useState<string>("");
   const [activeTab, setActiveTab] = useState("dashboard");
-  const [dateRange, setDateRange] = useState<DateRange>(() => getDateRangeFromPreset("7_days"));
-  const [comparisonRange, setComparisonRange] = useState<DateRange | undefined>();
+  const [dateRange, setDateRange] = useState<DateRange>(() =>
+    getDateRangeFromPreset("7_days"),
+  );
+  const [comparisonRange, setComparisonRange] = useState<
+    DateRange | undefined
+  >();
   const [compareEnabled, setCompareEnabled] = useState(false);
 
   const handleRangeChange = (range: DateRange, comparison?: DateRange) => {
@@ -56,10 +79,12 @@ export default function SiteAnalytics() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("site_tracking_configs")
-        .select(`
+        .select(
+          `
           *,
           clients:client_id (id, name)
-        `)
+        `,
+        )
         .eq("tenant_id", currentTenantId)
         .order("created_at", { ascending: false });
       if (error) throw error;
@@ -81,7 +106,7 @@ export default function SiteAnalytics() {
       // Get sessions today
       const today = new Date();
       today.setHours(0, 0, 0, 0);
-      
+
       const { count: sessionsToday } = await supabase
         .from("site_sessions")
         .select("*", { count: "exact", head: true })
@@ -114,21 +139,36 @@ export default function SiteAnalytics() {
 
   // Create tracking config mutation
   const createConfigMutation = useMutation({
-    mutationFn: async ({ clientId, domain }: { clientId: string; domain: string }) => {
+    mutationFn: async ({
+      clientId,
+      domain,
+    }: {
+      clientId: string;
+      domain: string;
+    }) => {
       const { data, error } = await supabase
         .from("site_tracking_configs")
-        .insert([{
-          client_id: clientId,
-          tenant_id: currentTenantId!,
-          website_domain: domain,
-        } as { client_id: string; tenant_id: string; website_domain: string; tracking_id?: string }])
+        .insert([
+          {
+            client_id: clientId,
+            tenant_id: currentTenantId!,
+            website_domain: domain,
+          } as {
+            client_id: string;
+            tenant_id: string;
+            website_domain: string;
+            tracking_id?: string;
+          },
+        ])
         .select()
         .single();
       if (error) throw error;
       return data;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["site_tracking_configs", currentTenantId] });
+      queryClient.invalidateQueries({
+        queryKey: ["site_tracking_configs", currentTenantId],
+      });
       toast.success("קוד מעקב נוצר בהצלחה");
     },
     onError: (error) => {
@@ -150,8 +190,11 @@ export default function SiteAnalytics() {
             מעקב אחר תנועה באתרי הלקוחות שלך
           </p>
         </div>
-        
-        <Select value={selectedClientId || "all"} onValueChange={(val) => setSelectedClientId(val === "all" ? "" : val)}>
+
+        <Select
+          value={selectedClientId || "all"}
+          onValueChange={(val) => setSelectedClientId(val === "all" ? "" : val)}
+        >
           <SelectTrigger className="w-[250px]">
             <SelectValue placeholder="בחר לקוח לצפייה" />
           </SelectTrigger>
@@ -174,30 +217,38 @@ export default function SiteAnalytics() {
             <Users className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{stats?.totalVisitors || 0}</div>
+            <div className="text-2xl font-bold">
+              {stats?.totalVisitors || 0}
+            </div>
           </CardContent>
         </Card>
-        
+
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">סשנים היום</CardTitle>
             <Globe className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{stats?.sessionsToday || 0}</div>
+            <div className="text-2xl font-bold">
+              {stats?.sessionsToday || 0}
+            </div>
           </CardContent>
         </Card>
-        
+
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">צפיות דפים היום</CardTitle>
+            <CardTitle className="text-sm font-medium">
+              צפיות דפים היום
+            </CardTitle>
             <Eye className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{stats?.pageviewsToday || 0}</div>
+            <div className="text-2xl font-bold">
+              {stats?.pageviewsToday || 0}
+            </div>
           </CardContent>
         </Card>
-        
+
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">אירועים היום</CardTitle>
@@ -225,15 +276,15 @@ export default function SiteAnalytics() {
         <TabsContent value="dashboard" className="space-y-4">
           {/* Date Filters - Above the dashboard cards */}
           <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 pt-2">
-            <DateRangeFilter 
+            <DateRangeFilter
               onRangeChange={handleRangeChange}
               onCompareChange={handleCompareChange}
             />
             <ImportAnalyticsDialog tenantId={currentTenantId} />
           </div>
 
-          <AnalyticsDashboard 
-            tenantId={currentTenantId} 
+          <AnalyticsDashboard
+            tenantId={currentTenantId}
             clientId={selectedClientId || undefined}
             dateRange={dateRange}
             comparisonRange={comparisonRange}
@@ -244,9 +295,9 @@ export default function SiteAnalytics() {
         <TabsContent value="tracking" className="space-y-4">
           <TrackingCodeGenerator
             clients={clients}
-            trackingConfigs={trackingConfigs.map(c => ({
+            trackingConfigs={trackingConfigs.map((c) => ({
               ...c,
-              settings: (c.settings as Record<string, boolean>) || {}
+              settings: (c.settings as Record<string, boolean>) || {},
             }))}
             onCreateConfig={createConfigMutation.mutate}
             isCreating={createConfigMutation.isPending}

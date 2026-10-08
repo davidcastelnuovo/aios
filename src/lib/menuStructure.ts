@@ -10,12 +10,50 @@
  *     reassigns that module to a different tab+section (drag-and-drop in workspace)
  */
 import {
-  LayoutDashboard, Building2, Users, Megaphone, DollarSign, CheckSquare, Clock,
-  Truck, BarChart3, User, UserPlus, ShieldCheck, UserCheck, Target, TrendingUp,
-  Settings, Building, Zap, Package, Palette, Bot, Menu, ListTree, Table, Table2,
-  MessageSquare, MessagesSquare, PenLine, Mail, Plug, Cpu, Share2, Home, Briefcase,
-  ClipboardList, AlertTriangle, Send, Brain, Sparkles, Globe, ShoppingCart,
-  CalendarRange, FileText, type LucideIcon,
+  LayoutDashboard,
+  Building2,
+  Users,
+  Megaphone,
+  DollarSign,
+  CheckSquare,
+  Clock,
+  Truck,
+  BarChart3,
+  User,
+  UserPlus,
+  ShieldCheck,
+  UserCheck,
+  Target,
+  TrendingUp,
+  Settings,
+  Building,
+  Zap,
+  Package,
+  Palette,
+  Bot,
+  Menu,
+  ListTree,
+  Table,
+  Table2,
+  MessageSquare,
+  MessagesSquare,
+  PenLine,
+  Mail,
+  Plug,
+  Cpu,
+  Share2,
+  Home,
+  Briefcase,
+  ClipboardList,
+  AlertTriangle,
+  Send,
+  Brain,
+  Sparkles,
+  Globe,
+  ShoppingCart,
+  CalendarRange,
+  FileText,
+  type LucideIcon,
 } from "lucide-react";
 
 export type MenuTabId = "daily" | "sales" | "marketing" | "admin";
@@ -55,23 +93,44 @@ export const MENU_TABS: MenuTab[] = [
         label: "לקוחות",
         items: [
           { key: "clients", label: "לקוחות", route: "/clients", icon: Users },
-          { key: "dmm-dashboard", label: "דשבורד בדיקת דופק", route: "/dmm-dashboard", icon: LayoutDashboard, permission: "crm_dashboard" },
-          
+          {
+            key: "dmm-dashboard",
+            label: "דשבורד בדיקת דופק",
+            route: "/dmm-dashboard",
+            icon: LayoutDashboard,
+            permission: "crm_dashboard",
+          },
+
           { key: "tasks", label: "משימות", route: "/tasks", icon: CheckSquare },
-          { key: "time-tracking", label: "מעקב זמני עבודה", route: "/time-tracking", icon: Clock },
+          {
+            key: "time-tracking",
+            label: "מעקב זמני עבודה",
+            route: "/time-tracking",
+            icon: Clock,
+          },
         ],
       },
       {
         label: "צוות",
         items: [
-          { key: "campaigners", label: "קמפיינרים", route: "/campaigners", icon: Megaphone },
+          {
+            key: "campaigners",
+            label: "קמפיינרים",
+            route: "/campaigners",
+            icon: Megaphone,
+          },
         ],
       },
       {
         label: "תקשורת",
         items: [
           { key: "chat", label: "צ'אט", route: "/chat", icon: MessageSquare },
-          { key: "team-chat", label: "צ'אט צוות", route: "/team-chat", icon: MessagesSquare },
+          {
+            key: "team-chat",
+            label: "צ'אט צוות",
+            route: "/team-chat",
+            icon: MessagesSquare,
+          },
         ],
       },
     ],
@@ -84,22 +143,47 @@ export const MENU_TABS: MenuTab[] = [
       {
         label: "מכירות",
         items: [
-          { key: "sales-dashboard", label: "דשבורד מכירות", route: "/sales-dashboard", icon: TrendingUp },
+          {
+            key: "sales-dashboard",
+            label: "דשבורד מכירות",
+            route: "/sales-dashboard",
+            icon: TrendingUp,
+          },
           { key: "leads", label: "לידים", route: "/leads", icon: Target },
         ],
       },
       {
         label: "צוות מכירות",
         items: [
-          { key: "sales-people", label: "אנשי מכירות", route: "/sales-people", icon: UserCheck },
+          {
+            key: "sales-people",
+            label: "אנשי מכירות",
+            route: "/sales-people",
+            icon: UserCheck,
+          },
         ],
       },
       {
         label: "כלים",
         items: [
-          { key: "products", label: "מוצרים ושירותים", route: "/products", icon: Package },
-          { key: "signatures", label: "חתימות", route: "/signatures", icon: PenLine },
-          { key: "lead-integrations", label: "אינטגרציות לידים", route: "/lead-integrations", icon: Plug },
+          {
+            key: "products",
+            label: "מוצרים ושירותים",
+            route: "/products",
+            icon: Package,
+          },
+          {
+            key: "signatures",
+            label: "חתימות",
+            route: "/signatures",
+            icon: PenLine,
+          },
+          {
+            key: "lead-integrations",
+            label: "אינטגרציות לידים",
+            route: "/lead-integrations",
+            icon: Plug,
+          },
         ],
       },
     ],
@@ -112,15 +196,36 @@ export const MENU_TABS: MenuTab[] = [
       {
         label: "מחלקת שיווק",
         items: [
-          { key: "marketing", label: "מחלקת שיווק", route: "/marketing", icon: Share2, permission: "social_media" },
-          { key: "campaign-alerts", label: "התראות קמפיינים", route: "/campaign-alerts", icon: AlertTriangle },
-          { key: "recordings", label: "הקלטות", route: "/recordings", icon: Cpu },
+          {
+            key: "marketing",
+            label: "מחלקת שיווק",
+            route: "/marketing",
+            icon: Share2,
+            permission: "social_media",
+          },
+          {
+            key: "campaign-alerts",
+            label: "התראות קמפיינים",
+            route: "/campaign-alerts",
+            icon: AlertTriangle,
+          },
+          {
+            key: "recordings",
+            label: "הקלטות",
+            route: "/recordings",
+            icon: Cpu,
+          },
         ],
       },
       {
         label: "אנליטיקס",
         items: [
-          { key: "dynamic-tables", label: "דשבורדים ודוחות", route: "/dynamic-tables", icon: Table2 },
+          {
+            key: "dynamic-tables",
+            label: "דשבורדים ודוחות",
+            route: "/dynamic-tables",
+            icon: Table2,
+          },
         ],
       },
       {
@@ -133,8 +238,18 @@ export const MENU_TABS: MenuTab[] = [
       {
         label: "אינטגרציות",
         items: [
-          { key: "integrations", label: "אינטגרציות", route: "/integrations", icon: Plug },
-          { key: "chat-integrations", label: "אינטגרציות צ'אט", route: "/chat-integrations", icon: MessageSquare },
+          {
+            key: "integrations",
+            label: "אינטגרציות",
+            route: "/integrations",
+            icon: Plug,
+          },
+          {
+            key: "chat-integrations",
+            label: "אינטגרציות צ'אט",
+            route: "/chat-integrations",
+            icon: MessageSquare,
+          },
         ],
       },
     ],
@@ -147,35 +262,96 @@ export const MENU_TABS: MenuTab[] = [
       {
         label: "ניהול",
         items: [
-          { key: "dashboard", label: "דשבורד", route: "/dashboard", icon: LayoutDashboard },
-          { key: "tenants", label: "ניהול ארגונים", route: "/tenants", icon: Building },
-          { key: "agencies", label: "סוכנויות", route: "/agencies", icon: Building2 },
+          {
+            key: "dashboard",
+            label: "דשבורד",
+            route: "/dashboard",
+            icon: LayoutDashboard,
+          },
+          {
+            key: "tenants",
+            label: "ניהול ארגונים",
+            route: "/tenants",
+            icon: Building,
+          },
+          {
+            key: "agencies",
+            label: "סוכנויות",
+            route: "/agencies",
+            icon: Building2,
+          },
           { key: "users", label: "משתמשים", route: "/users", icon: Users },
-          { key: "suppliers", label: "ספקים", route: "/suppliers", icon: Truck },
+          {
+            key: "suppliers",
+            label: "ספקים",
+            route: "/suppliers",
+            icon: Truck,
+          },
         ],
       },
       {
         label: "כספים",
         items: [
-          { key: "accounting-integrations", label: "הנהלת חשבונות", route: "/accounting-integrations", icon: BarChart3 },
+          {
+            key: "accounting-integrations",
+            label: "הנהלת חשבונות",
+            route: "/accounting-integrations",
+            icon: BarChart3,
+          },
         ],
       },
       {
         label: "אוטומציה ו-AI",
         items: [
-          { key: "automations", label: "אוטומציות", route: "/automations", icon: Zap },
+          {
+            key: "automations",
+            label: "אוטומציות",
+            route: "/automations",
+            icon: Zap,
+          },
           { key: "agents", label: "סוכני AI", route: "/agents", icon: Bot },
-          { key: "visual-workspace", label: "Visual Workspace", route: "/visual-workspace", icon: Sparkles, permission: "agents" },
+          {
+            key: "visual-workspace",
+            label: "Visual Workspace",
+            route: "/visual-workspace",
+            icon: Sparkles,
+            permission: "agents",
+          },
         ],
       },
       {
         label: "הגדרות",
         items: [
-          { key: "my-profile", label: "אזור אישי", route: "/my-profile", icon: User },
-          { key: "branding", label: "התאמת מערכת", route: "/branding", icon: Palette },
-          { key: "menu-management", label: "ניהול תפריטים", route: "/menu-management", icon: Menu },
-          { key: "fields-management", label: "ניהול שדות", route: "/fields-management", icon: ListTree },
-          { key: "ai-support", label: "תמיכה טכנית AI", route: "/ai-support", icon: ShieldCheck },
+          {
+            key: "my-profile",
+            label: "אזור אישי",
+            route: "/my-profile",
+            icon: User,
+          },
+          {
+            key: "branding",
+            label: "התאמת מערכת",
+            route: "/branding",
+            icon: Palette,
+          },
+          {
+            key: "menu-management",
+            label: "ניהול תפריטים",
+            route: "/menu-management",
+            icon: Menu,
+          },
+          {
+            key: "fields-management",
+            label: "ניהול שדות",
+            route: "/fields-management",
+            icon: ListTree,
+          },
+          {
+            key: "ai-support",
+            label: "תמיכה טכנית AI",
+            route: "/ai-support",
+            icon: ShieldCheck,
+          },
         ],
       },
     ],
@@ -186,37 +362,187 @@ export const MENU_TABS: MenuTab[] = [
  *  Drawn in workspace as connected to their parent via a secondary line.
  */
 export const SUB_MODULES: Array<MenuModule & { parentKey: string }> = [
-  { key: "gmail-settings", parentKey: "gmail", label: "הגדרות Gmail", route: "/gmail-settings", icon: Settings },
-  { key: "agent-tasks", parentKey: "agents", label: "משימות סוכן", route: "/agent-tasks", icon: CheckSquare },
-  { key: "manus-tasks", parentKey: "agents", label: "Manus Tasks", route: "/manus-tasks", icon: CheckSquare },
-  { key: "github-agent", parentKey: "agents", label: "GitHub Agent", route: "/github-agent", icon: Bot },
-  { key: "rank-tracking", parentKey: "marketing", label: "מעקב מיקומים", route: "/rank-tracking", icon: Target },
-  { key: "site-analytics", parentKey: "dynamic-tables", label: "אנליטיקס אתרים", route: "/site-analytics", icon: BarChart3 },
-  { key: "accounting-settings", parentKey: "accounting-integrations", label: "הגדרות הנה״ח", route: "/accounting-settings", icon: Settings },
+  {
+    key: "gmail-settings",
+    parentKey: "gmail",
+    label: "הגדרות Gmail",
+    route: "/gmail-settings",
+    icon: Settings,
+  },
+  {
+    key: "agent-tasks",
+    parentKey: "agents",
+    label: "משימות סוכן",
+    route: "/agent-tasks",
+    icon: CheckSquare,
+  },
+  {
+    key: "manus-tasks",
+    parentKey: "agents",
+    label: "Manus Tasks",
+    route: "/manus-tasks",
+    icon: CheckSquare,
+  },
+  {
+    key: "github-agent",
+    parentKey: "agents",
+    label: "GitHub Agent",
+    route: "/github-agent",
+    icon: Bot,
+  },
+  {
+    key: "rank-tracking",
+    parentKey: "marketing",
+    label: "מעקב מיקומים",
+    route: "/rank-tracking",
+    icon: Target,
+  },
+  {
+    key: "site-analytics",
+    parentKey: "dynamic-tables",
+    label: "אנליטיקס אתרים",
+    route: "/site-analytics",
+    icon: BarChart3,
+  },
+  {
+    key: "accounting-settings",
+    parentKey: "accounting-integrations",
+    label: "הגדרות הנה״ח",
+    route: "/accounting-settings",
+    icon: Settings,
+  },
 ];
 
 /** Settings pages reachable only from /integrations or /lead-integrations.
  *  Shown in workspace as connected to their parent module.
  */
 export const INTEGRATION_SETTINGS: Array<MenuModule & { parentKey: string }> = [
-  { key: "manychat-settings", parentKey: "chat-integrations", label: "ManyChat", route: "/manychat-settings", icon: MessageSquare },
-  { key: "green-api-settings", parentKey: "chat-integrations", label: "Green API", route: "/green-api-settings", icon: MessageSquare },
-  { key: "manus-wa-settings", parentKey: "chat-integrations", label: "Manus WA", route: "/manus-wa-settings", icon: MessageSquare },
-  { key: "telegram-settings", parentKey: "chat-integrations", label: "Telegram", route: "/telegram-settings", icon: Send },
-  { key: "facebook-settings", parentKey: "lead-integrations", label: "Facebook", route: "/facebook-settings", icon: Globe },
-  { key: "google-ads-settings", parentKey: "lead-integrations", label: "Google Ads", route: "/google-ads-settings", icon: Globe },
-  { key: "google-analytics-settings", parentKey: "lead-integrations", label: "Google Analytics", route: "/google-analytics-settings", icon: BarChart3 },
-  { key: "google-search-console-settings", parentKey: "lead-integrations", label: "Search Console", route: "/google-search-console-settings", icon: Globe },
-  { key: "ahrefs-settings", parentKey: "lead-integrations", label: "Ahrefs", route: "/ahrefs-settings", icon: BarChart3 },
-  { key: "tiktok-settings", parentKey: "lead-integrations", label: "TikTok", route: "/tiktok-settings", icon: Share2 },
-  { key: "make-settings", parentKey: "lead-integrations", label: "Make", route: "/make-settings", icon: Plug },
-  { key: "serpapi-settings", parentKey: "lead-integrations", label: "SerpAPI", route: "/integrations/serpapi", icon: Globe },
-  { key: "zoom-settings", parentKey: "lead-integrations", label: "Zoom", route: "/zoom-settings", icon: CalendarRange },
-  { key: "telephony-settings", parentKey: "lead-integrations", label: "טלפוניה", route: "/telephony-settings", icon: MessageSquare },
-  { key: "maskyoo-settings", parentKey: "lead-integrations", label: "Maskyoo", route: "/maskyoo-settings", icon: MessageSquare },
-  { key: "wordpress-settings", parentKey: "lead-integrations", label: "WordPress", route: "/wordpress-settings", icon: Globe },
-  { key: "manus-settings", parentKey: "agents", label: "Manus", route: "/manus-settings", icon: Bot },
-  { key: "unified-settings", parentKey: "lead-integrations", label: "Unified.to", route: "/unified-settings", icon: Plug },
+  {
+    key: "manychat-settings",
+    parentKey: "chat-integrations",
+    label: "ManyChat",
+    route: "/manychat-settings",
+    icon: MessageSquare,
+  },
+  {
+    key: "green-api-settings",
+    parentKey: "chat-integrations",
+    label: "Green API",
+    route: "/green-api-settings",
+    icon: MessageSquare,
+  },
+  {
+    key: "manus-wa-settings",
+    parentKey: "chat-integrations",
+    label: "Manus WA",
+    route: "/manus-wa-settings",
+    icon: MessageSquare,
+  },
+  {
+    key: "telegram-settings",
+    parentKey: "chat-integrations",
+    label: "Telegram",
+    route: "/telegram-settings",
+    icon: Send,
+  },
+  {
+    key: "facebook-settings",
+    parentKey: "lead-integrations",
+    label: "Facebook",
+    route: "/facebook-settings",
+    icon: Globe,
+  },
+  {
+    key: "google-ads-settings",
+    parentKey: "lead-integrations",
+    label: "Google Ads",
+    route: "/google-ads-settings",
+    icon: Globe,
+  },
+  {
+    key: "google-analytics-settings",
+    parentKey: "lead-integrations",
+    label: "Google Analytics",
+    route: "/google-analytics-settings",
+    icon: BarChart3,
+  },
+  {
+    key: "google-search-console-settings",
+    parentKey: "lead-integrations",
+    label: "Search Console",
+    route: "/google-search-console-settings",
+    icon: Globe,
+  },
+  {
+    key: "ahrefs-settings",
+    parentKey: "lead-integrations",
+    label: "Ahrefs",
+    route: "/ahrefs-settings",
+    icon: BarChart3,
+  },
+  {
+    key: "tiktok-settings",
+    parentKey: "lead-integrations",
+    label: "TikTok",
+    route: "/tiktok-settings",
+    icon: Share2,
+  },
+  {
+    key: "make-settings",
+    parentKey: "lead-integrations",
+    label: "Make",
+    route: "/make-settings",
+    icon: Plug,
+  },
+  {
+    key: "serpapi-settings",
+    parentKey: "lead-integrations",
+    label: "SerpAPI",
+    route: "/integrations/serpapi",
+    icon: Globe,
+  },
+  {
+    key: "zoom-settings",
+    parentKey: "lead-integrations",
+    label: "Zoom",
+    route: "/zoom-settings",
+    icon: CalendarRange,
+  },
+  {
+    key: "telephony-settings",
+    parentKey: "lead-integrations",
+    label: "טלפוניה",
+    route: "/telephony-settings",
+    icon: MessageSquare,
+  },
+  {
+    key: "maskyoo-settings",
+    parentKey: "lead-integrations",
+    label: "Maskyoo",
+    route: "/maskyoo-settings",
+    icon: MessageSquare,
+  },
+  {
+    key: "wordpress-settings",
+    parentKey: "lead-integrations",
+    label: "WordPress",
+    route: "/wordpress-settings",
+    icon: Globe,
+  },
+  {
+    key: "manus-settings",
+    parentKey: "agents",
+    label: "Manus",
+    route: "/manus-settings",
+    icon: Bot,
+  },
+  {
+    key: "unified-settings",
+    parentKey: "lead-integrations",
+    label: "Unified.to",
+    route: "/unified-settings",
+    icon: Plug,
+  },
 ];
 
 /** Routes that exist in App.tsx but have no clear path from the sidebar.
@@ -224,7 +550,12 @@ export const INTEGRATION_SETTINGS: Array<MenuModule & { parentKey: string }> = [
  */
 export const ORPHAN_MODULES: MenuModule[] = [
   { key: "home", label: "בית", route: "/home", icon: Home },
-  { key: "landing-page-submissions", label: "פניות מדפי נחיתה", route: "/landing-page-submissions", icon: FileText },
+  {
+    key: "landing-page-submissions",
+    label: "פניות מדפי נחיתה",
+    route: "/landing-page-submissions",
+    icon: FileText,
+  },
   { key: "finance", label: "כספים", route: "/finance", icon: DollarSign },
 ];
 
@@ -254,7 +585,8 @@ function buildExplicitPermissionMap(): Map<string, string> {
       if (m.permission) map.set(m.key, m.permission);
     }
   };
-  for (const tab of MENU_TABS) for (const section of tab.sections) collect(section.items);
+  for (const tab of MENU_TABS)
+    for (const section of tab.sections) collect(section.items);
   collect(SUB_MODULES);
   collect(INTEGRATION_SETTINGS);
   collect(ORPHAN_MODULES);
@@ -266,7 +598,8 @@ function buildExplicitPermissionMap(): Map<string, string> {
  * Explicit `permission` value (or override) if set, else key.replace(/-/g, "_").
  */
 export function permissionForMenuKey(key: string): string {
-  if (!explicitPermissionByKey) explicitPermissionByKey = buildExplicitPermissionMap();
+  if (!explicitPermissionByKey)
+    explicitPermissionByKey = buildExplicitPermissionMap();
   return explicitPermissionByKey.get(key) ?? key.replace(/-/g, "_");
 }
 
@@ -277,17 +610,23 @@ export function sectionKey(tabId: MenuTabId, sectionLabel: string): SectionKey {
 }
 
 /** Decode a parent_menu_key shaped `tab:<tabId>:<sectionLabel>` */
-export function parseParentMenuKey(parentMenuKey: string | null | undefined):
-  | { tabId: MenuTabId; sectionLabel: string }
-  | null {
+export function parseParentMenuKey(
+  parentMenuKey: string | null | undefined,
+): { tabId: MenuTabId; sectionLabel: string } | null {
   if (!parentMenuKey || !parentMenuKey.startsWith("tab:")) return null;
   const rest = parentMenuKey.slice(4);
   const i = rest.indexOf(":");
   if (i === -1) return null;
-  return { tabId: rest.slice(0, i) as MenuTabId, sectionLabel: rest.slice(i + 1) };
+  return {
+    tabId: rest.slice(0, i) as MenuTabId,
+    sectionLabel: rest.slice(i + 1),
+  };
 }
 
-export function buildParentMenuKey(tabId: MenuTabId, sectionLabel: string): string {
+export function buildParentMenuKey(
+  tabId: MenuTabId,
+  sectionLabel: string,
+): string {
   return `tab:${tabId}:${sectionLabel}`;
 }
 
@@ -297,7 +636,10 @@ export function tabIdForRoute(route: string): MenuTabId | undefined {
   for (const tab of MENU_TABS) {
     for (const section of tab.sections) {
       for (const item of section.items) {
-        if (normalized === item.route || normalized.startsWith(`${item.route}/`)) {
+        if (
+          normalized === item.route ||
+          normalized.startsWith(`${item.route}/`)
+        ) {
           return tab.id;
         }
       }

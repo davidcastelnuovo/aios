@@ -15,7 +15,8 @@ interface ClientDocsEditorProps {
 
 export function ClientDocsEditor({ client, tenantId }: ClientDocsEditorProps) {
   const queryClient = useQueryClient();
-  const { folderLinks, setFolderLinks, attachments, setAttachments } = useFolderLinksAndAttachments(client);
+  const { folderLinks, setFolderLinks, attachments, setAttachments } =
+    useFolderLinksAndAttachments(client);
 
   const handleFolderLinksChange = async (newLinks: any[]) => {
     setFolderLinks(newLinks);
@@ -48,7 +49,8 @@ export function ClientDocsEditor({ client, tenantId }: ClientDocsEditorProps) {
     toast.success(`${label} הועתק`);
   };
 
-  const hasAdAccounts = client.meta_ads_account_id || client.google_ads_account_id;
+  const hasAdAccounts =
+    client.meta_ads_account_id || client.google_ads_account_id;
 
   return (
     <div className="space-y-6">
@@ -59,28 +61,49 @@ export function ClientDocsEditor({ client, tenantId }: ClientDocsEditorProps) {
           </h3>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
             {client.meta_ads_account_id && (
-              <div className="flex items-center gap-2 p-2.5 rounded-lg border bg-card text-sm" dir="rtl">
-                <span className="text-muted-foreground text-xs whitespace-nowrap">Meta Ads:</span>
-                <span className="font-mono truncate flex-1">{client.meta_ads_account_id}</span>
+              <div
+                className="flex items-center gap-2 p-2.5 rounded-lg border bg-card text-sm"
+                dir="rtl"
+              >
+                <span className="text-muted-foreground text-xs whitespace-nowrap">
+                  Meta Ads:
+                </span>
+                <span className="font-mono truncate flex-1">
+                  {client.meta_ads_account_id}
+                </span>
                 <Button
                   variant="ghost"
                   size="icon"
                   className="h-6 w-6 shrink-0"
-                  onClick={() => copyToClipboard(client.meta_ads_account_id, "מזהה Meta Ads")}
+                  onClick={() =>
+                    copyToClipboard(client.meta_ads_account_id, "מזהה Meta Ads")
+                  }
                 >
                   <Copy className="h-3.5 w-3.5" />
                 </Button>
               </div>
             )}
             {client.google_ads_account_id && (
-              <div className="flex items-center gap-2 p-2.5 rounded-lg border bg-card text-sm" dir="rtl">
-                <span className="text-muted-foreground text-xs whitespace-nowrap">Google Ads:</span>
-                <span className="font-mono truncate flex-1">{client.google_ads_account_id}</span>
+              <div
+                className="flex items-center gap-2 p-2.5 rounded-lg border bg-card text-sm"
+                dir="rtl"
+              >
+                <span className="text-muted-foreground text-xs whitespace-nowrap">
+                  Google Ads:
+                </span>
+                <span className="font-mono truncate flex-1">
+                  {client.google_ads_account_id}
+                </span>
                 <Button
                   variant="ghost"
                   size="icon"
                   className="h-6 w-6 shrink-0"
-                  onClick={() => copyToClipboard(client.google_ads_account_id, "מזהה Google Ads")}
+                  onClick={() =>
+                    copyToClipboard(
+                      client.google_ads_account_id,
+                      "מזהה Google Ads",
+                    )
+                  }
                 >
                   <Copy className="h-3.5 w-3.5" />
                 </Button>
@@ -89,7 +112,10 @@ export function ClientDocsEditor({ client, tenantId }: ClientDocsEditorProps) {
           </div>
         </div>
       )}
-      <FolderLinksField links={folderLinks} onChange={handleFolderLinksChange} />
+      <FolderLinksField
+        links={folderLinks}
+        onChange={handleFolderLinksChange}
+      />
       <AttachmentsField
         attachments={attachments}
         onChange={handleAttachmentsChange}

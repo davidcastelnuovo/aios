@@ -1,25 +1,62 @@
 import { useState, useMemo, useEffect } from "react";
 import DOMPurify from "dompurify";
 import { useNavigate } from "react-router-dom";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { supabase } from "@/integrations/supabase/client";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTenant } from "@/contexts/TenantContext";
 import { useToast } from "@/hooks/use-toast";
 import { useUserIntegrations } from "@/hooks/useUserIntegrations";
 import { useSeoScope } from "@/hooks/useSeoScope";
-import { TrendingUp, Globe, FileText, Calendar, ArrowUp, ArrowDown, Loader2, PlusCircle, Search, ChevronsUpDown, Check } from "lucide-react";
+import {
+  TrendingUp,
+  Globe,
+  FileText,
+  Calendar,
+  ArrowUp,
+  ArrowDown,
+  Loader2,
+  PlusCircle,
+  Search,
+  ChevronsUpDown,
+  Check,
+} from "lucide-react";
 import { format } from "date-fns";
 import { he } from "date-fns/locale";
-import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from "recharts";
+import {
+  LineChart,
+  Line,
+  XAxis,
+  YAxis,
+  Tooltip,
+  ResponsiveContainer,
+  CartesianGrid,
+} from "recharts";
 import { cn } from "@/lib/utils";
 import { invalidateClientCrmTablesQueries } from "@/lib/reportQueryCache";
 
@@ -29,7 +66,11 @@ interface SeoReportDialogProps {
   assignedClientIds?: string[];
 }
 
-function ClientSearchSelect({ clients, selectedClient, onSelect }: {
+function ClientSearchSelect({
+  clients,
+  selectedClient,
+  onSelect,
+}: {
   clients: { id: string; name: string; is_seo_client?: boolean | null }[];
   selectedClient: string;
   onSelect: (id: string) => void;
@@ -40,45 +81,68 @@ function ClientSearchSelect({ clients, selectedClient, onSelect }: {
   const filtered = useMemo(() => {
     if (!search.trim()) return clients;
     const q = search.trim().toLowerCase();
-    return clients.filter(c => c.name.toLowerCase().includes(q));
+    return clients.filter((c) => c.name.toLowerCase().includes(q));
   }, [clients, search]);
 
-  const selectedName = clients.find(c => c.id === selectedClient)?.name;
+  const selectedName = clients.find((c) => c.id === selectedClient)?.name;
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
-        <Button variant="outline" role="combobox" aria-expanded={open} className="w-full justify-between font-normal">
+        <Button
+          variant="outline"
+          role="combobox"
+          aria-expanded={open}
+          className="w-full justify-between font-normal"
+        >
           {selectedName || "בחר לקוח..."}
           <ChevronsUpDown className="h-4 w-4 shrink-0 opacity-50" />
         </Button>
       </PopoverTrigger>
-      <PopoverContent className="w-[--radix-popover-trigger-width] p-0" align="start">
+      <PopoverContent
+        className="w-[--radix-popover-trigger-width] p-0"
+        align="start"
+      >
         <div className="flex items-center gap-2 border-b px-3 py-2">
           <Search className="h-4 w-4 text-muted-foreground shrink-0" />
           <Input
             value={search}
-            onChange={e => setSearch(e.target.value)}
+            onChange={(e) => setSearch(e.target.value)}
             placeholder="חפש לקוח..."
             className="border-0 p-0 h-8 focus-visible:ring-0 shadow-none"
           />
         </div>
         <div className="max-h-60 overflow-y-auto p-1">
           {filtered.length === 0 ? (
-            <p className="text-sm text-muted-foreground text-center py-4">לא נמצאו לקוחות</p>
+            <p className="text-sm text-muted-foreground text-center py-4">
+              לא נמצאו לקוחות
+            </p>
           ) : (
-            filtered.map(client => (
+            filtered.map((client) => (
               <button
                 key={client.id}
-                onClick={() => { onSelect(client.id); setOpen(false); setSearch(""); }}
+                onClick={() => {
+                  onSelect(client.id);
+                  setOpen(false);
+                  setSearch("");
+                }}
                 className={cn(
                   "flex items-center gap-2 w-full rounded-sm px-2 py-1.5 text-sm hover:bg-accent cursor-pointer text-right",
-                  selectedClient === client.id && "bg-accent"
+                  selectedClient === client.id && "bg-accent",
                 )}
               >
-                <Check className={cn("h-4 w-4 shrink-0", selectedClient === client.id ? "opacity-100" : "opacity-0")} />
+                <Check
+                  className={cn(
+                    "h-4 w-4 shrink-0",
+                    selectedClient === client.id ? "opacity-100" : "opacity-0",
+                  )}
+                />
                 {client.name}
-                {client.is_seo_client && <Badge variant="secondary" className="text-xs mr-auto">SEO</Badge>}
+                {client.is_seo_client && (
+                  <Badge variant="secondary" className="text-xs mr-auto">
+                    SEO
+                  </Badge>
+                )}
               </button>
             ))
           )}
@@ -88,7 +152,11 @@ function ClientSearchSelect({ clients, selectedClient, onSelect }: {
   );
 }
 
-export function SeoReportDialog({ open, onOpenChange, assignedClientIds }: SeoReportDialogProps) {
+export function SeoReportDialog({
+  open,
+  onOpenChange,
+  assignedClientIds,
+}: SeoReportDialogProps) {
   const { currentTenantId, currentTenant } = useTenant();
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -100,39 +168,51 @@ export function SeoReportDialog({ open, onOpenChange, assignedClientIds }: SeoRe
 
   // New-report form state
   const [domainInput, setDomainInput] = useState("");
-  const [selectedAhrefsProject, setSelectedAhrefsProject] = useState<string>("none");
-  const [selectedGscIntegrationId, setSelectedGscIntegrationId] = useState<string>("none");
+  const [selectedAhrefsProject, setSelectedAhrefsProject] =
+    useState<string>("none");
+  const [selectedGscIntegrationId, setSelectedGscIntegrationId] =
+    useState<string>("none");
   const [selectedGscSite, setSelectedGscSite] = useState<string>("");
-  const [selectedGaIntegrationId, setSelectedGaIntegrationId] = useState<string>("none");
+  const [selectedGaIntegrationId, setSelectedGaIntegrationId] =
+    useState<string>("none");
   const [selectedGaProperty, setSelectedGaProperty] = useState<string>("");
   const [isCreatingReport, setIsCreatingReport] = useState(false);
 
   const handleFetchFromAhrefs = async () => {
     if (!selectedClient) return;
-    const client = clients.find(c => c.id === selectedClient);
+    const client = clients.find((c) => c.id === selectedClient);
     const domain = normalizeDomain(client?.website);
     if (!domain) {
-      toast({ title: 'אין דומיין מוגדר ללקוח', variant: 'destructive' });
+      toast({ title: "אין דומיין מוגדר ללקוח", variant: "destructive" });
       return;
     }
     setIsFetchingFromAhrefs(true);
     try {
-      const { data, error } = await supabase.functions.invoke('fetch-ahrefs-snapshot', {
-        body: { clientId: selectedClient, domain },
-      });
+      const { data, error } = await supabase.functions.invoke(
+        "fetch-ahrefs-snapshot",
+        {
+          body: { clientId: selectedClient, domain },
+        },
+      );
       if (error) throw error;
       toast({
-        title: 'הדוח נוצר בהצלחה',
+        title: "הדוח נוצר בהצלחה",
         description: `${data?.keywords_count ?? 0} מילות מפתח נטענו עבור ${data?.domain || domain}`,
       });
-      queryClient.invalidateQueries({ queryKey: ['seo-reports', currentTenantId, selectedClient] });
-      queryClient.invalidateQueries({ queryKey: ['ahrefs-reports', currentTenantId] });
-      queryClient.invalidateQueries({ queryKey: ['crm-tables', currentTenantId] });
+      queryClient.invalidateQueries({
+        queryKey: ["seo-reports", currentTenantId, selectedClient],
+      });
+      queryClient.invalidateQueries({
+        queryKey: ["ahrefs-reports", currentTenantId],
+      });
+      queryClient.invalidateQueries({
+        queryKey: ["crm-tables", currentTenantId],
+      });
     } catch (err: any) {
       toast({
-        title: 'שגיאה ביצירת דוח מ-Ahrefs',
-        description: err?.message || 'נסה שוב מאוחר יותר',
-        variant: 'destructive',
+        title: "שגיאה ביצירת דוח מ-Ahrefs",
+        description: err?.message || "נסה שוב מאוחר יותר",
+        variant: "destructive",
       });
     } finally {
       setIsFetchingFromAhrefs(false);
@@ -140,43 +220,52 @@ export function SeoReportDialog({ open, onOpenChange, assignedClientIds }: SeoRe
   };
 
   const { data: clients = [] } = useQuery({
-    queryKey: ['seo-report-clients', currentTenantId],
+    queryKey: ["seo-report-clients", currentTenantId],
     queryFn: async () => {
       // 1) Own-tenant clients
       const ownPromise = supabase
-        .from('clients')
-        .select('id, name, agency_id, website, is_seo_client')
-        .eq('tenant_id', currentTenantId!);
+        .from("clients")
+        .select("id, name, agency_id, website, is_seo_client")
+        .eq("tenant_id", currentTenantId!);
 
       // 2) Cross-tenant: agencies shared with this tenant
       const sharedAgenciesPromise = supabase
-        .from('agency_tenant_access')
-        .select('agency_id')
-        .eq('accessing_tenant_id', currentTenantId!);
+        .from("agency_tenant_access")
+        .select("agency_id")
+        .eq("accessing_tenant_id", currentTenantId!);
 
-      const [ownRes, sharedRes] = await Promise.all([ownPromise, sharedAgenciesPromise]);
+      const [ownRes, sharedRes] = await Promise.all([
+        ownPromise,
+        sharedAgenciesPromise,
+      ]);
       if (ownRes.error) throw ownRes.error;
       if (sharedRes.error) throw sharedRes.error;
 
-      const sharedAgencyIds = (sharedRes.data || []).map((r: any) => r.agency_id).filter(Boolean);
+      const sharedAgencyIds = (sharedRes.data || [])
+        .map((r: any) => r.agency_id)
+        .filter(Boolean);
 
       let sharedClients: any[] = [];
       if (sharedAgencyIds.length > 0) {
         const { data, error } = await supabase
-          .from('clients')
-          .select('id, name, agency_id, website, is_seo_client')
-          .in('agency_id', sharedAgencyIds);
+          .from("clients")
+          .select("id, name, agency_id, website, is_seo_client")
+          .in("agency_id", sharedAgencyIds);
         if (error) throw error;
         sharedClients = data || [];
       }
 
       // Merge & dedupe by id
       const map = new Map<string, any>();
-      [...(ownRes.data || []), ...sharedClients].forEach((c: any) => map.set(c.id, c));
-      let result = Array.from(map.values()).sort((a, b) => a.name.localeCompare(b.name, 'he'));
+      [...(ownRes.data || []), ...sharedClients].forEach((c: any) =>
+        map.set(c.id, c),
+      );
+      let result = Array.from(map.values()).sort((a, b) =>
+        a.name.localeCompare(b.name, "he"),
+      );
 
       if (assignedClientIds) {
-        result = result.filter(c => assignedClientIds.includes(c.id));
+        result = result.filter((c) => assignedClientIds.includes(c.id));
       }
       return result;
     },
@@ -184,14 +273,14 @@ export function SeoReportDialog({ open, onOpenChange, assignedClientIds }: SeoRe
   });
 
   const { data: reports = [], isLoading: reportsLoading } = useQuery({
-    queryKey: ['seo-reports', currentTenantId, selectedClient],
+    queryKey: ["seo-reports", currentTenantId, selectedClient],
     queryFn: async () => {
       const { data, error } = await supabase
-        .from('ahrefs_reports')
-        .select('*')
-        .eq('tenant_id', currentTenantId!)
-        .eq('client_id', selectedClient)
-        .order('received_at', { ascending: false });
+        .from("ahrefs_reports")
+        .select("*")
+        .eq("tenant_id", currentTenantId!)
+        .eq("client_id", selectedClient)
+        .order("received_at", { ascending: false });
       if (error) throw error;
       return data || [];
     },
@@ -203,41 +292,67 @@ export function SeoReportDialog({ open, onOpenChange, assignedClientIds }: SeoRe
   const integrationTenantIds = useMemo(() => {
     const set = new Set<string>();
     if (currentTenantId) set.add(currentTenantId);
-    (seoScope.data?.accessibleTenantIds || []).forEach(t => set.add(t));
+    (seoScope.data?.accessibleTenantIds || []).forEach((t) => set.add(t));
     return Array.from(set);
   }, [currentTenantId, seoScope.data?.accessibleTenantIds]);
 
   // Ahrefs projects
-  const { data: ahrefsProjects = [], isLoading: ahrefsProjectsLoading } = useQuery({
-    queryKey: ['ahrefs-projects-picker'],
-    queryFn: async () => {
-      const { data, error } = await supabase.functions.invoke('list-ahrefs-projects', { body: {} });
-      if (error) throw error;
-      return (data?.projects || []) as Array<{ project_id: string; project_name: string; domain: string; url: string }>;
-    },
-    enabled: open,
-    staleTime: 5 * 60 * 1000,
-  });
+  const { data: ahrefsProjects = [], isLoading: ahrefsProjectsLoading } =
+    useQuery({
+      queryKey: ["ahrefs-projects-picker"],
+      queryFn: async () => {
+        const { data, error } = await supabase.functions.invoke(
+          "list-ahrefs-projects",
+          { body: {} },
+        );
+        if (error) throw error;
+        return (data?.projects || []) as Array<{
+          project_id: string;
+          project_name: string;
+          domain: string;
+          url: string;
+        }>;
+      },
+      enabled: open,
+      staleTime: 5 * 60 * 1000,
+    });
 
   // GSC & GA integrations
-  const { data: gscIntegrations = [] } = useUserIntegrations(integrationTenantIds, 'google_search_console', { enabled: open && integrationTenantIds.length > 0 });
-  const { data: gaIntegrations = [] } = useUserIntegrations(integrationTenantIds, 'google_analytics', { enabled: open && integrationTenantIds.length > 0 });
+  const { data: gscIntegrations = [] } = useUserIntegrations(
+    integrationTenantIds,
+    "google_search_console",
+    { enabled: open && integrationTenantIds.length > 0 },
+  );
+  const { data: gaIntegrations = [] } = useUserIntegrations(
+    integrationTenantIds,
+    "google_analytics",
+    { enabled: open && integrationTenantIds.length > 0 },
+  );
 
   // Available domains for the selected client
   const availableDomains = useMemo(() => {
     const set = new Set<string>();
-    reports.forEach((r: any) => { if (r.domain) set.add(r.domain); });
+    reports.forEach((r: any) => {
+      if (r.domain) set.add(r.domain);
+    });
     return Array.from(set);
   }, [reports]);
 
   // Normalize a website URL → bare domain (no protocol, no www, no path)
   const normalizeDomain = (url?: string | null): string => {
-    if (!url) return '';
-    return url.replace(/^https?:\/\//i, '').replace(/^www\./i, '').split('/')[0].toLowerCase().trim();
+    if (!url) return "";
+    return url
+      .replace(/^https?:\/\//i, "")
+      .replace(/^www\./i, "")
+      .split("/")[0]
+      .toLowerCase()
+      .trim();
   };
 
-  const selectedClientObjEarly = clients.find(c => c.id === selectedClient);
-  const clientPreferredDomain = normalizeDomain(selectedClientObjEarly?.website);
+  const selectedClientObjEarly = clients.find((c) => c.id === selectedClient);
+  const clientPreferredDomain = normalizeDomain(
+    selectedClientObjEarly?.website,
+  );
 
   // Auto-select domain: prefer the one matching client's website, else first
   useMemo(() => {
@@ -247,16 +362,24 @@ export function SeoReportDialog({ open, onOpenChange, assignedClientIds }: SeoRe
     }
     if (selectedDomain && availableDomains.includes(selectedDomain)) return;
     const preferred = clientPreferredDomain
-      ? availableDomains.find(d => d.toLowerCase() === clientPreferredDomain || d.toLowerCase().includes(clientPreferredDomain) || clientPreferredDomain.includes(d.toLowerCase()))
+      ? availableDomains.find(
+          (d) =>
+            d.toLowerCase() === clientPreferredDomain ||
+            d.toLowerCase().includes(clientPreferredDomain) ||
+            clientPreferredDomain.includes(d.toLowerCase()),
+        )
       : null;
     setSelectedDomain(preferred || availableDomains[0]);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedClient, availableDomains.join('|'), clientPreferredDomain]);
+  }, [selectedClient, availableDomains.join("|"), clientPreferredDomain]);
 
   // Selected GSC integration object + its available sites
   const selectedGscIntegration = useMemo(
-    () => (gscIntegrations || []).find((i: any) => i.id === selectedGscIntegrationId),
-    [gscIntegrations, selectedGscIntegrationId]
+    () =>
+      (gscIntegrations || []).find(
+        (i: any) => i.id === selectedGscIntegrationId,
+      ),
+    [gscIntegrations, selectedGscIntegrationId],
   );
   const gscAvailableSites = useMemo(() => {
     const list = (selectedGscIntegration as any)?.settings?.available_sites;
@@ -264,12 +387,14 @@ export function SeoReportDialog({ open, onOpenChange, assignedClientIds }: SeoRe
   }, [selectedGscIntegration]);
 
   const selectedGaIntegration = useMemo(
-    () => (gaIntegrations || []).find((i: any) => i.id === selectedGaIntegrationId),
-    [gaIntegrations, selectedGaIntegrationId]
+    () =>
+      (gaIntegrations || []).find((i: any) => i.id === selectedGaIntegrationId),
+    [gaIntegrations, selectedGaIntegrationId],
   );
   const gaAvailableProperties = useMemo(() => {
     const s = (selectedGaIntegration as any)?.settings || {};
-    const list = s.available_properties || s.available_property_ids || s.properties;
+    const list =
+      s.available_properties || s.available_property_ids || s.properties;
     return Array.isArray(list) ? list : [];
   }, [selectedGaIntegration]);
 
@@ -288,8 +413,12 @@ export function SeoReportDialog({ open, onOpenChange, assignedClientIds }: SeoRe
     setDomainInput(prefill);
     // Try to auto-pick Ahrefs project matching the client's domain
     if (prefill && ahrefsProjects.length) {
-      const match = ahrefsProjects.find(p =>
-        p.domain && (p.domain.toLowerCase() === prefill || p.domain.toLowerCase().includes(prefill) || prefill.includes(p.domain.toLowerCase()))
+      const match = ahrefsProjects.find(
+        (p) =>
+          p.domain &&
+          (p.domain.toLowerCase() === prefill ||
+            p.domain.toLowerCase().includes(prefill) ||
+            prefill.includes(p.domain.toLowerCase())),
       );
       if (match) setSelectedAhrefsProject(String(match.project_id));
     }
@@ -302,7 +431,13 @@ export function SeoReportDialog({ open, onOpenChange, assignedClientIds }: SeoRe
       return;
     }
     const d = (domainInput || "").toLowerCase();
-    const norm = (s: string) => s.replace(/^sc-domain:/, "").replace(/^https?:\/\//, "").replace(/^www\./, "").replace(/\/+$/, "").toLowerCase();
+    const norm = (s: string) =>
+      s
+        .replace(/^sc-domain:/, "")
+        .replace(/^https?:\/\//, "")
+        .replace(/^www\./, "")
+        .replace(/\/+$/, "")
+        .toLowerCase();
     const match = d
       ? gscAvailableSites.find((s: any) => {
           const n = norm(String(s?.siteUrl || ""));
@@ -314,92 +449,142 @@ export function SeoReportDialog({ open, onOpenChange, assignedClientIds }: SeoRe
 
   // Default GA property to first
   useEffect(() => {
-    if (selectedGaIntegrationId === "none" || gaAvailableProperties.length === 0) {
+    if (
+      selectedGaIntegrationId === "none" ||
+      gaAvailableProperties.length === 0
+    ) {
       setSelectedGaProperty("");
       return;
     }
     const first = gaAvailableProperties[0];
-    const id = typeof first === "string" ? first : (first?.propertyId || first?.id || first?.property_id || "");
+    const id =
+      typeof first === "string"
+        ? first
+        : first?.propertyId || first?.id || first?.property_id || "";
     setSelectedGaProperty(String(id || ""));
   }, [selectedGaIntegrationId, gaAvailableProperties]);
-
 
   // Pick the latest report matching the selected domain
   const latestReport = useMemo(() => {
     if (!reports.length) return null;
     if (selectedDomain) {
-      return reports.find((r: any) => r.domain === selectedDomain) || reports[0];
+      return (
+        reports.find((r: any) => r.domain === selectedDomain) || reports[0]
+      );
     }
     return reports[0];
   }, [reports, selectedDomain]);
   const reportData = (latestReport as any)?.report_data;
 
   const snapshot = reportData?.snapshot || {};
-  const trafficHistory = Array.isArray(reportData?.traffic_history) ? reportData.traffic_history : [];
-  const organicKeywords = Array.isArray(reportData?.organic_keywords) ? reportData.organic_keywords : [];
+  const trafficHistory = Array.isArray(reportData?.traffic_history)
+    ? reportData.traffic_history
+    : [];
+  const organicKeywords = Array.isArray(reportData?.organic_keywords)
+    ? reportData.organic_keywords
+    : [];
 
   const snapshotMetrics = [
-    { label: 'דירוג דומיין (DR)', value: snapshot.dr, icon: '🏆' },
-    { label: 'תנועה אורגנית', value: snapshot.org_traffic?.toLocaleString(), icon: '📈' },
-    { label: 'מילות מפתח (Top 3)', value: snapshot.org_keywords_top3, icon: '🥇' },
-    { label: 'מילות מפתח (Top 10)', value: snapshot.org_keywords_top10, icon: '🔟' },
-    { label: 'סה״כ מילות מפתח', value: snapshot.org_keywords_total, icon: '🔑' },
-    { label: 'דומיינים מפנים', value: snapshot.referring_domains, icon: '🔗' },
-    { label: 'קישורים נכנסים (פעילים)', value: snapshot.backlinks_live?.toLocaleString(), icon: '🌐' },
-    { label: 'קישורים נכנסים (כולל)', value: snapshot.backlinks_all_time?.toLocaleString(), icon: '📊' },
-  ].filter(m => m.value !== undefined && m.value !== null);
+    { label: "דירוג דומיין (DR)", value: snapshot.dr, icon: "🏆" },
+    {
+      label: "תנועה אורגנית",
+      value: snapshot.org_traffic?.toLocaleString(),
+      icon: "📈",
+    },
+    {
+      label: "מילות מפתח (Top 3)",
+      value: snapshot.org_keywords_top3,
+      icon: "🥇",
+    },
+    {
+      label: "מילות מפתח (Top 10)",
+      value: snapshot.org_keywords_top10,
+      icon: "🔟",
+    },
+    {
+      label: "סה״כ מילות מפתח",
+      value: snapshot.org_keywords_total,
+      icon: "🔑",
+    },
+    { label: "דומיינים מפנים", value: snapshot.referring_domains, icon: "🔗" },
+    {
+      label: "קישורים נכנסים (פעילים)",
+      value: snapshot.backlinks_live?.toLocaleString(),
+      icon: "🌐",
+    },
+    {
+      label: "קישורים נכנסים (כולל)",
+      value: snapshot.backlinks_all_time?.toLocaleString(),
+      icon: "📊",
+    },
+  ].filter((m) => m.value !== undefined && m.value !== null);
 
   const chartData = trafficHistory.map((item: any) => ({
-    date: item.date ? format(new Date(item.date), 'MM/yy') : '',
+    date: item.date ? format(new Date(item.date), "MM/yy") : "",
     traffic: item.traffic || 0,
   }));
 
-  const selectedClientObj = clients.find(c => c.id === selectedClient);
+  const selectedClientObj = clients.find((c) => c.id === selectedClient);
 
   const handleCreateTable = async () => {
     if (!selectedClient || !latestReport) return;
     setIsCreatingTable(true);
     try {
-      const domain = selectedDomain || reportData?.domain || latestReport?.domain || '';
-      const clientName = selectedClientObj?.name || '';
-      const domainMatchesName = domain && clientName && domain.toLowerCase().includes(clientName.toLowerCase());
-      const tableName = domain && !domainMatchesName ? `${clientName} - ${domain}` : clientName;
+      const domain =
+        selectedDomain || reportData?.domain || latestReport?.domain || "";
+      const clientName = selectedClientObj?.name || "";
+      const domainMatchesName =
+        domain &&
+        clientName &&
+        domain.toLowerCase().includes(clientName.toLowerCase());
+      const tableName =
+        domain && !domainMatchesName ? `${clientName} - ${domain}` : clientName;
       const slug = `seo-report-${selectedClient}-${Date.now()}`;
 
-      const { error } = await supabase.functions.invoke('crm-tables', {
+      const { error } = await supabase.functions.invoke("crm-tables", {
         body: {
-          action: 'create',
+          action: "create",
           tenantId: currentTenantId,
           name: tableName,
           slug,
           description: `דוח SEO עבור ${domain}`,
-          category: 'seo',
-          icon: 'TrendingUp',
+          category: "seo",
+          icon: "TrendingUp",
           agencyId: selectedClientObj?.agency_id || null,
           clientId: selectedClient,
-          integration_type: 'ahrefs',
+          integration_type: "ahrefs",
           integration_settings: {
-            data_source: 'ahrefs_reports',
+            data_source: "ahrefs_reports",
             targetDomain: domain,
-            reportType: 'site_explorer',
+            reportType: "site_explorer",
             clientId: selectedClient,
           },
-        }
+        },
       });
 
       if (error) throw error;
 
       toast({ title: "טבלת דוח SEO נוצרה בהצלחה!" });
-      queryClient.invalidateQueries({ queryKey: ['crm-tables', currentTenantId] });
-      invalidateClientCrmTablesQueries(queryClient, currentTenantId, selectedClient);
+      queryClient.invalidateQueries({
+        queryKey: ["crm-tables", currentTenantId],
+      });
+      invalidateClientCrmTablesQueries(
+        queryClient,
+        currentTenantId,
+        selectedClient,
+      );
       onOpenChange(false);
       // Navigate to the new table
-      const tenantSlug = currentTenant?.slug || '';
+      const tenantSlug = currentTenant?.slug || "";
       if (tenantSlug) {
         navigate(`/t/${tenantSlug}/table/${slug}`);
       }
     } catch (error: any) {
-      toast({ title: "שגיאה ביצירת הטבלה", description: error.message, variant: "destructive" });
+      toast({
+        title: "שגיאה ביצירת הטבלה",
+        description: error.message,
+        variant: "destructive",
+      });
     } finally {
       setIsCreatingTable(false);
     }
@@ -411,86 +596,120 @@ export function SeoReportDialog({ open, onOpenChange, assignedClientIds }: SeoRe
     selectedGscIntegrationId !== "none" ||
     selectedGaIntegrationId !== "none";
 
-  const canCreate = !!selectedClient && hasAnySource && !!(domainInput.trim() || selectedAhrefsProject !== "none");
+  const canCreate =
+    !!selectedClient &&
+    hasAnySource &&
+    !!(domainInput.trim() || selectedAhrefsProject !== "none");
 
   const handleCreateReport = async () => {
     if (!selectedClient || !canCreate) return;
     setIsCreatingReport(true);
     try {
-      const domain = normalizeDomain(domainInput) ||
+      const domain =
+        normalizeDomain(domainInput) ||
         (selectedAhrefsProject !== "none"
-          ? (ahrefsProjects.find(p => String(p.project_id) === selectedAhrefsProject)?.domain || "")
+          ? ahrefsProjects.find(
+              (p) => String(p.project_id) === selectedAhrefsProject,
+            )?.domain || ""
           : "");
 
       // 1) Pull an Ahrefs snapshot if we have a domain (Ahrefs uses the global key)
       if (domain) {
         try {
-          await supabase.functions.invoke('fetch-ahrefs-snapshot', {
+          await supabase.functions.invoke("fetch-ahrefs-snapshot", {
             body: { clientId: selectedClient, domain },
           });
         } catch (err) {
-          console.warn('[SeoReportDialog] fetch-ahrefs-snapshot failed (continuing):', err);
+          console.warn(
+            "[SeoReportDialog] fetch-ahrefs-snapshot failed (continuing):",
+            err,
+          );
         }
       }
 
       // 2) Create the unified CRM table
-      const clientName = selectedClientObj?.name || '';
-      const domainMatchesName = domain && clientName && domain.toLowerCase().includes(clientName.toLowerCase());
-      const tableName = domain && !domainMatchesName ? `${clientName} - ${domain}` : (clientName || `דוח SEO`);
+      const clientName = selectedClientObj?.name || "";
+      const domainMatchesName =
+        domain &&
+        clientName &&
+        domain.toLowerCase().includes(clientName.toLowerCase());
+      const tableName =
+        domain && !domainMatchesName
+          ? `${clientName} - ${domain}`
+          : clientName || `דוח SEO`;
       const slug = `seo-report-${selectedClient}-${Date.now()}`;
 
-      const ahrefsProjectId = selectedAhrefsProject !== "none" ? selectedAhrefsProject : null;
-      const gscIntId = selectedGscIntegrationId !== "none" ? selectedGscIntegrationId : null;
-      const gaIntId = selectedGaIntegrationId !== "none" ? selectedGaIntegrationId : null;
+      const ahrefsProjectId =
+        selectedAhrefsProject !== "none" ? selectedAhrefsProject : null;
+      const gscIntId =
+        selectedGscIntegrationId !== "none" ? selectedGscIntegrationId : null;
+      const gaIntId =
+        selectedGaIntegrationId !== "none" ? selectedGaIntegrationId : null;
 
-      const { error } = await supabase.functions.invoke('crm-tables', {
+      const { error } = await supabase.functions.invoke("crm-tables", {
         body: {
-          action: 'create',
+          action: "create",
           tenantId: currentTenantId,
           name: tableName,
           slug,
           description: `דוח SEO מאוחד עבור ${domain || clientName}`,
-          category: 'seo',
-          icon: 'TrendingUp',
+          category: "seo",
+          icon: "TrendingUp",
           agencyId: selectedClientObj?.agency_id || null,
           clientId: selectedClient,
-          integration_type: 'ahrefs',
+          integration_type: "ahrefs",
           integration_settings: {
-            data_source: 'seo_unified',
+            data_source: "seo_unified",
             clientId: selectedClient,
             targetDomain: domain,
-            reportType: 'site_explorer',
+            reportType: "site_explorer",
             ahrefs_project_id: ahrefsProjectId,
             gsc_integration_id: gscIntId,
-            linkedGscSiteUrl: gscIntId ? (selectedGscSite || null) : null,
-            gsc_site_url: gscIntId ? (selectedGscSite || null) : null,
+            linkedGscSiteUrl: gscIntId ? selectedGscSite || null : null,
+            gsc_site_url: gscIntId ? selectedGscSite || null : null,
             ga_integration_id: gaIntId,
-            ga_property_id: gaIntId ? (selectedGaProperty || null) : null,
+            ga_property_id: gaIntId ? selectedGaProperty || null : null,
           },
         },
       });
 
       if (error) throw error;
 
-      toast({ title: 'דוח ה-SEO נוצר בהצלחה' });
-      queryClient.invalidateQueries({ queryKey: ['seo-reports', currentTenantId, selectedClient] });
-      queryClient.invalidateQueries({ queryKey: ['ahrefs-reports', currentTenantId] });
-      queryClient.invalidateQueries({ queryKey: ['crm-tables', currentTenantId] });
-      invalidateClientCrmTablesQueries(queryClient, currentTenantId, selectedClient);
+      toast({ title: "דוח ה-SEO נוצר בהצלחה" });
+      queryClient.invalidateQueries({
+        queryKey: ["seo-reports", currentTenantId, selectedClient],
+      });
+      queryClient.invalidateQueries({
+        queryKey: ["ahrefs-reports", currentTenantId],
+      });
+      queryClient.invalidateQueries({
+        queryKey: ["crm-tables", currentTenantId],
+      });
+      invalidateClientCrmTablesQueries(
+        queryClient,
+        currentTenantId,
+        selectedClient,
+      );
       onOpenChange(false);
-      const tenantSlug = currentTenant?.slug || '';
+      const tenantSlug = currentTenant?.slug || "";
       if (tenantSlug) navigate(`/t/${tenantSlug}/table/${slug}`);
     } catch (err: any) {
-      toast({ title: 'שגיאה ביצירת דוח SEO', description: err?.message || 'נסה שוב מאוחר יותר', variant: 'destructive' });
+      toast({
+        title: "שגיאה ביצירת דוח SEO",
+        description: err?.message || "נסה שוב מאוחר יותר",
+        variant: "destructive",
+      });
     } finally {
       setIsCreatingReport(false);
     }
   };
 
-
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-5xl max-h-[85vh] overflow-y-auto" dir="rtl">
+      <DialogContent
+        className="max-w-5xl max-h-[85vh] overflow-y-auto"
+        dir="rtl"
+      >
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <TrendingUp className="h-5 w-5 text-primary" />
@@ -517,10 +736,14 @@ export function SeoReportDialog({ open, onOpenChange, assignedClientIds }: SeoRe
             <div className="space-y-5">
               {reportsLoading ? (
                 <div className="grid gap-4 md:grid-cols-2">
-                  {[1, 2, 3, 4].map(i => (
+                  {[1, 2, 3, 4].map((i) => (
                     <Card key={i}>
-                      <CardHeader><Skeleton className="h-5 w-32" /></CardHeader>
-                      <CardContent><Skeleton className="h-16 w-full" /></CardContent>
+                      <CardHeader>
+                        <Skeleton className="h-5 w-32" />
+                      </CardHeader>
+                      <CardContent>
+                        <Skeleton className="h-16 w-full" />
+                      </CardContent>
                     </Card>
                   ))}
                 </div>
@@ -530,7 +753,8 @@ export function SeoReportDialog({ open, onOpenChange, assignedClientIds }: SeoRe
                     <FileText className="h-10 w-10 mx-auto text-muted-foreground" />
                     <h3 className="font-semibold text-lg">צור דוח SEO חדש</h3>
                     <p className="text-muted-foreground text-sm">
-                      בחר את המקורות שיתחברו ללקוח. ניתן לחבר Ahrefs, Google Search Console ו-Google Analytics יחד לטבלת דוח אחת.
+                      בחר את המקורות שיתחברו ללקוח. ניתן לחבר Ahrefs, Google
+                      Search Console ו-Google Analytics יחד לטבלת דוח אחת.
                     </p>
                   </div>
 
@@ -545,20 +769,38 @@ export function SeoReportDialog({ open, onOpenChange, assignedClientIds }: SeoRe
                         dir="ltr"
                       />
                       {!selectedClientObj?.website && (
-                        <p className="text-xs text-muted-foreground">ללקוח אין אתר מוגדר במערכת — הזן ידנית.</p>
+                        <p className="text-xs text-muted-foreground">
+                          ללקוח אין אתר מוגדר במערכת — הזן ידנית.
+                        </p>
                       )}
                     </div>
 
                     {/* Ahrefs project */}
                     <div className="space-y-1.5">
                       <Label>פרויקט Ahrefs</Label>
-                      <Select value={selectedAhrefsProject} onValueChange={setSelectedAhrefsProject}>
-                        <SelectTrigger><SelectValue placeholder={ahrefsProjectsLoading ? "טוען..." : "ללא / לפי דומיין"} /></SelectTrigger>
+                      <Select
+                        value={selectedAhrefsProject}
+                        onValueChange={setSelectedAhrefsProject}
+                      >
+                        <SelectTrigger>
+                          <SelectValue
+                            placeholder={
+                              ahrefsProjectsLoading
+                                ? "טוען..."
+                                : "ללא / לפי דומיין"
+                            }
+                          />
+                        </SelectTrigger>
                         <SelectContent>
-                          <SelectItem value="none">ללא — לפי דומיין בלבד</SelectItem>
-                          {ahrefsProjects.map(p => (
-                            <SelectItem key={p.project_id} value={String(p.project_id)}>
-                              {p.project_name} {p.domain ? `· ${p.domain}` : ''}
+                          <SelectItem value="none">
+                            ללא — לפי דומיין בלבד
+                          </SelectItem>
+                          {ahrefsProjects.map((p) => (
+                            <SelectItem
+                              key={p.project_id}
+                              value={String(p.project_id)}
+                            >
+                              {p.project_name} {p.domain ? `· ${p.domain}` : ""}
                             </SelectItem>
                           ))}
                         </SelectContent>
@@ -568,13 +810,25 @@ export function SeoReportDialog({ open, onOpenChange, assignedClientIds }: SeoRe
                     {/* GSC integration */}
                     <div className="space-y-1.5">
                       <Label>חיבור Google Search Console</Label>
-                      <Select value={selectedGscIntegrationId} onValueChange={setSelectedGscIntegrationId}>
-                        <SelectTrigger><SelectValue placeholder={gscIntegrations.length ? "בחר חיבור" : "אין חיבורים זמינים"} /></SelectTrigger>
+                      <Select
+                        value={selectedGscIntegrationId}
+                        onValueChange={setSelectedGscIntegrationId}
+                      >
+                        <SelectTrigger>
+                          <SelectValue
+                            placeholder={
+                              gscIntegrations.length
+                                ? "בחר חיבור"
+                                : "אין חיבורים זמינים"
+                            }
+                          />
+                        </SelectTrigger>
                         <SelectContent>
                           <SelectItem value="none">ללא</SelectItem>
                           {gscIntegrations.map((i: any) => (
                             <SelectItem key={i.id} value={i.id}>
-                              {i.settings?.google_email || i.name || 'GSC'} {i._isOwn ? '' : '· משותף'}
+                              {i.settings?.google_email || i.name || "GSC"}{" "}
+                              {i._isOwn ? "" : "· משותף"}
                             </SelectItem>
                           ))}
                         </SelectContent>
@@ -582,32 +836,59 @@ export function SeoReportDialog({ open, onOpenChange, assignedClientIds }: SeoRe
                     </div>
 
                     {/* GSC site picker */}
-                    {selectedGscIntegrationId !== "none" && gscAvailableSites.length > 0 && (
-                      <div className="space-y-1.5 md:col-span-2">
-                        <Label>בחר אתר ב-GSC</Label>
-                        <Select value={selectedGscSite} onValueChange={setSelectedGscSite}>
-                          <SelectTrigger><SelectValue placeholder="בחר site" /></SelectTrigger>
-                          <SelectContent>
-                            {gscAvailableSites.map((s: any) => (
-                              <SelectItem key={s.siteUrl} value={s.siteUrl} disabled={s.permissionLevel === 'siteUnverifiedUser'}>
-                                {s.siteUrl} {s.permissionLevel === 'siteUnverifiedUser' ? '· ללא הרשאה' : ''}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      </div>
-                    )}
+                    {selectedGscIntegrationId !== "none" &&
+                      gscAvailableSites.length > 0 && (
+                        <div className="space-y-1.5 md:col-span-2">
+                          <Label>בחר אתר ב-GSC</Label>
+                          <Select
+                            value={selectedGscSite}
+                            onValueChange={setSelectedGscSite}
+                          >
+                            <SelectTrigger>
+                              <SelectValue placeholder="בחר site" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {gscAvailableSites.map((s: any) => (
+                                <SelectItem
+                                  key={s.siteUrl}
+                                  value={s.siteUrl}
+                                  disabled={
+                                    s.permissionLevel === "siteUnverifiedUser"
+                                  }
+                                >
+                                  {s.siteUrl}{" "}
+                                  {s.permissionLevel === "siteUnverifiedUser"
+                                    ? "· ללא הרשאה"
+                                    : ""}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                      )}
 
                     {/* GA integration */}
                     <div className="space-y-1.5">
                       <Label>חיבור Google Analytics</Label>
-                      <Select value={selectedGaIntegrationId} onValueChange={setSelectedGaIntegrationId}>
-                        <SelectTrigger><SelectValue placeholder={gaIntegrations.length ? "בחר חיבור" : "אין חיבורים זמינים"} /></SelectTrigger>
+                      <Select
+                        value={selectedGaIntegrationId}
+                        onValueChange={setSelectedGaIntegrationId}
+                      >
+                        <SelectTrigger>
+                          <SelectValue
+                            placeholder={
+                              gaIntegrations.length
+                                ? "בחר חיבור"
+                                : "אין חיבורים זמינים"
+                            }
+                          />
+                        </SelectTrigger>
                         <SelectContent>
                           <SelectItem value="none">ללא</SelectItem>
                           {gaIntegrations.map((i: any) => (
                             <SelectItem key={i.id} value={i.id}>
-                              {i.settings?.google_email || i.name || 'GA'} {i._isOwn ? '' : '· משותף'}
+                              {i.settings?.google_email || i.name || "GA"}{" "}
+                              {i._isOwn ? "" : "· משותף"}
                             </SelectItem>
                           ))}
                         </SelectContent>
@@ -615,33 +896,60 @@ export function SeoReportDialog({ open, onOpenChange, assignedClientIds }: SeoRe
                     </div>
 
                     {/* GA property picker */}
-                    {selectedGaIntegrationId !== "none" && gaAvailableProperties.length > 0 && (
-                      <div className="space-y-1.5">
-                        <Label>בחר Property ב-GA</Label>
-                        <Select value={selectedGaProperty} onValueChange={setSelectedGaProperty}>
-                          <SelectTrigger><SelectValue placeholder="בחר property" /></SelectTrigger>
-                          <SelectContent>
-                            {gaAvailableProperties.map((p: any, idx: number) => {
-                              const id = String(typeof p === 'string' ? p : (p.propertyId || p.id || p.property_id || ''));
-                              const name = typeof p === 'string' ? p : (p.displayName || p.name || id);
-                              return (
-                                <SelectItem key={id || idx} value={id}>{name}</SelectItem>
-                              );
-                            })}
-                          </SelectContent>
-                        </Select>
-                      </div>
-                    )}
+                    {selectedGaIntegrationId !== "none" &&
+                      gaAvailableProperties.length > 0 && (
+                        <div className="space-y-1.5">
+                          <Label>בחר Property ב-GA</Label>
+                          <Select
+                            value={selectedGaProperty}
+                            onValueChange={setSelectedGaProperty}
+                          >
+                            <SelectTrigger>
+                              <SelectValue placeholder="בחר property" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {gaAvailableProperties.map(
+                                (p: any, idx: number) => {
+                                  const id = String(
+                                    typeof p === "string"
+                                      ? p
+                                      : p.propertyId ||
+                                          p.id ||
+                                          p.property_id ||
+                                          "",
+                                  );
+                                  const name =
+                                    typeof p === "string"
+                                      ? p
+                                      : p.displayName || p.name || id;
+                                  return (
+                                    <SelectItem key={id || idx} value={id}>
+                                      {name}
+                                    </SelectItem>
+                                  );
+                                },
+                              )}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                      )}
                   </div>
 
                   <div className="flex justify-center">
-                    <Button onClick={handleCreateReport} disabled={!canCreate || isCreatingReport} className="gap-2">
-                      {isCreatingReport ? <Loader2 className="h-4 w-4 animate-spin" /> : <PlusCircle className="h-4 w-4" />}
-                      {isCreatingReport ? 'יוצר דוח...' : 'צור דוח SEO'}
+                    <Button
+                      onClick={handleCreateReport}
+                      disabled={!canCreate || isCreatingReport}
+                      className="gap-2"
+                    >
+                      {isCreatingReport ? (
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      ) : (
+                        <PlusCircle className="h-4 w-4" />
+                      )}
+                      {isCreatingReport ? "יוצר דוח..." : "צור דוח SEO"}
                     </Button>
                   </div>
                 </Card>
-
               ) : (
                 <>
                   {/* Report Header */}
@@ -654,15 +962,21 @@ export function SeoReportDialog({ open, onOpenChange, assignedClientIds }: SeoRe
                           onChange={(e) => setSelectedDomain(e.target.value)}
                           className="font-semibold text-lg bg-transparent border border-input rounded-md px-2 py-1 cursor-pointer hover:bg-accent"
                         >
-                          {availableDomains.map(d => (
-                            <option key={d} value={d}>{d}</option>
+                          {availableDomains.map((d) => (
+                            <option key={d} value={d}>
+                              {d}
+                            </option>
                           ))}
                         </select>
                       ) : (
-                        <span className="font-semibold text-lg">{reportData?.domain || latestReport?.domain}</span>
+                        <span className="font-semibold text-lg">
+                          {reportData?.domain || latestReport?.domain}
+                        </span>
                       )}
                       {reportData?.project_name && (
-                        <Badge variant="outline">{reportData.project_name}</Badge>
+                        <Badge variant="outline">
+                          {reportData.project_name}
+                        </Badge>
                       )}
                     </div>
                     <div className="flex items-center gap-2">
@@ -673,13 +987,24 @@ export function SeoReportDialog({ open, onOpenChange, assignedClientIds }: SeoRe
                         disabled={isCreatingTable}
                         className="gap-1.5"
                       >
-                        {isCreatingTable ? <Loader2 className="h-4 w-4 animate-spin" /> : <PlusCircle className="h-4 w-4" />}
+                        {isCreatingTable ? (
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                        ) : (
+                          <PlusCircle className="h-4 w-4" />
+                        )}
                         צור כטבלה
                       </Button>
                       <div className="flex items-center gap-2 text-sm text-muted-foreground">
                         <Calendar className="h-4 w-4" />
-                        {latestReport && format(new Date(latestReport.received_at), 'dd MMMM yyyy', { locale: he })}
-                        <Badge variant="secondary">{reports.length} דוחות</Badge>
+                        {latestReport &&
+                          format(
+                            new Date(latestReport.received_at),
+                            "dd MMMM yyyy",
+                            { locale: he },
+                          )}
+                        <Badge variant="secondary">
+                          {reports.length} דוחות
+                        </Badge>
                       </div>
                     </div>
                   </div>
@@ -690,9 +1015,15 @@ export function SeoReportDialog({ open, onOpenChange, assignedClientIds }: SeoRe
                       {snapshotMetrics.map((metric, idx) => (
                         <Card key={idx} className="border-primary/10">
                           <CardContent className="p-4 text-center">
-                            <span className="text-xl mb-1 block">{metric.icon}</span>
-                            <p className="text-xs text-muted-foreground mb-1">{metric.label}</p>
-                            <p className="text-2xl font-bold text-primary">{metric.value}</p>
+                            <span className="text-xl mb-1 block">
+                              {metric.icon}
+                            </span>
+                            <p className="text-xs text-muted-foreground mb-1">
+                              {metric.label}
+                            </p>
+                            <p className="text-2xl font-bold text-primary">
+                              {metric.value}
+                            </p>
                           </CardContent>
                         </Card>
                       ))}
@@ -703,22 +1034,30 @@ export function SeoReportDialog({ open, onOpenChange, assignedClientIds }: SeoRe
                   {chartData.length > 0 && (
                     <Card>
                       <CardHeader className="pb-2">
-                        <CardTitle className="text-base">היסטוריית תנועה אורגנית</CardTitle>
+                        <CardTitle className="text-base">
+                          היסטוריית תנועה אורגנית
+                        </CardTitle>
                       </CardHeader>
                       <CardContent>
                         <ResponsiveContainer width="100%" height={250}>
                           <LineChart data={chartData}>
-                            <CartesianGrid strokeDasharray="3 3" className="opacity-30" />
+                            <CartesianGrid
+                              strokeDasharray="3 3"
+                              className="opacity-30"
+                            />
                             <XAxis dataKey="date" fontSize={12} />
                             <YAxis fontSize={12} />
-                            <Tooltip 
-                              formatter={(value: number) => [value.toLocaleString(), 'תנועה']}
+                            <Tooltip
+                              formatter={(value: number) => [
+                                value.toLocaleString(),
+                                "תנועה",
+                              ]}
                               labelFormatter={(label) => `תאריך: ${label}`}
                             />
-                            <Line 
-                              type="monotone" 
-                              dataKey="traffic" 
-                              stroke="hsl(var(--primary))" 
+                            <Line
+                              type="monotone"
+                              dataKey="traffic"
+                              stroke="hsl(var(--primary))"
                               strokeWidth={2.5}
                               dot={{ fill: "hsl(var(--primary))", r: 4 }}
                               activeDot={{ r: 6 }}
@@ -735,7 +1074,9 @@ export function SeoReportDialog({ open, onOpenChange, assignedClientIds }: SeoRe
                       <CardHeader className="pb-2">
                         <CardTitle className="text-base flex items-center justify-between">
                           <span>מילות מפתח אורגניות</span>
-                          <Badge variant="outline">{organicKeywords.length} מילים</Badge>
+                          <Badge variant="outline">
+                            {organicKeywords.length} מילים
+                          </Badge>
                         </CardTitle>
                       </CardHeader>
                       <CardContent className="p-0">
@@ -743,47 +1084,97 @@ export function SeoReportDialog({ open, onOpenChange, assignedClientIds }: SeoRe
                           <table className="w-full text-sm">
                             <thead>
                               <tr className="border-b bg-muted/50">
-                                <th className="text-right p-3 font-medium">מילת מפתח</th>
-                                <th className="text-center p-3 font-medium">מיקום</th>
-                                <th className="text-center p-3 font-medium">שינוי</th>
-                                <th className="text-center p-3 font-medium">תנועה</th>
-                                <th className="text-center p-3 font-medium">נפח חיפוש</th>
-                                <th className="text-center p-3 font-medium">KD</th>
+                                <th className="text-right p-3 font-medium">
+                                  מילת מפתח
+                                </th>
+                                <th className="text-center p-3 font-medium">
+                                  מיקום
+                                </th>
+                                <th className="text-center p-3 font-medium">
+                                  שינוי
+                                </th>
+                                <th className="text-center p-3 font-medium">
+                                  תנועה
+                                </th>
+                                <th className="text-center p-3 font-medium">
+                                  נפח חיפוש
+                                </th>
+                                <th className="text-center p-3 font-medium">
+                                  KD
+                                </th>
                               </tr>
                             </thead>
                             <tbody>
-                              {organicKeywords.slice(0, 20).map((kw: any, idx: number) => {
-                                const posChange = kw.position_prev_month != null 
-                                  ? kw.position_prev_month - (kw.position || 0) 
-                                  : null;
-                                return (
-                                  <tr key={idx} className="border-b last:border-0 hover:bg-muted/30">
-                                    <td className="p-3 font-medium">{String(kw.keyword || '')}</td>
-                                    <td className="p-3 text-center">
-                                      <Badge variant="secondary" className="font-mono">
-                                        {kw.position ?? '-'}
-                                      </Badge>
-                                    </td>
-                                    <td className="p-3 text-center">
-                                      {posChange !== null && posChange !== 0 ? (
-                                        <span className={`inline-flex items-center gap-0.5 text-xs font-medium ${posChange > 0 ? 'text-green-600' : 'text-red-500'}`}>
-                                          {posChange > 0 ? <ArrowUp className="h-3 w-3" /> : <ArrowDown className="h-3 w-3" />}
-                                          {Math.abs(posChange)}
-                                        </span>
-                                      ) : (
-                                        <span className="text-xs text-muted-foreground">—</span>
-                                      )}
-                                    </td>
-                                    <td className="p-3 text-center">{kw.traffic != null ? Number(kw.traffic).toLocaleString() : '-'}</td>
-                                    <td className="p-3 text-center">{kw.volume != null ? Number(kw.volume).toLocaleString() : '-'}</td>
-                                    <td className="p-3 text-center">
-                                      <Badge variant={kw.kd <= 20 ? 'default' : kw.kd <= 50 ? 'secondary' : 'destructive'} className="text-xs">
-                                        {kw.kd ?? '-'}
-                                      </Badge>
-                                    </td>
-                                  </tr>
-                                );
-                              })}
+                              {organicKeywords
+                                .slice(0, 20)
+                                .map((kw: any, idx: number) => {
+                                  const posChange =
+                                    kw.position_prev_month != null
+                                      ? kw.position_prev_month -
+                                        (kw.position || 0)
+                                      : null;
+                                  return (
+                                    <tr
+                                      key={idx}
+                                      className="border-b last:border-0 hover:bg-muted/30"
+                                    >
+                                      <td className="p-3 font-medium">
+                                        {String(kw.keyword || "")}
+                                      </td>
+                                      <td className="p-3 text-center">
+                                        <Badge
+                                          variant="secondary"
+                                          className="font-mono"
+                                        >
+                                          {kw.position ?? "-"}
+                                        </Badge>
+                                      </td>
+                                      <td className="p-3 text-center">
+                                        {posChange !== null &&
+                                        posChange !== 0 ? (
+                                          <span
+                                            className={`inline-flex items-center gap-0.5 text-xs font-medium ${posChange > 0 ? "text-green-600" : "text-red-500"}`}
+                                          >
+                                            {posChange > 0 ? (
+                                              <ArrowUp className="h-3 w-3" />
+                                            ) : (
+                                              <ArrowDown className="h-3 w-3" />
+                                            )}
+                                            {Math.abs(posChange)}
+                                          </span>
+                                        ) : (
+                                          <span className="text-xs text-muted-foreground">
+                                            —
+                                          </span>
+                                        )}
+                                      </td>
+                                      <td className="p-3 text-center">
+                                        {kw.traffic != null
+                                          ? Number(kw.traffic).toLocaleString()
+                                          : "-"}
+                                      </td>
+                                      <td className="p-3 text-center">
+                                        {kw.volume != null
+                                          ? Number(kw.volume).toLocaleString()
+                                          : "-"}
+                                      </td>
+                                      <td className="p-3 text-center">
+                                        <Badge
+                                          variant={
+                                            kw.kd <= 20
+                                              ? "default"
+                                              : kw.kd <= 50
+                                                ? "secondary"
+                                                : "destructive"
+                                          }
+                                          className="text-xs"
+                                        >
+                                          {kw.kd ?? "-"}
+                                        </Badge>
+                                      </td>
+                                    </tr>
+                                  );
+                                })}
                             </tbody>
                           </table>
                           {organicKeywords.length > 20 && (
@@ -800,9 +1191,27 @@ export function SeoReportDialog({ open, onOpenChange, assignedClientIds }: SeoRe
                   {reportData?.html && (
                     <Card>
                       <CardContent className="p-4">
-                        <div 
+                        <div
                           className="prose prose-sm dark:prose-invert max-w-none text-right"
-                          dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(reportData.html || "", { FORBID_TAGS: ["script", "style", "iframe", "object", "embed"], FORBID_ATTR: ["onerror", "onload", "onclick", "onmouseover", "onfocus", "onblur"] }) }}
+                          dangerouslySetInnerHTML={{
+                            __html: DOMPurify.sanitize(reportData.html || "", {
+                              FORBID_TAGS: [
+                                "script",
+                                "style",
+                                "iframe",
+                                "object",
+                                "embed",
+                              ],
+                              FORBID_ATTR: [
+                                "onerror",
+                                "onload",
+                                "onclick",
+                                "onmouseover",
+                                "onfocus",
+                                "onblur",
+                              ],
+                            }),
+                          }}
                         />
                       </CardContent>
                     </Card>

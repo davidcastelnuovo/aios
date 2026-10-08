@@ -25,13 +25,20 @@ export async function fireGrokBotWebhook(args: {
   const raw = await resp.text();
   if (!resp.ok) {
     let detail = raw.slice(0, 400);
-    try { detail = JSON.parse(raw)?.error?.message || JSON.parse(raw)?.message || detail; } catch { /* keep */ }
+    try {
+      detail =
+        JSON.parse(raw)?.error?.message || JSON.parse(raw)?.message || detail;
+    } catch {
+      /* keep */
+    }
     throw new Error(`Grok Bot webhook ${resp.status}: ${detail}`);
   }
   let id = `webhook-${crypto.randomUUID()}`;
   try {
     const data = JSON.parse(raw);
     id = String(data?.id || data?.runId || data?.dispatchId || id);
-  } catch { /* empty body is fine */ }
+  } catch {
+    /* empty body is fine */
+  }
   return { id, url: "Grok Bot Direct" };
 }

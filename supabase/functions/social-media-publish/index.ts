@@ -3,7 +3,8 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2.75.0";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+  "Access-Control-Allow-Headers":
+    "authorization, x-client-info, apikey, content-type",
 };
 
 interface PublishRequest {
@@ -55,7 +56,12 @@ serve(async (req) => {
       .select("*, social_media_channels(*)")
       .eq("post_id", post_id);
 
-    const results: { channel_id: string; success: boolean; error?: string; platform_post_id?: string }[] = [];
+    const results: {
+      channel_id: string;
+      success: boolean;
+      error?: string;
+      platform_post_id?: string;
+    }[] = [];
 
     // Publish to each social media channel
     if (postChannels && postChannels.length > 0) {
@@ -95,7 +101,11 @@ serve(async (req) => {
             })
             .eq("id", pc.id);
 
-          results.push({ channel_id: channel.id, success: true, platform_post_id: platformPostId || undefined });
+          results.push({
+            channel_id: channel.id,
+            success: true,
+            platform_post_id: platformPostId || undefined,
+          });
         } catch (err: any) {
           console.error(`Error publishing to ${channel.platform}:`, err);
           await supabase
@@ -103,7 +113,11 @@ serve(async (req) => {
             .update({ status: "failed", error_message: err.message })
             .eq("id", pc.id);
 
-          results.push({ channel_id: channel.id, success: false, error: err.message });
+          results.push({
+            channel_id: channel.id,
+            success: false,
+            error: err.message,
+          });
         }
       }
     }
@@ -120,14 +134,19 @@ serve(async (req) => {
     }
 
     // Determine overall status
-    const allSucceeded = results.every((r) => r.success) && (!wpResult || (wpResult as any).success !== false);
-    const allFailed = results.every((r) => !r.success) && (!wpResult || (wpResult as any).success === false);
+    const allSucceeded =
+      results.every((r) => r.success) &&
+      (!wpResult || (wpResult as any).success !== false);
+    const allFailed =
+      results.every((r) => !r.success) &&
+      (!wpResult || (wpResult as any).success === false);
 
-    const finalStatus = results.length === 0 && !wpResult
-      ? "failed"
-      : allFailed
-      ? "failed"
-      : "published";
+    const finalStatus =
+      results.length === 0 && !wpResult
+        ? "failed"
+        : allFailed
+          ? "failed"
+          : "published";
 
     const errorMessages = results
       .filter((r) => !r.success)
@@ -138,7 +157,8 @@ serve(async (req) => {
       .from("social_media_posts")
       .update({
         status: finalStatus,
-        published_at: finalStatus === "published" ? new Date().toISOString() : null,
+        published_at:
+          finalStatus === "published" ? new Date().toISOString() : null,
         error_message: errorMessages || null,
         updated_at: new Date().toISOString(),
       })
@@ -146,7 +166,7 @@ serve(async (req) => {
 
     return new Response(
       JSON.stringify({ success: true, results, wordpress: wpResult }),
-      { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      { headers: { ...corsHeaders, "Content-Type": "application/json" } },
     );
   } catch (error: any) {
     console.error("Publish error:", error);
@@ -160,7 +180,10 @@ serve(async (req) => {
 
 // ---- Platform Publishers ----
 
-async function publishToFacebook(channel: any, post: any): Promise<string | null> {
+async function publishToFacebook(
+  channel: any,
+  post: any,
+): Promise<string | null> {
   if (!channel.access_token || !channel.channel_id) {
     throw new Error("Facebook: missing access_token or page_id");
   }
@@ -199,9 +222,14 @@ async function publishToFacebook(channel: any, post: any): Promise<string | null
   return data.id;
 }
 
-async function publishToInstagram(channel: any, post: any): Promise<string | null> {
+async function publishToInstagram(
+  channel: any,
+  post: any,
+): Promise<string | null> {
   if (!channel.access_token || !channel.channel_id) {
-    throw new Error("Instagram: missing access_token or instagram_business_account_id");
+    throw new Error(
+      "Instagram: missing access_token or instagram_business_account_id",
+    );
   }
 
   // Instagram requires media - create a media container first
@@ -246,7 +274,10 @@ async function publishToInstagram(channel: any, post: any): Promise<string | nul
   return publishData.id;
 }
 
-async function publishToLinkedIn(channel: any, post: any): Promise<string | null> {
+async function publishToLinkedIn(
+  channel: any,
+  post: any,
+): Promise<string | null> {
   if (!channel.access_token) {
     throw new Error("LinkedIn: missing access_token");
   }
@@ -255,7 +286,9 @@ async function publishToLinkedIn(channel: any, post: any): Promise<string | null
   if (!authorUrn) throw new Error("LinkedIn: missing author URN");
 
   const body: any = {
-    author: authorUrn.startsWith("urn:") ? authorUrn : `urn:li:person:${authorUrn}`,
+    author: authorUrn.startsWith("urn:")
+      ? authorUrn
+      : `urn:li:person:${authorUrn}`,
     lifecycleState: "PUBLISHED",
     specificContent: {
       "com.linkedin.ugc.ShareContent": {
@@ -272,7 +305,8 @@ async function publishToLinkedIn(channel: any, post: any): Promise<string | null
 
   // Add media if present
   if (post.media_urls && post.media_urls.length > 0) {
-    body.specificContent["com.linkedin.ugc.ShareContent"].shareMediaCategory = "ARTICLE";
+    body.specificContent["com.linkedin.ugc.ShareContent"].shareMediaCategory =
+      "ARTICLE";
     body.specificContent["com.linkedin.ugc.ShareContent"].media = [
       {
         status: "READY",
@@ -301,12 +335,19 @@ async function publishToLinkedIn(channel: any, post: any): Promise<string | null
   return postId;
 }
 
-async function publishToYouTube(channel: any, post: any): Promise<string | null> {
+async function publishToYouTube(
+  channel: any,
+  post: any,
+): Promise<string | null> {
   if (!channel.access_token) {
     throw new Error("YouTube: missing access_token");
   }
 
-  if (!post.media_urls || post.media_urls.length === 0 || post.post_type !== "video") {
+  if (
+    !post.media_urls ||
+    post.media_urls.length === 0 ||
+    post.post_type !== "video"
+  ) {
     throw new Error("YouTube requires a video URL");
   }
 
@@ -333,12 +374,14 @@ async function publishToYouTube(channel: any, post: any): Promise<string | null>
         "Content-Type": "application/json",
       },
       body: JSON.stringify(metadata),
-    }
+    },
   );
 
   if (!resp.ok) {
     const errorData = await resp.json().catch(() => ({}));
-    throw new Error(errorData.error?.message || `YouTube API error: ${resp.status}`);
+    throw new Error(
+      errorData.error?.message || `YouTube API error: ${resp.status}`,
+    );
   }
 
   const data = await resp.json();

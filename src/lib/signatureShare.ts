@@ -1,4 +1,6 @@
-export function toWhatsAppPhone(phone: string | null | undefined): string | null {
+export function toWhatsAppPhone(
+  phone: string | null | undefined,
+): string | null {
   const digits = (phone || "").replace(/\D/g, "");
   if (!digits) return null;
   if (digits.startsWith("972")) return digits;
@@ -31,15 +33,23 @@ export function buildWhatsAppSignUrl(opts: {
   return `https://wa.me/${waPhone}?text=${encodeURIComponent(text)}`;
 }
 
-export async function copySigningUrl(url: string | Promise<string>): Promise<void> {
+export async function copySigningUrl(
+  url: string | Promise<string>,
+): Promise<void> {
   // Safari requires the clipboard call itself to happen inside the click gesture.
   if (typeof ClipboardItem !== "undefined" && navigator.clipboard?.write) {
     try {
-      await navigator.clipboard.write([new ClipboardItem({
-        "text/plain": Promise.resolve(url).then((text) => new Blob([text], { type: "text/plain" })),
-      })]);
+      await navigator.clipboard.write([
+        new ClipboardItem({
+          "text/plain": Promise.resolve(url).then(
+            (text) => new Blob([text], { type: "text/plain" }),
+          ),
+        }),
+      ]);
       return;
-    } catch { /* Try the compatible text API, then a selectable textarea. */ }
+    } catch {
+      /* Try the compatible text API, then a selectable textarea. */
+    }
   }
   const text = await url;
   try {
@@ -49,7 +59,9 @@ export async function copySigningUrl(url: string | Promise<string>): Promise<voi
     textarea.value = text;
     textarea.style.cssText = "position:fixed;opacity:0";
     const focused = document.activeElement as HTMLElement | null;
-    (focused?.closest('[role="dialog"]') || document.body).appendChild(textarea);
+    (focused?.closest('[role="dialog"]') || document.body).appendChild(
+      textarea,
+    );
     textarea.select();
     const copied = document.execCommand("copy");
     textarea.remove();

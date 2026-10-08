@@ -1,7 +1,12 @@
 import { useEffect, useMemo, useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -19,7 +24,14 @@ import { ensurePipelineForClient } from "@/components/marketing/lib/ensurePipeli
 import { ClientSelector } from "@/components/marketing/ClientSelector";
 import { supabase } from "@/integrations/supabase/client";
 import { invokeEdgeFunction } from "@/lib/edgeFunctionInvoke";
-import { CheckCircle2, Globe, Loader2, Plus, Sparkles, WandSparkles } from "lucide-react";
+import {
+  CheckCircle2,
+  Globe,
+  Loader2,
+  Plus,
+  Sparkles,
+  WandSparkles,
+} from "lucide-react";
 
 type Path = "pick_brief" | "carmen" | "manual";
 
@@ -31,10 +43,19 @@ interface Props {
   onCreated: (id: string) => void | Promise<void>;
 }
 
-const message = (error: unknown, fallback: string) => (error instanceof Error ? error.message : fallback);
+const message = (error: unknown, fallback: string) =>
+  error instanceof Error ? error.message : fallback;
 
-export function SeoProjectIntakeDialog({ open, onClose, tenantId, defaultClientId, onCreated }: Props) {
-  const [clientId, setClientId] = useState<string | null>(defaultClientId ?? null);
+export function SeoProjectIntakeDialog({
+  open,
+  onClose,
+  tenantId,
+  defaultClientId,
+  onCreated,
+}: Props) {
+  const [clientId, setClientId] = useState<string | null>(
+    defaultClientId ?? null,
+  );
   const [title, setTitle] = useState("");
   const [websiteOverride, setWebsiteOverride] = useState("");
   const [preview, setPreview] = useState<SeoIntakePreview | null>(null);
@@ -42,7 +63,9 @@ export function SeoProjectIntakeDialog({ open, onClose, tenantId, defaultClientI
   const [path, setPath] = useState<Path>("carmen");
   const [selectedBriefId, setSelectedBriefId] = useState<string | null>(null);
   const [carmenPrompt, setCarmenPrompt] = useState("");
-  const [manualAnswers, setManualAnswers] = useState<Record<string, string>>({});
+  const [manualAnswers, setManualAnswers] = useState<Record<string, string>>(
+    {},
+  );
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
@@ -87,20 +110,30 @@ export function SeoProjectIntakeDialog({ open, onClose, tenantId, defaultClientI
   }, [clientId, open, tenantId]);
 
   const activeWp = useMemo(
-    () => preview?.wordpressSites.find((s) => s.is_active !== false) ?? preview?.wordpressSites[0],
+    () =>
+      preview?.wordpressSites.find((s) => s.is_active !== false) ??
+      preview?.wordpressSites[0],
     [preview],
   );
 
   const createWorkItem = async () => {
     if (!clientId || !title.trim()) throw new Error("נדרש לקוח ושם תוכנית");
-    const pipeline = await ensurePipelineForClient({ clientId, tenantId, track: "seo_geo" });
-    if (!pipeline?.id) throw new Error("לא ניתן לפתוח pipeline SEO/GEO ללקוח — נסה שוב או פנה לתמיכה");
+    const pipeline = await ensurePipelineForClient({
+      clientId,
+      tenantId,
+      track: "seo_geo",
+    });
+    if (!pipeline?.id)
+      throw new Error(
+        "לא ניתן לפתוח pipeline SEO/GEO ללקוח — נסה שוב או פנה לתמיכה",
+      );
     const { data: stages, error: stageError } = await supabase
       .from("marketing_pipeline_stages")
       .select("id,stage_type")
       .eq("pipeline_id", pipeline.id);
     if (stageError) throw stageError;
-    const stageId = stages?.find((stage) => stage.stage_type === "target_seo")?.id ?? null;
+    const stageId =
+      stages?.find((stage) => stage.stage_type === "target_seo")?.id ?? null;
     if (!stageId) throw new Error("שלב SEO/GEO לא נמצא");
 
     const { data, error } = await supabase
@@ -130,7 +163,12 @@ export function SeoProjectIntakeDialog({ open, onClose, tenantId, defaultClientI
       toast.error("הזן שם לתוכנית");
       return;
     }
-    if (path === "manual" && SEO_INTAKE_MANUAL_QUESTIONS.some((_, i) => !manualAnswers[`q${i + 1}`]?.trim())) {
+    if (
+      path === "manual" &&
+      SEO_INTAKE_MANUAL_QUESTIONS.some(
+        (_, i) => !manualAnswers[`q${i + 1}`]?.trim(),
+      )
+    ) {
       toast.error("ענה על כל חמש השאלות");
       return;
     }
@@ -147,13 +185,19 @@ export function SeoProjectIntakeDialog({ open, onClose, tenantId, defaultClientI
     let workItemId: string | null = null;
     try {
       workItemId = await createWorkItem();
-      const mode = path === "pick_brief" ? "existing_brief" : path === "manual" ? "manual_five" : "carmen_full";
+      const mode =
+        path === "pick_brief"
+          ? "existing_brief"
+          : path === "manual"
+            ? "manual_five"
+            : "carmen_full";
       const intake = await runSeoProjectIntake({
         work_item_id: workItemId,
         mode,
         website_override: websiteOverride.trim() || undefined,
         manual_answers: path === "manual" ? manualAnswers : undefined,
-        selected_brief_id: path === "pick_brief" ? selectedBriefId ?? undefined : undefined,
+        selected_brief_id:
+          path === "pick_brief" ? (selectedBriefId ?? undefined) : undefined,
         run_research: mode === "carmen_full",
         user_prompt: path === "carmen" ? carmenPrompt.trim() : "",
       });
@@ -167,20 +211,34 @@ export function SeoProjectIntakeDialog({ open, onClose, tenantId, defaultClientI
         await invokeEdgeFunction("marketing-seo-plan", {
           item_id: workItemId,
           mode: "brief",
-          prompt: path === "manual" ? "מחקר ביטויים ומתחרים מהתשובות הידניות" : "המשך מהבריף הקיים",
+          prompt:
+            path === "manual"
+              ? "מחקר ביטויים ומתחרים מהתשובות הידניות"
+              : "המשך מהבריף הקיים",
           horizon_months: 3,
         });
       }
 
-      toast.success(path === "carmen" && !planError ? "כרמן בנתה בריף ומחקר מהנתונים המחוברים" : "הפרויקט נפתח");
+      toast.success(
+        path === "carmen" && !planError
+          ? "כרמן בנתה בריף ומחקר מהנתונים המחוברים"
+          : "הפרויקט נפתח",
+      );
       setTitle("");
       await onCreated(workItemId);
     } catch (error: unknown) {
       if (workItemId) {
-        await supabase.from("marketing_work_items").delete().eq("id", workItemId);
+        await supabase
+          .from("marketing_work_items")
+          .delete()
+          .eq("id", workItemId);
       }
       const msg = message(error, "פתיחת הפרויקט נכשלה");
-      toast.error(msg.includes("Failed to send") || msg.includes("404") ? `${msg} — ייתכן ש-marketing-seo-intake עדיין לא נפרס בסטייג'ינג` : msg);
+      toast.error(
+        msg.includes("Failed to send") || msg.includes("404")
+          ? `${msg} — ייתכן ש-marketing-seo-intake עדיין לא נפרס בסטייג'ינג`
+          : msg,
+      );
     } finally {
       setSaving(false);
     }
@@ -188,7 +246,10 @@ export function SeoProjectIntakeDialog({ open, onClose, tenantId, defaultClientI
 
   return (
     <Dialog open={open} onOpenChange={(value) => !value && onClose()}>
-      <DialogContent className="max-h-[90dvh] w-[calc(100vw-1.5rem)] max-w-2xl overflow-hidden p-4 sm:p-6" dir="rtl">
+      <DialogContent
+        className="max-h-[90dvh] w-[calc(100vw-1.5rem)] max-w-2xl overflow-hidden p-4 sm:p-6"
+        dir="rtl"
+      >
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Globe className="h-5 w-5 text-emerald-600" />
@@ -200,14 +261,28 @@ export function SeoProjectIntakeDialog({ open, onClose, tenantId, defaultClientI
             <div>
               <Label>לקוח</Label>
               <div className="mt-1">
-                <ClientSelector tenantId={tenantId} value={clientId} onChange={setClientId} allowGeneral={false} />
+                <ClientSelector
+                  tenantId={tenantId}
+                  value={clientId}
+                  onChange={setClientId}
+                  allowGeneral={false}
+                />
               </div>
-              {!clientId && <p className="mt-2 text-[11px] text-amber-700">פרויקט SEO דורש לקוח — נמשך את האתר, וורדפרס ובריפים מהמערכת.</p>}
+              {!clientId && (
+                <p className="mt-2 text-[11px] text-amber-700">
+                  פרויקט SEO דורש לקוח — נמשך את האתר, וורדפרס ובריפים מהמערכת.
+                </p>
+              )}
             </div>
 
             <div>
               <Label>שם התוכנית</Label>
-              <Input className="mt-1" value={title} onChange={(e) => setTitle(e.target.value)} placeholder="לדוגמה: תוכנית SEO רבעון 4" />
+              <Input
+                className="mt-1"
+                value={title}
+                onChange={(e) => setTitle(e.target.value)}
+                placeholder="לדוגמה: תוכנית SEO רבעון 4"
+              />
             </div>
 
             {clientId && (
@@ -221,19 +296,34 @@ export function SeoProjectIntakeDialog({ open, onClose, tenantId, defaultClientI
                   <div className="space-y-3">
                     <div>
                       <Label>אתר</Label>
-                      <Input className="mt-1" value={websiteOverride} onChange={(e) => setWebsiteOverride(e.target.value)} placeholder="https://…" dir="ltr" />
+                      <Input
+                        className="mt-1"
+                        value={websiteOverride}
+                        onChange={(e) => setWebsiteOverride(e.target.value)}
+                        placeholder="https://…"
+                        dir="ltr"
+                      />
                     </div>
                     <div className="flex flex-wrap gap-2 text-[11px]">
                       {activeWp ? (
-                        <Badge variant="outline" className="gap-1 border-emerald-400 text-emerald-800">
+                        <Badge
+                          variant="outline"
+                          className="gap-1 border-emerald-400 text-emerald-800"
+                        >
                           <CheckCircle2 className="h-3 w-3" />
                           WordPress: {activeWp.site_name || activeWp.site_url}
                         </Badge>
                       ) : (
-                        <Badge variant="outline">WordPress — לא מחובר ללקוח</Badge>
+                        <Badge variant="outline">
+                          WordPress — לא מחובר ללקוח
+                        </Badge>
                       )}
-                      <Badge variant="secondary">Ahrefs: {preview.ahrefsReportCount} דוחות</Badge>
-                      <Badge variant="secondary">מעקב: {preview.trackedKeywordCount} ביטויים</Badge>
+                      <Badge variant="secondary">
+                        Ahrefs: {preview.ahrefsReportCount} דוחות
+                      </Badge>
+                      <Badge variant="secondary">
+                        מעקב: {preview.trackedKeywordCount} ביטויים
+                      </Badge>
                     </div>
                   </div>
                 ) : null}
@@ -248,7 +338,9 @@ export function SeoProjectIntakeDialog({ open, onClose, tenantId, defaultClientI
                     <BriefRow
                       key={brief.id}
                       brief={brief}
-                      active={path === "pick_brief" && selectedBriefId === brief.id}
+                      active={
+                        path === "pick_brief" && selectedBriefId === brief.id
+                      }
                       onSelect={() => {
                         setPath("pick_brief");
                         setSelectedBriefId(brief.id);
@@ -296,7 +388,12 @@ export function SeoProjectIntakeDialog({ open, onClose, tenantId, defaultClientI
                     <Textarea
                       className="mt-1 min-h-16"
                       value={manualAnswers[`q${i + 1}`] ?? ""}
-                      onChange={(e) => setManualAnswers((prev) => ({ ...prev, [`q${i + 1}`]: e.target.value }))}
+                      onChange={(e) =>
+                        setManualAnswers((prev) => ({
+                          ...prev,
+                          [`q${i + 1}`]: e.target.value,
+                        }))
+                      }
                     />
                   </div>
                 ))}
@@ -308,8 +405,16 @@ export function SeoProjectIntakeDialog({ open, onClose, tenantId, defaultClientI
               disabled={saving || !clientId || !title.trim()}
               className="gap-2 bg-emerald-600 hover:bg-emerald-700"
             >
-              {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
-              {path === "carmen" ? "קרמן — צור בריף ופתח מחקר" : path === "pick_brief" ? "המשך מבריף קיים" : "שמור בריף ופתח מחקר"}
+              {saving ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <Plus className="h-4 w-4" />
+              )}
+              {path === "carmen"
+                ? "קרמן — צור בריף ופתח מחקר"
+                : path === "pick_brief"
+                  ? "המשך מבריף קיים"
+                  : "שמור בריף ופתח מחקר"}
             </Button>
           </div>
         </ScrollArea>
@@ -318,18 +423,30 @@ export function SeoProjectIntakeDialog({ open, onClose, tenantId, defaultClientI
   );
 }
 
-function BriefRow({ brief, active, onSelect }: { brief: SeoPriorBrief; active: boolean; onSelect: () => void }) {
+function BriefRow({
+  brief,
+  active,
+  onSelect,
+}: {
+  brief: SeoPriorBrief;
+  active: boolean;
+  onSelect: () => void;
+}) {
   return (
     <button
       type="button"
       onClick={onSelect}
       className={cn(
         "w-full rounded-lg border p-3 text-right text-xs transition",
-        active ? "border-emerald-500 bg-emerald-50" : "bg-background hover:bg-muted/50",
+        active
+          ? "border-emerald-500 bg-emerald-50"
+          : "bg-background hover:bg-muted/50",
       )}
     >
       <div className="font-semibold">{brief.title || "בריף ללא כותרת"}</div>
-      <p className="mt-1 line-clamp-2 text-[10px] text-muted-foreground">{brief.excerpt}</p>
+      <p className="mt-1 line-clamp-2 text-[10px] text-muted-foreground">
+        {brief.excerpt}
+      </p>
     </button>
   );
 }
@@ -353,7 +470,9 @@ function PathButton({
       onClick={onClick}
       className={cn(
         "rounded-xl border p-3 text-right",
-        active ? "border-emerald-500 bg-emerald-50 ring-2 ring-emerald-500/10" : "hover:bg-muted/50",
+        active
+          ? "border-emerald-500 bg-emerald-50 ring-2 ring-emerald-500/10"
+          : "hover:bg-muted/50",
       )}
     >
       <div className="flex items-center gap-2 text-xs font-bold">

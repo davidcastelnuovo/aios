@@ -31,7 +31,10 @@ function fromEnv(
   return {
     sessionId: id,
     sessionUrl: cursorSessionUrl(id),
-    source: key === "CURSOR_DIRECT_AGENT_ID" ? "env:CURSOR_DIRECT_AGENT_ID" : "env:CURSOR_STICKY_AGENT_ID",
+    source:
+      key === "CURSOR_DIRECT_AGENT_ID"
+        ? "env:CURSOR_DIRECT_AGENT_ID"
+        : "env:CURSOR_STICKY_AGENT_ID",
   };
 }
 
@@ -62,7 +65,9 @@ export async function resolveCursorDirectSession(
           source: "db:cursor_sticky_agents",
         };
       }
-    } catch { /* table may be missing on a fresh clone */ }
+    } catch {
+      /* table may be missing on a fresh clone */
+    }
   }
 
   const sticky = fromEnv(env, "CURSOR_STICKY_AGENT_ID");
@@ -78,7 +83,9 @@ export async function resolveCursorDirectSession(
         .not("external_session_id", "is", null)
         .order("last_activity_at", { ascending: false })
         .limit(1);
-      const { data: rows } = await chain as { data: Array<Record<string, unknown>> | null };
+      const { data: rows } = (await chain) as {
+        data: Array<Record<string, unknown>> | null;
+      };
       const row = Array.isArray(rows) ? rows[0] : null;
       const id = asCursorSessionId(String(row?.external_session_id || ""));
       if (id) {
@@ -88,7 +95,9 @@ export async function resolveCursorDirectSession(
           source: "db:agent_channel_sessions",
         };
       }
-    } catch { /* ignore */ }
+    } catch {
+      /* ignore */
+    }
   }
 
   return null;

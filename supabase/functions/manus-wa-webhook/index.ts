@@ -2,10 +2,14 @@
 // operator on outbound messages (stops Carmen replying in the operator's private chats).
 // redeploy trigger: session identity is chat JID only — never newest session / speaker phone (2026-08-27)
 // redeploy trigger: refuse Carmen turns without a canonical chat_id (2026-08-27b)
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.3';
-import { findCarmenSessionAutomation, groupMessageInvokesCarmen, handleCarmenMessage } from '../_shared/carmen.ts';
-import { routeWhatsAppDirect } from '../_shared/agent-channel/whatsapp-direct.ts';
-import { aiTranscribe, aiCleanTranscript } from '../_shared/ai.ts';
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
+import {
+  findCarmenSessionAutomation,
+  groupMessageInvokesCarmen,
+  handleCarmenMessage,
+} from "../_shared/carmen.ts";
+import { routeWhatsAppDirect } from "../_shared/agent-channel/whatsapp-direct.ts";
+import { aiTranscribe, aiCleanTranscript } from "../_shared/ai.ts";
 import {
   VOICE_STATUSES,
   buildVoiceMeta,
@@ -15,7 +19,7 @@ import {
   looksLikeAudioPayload,
   pickAudioUrlFromContainers,
   stripVoiceMarker,
-} from '../_shared/wa-voice-resolve.ts';
+} from "../_shared/wa-voice-resolve.ts";
 import {
   isUsableLidKey,
   looksLikeRealPhone,
@@ -25,21 +29,24 @@ import {
   pickPrivateCarmenTarget,
   resolveInboundLidToPhone,
   shouldMarkResolvedLidAsOutgoing,
-} from '../_shared/carmen-private-routing.ts';
-import { observeManusGroupMember } from '../_shared/carmen-observe-group-member.ts';
+} from "../_shared/carmen-private-routing.ts";
+import { observeManusGroupMember } from "../_shared/carmen-observe-group-member.ts";
 
 const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-wa-gateway-instance, x-wa-gateway-secret, x-webhook-secret, x-manus-secret, x-webhook-signature',
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Headers":
+    "authorization, x-client-info, apikey, content-type, x-wa-gateway-instance, x-wa-gateway-secret, x-webhook-secret, x-manus-secret, x-webhook-signature",
 };
 
 // Last 9 digits — matches existing lead/client matching policy
 function normalizePhone(p: string): string {
-  return (p || '').replace(/\D/g, '').slice(-9);
+  return (p || "").replace(/\D/g, "").slice(-9);
 }
 
 function isIsraeliMobileTail(digits: string): boolean {
-  const tail = String(digits || '').replace(/\D/g, '').slice(-9);
+  const tail = String(digits || "")
+    .replace(/\D/g, "")
+    .slice(-9);
   return /^[5-9]\d{8}$/.test(tail);
 }
 
@@ -49,7 +56,7 @@ function isUnresolvedGroupAuthor(
   authorRaw: string,
   groupChatId: string,
 ): boolean {
-  const groupDigits = groupChatId.split('@')[0].replace(/\D/g, '');
+  const groupDigits = groupChatId.split("@")[0].replace(/\D/g, "");
   if (!authorPhone) return true;
   if (authorPhone === groupDigits) return true;
   if (/@lid/i.test(authorRaw)) return true;
@@ -59,7 +66,12 @@ function isUnresolvedGroupAuthor(
 // ── Incoming voice notes → transcript (OpenAI Whisper) ────────────────
 // Returns structured result: clear 🎤 transcript when available, otherwise an
 // explicit status (no_audio_url / transcription_failed / …) — never silent.
-type MediaAuth = { apiKey?: string; gateway?: string; supabase?: any; tenantId?: string };
+type MediaAuth = {
+  apiKey?: string;
+  gateway?: string;
+  supabase?: any;
+  tenantId?: string;
+};
 type VoiceResolveResult = {
   messageText: string;
   isVoice: boolean;
@@ -70,15 +82,32 @@ type VoiceResolveResult = {
 const pairedVoicePayloads = new WeakSet<object>();
 function pickAudioUrl(payload: any, msgContainer: any): string | null {
   return pickAudioUrlFromContainers([
-    payload, payload?.media, payload?.file, payload?.attachment, payload?.audio,
-    msgContainer, msgContainer?.audioMessage, msgContainer?.message,
+    payload,
+    payload?.media,
+    payload?.file,
+    payload?.attachment,
+    payload?.audio,
+    msgContainer,
+    msgContainer?.audioMessage,
+    msgContainer?.message,
   ]);
 }
-function looksAudio(payload: any, msgContainer: any, url: string | null): boolean {
+function looksAudio(
+  payload: any,
+  msgContainer: any,
+  url: string | null,
+): boolean {
   return looksLikeAudioPayload({
     hasAudioMessage: !!msgContainer?.audioMessage,
-    type: payload?.type ?? payload?.messageType ?? payload?.mediaType ?? msgContainer?.type,
-    mime: payload?.mimeType || payload?.mime_type || payload?.media?.mimetype ||
+    type:
+      payload?.type ??
+      payload?.messageType ??
+      payload?.mediaType ??
+      msgContainer?.type,
+    mime:
+      payload?.mimeType ||
+      payload?.mime_type ||
+      payload?.media?.mimetype ||
       msgContainer?.audioMessage?.mimetype,
     url,
   });
@@ -89,12 +118,16 @@ async function fetchMedia(url: string, auth?: MediaAuth): Promise<Blob | null> {
   try {
     const r = await fetch(url);
     if (r.ok) return await r.blob();
-  } catch (_) { /* try authed */ }
+  } catch (_) {
+    /* try authed */
+  }
   if (auth?.apiKey) {
     try {
-      const r = await fetch(url, { headers: { 'X-Api-Key': auth.apiKey } });
+      const r = await fetch(url, { headers: { "X-Api-Key": auth.apiKey } });
       if (r.ok) return await r.blob();
-    } catch (_) { /* give up */ }
+    } catch (_) {
+      /* give up */
+    }
   }
   return null;
 }
@@ -108,30 +141,36 @@ async function findPairedGreenTranscript(
   auth?: MediaAuth,
 ): Promise<string | null> {
   if (!auth?.supabase || !auth.tenantId) return null;
-  const messageId = String(payload?.messageId || payload?.id || '').trim();
+  const messageId = String(payload?.messageId || payload?.id || "").trim();
   if (!messageId) return null;
 
   for (let attempt = 0; attempt < 21; attempt++) {
     if (attempt > 0) await new Promise((resolve) => setTimeout(resolve, 1000));
     const { data } = await auth.supabase
-      .from('chat_messages')
-      .select('message_text')
-      .eq('tenant_id', auth.tenantId)
-      .eq('provider', 'green_api')
-      .eq('raw_provider_data->>idMessage', messageId)
-      .order('created_at', { ascending: false })
+      .from("chat_messages")
+      .select("message_text")
+      .eq("tenant_id", auth.tenantId)
+      .eq("provider", "green_api")
+      .eq("raw_provider_data->>idMessage", messageId)
+      .order("created_at", { ascending: false })
       .limit(1)
       .maybeSingle();
-    const raw = String(data?.message_text || '').trim();
+    const raw = String(data?.message_text || "").trim();
     const text = stripVoiceMarker(raw);
     if (text && !isVoicePlaceholder(raw) && !isVoicePlaceholder(text)) {
-      if (payload && typeof payload === 'object') pairedVoicePayloads.add(payload);
+      if (payload && typeof payload === "object")
+        pairedVoicePayloads.add(payload);
       // Always re-apply 🎤 — Green rows already have it; keep Carmen context consistent.
-      return formatVoiceMessageText({ transcript: text, status: VOICE_STATUSES.OK, isVoice: true });
+      return formatVoiceMessageText({
+        transcript: text,
+        status: VOICE_STATUSES.OK,
+        isVoice: true,
+      });
     }
     // Green already wrote an explicit failure — surface it (don't keep waiting forever).
     if (raw && isVoicePlaceholder(raw) && /·/.test(raw) && attempt >= 3) {
-      if (payload && typeof payload === 'object') pairedVoicePayloads.add(payload);
+      if (payload && typeof payload === "object")
+        pairedVoicePayloads.add(payload);
       return raw;
     }
   }
@@ -149,33 +188,45 @@ function logMediaDebug(
 ) {
   if (!auth?.supabase) return;
   try {
-    auth.supabase.from('error_logs').insert({
-      tenant_id: auth.tenantId ?? null,
-      source: 'manus-wa-media-debug',
-      error_message: `voice/media resolve status=${status}`,
-      context: {
-        status,
-        top_keys: Object.keys(payload || {}),
-        hasMedia: payload?.hasMedia ?? null,
-        type: payload?.type ?? payload?.messageType ?? payload?.mediaType ?? null,
-        mimeType: payload?.mimeType ?? payload?.mime_type ?? null,
-        message_id: payload?.messageId ?? payload?.id ?? null,
-        picked_url: url,
-        looks_audio: isAudio,
-        msg_keys: msgContainer ? Object.keys(msgContainer) : null,
-        audioMessage_keys: msgContainer?.audioMessage ? Object.keys(msgContainer.audioMessage) : null,
-        preview: JSON.stringify(payload ?? {}).slice(0, 1500),
-      },
-    }).then(() => {}, () => {});
-  } catch (_) { /* never let diagnostics break the webhook */ }
+    auth.supabase
+      .from("error_logs")
+      .insert({
+        tenant_id: auth.tenantId ?? null,
+        source: "manus-wa-media-debug",
+        error_message: `voice/media resolve status=${status}`,
+        context: {
+          status,
+          top_keys: Object.keys(payload || {}),
+          hasMedia: payload?.hasMedia ?? null,
+          type:
+            payload?.type ?? payload?.messageType ?? payload?.mediaType ?? null,
+          mimeType: payload?.mimeType ?? payload?.mime_type ?? null,
+          message_id: payload?.messageId ?? payload?.id ?? null,
+          picked_url: url,
+          looks_audio: isAudio,
+          msg_keys: msgContainer ? Object.keys(msgContainer) : null,
+          audioMessage_keys: msgContainer?.audioMessage
+            ? Object.keys(msgContainer.audioMessage)
+            : null,
+          preview: JSON.stringify(payload ?? {}).slice(0, 1500),
+        },
+      })
+      .then(
+        () => {},
+        () => {},
+      );
+  } catch (_) {
+    /* never let diagnostics break the webhook */
+  }
 }
 async function resolveMessageText(
   payload: any,
   msgContainer: any,
   auth?: MediaAuth,
 ): Promise<VoiceResolveResult> {
-  const messageId = String(payload?.messageId || payload?.id || '').trim() || null;
-  const body = payload?.body != null ? String(payload.body).trim() : '';
+  const messageId =
+    String(payload?.messageId || payload?.id || "").trim() || null;
+  const body = payload?.body != null ? String(payload.body).trim() : "";
   const urlEarly = pickAudioUrl(payload, msgContainer);
   const audioEarly = looksAudio(payload, msgContainer, urlEarly);
 
@@ -184,36 +235,58 @@ async function resolveMessageText(
   if (body && (!payload?.hasMedia || !audioEarly)) {
     const isVoice = hasVoiceTranscriptMarker(body);
     const messageText = isVoice
-      ? formatVoiceMessageText({ transcript: body, status: VOICE_STATUSES.OK, isVoice: true })
+      ? formatVoiceMessageText({
+          transcript: body,
+          status: VOICE_STATUSES.OK,
+          isVoice: true,
+        })
       : body;
     const meta = buildVoiceMeta({
       status: isVoice ? VOICE_STATUSES.OK : VOICE_STATUSES.TEXT,
       transcript: isVoice ? stripVoiceMarker(messageText) : null,
-      source: 'body', messageId, isVoice,
+      source: "body",
+      messageId,
+      isVoice,
     });
     return { messageText, isVoice, voiceMeta: meta };
   }
   if (body && audioEarly) {
-    const formatted = formatVoiceMessageText({ transcript: body, status: VOICE_STATUSES.OK, isVoice: true });
-    if (payload && typeof payload === 'object') pairedVoicePayloads.add(payload);
+    const formatted = formatVoiceMessageText({
+      transcript: body,
+      status: VOICE_STATUSES.OK,
+      isVoice: true,
+    });
+    if (payload && typeof payload === "object")
+      pairedVoicePayloads.add(payload);
     const meta = buildVoiceMeta({
-      status: VOICE_STATUSES.OK, transcript: stripVoiceMarker(formatted),
-      source: 'body', messageId, audioUrl: urlEarly, isVoice: true,
+      status: VOICE_STATUSES.OK,
+      transcript: stripVoiceMarker(formatted),
+      source: "body",
+      messageId,
+      audioUrl: urlEarly,
+      isVoice: true,
     });
     return { messageText: formatted, isVoice: true, voiceMeta: meta };
   }
 
   if (!payload?.hasMedia) {
-    const meta = buildVoiceMeta({ status: VOICE_STATUSES.EMPTY, source: 'none', messageId, isVoice: false });
-    return { messageText: '', isVoice: false, voiceMeta: meta };
+    const meta = buildVoiceMeta({
+      status: VOICE_STATUSES.EMPTY,
+      source: "none",
+      messageId,
+      isVoice: false,
+    });
+    return { messageText: "", isVoice: false, voiceMeta: meta };
   }
 
   const url = urlEarly;
   const isAudio = audioEarly;
   let status = isAudio
-    ? (url ? VOICE_STATUSES.TRANSCRIPTION_FAILED : VOICE_STATUSES.NO_AUDIO_URL)
+    ? url
+      ? VOICE_STATUSES.TRANSCRIPTION_FAILED
+      : VOICE_STATUSES.NO_AUDIO_URL
     : VOICE_STATUSES.NOT_VOICE_MEDIA;
-  let source: string = 'none';
+  let source: string = "none";
   let transcript: string | null = null;
 
   if (url && isAudio) {
@@ -224,11 +297,14 @@ async function resolveMessageText(
       } else if (blob.size <= 0 || blob.size > 25 * 1024 * 1024) {
         status = VOICE_STATUSES.EMPTY_AUDIO;
       } else {
-        const t = await aiTranscribe(blob, { language: 'he', filename: 'voice.ogg' });
+        const t = await aiTranscribe(blob, {
+          language: "he",
+          filename: "voice.ogg",
+        });
         if (t && t.trim()) {
           transcript = (await aiCleanTranscript(t)).trim();
           status = VOICE_STATUSES.OK;
-          source = 'direct_whisper';
+          source = "direct_whisper";
         } else {
           status = VOICE_STATUSES.TRANSCRIPTION_FAILED;
         }
@@ -245,17 +321,31 @@ async function resolveMessageText(
       if (isVoicePlaceholder(paired)) {
         const meta = buildVoiceMeta({
           status: VOICE_STATUSES.TRANSCRIPTION_FAILED,
-          transcript: null, source: 'green_api_pair', messageId, audioUrl: url, isVoice: true,
+          transcript: null,
+          source: "green_api_pair",
+          messageId,
+          audioUrl: url,
+          isVoice: true,
         });
         meta.message_text = paired;
-        console.log('[manus-wa] voice resolve paired failure', { messageId, status: paired });
+        console.log("[manus-wa] voice resolve paired failure", {
+          messageId,
+          status: paired,
+        });
         return { messageText: paired, isVoice: true, voiceMeta: meta };
       }
       const meta = buildVoiceMeta({
-        status: VOICE_STATUSES.OK, transcript: stripVoiceMarker(paired),
-        source: 'green_api_pair', messageId, audioUrl: url, isVoice: true,
+        status: VOICE_STATUSES.OK,
+        transcript: stripVoiceMarker(paired),
+        source: "green_api_pair",
+        messageId,
+        audioUrl: url,
+        isVoice: true,
       });
-      console.log('[manus-wa] voice resolve ok via green_api_pair', { messageId, len: paired.length });
+      console.log("[manus-wa] voice resolve ok via green_api_pair", {
+        messageId,
+        len: paired.length,
+      });
       return { messageText: paired, isVoice: true, voiceMeta: meta };
     }
   }
@@ -265,34 +355,59 @@ async function resolveMessageText(
     logMediaDebug(auth, payload, msgContainer, url, isAudio, status);
   }
   const meta = buildVoiceMeta({
-    status, transcript, source: source as any, messageId, audioUrl: url, isVoice,
+    status,
+    transcript,
+    source: source as any,
+    messageId,
+    audioUrl: url,
+    isVoice,
   });
-  const messageText = String(meta.message_text || '');
-  console.log('[manus-wa] voice resolve', { messageId, status, isVoice, source, hasTranscript: !!transcript });
+  const messageText = String(meta.message_text || "");
+  console.log("[manus-wa] voice resolve", {
+    messageId,
+    status,
+    isVoice,
+    source,
+    hasTranscript: !!transcript,
+  });
   return { messageText, isVoice, voiceMeta: meta };
 }
 
 // Was the inbound message a voice note? (drives Carmen's voice-out mirroring)
-function messageIsVoice(payload: any, msgContainer: any, resolved?: VoiceResolveResult): boolean {
+function messageIsVoice(
+  payload: any,
+  msgContainer: any,
+  resolved?: VoiceResolveResult,
+): boolean {
   if (resolved?.isVoice) return true;
-  if (payload && typeof payload === 'object' && pairedVoicePayloads.has(payload)) return true;
+  if (
+    payload &&
+    typeof payload === "object" &&
+    pairedVoicePayloads.has(payload)
+  )
+    return true;
   if (!payload?.hasMedia) return false;
   const url = pickAudioUrl(payload, msgContainer);
   return looksAudio(payload, msgContainer, url);
 }
 
 // Send Carmen's reply as a voice note too (best-effort, via send-manus-wa-voice)
-function makeVoiceSender(tenantId: string): (chatId: string, text: string) => Promise<boolean> {
+function makeVoiceSender(
+  tenantId: string,
+): (chatId: string, text: string) => Promise<boolean> {
   return async (toChatId: string, text: string): Promise<boolean> => {
     try {
-      const r = await fetch(`${Deno.env.get('SUPABASE_URL')}/functions/v1/send-manus-wa-voice`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')}`,
+      const r = await fetch(
+        `${Deno.env.get("SUPABASE_URL")}/functions/v1/send-manus-wa-voice`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}`,
+          },
+          body: JSON.stringify({ tenant_id: tenantId, to: toChatId, text }),
         },
-        body: JSON.stringify({ tenant_id: tenantId, to: toChatId, text }),
-      });
+      );
       return r.ok;
     } catch {
       return false;
@@ -302,17 +417,19 @@ function makeVoiceSender(tenantId: string): (chatId: string, text: string) => Pr
 
 function ok(body: Record<string, unknown>, status = 200) {
   return new Response(JSON.stringify(body), {
-    status, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+    status,
+    headers: { ...corsHeaders, "Content-Type": "application/json" },
   });
 }
 
 Deno.serve(async (req) => {
-  if (req.method === 'OPTIONS') return new Response(null, { headers: corsHeaders });
+  if (req.method === "OPTIONS")
+    return new Response(null, { headers: corsHeaders });
 
   try {
     const supabase = createClient(
-      Deno.env.get('SUPABASE_URL') ?? '',
-      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
+      Deno.env.get("SUPABASE_URL") ?? "",
+      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "",
     );
 
     const url = new URL(req.url);
@@ -320,47 +437,110 @@ Deno.serve(async (req) => {
 
     // Diagnostic: log top-level shape so we can see exactly what Manus sends
     try {
-      console.log('[manus-wa] raw keys=', Object.keys(rawPayload || {}).join(','), 'preview=', JSON.stringify(rawPayload).slice(0, 800));
+      console.log(
+        "[manus-wa] raw keys=",
+        Object.keys(rawPayload || {}).join(","),
+        "preview=",
+        JSON.stringify(rawPayload).slice(0, 800),
+      );
     } catch {}
 
     // Normalize Manus WA Gateway payload — it may be flat, or wrapped in
     // { data }, { message }, { payload }, { event, data: {...} }, etc.
     function pickObj(...candidates: unknown[]): Record<string, any> | null {
       for (const c of candidates) {
-        if (c && typeof c === 'object' && !Array.isArray(c)) return c as Record<string, any>;
+        if (c && typeof c === "object" && !Array.isArray(c))
+          return c as Record<string, any>;
       }
       return null;
     }
     const outer = rawPayload as Record<string, any>;
-    const inner = pickObj(outer.data, outer.message, outer.payload, outer.body) || {};
+    const inner =
+      pickObj(outer.data, outer.message, outer.payload, outer.body) || {};
     const key = pickObj(inner.key, outer.key) || {};
     const msgContainer = pickObj(inner.message, outer.message) || {};
 
     // Only treat as 'message' when there is actual message content (from/body/key).
     // Otherwise keep the raw event (or 'ping' / 'unknown') so we don't falsely trigger Carmen.
     const rawEventField =
-      outer.event ?? inner.event ?? outer.type ?? inner.type ?? outer.messageType ?? inner.messageType ?? null;
-    const looksLikeMessage =
-      !!(outer.from || inner.from || inner.chatId || outer.chatId || outer.body || inner.body || inner.text || outer.text ||
-         (pickObj(inner.message, outer.message)));
+      outer.event ??
+      inner.event ??
+      outer.type ??
+      inner.type ??
+      outer.messageType ??
+      inner.messageType ??
+      null;
+    const looksLikeMessage = !!(
+      outer.from ||
+      inner.from ||
+      inner.chatId ||
+      outer.chatId ||
+      outer.body ||
+      inner.body ||
+      inner.text ||
+      outer.text ||
+      pickObj(inner.message, outer.message)
+    );
     const normalizedEvent =
-      (rawEventField === 'chat' || rawEventField === 'text' || rawEventField === 'message') && looksLikeMessage
-        ? 'message'
-        : rawEventField ?? (looksLikeMessage ? 'message' : 'ping');
+      (rawEventField === "chat" ||
+        rawEventField === "text" ||
+        rawEventField === "message") &&
+      looksLikeMessage
+        ? "message"
+        : (rawEventField ?? (looksLikeMessage ? "message" : "ping"));
     const fromField =
-      outer.from ?? inner.from ?? inner.chatId ?? outer.chatId ?? key.remoteJid ?? inner.remoteJid ?? '';
+      outer.from ??
+      inner.from ??
+      inner.chatId ??
+      outer.chatId ??
+      key.remoteJid ??
+      inner.remoteJid ??
+      "";
     const toField =
-      outer.to ?? inner.to ?? inner.recipientId ?? outer.recipientId ?? '';
+      outer.to ?? inner.to ?? inner.recipientId ?? outer.recipientId ?? "";
     const bodyField =
-      outer.body ?? inner.body ?? inner.text ?? outer.text ?? inner.content ?? outer.content ??
-      msgContainer.conversation ?? msgContainer.text ?? msgContainer.body ?? '';
+      outer.body ??
+      inner.body ??
+      inner.text ??
+      outer.text ??
+      inner.content ??
+      outer.content ??
+      msgContainer.conversation ??
+      msgContainer.text ??
+      msgContainer.body ??
+      "";
     const fromMeField =
-      outer.fromMe ?? inner.fromMe ?? key.fromMe ?? (outer.direction === 'outgoing' || inner.direction === 'outgoing');
+      outer.fromMe ??
+      inner.fromMe ??
+      key.fromMe ??
+      (outer.direction === "outgoing" || inner.direction === "outgoing");
     const directionField = outer.direction ?? inner.direction;
-    const idField = outer.id ?? inner.id ?? outer.messageId ?? inner.messageId ?? key.id;
-    const senderNameField = outer.senderName ?? inner.senderName ?? outer.fromName ?? inner.fromName ?? outer.pushName ?? inner.pushName ?? null;
-    const authorField = outer.author ?? inner.author ?? outer.participant ?? inner.participant ?? key.participant ?? null;
-    const hasMediaField = outer.hasMedia ?? inner.hasMedia ?? !!(msgContainer.imageMessage || msgContainer.audioMessage || msgContainer.videoMessage || msgContainer.documentMessage);
+    const idField =
+      outer.id ?? inner.id ?? outer.messageId ?? inner.messageId ?? key.id;
+    const senderNameField =
+      outer.senderName ??
+      inner.senderName ??
+      outer.fromName ??
+      inner.fromName ??
+      outer.pushName ??
+      inner.pushName ??
+      null;
+    const authorField =
+      outer.author ??
+      inner.author ??
+      outer.participant ??
+      inner.participant ??
+      key.participant ??
+      null;
+    const hasMediaField =
+      outer.hasMedia ??
+      inner.hasMedia ??
+      !!(
+        msgContainer.imageMessage ||
+        msgContainer.audioMessage ||
+        msgContainer.videoMessage ||
+        msgContainer.documentMessage
+      );
 
     // Build a unified payload object that the rest of the code uses
     const payload: Record<string, any> = {
@@ -369,7 +549,7 @@ Deno.serve(async (req) => {
       event: normalizedEvent,
       from: fromField,
       to: toField,
-      body: typeof bodyField === 'string' ? bodyField : (bodyField?.text ?? ''),
+      body: typeof bodyField === "string" ? bodyField : (bodyField?.text ?? ""),
       fromMe: fromMeField,
       direction: directionField,
       id: idField,
@@ -381,57 +561,71 @@ Deno.serve(async (req) => {
 
     // Collect every possible secret source Manus may use
     const headerSecret =
-      req.headers.get('x-wa-gateway-secret') ||
-      req.headers.get('x-webhook-secret') ||
-      req.headers.get('x-manus-secret') ||
-      req.headers.get('x-webhook-signature') ||
-      url.searchParams.get('secret') ||
+      req.headers.get("x-wa-gateway-secret") ||
+      req.headers.get("x-webhook-secret") ||
+      req.headers.get("x-manus-secret") ||
+      req.headers.get("x-webhook-signature") ||
+      url.searchParams.get("secret") ||
       (outer?.secret as string | undefined) ||
       (inner?.secret as string | undefined) ||
-      '';
+      "";
 
-    const headerInstanceId = req.headers.get('x-wa-gateway-instance') || '';
+    const headerInstanceId = req.headers.get("x-wa-gateway-instance") || "";
     const instanceId =
-      outer.instanceId || inner.instanceId || outer.instance_id || inner.instance_id ||
-      headerInstanceId || url.searchParams.get('instanceId') || '';
+      outer.instanceId ||
+      inner.instanceId ||
+      outer.instance_id ||
+      inner.instance_id ||
+      headerInstanceId ||
+      url.searchParams.get("instanceId") ||
+      "";
 
     if (!instanceId) {
-      console.error('Missing instanceId. Headers:', JSON.stringify(Object.fromEntries(req.headers)));
-      return ok({ error: 'Missing instanceId' }, 400);
+      console.error(
+        "Missing instanceId. Headers:",
+        JSON.stringify(Object.fromEntries(req.headers)),
+      );
+      return ok({ error: "Missing instanceId" }, 400);
     }
 
     // Find integration by instance ID
     const { data: integrations } = await supabase
-      .from('tenant_integrations')
-      .select('id, tenant_id, user_id, settings, api_key')
-      .eq('integration_type', 'manus_wa')
-      .eq('is_active', true)
-      .filter('settings->>instance_id', 'eq', String(instanceId))
-      .order('created_at', { ascending: false })
+      .from("tenant_integrations")
+      .select("id, tenant_id, user_id, settings, api_key")
+      .eq("integration_type", "manus_wa")
+      .eq("is_active", true)
+      .filter("settings->>instance_id", "eq", String(instanceId))
+      .order("created_at", { ascending: false })
       .limit(1);
 
     const integ = integrations?.[0];
     if (!integ) {
-      console.error('No active manus_wa integration for instance', instanceId);
-      return ok({ error: 'No active integration' }, 404);
+      console.error("No active manus_wa integration for instance", instanceId);
+      return ok({ error: "No active integration" }, 404);
     }
 
     const settings = (integ.settings as any) || {};
-    const expectedSecret: string = settings.webhook_secret || '';
+    const expectedSecret: string = settings.webhook_secret || "";
 
     // Auto-heal: if DB has no secret yet, accept the first webhook secret we see and persist it.
     if (!expectedSecret && headerSecret) {
       const merged = { ...settings, webhook_secret: headerSecret };
-      await supabase.from('tenant_integrations').update({ settings: merged }).eq('id', integ.id);
-      console.log('Auto-healed webhook_secret for instance', instanceId);
+      await supabase
+        .from("tenant_integrations")
+        .update({ settings: merged })
+        .eq("id", integ.id);
+      console.log("Auto-healed webhook_secret for instance", instanceId);
     } else if (expectedSecret && expectedSecret !== headerSecret) {
       // Log diagnostic info so we can see exactly what Manus sends, then ACK 200 so Manus doesn't disable the webhook.
       console.error(
-        'Webhook secret mismatch for instance', instanceId,
-        '— received headers:', JSON.stringify(Object.fromEntries(req.headers)),
-        'received secret:', headerSecret ? `${headerSecret.slice(0, 6)}…` : '(none)'
+        "Webhook secret mismatch for instance",
+        instanceId,
+        "— received headers:",
+        JSON.stringify(Object.fromEntries(req.headers)),
+        "received secret:",
+        headerSecret ? `${headerSecret.slice(0, 6)}…` : "(none)",
       );
-      return ok({ received: true, ignored: 'secret_mismatch' }, 200);
+      return ok({ received: true, ignored: "secret_mismatch" }, 200);
     }
 
     const tenantId = integ.tenant_id;
@@ -441,30 +635,32 @@ Deno.serve(async (req) => {
     // Credentials + diagnostics for resolving inbound voice-note media.
     const mediaAuth: MediaAuth = {
       apiKey: integ.api_key as string | undefined,
-      gateway: (settings.gateway_url as string) || 'https://whatsappgw-pzpyrrww.manus.space',
+      gateway:
+        (settings.gateway_url as string) ||
+        "https://whatsappgw-pzpyrrww.manus.space",
       supabase,
       tenantId,
     };
 
     // ===== Message ACK (delivery receipt) =====
-    if (event === 'message_ack') {
+    if (event === "message_ack") {
       const messageId = payload.messageId;
       const ack = Number(payload.ack);
       if (!messageId) return ok({ received: true });
 
       const { data: msg } = await supabase
-        .from('chat_messages')
-        .select('id, read_at')
-        .eq('tenant_id', tenantId)
-        .eq('provider', 'manus_wa')
-        .eq('raw_provider_data->>messageId', String(messageId))
+        .from("chat_messages")
+        .select("id, read_at")
+        .eq("tenant_id", tenantId)
+        .eq("provider", "manus_wa")
+        .eq("raw_provider_data->>messageId", String(messageId))
         .maybeSingle();
 
       if (msg) {
         const update: Record<string, unknown> = {};
         if (ack >= 3 && !msg.read_at) update.read_at = new Date().toISOString();
         if (Object.keys(update).length > 0) {
-          await supabase.from('chat_messages').update(update).eq('id', msg.id);
+          await supabase.from("chat_messages").update(update).eq("id", msg.id);
         }
       }
 
@@ -472,43 +668,74 @@ Deno.serve(async (req) => {
     }
 
     // ===== Incoming message =====
-    console.log('[manus-wa] event=', event, 'instance=', instanceId, 'from=', payload.from, 'to=', payload.to, 'fromMe=', payload.fromMe, 'direction=', payload.direction, 'bodyPreview=', String(payload.body || '').slice(0, 80));
-    if (event !== 'message') return ok({ received: true, ignored: event });
+    console.log(
+      "[manus-wa] event=",
+      event,
+      "instance=",
+      instanceId,
+      "from=",
+      payload.from,
+      "to=",
+      payload.to,
+      "fromMe=",
+      payload.fromMe,
+      "direction=",
+      payload.direction,
+      "bodyPreview=",
+      String(payload.body || "").slice(0, 80),
+    );
+    if (event !== "message") return ok({ received: true, ignored: event });
 
-    const fromRaw = String(payload.from || '');
-    const toRaw = String(payload.to || '');
-    const chatIdRaw = String(payload.chatId || '');
-    const senderLidRaw = String(payload.senderLid || '');
-    const isGroup = fromRaw.endsWith('@g.us') || toRaw.endsWith('@g.us') || chatIdRaw.endsWith('@g.us');
+    const fromRaw = String(payload.from || "");
+    const toRaw = String(payload.to || "");
+    const chatIdRaw = String(payload.chatId || "");
+    const senderLidRaw = String(payload.senderLid || "");
+    const isGroup =
+      fromRaw.endsWith("@g.us") ||
+      toRaw.endsWith("@g.us") ||
+      chatIdRaw.endsWith("@g.us");
 
     // LID detection: Manus often delivers `from` as bare digits but flags the chat as
     // `@lid` via `chatId` (or includes a `senderLid`). Treat any of these as LID so the
     // pairing/resolution blocks below actually fire.
     const isLidEvent =
-      fromRaw.endsWith('@lid') ||
-      chatIdRaw.endsWith('@lid') ||
-      (!!senderLidRaw && senderLidRaw.replace(/\D/g, '') === fromRaw.replace(/\D/g, ''));
+      fromRaw.endsWith("@lid") ||
+      chatIdRaw.endsWith("@lid") ||
+      (!!senderLidRaw &&
+        senderLidRaw.replace(/\D/g, "") === fromRaw.replace(/\D/g, ""));
 
     // The LID only ever comes from LID-bearing fields. Manus commonly delivers the
     // sender's REAL phone in `from` / `senderPhone` while marking the chat `@lid`,
     // so deriving the LID from `from` keyed wa_lid_map by a real phone number.
-    const inboundLidDigits = pickInboundLidDigits({ fromRaw, chatIdRaw, senderLidRaw });
+    const inboundLidDigits = pickInboundLidDigits({
+      fromRaw,
+      chatIdRaw,
+      senderLidRaw,
+    });
 
     // Outbound detection: prefer explicit flags from Manus, then fall back to phone comparison
-    const myPhone = (settings.phone_number || '').toString().replace(/\D/g, '');
-    const fromDigits = fromRaw.split('@')[0].replace(/\D/g, '');
-    const fromMeFlag = payload.fromMe === true || payload.fromMe === 'true' ||
-                       payload.direction === 'outgoing' || payload.direction === 'outbound';
-    let isOutgoingFromPhone = fromMeFlag || (!!myPhone && fromDigits === myPhone);
+    const myPhone = (settings.phone_number || "").toString().replace(/\D/g, "");
+    const fromDigits = fromRaw.split("@")[0].replace(/\D/g, "");
+    const fromMeFlag =
+      payload.fromMe === true ||
+      payload.fromMe === "true" ||
+      payload.direction === "outgoing" ||
+      payload.direction === "outbound";
+    let isOutgoingFromPhone =
+      fromMeFlag || (!!myPhone && fromDigits === myPhone);
     let sourcePhoneNumber = isOutgoingFromPhone ? fromDigits : myPhone;
 
     let counterpartRaw = isOutgoingFromPhone ? toRaw : fromRaw;
-    let counterpartPhone = counterpartRaw.split('@')[0];
+    let counterpartPhone = counterpartRaw.split("@")[0];
     let normalized = normalizePhone(counterpartPhone);
-    const resolvedMsg = await resolveMessageText(payload, msgContainer, mediaAuth);
+    const resolvedMsg = await resolveMessageText(
+      payload,
+      msgContainer,
+      mediaAuth,
+    );
     const messageText = resolvedMsg.messageText;
     const voiceMeta = resolvedMsg.voiceMeta;
-    const messageId = String(payload.messageId || payload.id || '');
+    const messageId = String(payload.messageId || payload.id || "");
 
     // AUTO LID RESOLUTION 1/2 — real phone in the payload. Newer Baileys exposes the
     // sender's actual number alongside the LID (senderPn / participantPn); if the
@@ -518,7 +745,13 @@ Deno.serve(async (req) => {
     if (isLidEvent && !isOutgoingFromPhone && !isGroup) {
       const lidDigits = inboundLidDigits;
       const payloadPhone = pickPayloadRealPhone(
-        [payload.senderPn, payload.participantPn, payload.senderPhone, payload.senderNumber, fromRaw],
+        [
+          payload.senderPn,
+          payload.participantPn,
+          payload.senderPhone,
+          payload.senderNumber,
+          fromRaw,
+        ],
         lidDigits,
       );
       if (payloadPhone) {
@@ -526,28 +759,46 @@ Deno.serve(async (req) => {
         counterpartRaw = `${counterpartPhone}@c.us`;
         normalized = normalizePhone(counterpartPhone);
         lidAutoResolved = true;
-        console.log('[manus-wa] LID auto-resolved from payload real-phone field', { lid: lidDigits, phone: counterpartPhone });
+        console.log(
+          "[manus-wa] LID auto-resolved from payload real-phone field",
+          { lid: lidDigits, phone: counterpartPhone },
+        );
         // Persist the mapping so future events resolve even without the payload field.
         if (isUsableLidKey(lidDigits)) {
-          supabase.from('wa_lid_map')
-            .upsert({ lid: lidDigits, phone: counterpartPhone, connection_user_id: connectionUserId, source: 'payload' }, { onConflict: 'lid' })
-            .then(() => {}, () => {});
+          supabase
+            .from("wa_lid_map")
+            .upsert(
+              {
+                lid: lidDigits,
+                phone: counterpartPhone,
+                connection_user_id: connectionUserId,
+                source: "payload",
+              },
+              { onConflict: "lid" },
+            )
+            .then(
+              () => {},
+              () => {},
+            );
         }
       } else if (isUsableLidKey(lidDigits)) {
         // AUTO LID RESOLUTION 2/2 — learned map. Any previously learned lid→phone pair
         // (from payload fields or Green-API pairing, across all tenants on this system)
         // resolves deterministically with zero configuration.
         const { data: known } = await supabase
-          .from('wa_lid_map')
-          .select('phone')
-          .eq('lid', lidDigits)
+          .from("wa_lid_map")
+          .select("phone")
+          .eq("lid", lidDigits)
           .maybeSingle();
         if (known?.phone) {
           counterpartPhone = String(known.phone);
           counterpartRaw = `${counterpartPhone}@c.us`;
           normalized = normalizePhone(counterpartPhone);
           lidAutoResolved = true;
-          console.log('[manus-wa] LID auto-resolved from learned map', { lid: lidDigits, phone: counterpartPhone });
+          console.log("[manus-wa] LID auto-resolved from learned map", {
+            lid: lidDigits,
+            phone: counterpartPhone,
+          });
         }
       }
     }
@@ -559,80 +810,133 @@ Deno.serve(async (req) => {
     // BEFORE any branching (group vs private), so duplicates exit immediately.
     if (messageId) {
       const { error: claimErr } = await supabase
-        .from('processed_webhook_messages')
+        .from("processed_webhook_messages")
         .insert({
-          provider: 'manus_wa',
+          provider: "manus_wa",
           tenant_id: tenantId,
           external_message_id: messageId,
         });
       if (claimErr) {
         // 23505 = unique_violation → another invocation already processing this msg
-        if ((claimErr as any).code === '23505') {
-          console.log('[manus-wa] duplicate webhook dropped', { messageId, bodyPreview: String(messageText).slice(0, 60) });
+        if ((claimErr as any).code === "23505") {
+          console.log("[manus-wa] duplicate webhook dropped", {
+            messageId,
+            bodyPreview: String(messageText).slice(0, 60),
+          });
           return ok({ received: true, duplicate: true });
         }
         // Any other error: log but continue (don't lose messages on transient DB issues)
-        console.error('[manus-wa] dedup insert failed (continuing):', claimErr);
+        console.error("[manus-wa] dedup insert failed (continuing):", claimErr);
       }
     }
-
 
     // ACTIVATION HANDSHAKE: an unresolved-LID private message may be the reply to
     // a "you were authorized" activation message (sent by carmen-activate-phone
     // when a phone is added to carmen_allowed_phones). A reply carrying the
     // one-time code — or quoting the activation message — proves the sender owns
     // the allow-listed number, so we learn the LID→phone mapping permanently.
-    if (!isGroup && isLidEvent && !isOutgoingFromPhone && !lidAutoResolved && messageText.trim()) {
+    if (
+      !isGroup &&
+      isLidEvent &&
+      !isOutgoingFromPhone &&
+      !lidAutoResolved &&
+      messageText.trim()
+    ) {
       try {
         const { data: pendings } = await supabase
-          .from('wa_pending_activations')
-          .select('id, phone, code, activation_message_id')
-          .eq('tenant_id', tenantId)
-          .eq('status', 'pending')
-          .gte('created_at', new Date(Date.now() - 48 * 60 * 60 * 1000).toISOString())
+          .from("wa_pending_activations")
+          .select("id, phone, code, activation_message_id")
+          .eq("tenant_id", tenantId)
+          .eq("status", "pending")
+          .gte(
+            "created_at",
+            new Date(Date.now() - 48 * 60 * 60 * 1000).toISOString(),
+          )
           .limit(10);
         if (pendings && pendings.length > 0) {
           const quotedId = String(
-            (payload as any).quotedMsgId || (payload as any).quotedMessageId ||
-            (payload as any)?.quotedMsg?.id || (msgContainer as any)?.contextInfo?.stanzaId || '',
+            (payload as any).quotedMsgId ||
+              (payload as any).quotedMessageId ||
+              (payload as any)?.quotedMsg?.id ||
+              (msgContainer as any)?.contextInfo?.stanzaId ||
+              "",
           );
-          const hit = pendings.find((p: any) =>
-            (p.code && new RegExp(`(^|\\D)${p.code}(\\D|$)`).test(messageText)) ||
-            (p.activation_message_id && quotedId && p.activation_message_id === quotedId));
+          const hit = pendings.find(
+            (p: any) =>
+              (p.code &&
+                new RegExp(`(^|\\D)${p.code}(\\D|$)`).test(messageText)) ||
+              (p.activation_message_id &&
+                quotedId &&
+                p.activation_message_id === quotedId),
+          );
           if (hit) {
-            const lidDigits = inboundLidDigits || counterpartPhone.replace(/\D/g, '');
-            const realPhone = String(hit.phone).replace(/\D/g, '');
+            const lidDigits =
+              inboundLidDigits || counterpartPhone.replace(/\D/g, "");
+            const realPhone = String(hit.phone).replace(/\D/g, "");
             if (isUsableLidKey(lidDigits)) {
-              await supabase.from('wa_lid_map')
-                .upsert({ lid: lidDigits, phone: realPhone, connection_user_id: connectionUserId, source: 'activation' }, { onConflict: 'lid' });
+              await supabase.from("wa_lid_map").upsert(
+                {
+                  lid: lidDigits,
+                  phone: realPhone,
+                  connection_user_id: connectionUserId,
+                  source: "activation",
+                },
+                { onConflict: "lid" },
+              );
             }
-            await supabase.from('wa_pending_activations')
-              .update({ status: 'completed', completed_at: new Date().toISOString(), completed_lid: lidDigits })
-              .eq('id', hit.id);
-            await supabase.from('carmen_whatsapp_identities')
-              .update({ verified_at: new Date().toISOString(), updated_at: new Date().toISOString() })
-              .eq('tenant_id', tenantId)
-              .eq('phone', realPhone)
-              .eq('status', 'approved');
-            console.log('[manus-wa] activation completed — LID mapped', { lid: lidDigits, phone: realPhone });
+            await supabase
+              .from("wa_pending_activations")
+              .update({
+                status: "completed",
+                completed_at: new Date().toISOString(),
+                completed_lid: lidDigits,
+              })
+              .eq("id", hit.id);
+            await supabase
+              .from("carmen_whatsapp_identities")
+              .update({
+                verified_at: new Date().toISOString(),
+                updated_at: new Date().toISOString(),
+              })
+              .eq("tenant_id", tenantId)
+              .eq("phone", realPhone)
+              .eq("status", "approved");
+            console.log("[manus-wa] activation completed — LID mapped", {
+              lid: lidDigits,
+              phone: realPhone,
+            });
             // Confirm to the user through the standard send path (to the real phone).
-            fetch(`${Deno.env.get('SUPABASE_URL')}/functions/v1/send-manus-wa-message`, {
-              method: 'POST',
-              headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')}`,
+            fetch(
+              `${Deno.env.get("SUPABASE_URL")}/functions/v1/send-manus-wa-message`,
+              {
+                method: "POST",
+                headers: {
+                  "Content-Type": "application/json",
+                  Authorization: `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}`,
+                },
+                body: JSON.stringify({
+                  integrationId: integ.id,
+                  tenantId,
+                  phoneNumber: realPhone,
+                  senderUserId: connectionUserId,
+                  message:
+                    'מעולה, זיהיתי אותך ✅ מעכשיו אפשר לדבר איתי — פשוט תתחיל הודעה במילה "כרמן".',
+                }),
               },
-              body: JSON.stringify({
-                integrationId: integ.id, tenantId, phoneNumber: realPhone,
-                senderUserId: connectionUserId,
-                message: 'מעולה, זיהיתי אותך ✅ מעכשיו אפשר לדבר איתי — פשוט תתחיל הודעה במילה "כרמן".',
-              }),
-            }).catch((e) => console.error('[manus-wa] activation confirm send failed:', e?.message));
-            return ok({ received: true, activation: 'completed' });
+            ).catch((e) =>
+              console.error(
+                "[manus-wa] activation confirm send failed:",
+                e?.message,
+              ),
+            );
+            return ok({ received: true, activation: "completed" });
           }
         }
       } catch (e) {
-        console.error('[manus-wa] activation check failed (continuing):', String(e));
+        console.error(
+          "[manus-wa] activation check failed (continuing):",
+          String(e),
+        );
       }
     }
 
@@ -640,23 +944,31 @@ Deno.serve(async (req) => {
     // If we just sent this exact text via Manus or Green API in the last 2 minutes, drop it.
     if (!isOutgoingFromPhone && isLidEvent && messageText.trim()) {
       const { data: ownOutbound } = await supabase
-        .from('chat_messages')
-        .select('id, provider, created_at')
-        .eq('tenant_id', tenantId)
-        .eq('direction', 'outbound')
-        .in('provider', ['manus_wa', 'green_api'])
-        .eq('message_text', messageText)
-        .gte('created_at', new Date(Date.now() - 2 * 60 * 1000).toISOString())
-        .order('created_at', { ascending: false })
+        .from("chat_messages")
+        .select("id, provider, created_at")
+        .eq("tenant_id", tenantId)
+        .eq("direction", "outbound")
+        .in("provider", ["manus_wa", "green_api"])
+        .eq("message_text", messageText)
+        .gte("created_at", new Date(Date.now() - 2 * 60 * 1000).toISOString())
+        .order("created_at", { ascending: false })
         .limit(1);
       if (ownOutbound && ownOutbound.length > 0) {
         const allowGreenApiCarmenKickoff =
-          ownOutbound[0].provider === 'green_api' && /כרמן|carmen/i.test(messageText);
+          ownOutbound[0].provider === "green_api" &&
+          /כרמן|carmen/i.test(messageText);
         if (!allowGreenApiCarmenKickoff) {
-          console.log('[manus-wa] echo dropped — matches our own outbound', { provider: ownOutbound[0].provider, messageId, bodyPreview: messageText.slice(0, 60) });
-          return ok({ received: true, ignored: 'self_echo' });
+          console.log("[manus-wa] echo dropped — matches our own outbound", {
+            provider: ownOutbound[0].provider,
+            messageId,
+            bodyPreview: messageText.slice(0, 60),
+          });
+          return ok({ received: true, ignored: "self_echo" });
         }
-        console.log('[manus-wa] keeping Green API Carmen kickoff mirrored by Manus', { messageId, bodyPreview: messageText.slice(0, 60) });
+        console.log(
+          "[manus-wa] keeping Green API Carmen kickoff mirrored by Manus",
+          { messageId, bodyPreview: messageText.slice(0, 60) },
+        );
       }
     }
 
@@ -668,21 +980,32 @@ Deno.serve(async (req) => {
     // When the LID was already deterministically resolved (payload field / learned map),
     // the 2.6s pairing wait is pure latency — skip it. Pairing remains for unresolved LIDs
     // (it both fixes direction for own-outbound mirrors and feeds the learned map).
-    if (!isOutgoingFromPhone && !isGroup && isLidEvent && messageText.trim() && !lidAutoResolved) {
+    if (
+      !isOutgoingFromPhone &&
+      !isGroup &&
+      isLidEvent &&
+      messageText.trim() &&
+      !lidAutoResolved
+    ) {
       await new Promise((resolve) => setTimeout(resolve, 2600));
       const { data: greenMatches } = await supabase
-        .from('chat_messages')
-        .select('sender_phone, raw_provider_data, created_at, connection_user_id')
-        .eq('tenant_id', tenantId)
-        .eq('provider', 'green_api')
-        .eq('direction', 'outbound')
-        .eq('message_text', messageText)
-        .gte('created_at', new Date(Date.now() - 2 * 60 * 1000).toISOString())
-        .order('created_at', { ascending: false })
+        .from("chat_messages")
+        .select(
+          "sender_phone, raw_provider_data, created_at, connection_user_id",
+        )
+        .eq("tenant_id", tenantId)
+        .eq("provider", "green_api")
+        .eq("direction", "outbound")
+        .eq("message_text", messageText)
+        .gte("created_at", new Date(Date.now() - 2 * 60 * 1000).toISOString())
+        .order("created_at", { ascending: false })
         .limit(5);
-      const pairedOutgoing = (greenMatches || []).find((m: any) =>
-        !messageId || String(m.raw_provider_data?.idMessage || '') === messageId
-      ) || greenMatches?.[0];
+      const pairedOutgoing =
+        (greenMatches || []).find(
+          (m: any) =>
+            !messageId ||
+            String(m.raw_provider_data?.idMessage || "") === messageId,
+        ) || greenMatches?.[0];
       if (pairedOutgoing?.sender_phone) {
         isOutgoingFromPhone = true;
         counterpartPhone = String(pairedOutgoing.sender_phone);
@@ -690,18 +1013,40 @@ Deno.serve(async (req) => {
         normalized = normalizePhone(counterpartPhone);
         sourcePhoneNumber = String(
           pairedOutgoing.raw_provider_data?.senderData?.sender ||
-          pairedOutgoing.raw_provider_data?.instanceData?.wid ||
-          ''
-        ).split('@')[0].replace(/[^0-9]/g, '');
+            pairedOutgoing.raw_provider_data?.instanceData?.wid ||
+            "",
+        )
+          .split("@")[0]
+          .replace(/[^0-9]/g, "");
         pairedFromGreenApi = true;
-        console.log('[manus-wa] paired LID event with Green API outbound', { messageId, counterpartPhone, sourcePhoneNumber });
+        console.log("[manus-wa] paired LID event with Green API outbound", {
+          messageId,
+          counterpartPhone,
+          sourcePhoneNumber,
+        });
         // AUTO LID LEARNING — a successful pairing proves lid↔phone; persist it so
         // future events (any tenant on this system) resolve without pairing or config.
-        const learnedLid = inboundLidDigits || fromRaw.split('@')[0].replace(/\D/g, '');
-        if (isUsableLidKey(learnedLid) && learnedLid !== counterpartPhone.replace(/\D/g, '')) {
-          supabase.from('wa_lid_map')
-            .upsert({ lid: learnedLid, phone: counterpartPhone.replace(/\D/g, ''), connection_user_id: connectionUserId, source: 'green_api_pairing' }, { onConflict: 'lid' })
-            .then(() => {}, () => {});
+        const learnedLid =
+          inboundLidDigits || fromRaw.split("@")[0].replace(/\D/g, "");
+        if (
+          isUsableLidKey(learnedLid) &&
+          learnedLid !== counterpartPhone.replace(/\D/g, "")
+        ) {
+          supabase
+            .from("wa_lid_map")
+            .upsert(
+              {
+                lid: learnedLid,
+                phone: counterpartPhone.replace(/\D/g, ""),
+                connection_user_id: connectionUserId,
+                source: "green_api_pairing",
+              },
+              { onConflict: "lid" },
+            )
+            .then(
+              () => {},
+              () => {},
+            );
         }
       }
     }
@@ -713,43 +1058,74 @@ Deno.serve(async (req) => {
     // Ana's private DMs into David's chat (reply "היי דוד" on David's thread).
     // fromMeFlag guard: when David sends OUTBOUND to a third party, the to-field is
     // already a real phone — do not overwrite it.
-    if (!isGroup && !pairedFromGreenApi && isLidEvent && !fromMeFlag && !lidAutoResolved) {
+    if (
+      !isGroup &&
+      !pairedFromGreenApi &&
+      isLidEvent &&
+      !fromMeFlag &&
+      !lidAutoResolved
+    ) {
       try {
-        const carmenAutomation = await findCarmenSessionAutomation(supabase, tenantId, integ.id, {
-          isGroup: false,
-          chatId: `${counterpartPhone}@c.us`,
-          phoneNumber: counterpartPhone,
-        });
+        const carmenAutomation = await findCarmenSessionAutomation(
+          supabase,
+          tenantId,
+          integ.id,
+          {
+            isGroup: false,
+            chatId: `${counterpartPhone}@c.us`,
+            phoneNumber: counterpartPhone,
+          },
+        );
         const cfg = carmenAutomation?.configuration || {};
-        const scopeMode = cfg.carmen_scope_mode || 'all';
+        const scopeMode = cfg.carmen_scope_mode || "all";
         const allowedPhones = Array.isArray(cfg.carmen_allowed_phones)
-          ? [...new Set(cfg.carmen_allowed_phones.map((p: any) => String(p).replace(/\D/g, '')).filter(Boolean))]
+          ? [
+              ...new Set(
+                cfg.carmen_allowed_phones
+                  .map((p: any) => String(p).replace(/\D/g, ""))
+                  .filter(Boolean),
+              ),
+            ]
           : [];
-        const lidAliases: Record<string, string> = (cfg.carmen_lid_aliases && typeof cfg.carmen_lid_aliases === 'object')
-          ? cfg.carmen_lid_aliases
-          : {};
-        const lidKey = inboundLidDigits || String(counterpartPhone || '').replace(/\D/g, '');
+        const lidAliases: Record<string, string> =
+          cfg.carmen_lid_aliases && typeof cfg.carmen_lid_aliases === "object"
+            ? cfg.carmen_lid_aliases
+            : {};
+        const lidKey =
+          inboundLidDigits || String(counterpartPhone || "").replace(/\D/g, "");
 
         let waLidMapPhone: string | null = null;
         if (isUsableLidKey(lidKey)) {
           const { data: knownLid } = await supabase
-            .from('wa_lid_map')
-            .select('phone')
-            .eq('lid', lidKey)
+            .from("wa_lid_map")
+            .select("phone")
+            .eq("lid", lidKey)
             .maybeSingle();
-          if (knownLid?.phone) waLidMapPhone = String(knownLid.phone).replace(/\D/g, '');
+          if (knownLid?.phone)
+            waLidMapPhone = String(knownLid.phone).replace(/\D/g, "");
         }
 
         const resolved = resolveInboundLidToPhone({
           lidDigits: lidKey,
           payloadRealPhone: pickPayloadRealPhone(
-            [payload.senderPn, payload.participantPn, payload.senderPhone, payload.senderNumber, fromRaw],
+            [
+              payload.senderPn,
+              payload.participantPn,
+              payload.senderPhone,
+              payload.senderNumber,
+              fromRaw,
+            ],
             lidKey,
           ),
           lidAliases,
           waLidMapPhone,
           // Only use single-allowed fallback for specific_phone scope; otherwise leave unresolved
-          allowedPhones: scopeMode === 'specific_phone' ? allowedPhones : (allowedPhones.length === 1 ? allowedPhones : []),
+          allowedPhones:
+            scopeMode === "specific_phone"
+              ? allowedPhones
+              : allowedPhones.length === 1
+                ? allowedPhones
+                : [],
         });
 
         if (resolved.phone) {
@@ -764,14 +1140,23 @@ Deno.serve(async (req) => {
             sourcePhoneNumber = aliasPhone;
           }
           if (isUsableLidKey(lidKey) && lidKey !== aliasPhone) {
-            supabase.from('wa_lid_map')
+            supabase
+              .from("wa_lid_map")
               .upsert(
-                { lid: lidKey, phone: aliasPhone, connection_user_id: connectionUserId, source: resolved.reason },
-                { onConflict: 'lid' },
+                {
+                  lid: lidKey,
+                  phone: aliasPhone,
+                  connection_user_id: connectionUserId,
+                  source: resolved.reason,
+                },
+                { onConflict: "lid" },
               )
-              .then(() => {}, () => {});
+              .then(
+                () => {},
+                () => {},
+              );
           }
-          console.log('[manus-wa] resolved LID for Carmen direct flow', {
+          console.log("[manus-wa] resolved LID for Carmen direct flow", {
             fromRaw,
             aliasPhone,
             aliasReason: resolved.reason,
@@ -779,15 +1164,18 @@ Deno.serve(async (req) => {
             manualLike: isOutgoingFromPhone,
           });
         } else {
-          console.log('[manus-wa] LID unresolved (deterministic only — no session hijack)', {
-            lid: lidKey,
-            reason: resolved.reason,
-            allowedCount: allowedPhones.length,
-            preview: messageText.slice(0, 60),
-          });
+          console.log(
+            "[manus-wa] LID unresolved (deterministic only — no session hijack)",
+            {
+              lid: lidKey,
+              reason: resolved.reason,
+              allowedCount: allowedPhones.length,
+              preview: messageText.slice(0, 60),
+            },
+          );
         }
       } catch (err) {
-        console.error('[manus-wa] LID Carmen resolution failed:', err);
+        console.error("[manus-wa] LID Carmen resolution failed:", err);
       }
     }
 
@@ -798,37 +1186,66 @@ Deno.serve(async (req) => {
     const counterpartLooksLikeLid =
       !counterpartPhone ||
       (!looksLikeRealPhone(counterpartPhone) &&
-        (counterpartPhone.replace(/\D/g, '') === fromDigits ||
+        (counterpartPhone.replace(/\D/g, "") === fromDigits ||
           // Real IL mobiles are ~12 digits (9725…); WhatsApp LIDs are often 14+ (Ana's is 14).
-          counterpartPhone.replace(/\D/g, '').length >= 14));
-    if (!isGroup && isLidEvent && counterpartLooksLikeLid && messageText.trim() && !lidAutoResolved && !pairedFromGreenApi && !fromMeFlag) {
+          counterpartPhone.replace(/\D/g, "").length >= 14));
+    if (
+      !isGroup &&
+      isLidEvent &&
+      counterpartLooksLikeLid &&
+      messageText.trim() &&
+      !lidAutoResolved &&
+      !pairedFromGreenApi &&
+      !fromMeFlag
+    ) {
       try {
-        const carmenAutomation = await findCarmenSessionAutomation(supabase, tenantId, integ.id, {
-          isGroup: false,
-          chatId: `${counterpartPhone || fromDigits}@c.us`,
-          phoneNumber: counterpartPhone || fromDigits,
-        });
+        const carmenAutomation = await findCarmenSessionAutomation(
+          supabase,
+          tenantId,
+          integ.id,
+          {
+            isGroup: false,
+            chatId: `${counterpartPhone || fromDigits}@c.us`,
+            phoneNumber: counterpartPhone || fromDigits,
+          },
+        );
         const cfg = carmenAutomation?.configuration || {};
         const allowedPhones = Array.isArray(cfg.carmen_allowed_phones)
-          ? [...new Set(cfg.carmen_allowed_phones.map((p: any) => String(p).replace(/\D/g, '')).filter(Boolean))]
+          ? [
+              ...new Set(
+                cfg.carmen_allowed_phones
+                  .map((p: any) => String(p).replace(/\D/g, ""))
+                  .filter(Boolean),
+              ),
+            ]
           : [];
-        const lidAliases: Record<string, string> = (cfg.carmen_lid_aliases && typeof cfg.carmen_lid_aliases === 'object')
-          ? cfg.carmen_lid_aliases
-          : {};
-        const lidKey = inboundLidDigits || String(counterpartPhone || fromDigits || '').replace(/\D/g, '');
+        const lidAliases: Record<string, string> =
+          cfg.carmen_lid_aliases && typeof cfg.carmen_lid_aliases === "object"
+            ? cfg.carmen_lid_aliases
+            : {};
+        const lidKey =
+          inboundLidDigits ||
+          String(counterpartPhone || fromDigits || "").replace(/\D/g, "");
         let waLidMapPhone: string | null = null;
         if (isUsableLidKey(lidKey)) {
           const { data: knownLid } = await supabase
-            .from('wa_lid_map')
-            .select('phone')
-            .eq('lid', lidKey)
+            .from("wa_lid_map")
+            .select("phone")
+            .eq("lid", lidKey)
             .maybeSingle();
-          if (knownLid?.phone) waLidMapPhone = String(knownLid.phone).replace(/\D/g, '');
+          if (knownLid?.phone)
+            waLidMapPhone = String(knownLid.phone).replace(/\D/g, "");
         }
         const resolved = resolveInboundLidToPhone({
           lidDigits: lidKey,
           payloadRealPhone: pickPayloadRealPhone(
-            [payload.senderPn, payload.participantPn, payload.senderPhone, payload.senderNumber, fromRaw],
+            [
+              payload.senderPn,
+              payload.participantPn,
+              payload.senderPhone,
+              payload.senderNumber,
+              fromRaw,
+            ],
             lidKey,
           ),
           lidAliases,
@@ -839,16 +1256,24 @@ Deno.serve(async (req) => {
           counterpartPhone = resolved.phone;
           counterpartRaw = `${resolved.phone}@c.us`;
           normalized = normalizePhone(resolved.phone);
-          console.log('[manus-wa] LID fallback → deterministic resolve', {
-            aliasPhone: resolved.phone, reason: resolved.reason, body: messageText.slice(0, 60),
+          console.log("[manus-wa] LID fallback → deterministic resolve", {
+            aliasPhone: resolved.phone,
+            reason: resolved.reason,
+            body: messageText.slice(0, 60),
           });
         } else {
-          console.log('[manus-wa] LID fallback left unresolved (no session hijack)', {
-            counterpartPhone, fromDigits, reason: resolved.reason, preview: messageText.slice(0, 60),
-          });
+          console.log(
+            "[manus-wa] LID fallback left unresolved (no session hijack)",
+            {
+              counterpartPhone,
+              fromDigits,
+              reason: resolved.reason,
+              preview: messageText.slice(0, 60),
+            },
+          );
         }
       } catch (err) {
-        console.error('[manus-wa] LID fallback resolution failed:', err);
+        console.error("[manus-wa] LID fallback resolution failed:", err);
       }
     }
 
@@ -856,14 +1281,16 @@ Deno.serve(async (req) => {
     if (isGroup) {
       // Prefer explicit group fields. `from` is often the sender's personal phone in groups,
       // and `to` may be empty — in which case we must fall back to chatId/groupId from the payload.
-      const groupIdRaw = String((payload as any).groupId || '');
-      const groupChatId = (
-        fromRaw.endsWith('@g.us') ? fromRaw :
-        toRaw.endsWith('@g.us') ? toRaw :
-        chatIdRaw.endsWith('@g.us') ? chatIdRaw :
-        groupIdRaw.endsWith('@g.us') ? groupIdRaw :
-        (chatIdRaw || groupIdRaw || toRaw)
-      );
+      const groupIdRaw = String((payload as any).groupId || "");
+      const groupChatId = fromRaw.endsWith("@g.us")
+        ? fromRaw
+        : toRaw.endsWith("@g.us")
+          ? toRaw
+          : chatIdRaw.endsWith("@g.us")
+            ? chatIdRaw
+            : groupIdRaw.endsWith("@g.us")
+              ? groupIdRaw
+              : chatIdRaw || groupIdRaw || toRaw;
 
       // Per-group tenant routing (shared bot): a single WhatsApp bot may sit in groups
       // that belong to DIFFERENT organizations. Resolve the owning tenant from the
@@ -872,9 +1299,9 @@ Deno.serve(async (req) => {
       let groupTenantId = tenantId;
       try {
         const { data: wgRows } = await supabase
-          .from('whatsapp_groups')
-          .select('tenant_id')
-          .eq('group_chat_id', groupChatId)
+          .from("whatsapp_groups")
+          .select("tenant_id")
+          .eq("group_chat_id", groupChatId)
           .limit(10);
         const rows = wgRows || [];
         const ownRegistered = rows.some((r: any) => r.tenant_id === tenantId);
@@ -886,43 +1313,63 @@ Deno.serve(async (req) => {
           // open-member-groups mode, where membership itself is the claim.
           // Route to the registered tenant only in the legacy shared-bot case.
           const { data: ownSteps } = await supabase
-            .from('automation_flow_steps')
-            .select('configuration')
-            .eq('tenant_id', tenantId)
-            .eq('step_type', 'trigger')
-            .eq('action_type', 'carmen_whatsapp_session')
+            .from("automation_flow_steps")
+            .select("configuration")
+            .eq("tenant_id", tenantId)
+            .eq("step_type", "trigger")
+            .eq("action_type", "carmen_whatsapp_session")
             .limit(10);
           const ownHasOpenMode = (ownSteps || []).some(
             (s: any) => s?.configuration?.carmen_open_member_groups === true,
           );
           if (!ownHasOpenMode) groupTenantId = rows[0].tenant_id as string;
         }
-      } catch (_e) { /* fall back to bot tenant */ }
+      } catch (_e) {
+        /* fall back to bot tenant */
+      }
       if (groupTenantId !== tenantId) {
-        console.log('[manus-wa group] routed by group → tenant', { groupChatId, botTenant: tenantId, groupTenant: groupTenantId });
+        console.log("[manus-wa group] routed by group → tenant", {
+          groupChatId,
+          botTenant: tenantId,
+          groupTenant: groupTenantId,
+        });
       }
 
-      const resolvedGroupMsg = await resolveMessageText(payload, msgContainer, { ...mediaAuth, tenantId: groupTenantId });
+      const resolvedGroupMsg = await resolveMessageText(payload, msgContainer, {
+        ...mediaAuth,
+        tenantId: groupTenantId,
+      });
       const messageText = resolvedGroupMsg.messageText;
       const voiceMeta = resolvedGroupMsg.voiceMeta;
-      const senderName = (payload.senderName || payload.fromName || payload.authorName || null) as string | null;
+      const senderName = (payload.senderName ||
+        payload.fromName ||
+        payload.authorName ||
+        null) as string | null;
 
       // Extract the REAL sender phone from author/participant fields.
       // Falling back to fromRaw inside a group gives the group id (120363...@g.us) which is useless.
       const authorCandidates = [
-        payload.author, payload.participant, payload.senderLid, key.participant,
-        (msgContainer as any)?.participant, (msgContainer as any)?.author,
-      ].filter((v: any) => typeof v === 'string' && v.includes('@')) as string[];
+        payload.author,
+        payload.participant,
+        payload.senderLid,
+        key.participant,
+        (msgContainer as any)?.participant,
+        (msgContainer as any)?.author,
+      ].filter(
+        (v: any) => typeof v === "string" && v.includes("@"),
+      ) as string[];
       // Prefer a real @c.us participant over an anonymous @lid author when both exist.
       const authorRaw =
-        authorCandidates.find((c) => c.endsWith('@c.us')) ||
+        authorCandidates.find((c) => c.endsWith("@c.us")) ||
         authorCandidates.find((c) => !/@lid/i.test(c)) ||
         authorCandidates[0] ||
-        '';
-      let authorPhone = authorRaw ? authorRaw.split('@')[0].replace(/\D/g, '') : '';
+        "";
+      let authorPhone = authorRaw
+        ? authorRaw.split("@")[0].replace(/\D/g, "")
+        : "";
       const lidDigitsForMap = /@lid/i.test(authorRaw)
-        ? authorRaw.split('@')[0].replace(/\D/g, '')
-        : '';
+        ? authorRaw.split("@")[0].replace(/\D/g, "")
+        : "";
 
       // GROUP AUTHOR LID RESOLUTION — same layers as the private branch above.
       // The "כרמן" trigger comes from group MEMBERS, and members often arrive as
@@ -931,24 +1378,54 @@ Deno.serve(async (req) => {
       // Payload resolutions are persisted so group traffic keeps teaching the map.
       if (/@lid/i.test(authorRaw) && isUsableLidKey(authorPhone)) {
         const lidDigits = authorPhone;
-        const realCandidates = [payload.senderPn, payload.participantPn, payload.senderPhone, payload.senderNumber]
-          .map((v: unknown) => String(v || '').split('@')[0].replace(/\D/g, ''))
-          .filter((d: string) => d && d.length >= 9 && d.length <= 15 && d !== lidDigits);
+        const realCandidates = [
+          payload.senderPn,
+          payload.participantPn,
+          payload.senderPhone,
+          payload.senderNumber,
+        ]
+          .map((v: unknown) =>
+            String(v || "")
+              .split("@")[0]
+              .replace(/\D/g, ""),
+          )
+          .filter(
+            (d: string) =>
+              d && d.length >= 9 && d.length <= 15 && d !== lidDigits,
+          );
         if (realCandidates.length > 0) {
           authorPhone = realCandidates[0];
-          console.log('[manus-wa group] author LID resolved from payload field', { lid: lidDigits, phone: authorPhone });
-          supabase.from('wa_lid_map')
-            .upsert({ lid: lidDigits, phone: authorPhone, connection_user_id: connectionUserId, source: 'payload' }, { onConflict: 'lid' })
-            .then(() => {}, () => {});
+          console.log(
+            "[manus-wa group] author LID resolved from payload field",
+            { lid: lidDigits, phone: authorPhone },
+          );
+          supabase
+            .from("wa_lid_map")
+            .upsert(
+              {
+                lid: lidDigits,
+                phone: authorPhone,
+                connection_user_id: connectionUserId,
+                source: "payload",
+              },
+              { onConflict: "lid" },
+            )
+            .then(
+              () => {},
+              () => {},
+            );
         } else {
           const { data: knownLid } = await supabase
-            .from('wa_lid_map')
-            .select('phone')
-            .eq('lid', lidDigits)
+            .from("wa_lid_map")
+            .select("phone")
+            .eq("lid", lidDigits)
             .maybeSingle();
           if (knownLid?.phone) {
-            authorPhone = String(knownLid.phone).replace(/\D/g, '');
-            console.log('[manus-wa group] author LID resolved from learned map', { lid: lidDigits, phone: authorPhone });
+            authorPhone = String(knownLid.phone).replace(/\D/g, "");
+            console.log(
+              "[manus-wa group] author LID resolved from learned map",
+              { lid: lidDigits, phone: authorPhone },
+            );
           }
         }
       }
@@ -963,92 +1440,130 @@ Deno.serve(async (req) => {
         await new Promise((resolve) => setTimeout(resolve, 2600));
         try {
           const since = new Date(Date.now() - 2 * 60 * 1000).toISOString();
-          const groupDigits = groupChatId.split('@')[0].replace(/\D/g, '');
+          const groupDigits = groupChatId.split("@")[0].replace(/\D/g, "");
           const { data: wgRow } = await supabase
-            .from('whatsapp_groups')
-            .select('id')
-            .eq('tenant_id', groupTenantId)
-            .eq('group_chat_id', groupChatId)
+            .from("whatsapp_groups")
+            .select("id")
+            .eq("tenant_id", groupTenantId)
+            .eq("group_chat_id", groupChatId)
             .maybeSingle();
           const groupDbId = wgRow?.id as string | undefined;
 
           const basePairedQuery = () => {
-            let q = supabase.from('chat_messages')
-              .select('sender_phone, raw_provider_data, created_at')
-              .eq('provider', 'green_api')
-              .gte('created_at', since)
-              .order('created_at', { ascending: false })
+            let q = supabase
+              .from("chat_messages")
+              .select("sender_phone, raw_provider_data, created_at")
+              .eq("provider", "green_api")
+              .gte("created_at", since)
+              .order("created_at", { ascending: false })
               .limit(10);
-            if (groupDbId) q = q.eq('group_id', groupDbId);
+            if (groupDbId) q = q.eq("group_id", groupDbId);
             return q;
           };
 
           let pairedQuery = basePairedQuery();
           pairedQuery = messageId
-            ? pairedQuery.eq('raw_provider_data->>idMessage', messageId)
-            : pairedQuery.eq('message_text', messageText);
+            ? pairedQuery.eq("raw_provider_data->>idMessage", messageId)
+            : pairedQuery.eq("message_text", messageText);
           let { data: paired } = await pairedQuery;
           if ((!paired || paired.length === 0) && messageText) {
-            const fallback = await basePairedQuery().eq('message_text', messageText);
+            const fallback = await basePairedQuery().eq(
+              "message_text",
+              messageText,
+            );
             paired = fallback.data;
           }
           for (const row of paired || []) {
             const participant = String(
-              row?.raw_provider_data?.senderData?.sender || row?.sender_phone || '',
-            ).split('@')[0].replace(/\D/g, '');
+              row?.raw_provider_data?.senderData?.sender ||
+                row?.sender_phone ||
+                "",
+            )
+              .split("@")[0]
+              .replace(/\D/g, "");
             if (
               participant &&
               participant !== groupDigits &&
               isIsraeliMobileTail(participant)
             ) {
-              if (isUsableLidKey(lidDigitsForMap) && lidDigitsForMap !== participant) {
-                supabase.from('wa_lid_map')
+              if (
+                isUsableLidKey(lidDigitsForMap) &&
+                lidDigitsForMap !== participant
+              ) {
+                supabase
+                  .from("wa_lid_map")
                   .upsert(
                     {
                       lid: lidDigitsForMap,
                       phone: participant,
                       connection_user_id: connectionUserId,
-                      source: 'green_api_pair',
+                      source: "green_api_pair",
                     },
-                    { onConflict: 'lid' },
+                    { onConflict: "lid" },
                   )
-                  .then(() => {}, () => {});
+                  .then(
+                    () => {},
+                    () => {},
+                  );
               }
               authorPhone = participant;
-              console.log('[manus-wa group] author resolved from paired Green API event', {
-                messageId, phone: authorPhone, lid: lidDigitsForMap || null,
-              });
+              console.log(
+                "[manus-wa group] author resolved from paired Green API event",
+                {
+                  messageId,
+                  phone: authorPhone,
+                  lid: lidDigitsForMap || null,
+                },
+              );
               break;
             }
           }
         } catch (err) {
-          console.error('[manus-wa group] paired author resolution failed:', err);
+          console.error(
+            "[manus-wa group] paired author resolution failed:",
+            err,
+          );
         }
       }
 
       // ECHO / OUTBOUND GUARD for groups: Manus mirrors our own outbound back as inbound.
       // If author's digits match our connected phone, OR if the body matches an outbound we
       // just sent to this same group within the last 2 minutes, drop it.
-      const myDigits = (settings.phone_number || '').toString().replace(/\D/g, '');
-      const looksLikeOurOwn = !!authorPhone && !!myDigits && (authorPhone === myDigits || authorPhone.endsWith(myDigits) || myDigits.endsWith(authorPhone));
+      const myDigits = (settings.phone_number || "")
+        .toString()
+        .replace(/\D/g, "");
+      const looksLikeOurOwn =
+        !!authorPhone &&
+        !!myDigits &&
+        (authorPhone === myDigits ||
+          authorPhone.endsWith(myDigits) ||
+          myDigits.endsWith(authorPhone));
       if (looksLikeOurOwn || isOutgoingFromPhone) {
-        console.log('[manus-wa group] dropping own outbound mirror', { groupChatId, authorPhone, myDigits, isOutgoingFromPhone });
-        return ok({ received: true, ignored: 'group_self_echo' });
+        console.log("[manus-wa group] dropping own outbound mirror", {
+          groupChatId,
+          authorPhone,
+          myDigits,
+          isOutgoingFromPhone,
+        });
+        return ok({ received: true, ignored: "group_self_echo" });
       }
       if (messageText && messageText.trim()) {
         const { data: recentOwn } = await supabase
-          .from('chat_messages')
-          .select('id, created_at')
-          .eq('tenant_id', tenantId)
-          .eq('direction', 'outbound')
-          .eq('group_id', null as any)
-          .in('provider', ['manus_wa', 'green_api'])
-          .eq('message_text', messageText)
-          .gte('created_at', new Date(Date.now() - 2 * 60 * 1000).toISOString())
+          .from("chat_messages")
+          .select("id, created_at")
+          .eq("tenant_id", tenantId)
+          .eq("direction", "outbound")
+          .eq("group_id", null as any)
+          .in("provider", ["manus_wa", "green_api"])
+          .eq("message_text", messageText)
+          .gte("created_at", new Date(Date.now() - 2 * 60 * 1000).toISOString())
           .limit(1);
         if (recentOwn && recentOwn.length > 0) {
-          console.log('[manus-wa group] dropping echoed body of our own outbound', { groupChatId, bodyPreview: messageText.slice(0, 60) });
-          return ok({ received: true, ignored: 'group_body_echo' });
+          console.log(
+            "[manus-wa group] dropping echoed body of our own outbound",
+            { groupChatId, bodyPreview: messageText.slice(0, 60) },
+          );
+          return ok({ received: true, ignored: "group_body_echo" });
         }
       }
 
@@ -1060,53 +1575,64 @@ Deno.serve(async (req) => {
         const fingerprintInput = [
           groupTenantId,
           groupChatId,
-          authorPhone || authorRaw || 'unknown',
-          messageText.trim().replace(/\s+/g, ' ').toLowerCase(),
-        ].join('|');
+          authorPhone || authorRaw || "unknown",
+          messageText.trim().replace(/\s+/g, " ").toLowerCase(),
+        ].join("|");
         const digestBytes = await crypto.subtle.digest(
-          'SHA-256',
+          "SHA-256",
           new TextEncoder().encode(fingerprintInput),
         );
         const digest = Array.from(new Uint8Array(digestBytes))
-          .map((byte) => byte.toString(16).padStart(2, '0'))
-          .join('');
+          .map((byte) => byte.toString(16).padStart(2, "0"))
+          .join("");
         const minuteBucket = Math.floor(Date.now() / 60_000);
         const currentFingerprint = `${digest}:${minuteBucket}`;
         const previousFingerprint = `${digest}:${minuteBucket - 1}`;
 
         const { data: previousClaim } = await supabase
-          .from('processed_webhook_messages')
-          .select('external_message_id')
-          .eq('provider', 'carmen_group_turn')
-          .eq('tenant_id', groupTenantId)
-          .eq('external_message_id', previousFingerprint)
+          .from("processed_webhook_messages")
+          .select("external_message_id")
+          .eq("provider", "carmen_group_turn")
+          .eq("tenant_id", groupTenantId)
+          .eq("external_message_id", previousFingerprint)
           .maybeSingle();
         if (previousClaim) {
-          console.log('[manus-wa group] semantic duplicate dropped', {
+          console.log("[manus-wa group] semantic duplicate dropped", {
             groupChatId,
             authorPhone,
             messageId,
           });
-          return ok({ received: true, duplicate: true, dedup: 'group_fingerprint' });
+          return ok({
+            received: true,
+            duplicate: true,
+            dedup: "group_fingerprint",
+          });
         }
 
         const { error: fingerprintError } = await supabase
-          .from('processed_webhook_messages')
+          .from("processed_webhook_messages")
           .insert({
-            provider: 'carmen_group_turn',
+            provider: "carmen_group_turn",
             tenant_id: groupTenantId,
             external_message_id: currentFingerprint,
           });
-        if ((fingerprintError as any)?.code === '23505') {
-          console.log('[manus-wa group] semantic duplicate dropped', {
+        if ((fingerprintError as any)?.code === "23505") {
+          console.log("[manus-wa group] semantic duplicate dropped", {
             groupChatId,
             authorPhone,
             messageId,
           });
-          return ok({ received: true, duplicate: true, dedup: 'group_fingerprint' });
+          return ok({
+            received: true,
+            duplicate: true,
+            dedup: "group_fingerprint",
+          });
         }
         if (fingerprintError) {
-          console.error('[manus-wa group] semantic dedup claim failed (continuing):', fingerprintError);
+          console.error(
+            "[manus-wa group] semantic dedup claim failed (continuing):",
+            fingerprintError,
+          );
         }
       }
 
@@ -1117,83 +1643,109 @@ Deno.serve(async (req) => {
         try {
           let wgId: string | null = null;
           const { data: wgRow } = await supabase
-            .from('whatsapp_groups')
-            .select('id')
-            .eq('tenant_id', groupTenantId)
-            .eq('group_chat_id', groupChatId)
+            .from("whatsapp_groups")
+            .select("id")
+            .eq("tenant_id", groupTenantId)
+            .eq("group_chat_id", groupChatId)
             .maybeSingle();
           if (wgRow?.id) {
             wgId = wgRow.id;
           } else {
             const groupName = String(
-              (payload as any).groupName || (payload as any).chatName || (payload as any).subject || groupChatId,
+              (payload as any).groupName ||
+                (payload as any).chatName ||
+                (payload as any).subject ||
+                groupChatId,
             );
             const { data: upserted, error: upsertErr } = await supabase
-              .from('whatsapp_groups')
+              .from("whatsapp_groups")
               .upsert(
                 {
                   tenant_id: groupTenantId,
                   group_chat_id: groupChatId,
                   group_name: groupName.slice(0, 200),
                 },
-                { onConflict: 'tenant_id,group_chat_id' },
+                { onConflict: "tenant_id,group_chat_id" },
               )
-              .select('id')
+              .select("id")
               .maybeSingle();
             if (upsertErr) {
-              console.warn('[manus-wa group] whatsapp_groups upsert failed:', upsertErr.message);
+              console.warn(
+                "[manus-wa group] whatsapp_groups upsert failed:",
+                upsertErr.message,
+              );
             } else {
               wgId = upserted?.id || null;
-              console.log('[manus-wa group] registered whatsapp_groups from Manus traffic', {
-                groupChatId, groupId: wgId,
-              });
+              console.log(
+                "[manus-wa group] registered whatsapp_groups from Manus traffic",
+                {
+                  groupChatId,
+                  groupId: wgId,
+                },
+              );
             }
           }
           if (wgId) {
-            const { error: groupInsertErr } = await supabase.from('chat_messages').insert({
-              group_id: wgId,
-              tenant_id: groupTenantId,
-              connection_user_id: connectionUserId,
-              message_text: messageText,
-              direction: isOutgoingFromPhone ? 'outbound' : 'inbound',
-              channel: 'whatsapp',
-              provider: 'manus_wa',
-              sender_phone: authorPhone || null,
-              sender_name: senderName,
-              raw_provider_data: {
-                ...(payload || {}),
-                _voice: voiceMeta,
-                _group_author_raw: authorRaw || null,
-              },
-            });
+            const { error: groupInsertErr } = await supabase
+              .from("chat_messages")
+              .insert({
+                group_id: wgId,
+                tenant_id: groupTenantId,
+                connection_user_id: connectionUserId,
+                message_text: messageText,
+                direction: isOutgoingFromPhone ? "outbound" : "inbound",
+                channel: "whatsapp",
+                provider: "manus_wa",
+                sender_phone: authorPhone || null,
+                sender_name: senderName,
+                raw_provider_data: {
+                  ...(payload || {}),
+                  _voice: voiceMeta,
+                  _group_author_raw: authorRaw || null,
+                },
+              });
             if (groupInsertErr) {
-              console.warn('[manus-wa group] chat_messages insert failed (non-fatal):', groupInsertErr.message);
+              console.warn(
+                "[manus-wa group] chat_messages insert failed (non-fatal):",
+                groupInsertErr.message,
+              );
             } else {
-              console.log('[manus-wa group] chat_messages saved', {
-                groupChatId, authorPhone, groupId: wgId,
+              console.log("[manus-wa group] chat_messages saved", {
+                groupChatId,
+                authorPhone,
+                groupId: wgId,
               });
             }
 
             // Map members from Carmen's Manus group traffic (for identity when addressed).
-            if (!isOutgoingFromPhone && (authorPhone || /@lid/i.test(authorRaw || ''))) {
+            if (
+              !isOutgoingFromPhone &&
+              (authorPhone || /@lid/i.test(authorRaw || ""))
+            ) {
               try {
                 const observed = await observeManusGroupMember(supabase, {
                   tenantId: groupTenantId,
                   groupId: wgId,
                   groupChatId,
                   phone: authorPhone || null,
-                  whatsappLid: /@lid/i.test(authorRaw || '') ? authorRaw : null,
+                  whatsappLid: /@lid/i.test(authorRaw || "") ? authorRaw : null,
                   whatsappName: senderName,
-                  source: 'manus_wa',
+                  source: "manus_wa",
                 });
-                console.log('[manus-wa group] member observed', observed);
+                console.log("[manus-wa group] member observed", observed);
               } catch (observeErr) {
-                console.warn('[manus-wa group] member observe failed (non-fatal):', observeErr);
+                console.warn(
+                  "[manus-wa group] member observe failed (non-fatal):",
+                  observeErr,
+                );
               }
             }
           }
         } catch (insertErr) {
-          console.warn('[manus-wa group] chat_messages insert error (non-fatal):', insertErr);
+          console.warn(
+            "[manus-wa group] chat_messages insert error (non-fatal):",
+            insertErr,
+          );
         }
       }
 
@@ -1204,18 +1756,24 @@ Deno.serve(async (req) => {
           integrationId: integ.id,
           connectionUserId,
           chatId: groupChatId,
-          phoneNumber: authorPhone || '',
+          phoneNumber: authorPhone || "",
           senderName,
           messageText,
           isIncoming: !isOutgoingFromPhone,
           isManualOutgoing: isOutgoingFromPhone,
           isGroup: true,
-          sourceChannel: 'own_instance',
-          isVoiceMessage: messageIsVoice(payload, msgContainer, resolvedGroupMsg),
+          sourceChannel: "own_instance",
+          isVoiceMessage: messageIsVoice(
+            payload,
+            msgContainer,
+            resolvedGroupMsg,
+          ),
           sendVoice: makeVoiceSender(groupTenantId),
           sendMessage: async (_chatId: string, message: string) => {
             const settingsAny = (integ.settings as any) || {};
-            const baseUrl = settingsAny.gateway_url || 'https://whatsappgw-pzpyrrww.manus.space';
+            const baseUrl =
+              settingsAny.gateway_url ||
+              "https://whatsappgw-pzpyrrww.manus.space";
             const instanceId = settingsAny.instance_id;
             const apiKey = integ.api_key;
             if (!instanceId || !apiKey) return false;
@@ -1224,32 +1782,57 @@ Deno.serve(async (req) => {
             // No retry on abort: the message may already have been delivered, so a retry risks a duplicate.
             const FETCH_TIMEOUT_MS = 60000;
             const controller = new AbortController();
-            const timer = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
+            const timer = setTimeout(
+              () => controller.abort(),
+              FETCH_TIMEOUT_MS,
+            );
             const started = Date.now();
             try {
-              const res = await fetch(`${baseUrl}/api/v1/instances/${instanceId}/send/group`, {
-                method: 'POST',
-                headers: { 'X-Api-Key': apiKey, 'Content-Type': 'application/json' },
-                body: JSON.stringify({ groupId: groupChatId, body: message }),
-                signal: controller.signal,
-              });
+              const res = await fetch(
+                `${baseUrl}/api/v1/instances/${instanceId}/send/group`,
+                {
+                  method: "POST",
+                  headers: {
+                    "X-Api-Key": apiKey,
+                    "Content-Type": "application/json",
+                  },
+                  body: JSON.stringify({ groupId: groupChatId, body: message }),
+                  signal: controller.signal,
+                },
+              );
               clearTimeout(timer);
-              console.log('[manus-wa Carmen group send]', { groupChatId, status: res.status, ok: res.ok, elapsedMs: Date.now() - started });
+              console.log("[manus-wa Carmen group send]", {
+                groupChatId,
+                status: res.status,
+                ok: res.ok,
+                elapsedMs: Date.now() - started,
+              });
               return res.ok;
             } catch (err: any) {
               clearTimeout(timer);
-              const isAbort = err?.name === 'AbortError';
-              console.error('manus-wa Carmen group sendMessage error:', isAbort
-                ? `aborted after ${Date.now() - started}ms (gateway timeout) — not retried to avoid duplicate delivery`
-                : err);
+              const isAbort = err?.name === "AbortError";
+              console.error(
+                "manus-wa Carmen group sendMessage error:",
+                isAbort
+                  ? `aborted after ${Date.now() - started}ms (gateway timeout) — not retried to avoid duplicate delivery`
+                  : err,
+              );
               return false;
             }
           },
         });
         if (result.handled) carmenOutcome = result.outcome;
-        console.log('[carmen-group]', { groupChatId, authorPhone, isOutgoingFromPhone, handled: result.handled, outcome: (result as any).outcome, reason: (result as any).reason, body: String(messageText).slice(0, 60) });
+        console.log("[carmen-group]", {
+          groupChatId,
+          authorPhone,
+          isOutgoingFromPhone,
+          handled: result.handled,
+          outcome: (result as any).outcome,
+          reason: (result as any).reason,
+          body: String(messageText).slice(0, 60),
+        });
       } catch (err) {
-        console.error('manus-wa Carmen group handler error:', err);
+        console.error("manus-wa Carmen group handler error:", err);
       }
 
       return ok({ received: true, group: true, carmen: carmenOutcome });
@@ -1258,11 +1841,11 @@ Deno.serve(async (req) => {
     // Dedup by message id
     if (messageId) {
       const { data: existing } = await supabase
-        .from('chat_messages')
-        .select('id')
-        .eq('tenant_id', tenantId)
-        .eq('provider', 'manus_wa')
-        .eq('raw_provider_data->>id', messageId)
+        .from("chat_messages")
+        .select("id")
+        .eq("tenant_id", tenantId)
+        .eq("provider", "manus_wa")
+        .eq("raw_provider_data->>id", messageId)
         .maybeSingle();
       if (existing) return ok({ received: true, duplicate: true });
     }
@@ -1272,38 +1855,38 @@ Deno.serve(async (req) => {
     let leadId: string | null = null;
 
     const { data: client } = await supabase
-      .from('clients')
-      .select('id')
-      .eq('tenant_id', tenantId)
+      .from("clients")
+      .select("id")
+      .eq("tenant_id", tenantId)
       .or(`phone.ilike.%${normalized}%,phone.ilike.%${counterpartPhone}%`)
       .maybeSingle();
     if (client) clientId = client.id;
 
     if (!clientId) {
       const { data: lead } = await supabase
-        .from('leads')
-        .select('id')
-        .eq('tenant_id', tenantId)
+        .from("leads")
+        .select("id")
+        .eq("tenant_id", tenantId)
         .or(`phone.ilike.%${normalized}%,phone.ilike.%${counterpartPhone}%`)
         .maybeSingle();
       if (lead) leadId = lead.id;
     }
 
-    const { error: insertError } = await supabase.from('chat_messages').insert({
+    const { error: insertError } = await supabase.from("chat_messages").insert({
       client_id: clientId,
       lead_id: leadId,
       tenant_id: tenantId,
       connection_user_id: connectionUserId,
       message_text: messageText,
-      direction: isOutgoingFromPhone ? 'outbound' : 'inbound',
-      channel: 'whatsapp',
-      provider: 'manus_wa',
+      direction: isOutgoingFromPhone ? "outbound" : "inbound",
+      channel: "whatsapp",
+      provider: "manus_wa",
       sender_phone: counterpartPhone,
       raw_provider_data: { ...(payload || {}), _voice: voiceMeta },
     });
 
     if (insertError) {
-      console.error('Failed to insert chat_messages:', insertError);
+      console.error("Failed to insert chat_messages:", insertError);
       throw insertError;
     }
 
@@ -1319,7 +1902,8 @@ Deno.serve(async (req) => {
     });
     const carmenTargetPhone = privateTarget.phone || counterpartPhone;
     const chatIdForCarmen = privateTarget.chatId || `${carmenTargetPhone}@c.us`;
-    const senderName = (payload.senderName || payload.fromName || null) as string | null;
+    const senderName = (payload.senderName || payload.fromName || null) as
+      string | null;
 
     // Direct channels: "קלוד ..." / "קרסר ..." from the owner's own phone skip Carmen
     // and go straight to Claude Direct / Cursor Direct. Replies come back to this chat.
@@ -1333,24 +1917,30 @@ Deno.serve(async (req) => {
           messageText,
         });
         if (direct.handled) {
-          if (direct.ack) await fetch(`${Deno.env.get('SUPABASE_URL')}/functions/v1/send-manus-wa-message`, {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'Authorization': `Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''}`,
-            },
-            body: JSON.stringify({
-              integrationId: integ.id,
-              tenantId,
-              phoneNumber: carmenTargetPhone,
-              senderUserId: connectionUserId,
-              message: direct.ack,
-            }),
-          }).catch((err) => console.error('[manus-wa] direct ack error:', err));
+          if (direct.ack)
+            await fetch(
+              `${Deno.env.get("SUPABASE_URL")}/functions/v1/send-manus-wa-message`,
+              {
+                method: "POST",
+                headers: {
+                  "Content-Type": "application/json",
+                  Authorization: `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? ""}`,
+                },
+                body: JSON.stringify({
+                  integrationId: integ.id,
+                  tenantId,
+                  phoneNumber: carmenTargetPhone,
+                  senderUserId: connectionUserId,
+                  message: direct.ack,
+                }),
+              },
+            ).catch((err) =>
+              console.error("[manus-wa] direct ack error:", err),
+            );
           return ok({ received: true, direct: direct.provider });
         }
       } catch (err) {
-        console.error('[manus-wa] direct channel error:', err);
+        console.error("[manus-wa] direct channel error:", err);
       }
     }
 
@@ -1360,12 +1950,12 @@ Deno.serve(async (req) => {
     // session for this specific chat, Carmen must not respond.
     if (isOutgoingFromPhone && !pairedFromGreenApi && !isGroup) {
       const { data: existingCarmenSession } = await supabase
-        .from('carmen_whatsapp_sessions')
-        .select('id')
-        .eq('tenant_id', tenantId)
-        .eq('status', 'active')
-        .eq('connection_user_id', connectionUserId)
-        .eq('chat_id', chatIdForCarmen)
+        .from("carmen_whatsapp_sessions")
+        .select("id")
+        .eq("tenant_id", tenantId)
+        .eq("status", "active")
+        .eq("connection_user_id", connectionUserId)
+        .eq("chat_id", chatIdForCarmen)
         .maybeSingle();
       const guard = outboundThirdPartyGuardDecision({
         isOutgoingFromPhone,
@@ -1374,11 +1964,16 @@ Deno.serve(async (req) => {
         messageText,
         hasActiveSessionForChat: !!existingCarmenSession,
       });
-      if (guard === 'skip') {
-        console.log('[manus-wa] outbound-to-third-party: no trigger keyword + no active carmen session → skip', {
-          chatIdForCarmen, carmenTargetPhone, bodyPreview: String(messageText).slice(0, 60),
-        });
-        return ok({ received: true, ignored: 'outbound_third_party' });
+      if (guard === "skip") {
+        console.log(
+          "[manus-wa] outbound-to-third-party: no trigger keyword + no active carmen session → skip",
+          {
+            chatIdForCarmen,
+            carmenTargetPhone,
+            bodyPreview: String(messageText).slice(0, 60),
+          },
+        );
+        return ok({ received: true, ignored: "outbound_third_party" });
       }
     }
 
@@ -1391,60 +1986,82 @@ Deno.serve(async (req) => {
         connectionUserId,
         chatId: chatIdForCarmen,
         phoneNumber: carmenTargetPhone,
-          sourcePhoneNumber,
+        sourcePhoneNumber,
         senderName,
         messageText,
         isIncoming: !isOutgoingFromPhone,
         isManualOutgoing: isOutgoingFromPhone,
         isGroup: false,
-        sourceChannel: 'own_instance',
+        sourceChannel: "own_instance",
         isVoiceMessage: messageIsVoice(payload, msgContainer, resolvedMsg),
         sendVoice: makeVoiceSender(tenantId),
         sendMessage: async (_chatId: string, message: string) => {
           try {
-            const supabaseUrl = Deno.env.get('SUPABASE_URL') ?? '';
-            const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '';
-            console.log('[carmen->manus] sending', { integrationId: integ.id, tenantId, phoneNumber: carmenTargetPhone, connectionUserId, messageLen: message.length });
-            const res = await fetch(`${supabaseUrl}/functions/v1/send-manus-wa-message`, {
-              method: 'POST',
-              headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${serviceKey}`,
-              },
-              body: JSON.stringify({
-                integrationId: integ.id,
-                tenantId,
-                phoneNumber: carmenTargetPhone,
-                senderUserId: connectionUserId,
-                message,
-              }),
+            const supabaseUrl = Deno.env.get("SUPABASE_URL") ?? "";
+            const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
+            console.log("[carmen->manus] sending", {
+              integrationId: integ.id,
+              tenantId,
+              phoneNumber: carmenTargetPhone,
+              connectionUserId,
+              messageLen: message.length,
             });
+            const res = await fetch(
+              `${supabaseUrl}/functions/v1/send-manus-wa-message`,
+              {
+                method: "POST",
+                headers: {
+                  "Content-Type": "application/json",
+                  Authorization: `Bearer ${serviceKey}`,
+                },
+                body: JSON.stringify({
+                  integrationId: integ.id,
+                  tenantId,
+                  phoneNumber: carmenTargetPhone,
+                  senderUserId: connectionUserId,
+                  message,
+                }),
+              },
+            );
             const txt = await res.text();
-            console.log('[carmen->manus] result', { status: res.status, body: txt.slice(0, 500) });
+            console.log("[carmen->manus] result", {
+              status: res.status,
+              body: txt.slice(0, 500),
+            });
             return res.ok;
           } catch (err) {
-            console.error('manus-wa Carmen sendMessage error:', err);
+            console.error("manus-wa Carmen sendMessage error:", err);
             return false;
           }
         },
       });
       if (result.handled) carmenOutcome = result.outcome;
-      console.log('[carmen-private]', { chatId: chatIdForCarmen, carmenTargetPhone, counterpartPhone, sourcePhoneNumber, pairedFromGreenApi, isOutgoingFromPhone, handled: result.handled, outcome: (result as any).outcome, reason: (result as any).reason, body: String(messageText).slice(0, 60) });
+      console.log("[carmen-private]", {
+        chatId: chatIdForCarmen,
+        carmenTargetPhone,
+        counterpartPhone,
+        sourcePhoneNumber,
+        pairedFromGreenApi,
+        isOutgoingFromPhone,
+        handled: result.handled,
+        outcome: (result as any).outcome,
+        reason: (result as any).reason,
+        body: String(messageText).slice(0, 60),
+      });
     } catch (err) {
-      console.error('manus-wa Carmen handler error:', err);
+      console.error("manus-wa Carmen handler error:", err);
     }
 
     return ok({
       success: true,
-      direction: isOutgoingFromPhone ? 'outbound' : 'inbound',
-      contactType: clientId ? 'client' : leadId ? 'lead' : 'unknown',
+      direction: isOutgoingFromPhone ? "outbound" : "inbound",
+      contactType: clientId ? "client" : leadId ? "lead" : "unknown",
       contactId: clientId || leadId || null,
       carmen: carmenOutcome,
     });
-
   } catch (e) {
-    const msg = e instanceof Error ? e.message : 'Unknown error';
-    console.error('manus-wa-webhook error:', msg);
+    const msg = e instanceof Error ? e.message : "Unknown error";
+    console.error("manus-wa-webhook error:", msg);
     return ok({ error: msg }, 500);
   }
 });

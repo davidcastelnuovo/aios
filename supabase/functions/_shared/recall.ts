@@ -9,7 +9,9 @@ export const RECALL_CREDIT_CANARY_DOWN_MS = 30 * 60 * 1000;
 
 function envGet(name: string): string | undefined {
   try {
-    return typeof Deno !== "undefined" ? Deno.env.get(name) ?? undefined : undefined;
+    return typeof Deno !== "undefined"
+      ? (Deno.env.get(name) ?? undefined)
+      : undefined;
   } catch {
     return undefined;
   }
@@ -48,13 +50,20 @@ export class RecallApiError extends Error {
 
 export function isRecallCreditHttp(status: number, body = ""): boolean {
   if (status === 402) return true;
-  return /insufficient credit|insufficient_credit|credit balance|top up your/i.test(body);
+  return /insufficient credit|insufficient_credit|credit balance|top up your/i.test(
+    body,
+  );
 }
 
 export function isRecallCreditError(err: unknown): boolean {
-  if (err instanceof RecallApiError) return isRecallCreditHttp(err.status, err.body);
+  if (err instanceof RecallApiError)
+    return isRecallCreditHttp(err.status, err.body);
   if (err instanceof Error) {
-    return isRecallCreditHttp(0, err.message) || err.message.includes("נגמר הקרדיט ב-Recall") || /\(402\)/.test(err.message);
+    return (
+      isRecallCreditHttp(0, err.message) ||
+      err.message.includes("נגמר הקרדיט ב-Recall") ||
+      /\(402\)/.test(err.message)
+    );
   }
   return false;
 }
@@ -66,7 +75,10 @@ export function formatRecallBotHours(seconds: number): string {
   return `${Math.round(hours)} שעות`;
 }
 
-export function utcMonthRange(now = new Date()): { start: string; end: string } {
+export function utcMonthRange(now = new Date()): {
+  start: string;
+  end: string;
+} {
   const start = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
   return { start: start.toISOString(), end: now.toISOString() };
 }
@@ -118,7 +130,9 @@ export interface RecallBotResponse {
   join_at?: string | null;
 }
 
-export async function createRecallBot(opts: CreateRecallBotOpts): Promise<RecallBotResponse> {
+export async function createRecallBot(
+  opts: CreateRecallBotOpts,
+): Promise<RecallBotResponse> {
   const key = recallApiKey();
   if (!key) throw new Error("RECALL_API_KEY is not configured");
 
@@ -173,9 +187,19 @@ export async function createRecallBot(opts: CreateRecallBotOpts): Promise<Recall
   if (!res.ok) {
     const errText = await res.text();
     const region = recallRegion();
-    console.error("[recall] create bot failed", res.status, "region=", region, errText.slice(0, 500));
+    console.error(
+      "[recall] create bot failed",
+      res.status,
+      "region=",
+      region,
+      errText.slice(0, 500),
+    );
     if (isRecallCreditHttp(res.status, errText)) {
-      throw new RecallApiError(res.status, errText, recallCreditErrorMessage(region));
+      throw new RecallApiError(
+        res.status,
+        errText,
+        recallCreditErrorMessage(region),
+      );
     }
     if (res.status === 401 && errText.includes("authentication_failed")) {
       throw new RecallApiError(
@@ -194,7 +218,10 @@ export async function createRecallBot(opts: CreateRecallBotOpts): Promise<Recall
   return await res.json();
 }
 
-export async function fetchRecallUsageSeconds(startIso: string, endIso: string): Promise<number | null> {
+export async function fetchRecallUsageSeconds(
+  startIso: string,
+  endIso: string,
+): Promise<number | null> {
   const key = recallApiKey();
   if (!key) throw new Error("RECALL_API_KEY is not configured");
 
@@ -203,9 +230,13 @@ export async function fetchRecallUsageSeconds(startIso: string, endIso: string):
     headers: { Authorization: `Token ${key}`, Accept: "application/json" },
   });
   if (!res.ok) {
-    throw new RecallApiError(res.status, await res.text(), `Recall usage failed (${res.status})`);
+    throw new RecallApiError(
+      res.status,
+      await res.text(),
+      `Recall usage failed (${res.status})`,
+    );
   }
-  const data = await res.json() as { bot_total?: number };
+  const data = (await res.json()) as { bot_total?: number };
   return typeof data.bot_total === "number" ? data.bot_total : null;
 }
 
@@ -281,7 +312,9 @@ export async function runRecallCreditCanary(): Promise<{
   };
 }
 
-export async function retrieveRecallBot(botId: string): Promise<Record<string, unknown>> {
+export async function retrieveRecallBot(
+  botId: string,
+): Promise<Record<string, unknown>> {
   const key = recallApiKey();
   if (!key) throw new Error("RECALL_API_KEY is not configured");
 
@@ -289,7 +322,9 @@ export async function retrieveRecallBot(botId: string): Promise<Record<string, u
     headers: { Authorization: `Token ${key}`, Accept: "application/json" },
   });
   if (!res.ok) {
-    throw new Error(`Recall retrieve bot failed (${res.status}): ${(await res.text()).slice(0, 200)}`);
+    throw new Error(
+      `Recall retrieve bot failed (${res.status}): ${(await res.text()).slice(0, 200)}`,
+    );
   }
   return await res.json();
 }
@@ -323,11 +358,21 @@ export function extractRecallDownloads(bot: Record<string, any>): {
   if (rec.started_at && rec.completed_at) {
     durationSeconds = Math.max(
       1,
-      Math.round((new Date(rec.completed_at).getTime() - new Date(rec.started_at).getTime()) / 1000),
+      Math.round(
+        (new Date(rec.completed_at).getTime() -
+          new Date(rec.started_at).getTime()) /
+          1000,
+      ),
     );
   }
 
-  return { videoUrl, audioUrl, transcriptUrl, transcriptStatus, durationSeconds };
+  return {
+    videoUrl,
+    audioUrl,
+    transcriptUrl,
+    transcriptStatus,
+    durationSeconds,
+  };
 }
 
 // A pause this long inside one participant's word stream starts a new line.
@@ -355,9 +400,10 @@ function participantSegmentsToLines(
   const lines: { at: number; line: string }[] = [];
 
   for (const seg of segments) {
-    const speaker = seg.participant?.name
-      || nameById.get(seg.participant?.id ?? -1)
-      || "משתתף";
+    const speaker =
+      seg.participant?.name ||
+      nameById.get(seg.participant?.id ?? -1) ||
+      "משתתף";
     const words = Array.isArray(seg.words) ? seg.words : [];
 
     let startAt: number | null = null;
@@ -366,7 +412,11 @@ function participantSegmentsToLines(
 
     const flush = () => {
       const text = buffer.join(" ").trim();
-      if (text && startAt !== null) lines.push({ at: startAt, line: `[${formatClock(startAt)}] ${speaker}: ${text}` });
+      if (text && startAt !== null)
+        lines.push({
+          at: startAt,
+          line: `[${formatClock(startAt)}] ${speaker}: ${text}`,
+        });
       buffer = [];
       startAt = null;
     };
@@ -392,7 +442,9 @@ function participantSegmentsToLines(
 /** Convert Recall transcript JSON to our speaker-timeline text format. */
 // deno-lint-ignore no-explicit-any
 export function recallTranscriptToText(data: any): string {
-  const participants: { id?: number; name?: string }[] = Array.isArray(data?.participants)
+  const participants: { id?: number; name?: string }[] = Array.isArray(
+    data?.participants,
+  )
     ? data.participants
     : [];
   const nameById = new Map<number, string>();
@@ -402,7 +454,10 @@ export function recallTranscriptToText(data: any): string {
 
   // v1.11 download schema: top-level array of { participant, words }.
   if (Array.isArray(data)) {
-    return participantSegmentsToLines(data as RecallParticipantSegment[], nameById)
+    return participantSegmentsToLines(
+      data as RecallParticipantSegment[],
+      nameById,
+    )
       .sort((a, b) => a.at - b.at)
       .map((l) => l.line)
       .join("\n");
@@ -412,11 +467,18 @@ export function recallTranscriptToText(data: any): string {
   if (Array.isArray(data?.utterances) && data.utterances.length > 0) {
     const lines: { at: number; line: string }[] = [];
     for (const u of data.utterances) {
-      const speaker = u.participant?.name || nameById.get(u.participant?.id) || "משתתף";
-      const text = (u.words || []).map((w: { text?: string }) => w.text).filter(Boolean).join(" ");
+      const speaker =
+        u.participant?.name || nameById.get(u.participant?.id) || "משתתף";
+      const text = (u.words || [])
+        .map((w: { text?: string }) => w.text)
+        .filter(Boolean)
+        .join(" ");
       if (!text.trim()) continue;
       const rel = u.words?.[0]?.start_timestamp?.relative ?? u.start ?? 0;
-      lines.push({ at: rel, line: `[${formatClock(rel)}] ${speaker}: ${text.trim()}` });
+      lines.push({
+        at: rel,
+        line: `[${formatClock(rel)}] ${speaker}: ${text.trim()}`,
+      });
     }
     return lines
       .sort((a, b) => a.at - b.at)
@@ -437,16 +499,27 @@ export function recallTranscriptToText(data: any): string {
   let current: { at: number; speaker: string; parts: string[] } | null = null;
 
   for (const w of words) {
-    const speaker = w.participant?.name || nameById.get(w.participant?.id ?? -1) || "משתתף";
+    const speaker =
+      w.participant?.name || nameById.get(w.participant?.id ?? -1) || "משתתף";
     const at = w.start_timestamp?.relative ?? 0;
     if (!current || current.speaker !== speaker) {
-      if (current) segments.push({ at: current.at, speaker: current.speaker, text: current.parts.join(" ") });
+      if (current)
+        segments.push({
+          at: current.at,
+          speaker: current.speaker,
+          text: current.parts.join(" "),
+        });
       current = { at, speaker, parts: [w.text || ""] };
     } else {
       current.parts.push(w.text || "");
     }
   }
-  if (current) segments.push({ at: current.at, speaker: current.speaker, text: current.parts.join(" ") });
+  if (current)
+    segments.push({
+      at: current.at,
+      speaker: current.speaker,
+      text: current.parts.join(" "),
+    });
 
   return segments
     .filter((s) => s.text.trim())
@@ -465,17 +538,23 @@ function formatClock(totalSeconds: number): string {
 }
 
 /** Verify Recall/Svix webhook signature (workspace verification secret). */
-export async function verifyRecallWebhook(rawBody: string, headers: Headers): Promise<boolean> {
-  const secret = Deno.env.get("RECALL_WORKSPACE_VERIFICATION_SECRET")
-    || Deno.env.get("RECALL_SVIX_WEBHOOK_SECRET");
+export async function verifyRecallWebhook(
+  rawBody: string,
+  headers: Headers,
+): Promise<boolean> {
+  const secret =
+    Deno.env.get("RECALL_WORKSPACE_VERIFICATION_SECRET") ||
+    Deno.env.get("RECALL_SVIX_WEBHOOK_SECRET");
   if (!secret) {
     console.warn("[recall] webhook secret not set — skipping verification");
     return true;
   }
 
   const msgId = headers.get("webhook-id") ?? headers.get("svix-id");
-  const msgTimestamp = headers.get("webhook-timestamp") ?? headers.get("svix-timestamp");
-  const msgSignature = headers.get("webhook-signature") ?? headers.get("svix-signature");
+  const msgTimestamp =
+    headers.get("webhook-timestamp") ?? headers.get("svix-timestamp");
+  const msgSignature =
+    headers.get("webhook-signature") ?? headers.get("svix-signature");
   if (!msgId || !msgTimestamp || !msgSignature) return false;
   if (!secret.startsWith("whsec_")) {
     console.error("[recall] invalid verification secret format");
@@ -494,7 +573,11 @@ export async function verifyRecallWebhook(rawBody: string, headers: Headers): Pr
     );
 
     const toSign = `${msgId}.${msgTimestamp}.${rawBody}`;
-    const sig = await crypto.subtle.sign("HMAC", cryptoKey, new TextEncoder().encode(toSign));
+    const sig = await crypto.subtle.sign(
+      "HMAC",
+      cryptoKey,
+      new TextEncoder().encode(toSign),
+    );
     const expected = btoa(String.fromCharCode(...new Uint8Array(sig)));
 
     for (const versioned of msgSignature.split(" ")) {

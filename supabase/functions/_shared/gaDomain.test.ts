@@ -1,9 +1,16 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { gaHostsMatch, listedPropertyMatchesDomain, normalizeGaHost } from "./gaDomain.ts";
+import {
+  gaHostsMatch,
+  listedPropertyMatchesDomain,
+  normalizeGaHost,
+} from "./gaDomain.ts";
 
 test("normalizes a pasted website to a host", () => {
-  assert.equal(normalizeGaHost("https://www.ggh-law.co.il/about"), "ggh-law.co.il");
+  assert.equal(
+    normalizeGaHost("https://www.ggh-law.co.il/about"),
+    "ggh-law.co.il",
+  );
 });
 
 test("matches a property account name to the domain", () => {
@@ -24,5 +31,8 @@ test("a display name that is not the domain does not match", () => {
     ),
     false,
   );
-  assert.equal(gaHostsMatch("https://www.periodontics.co.il", "periodontics.co.il"), true);
+  assert.equal(
+    gaHostsMatch("https://www.periodontics.co.il", "periodontics.co.il"),
+    true,
+  );
 });

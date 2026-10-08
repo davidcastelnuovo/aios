@@ -1,8 +1,9 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Headers":
+    "authorization, x-client-info, apikey, content-type",
 };
 
 async function hmacSha256Hex(secret: string, message: string): Promise<string> {
@@ -12,34 +13,38 @@ async function hmacSha256Hex(secret: string, message: string): Promise<string> {
     encoder.encode(secret),
     { name: "HMAC", hash: "SHA-256" },
     false,
-    ["sign"]
+    ["sign"],
   );
-  const signature = await crypto.subtle.sign("HMAC", key, encoder.encode(message));
+  const signature = await crypto.subtle.sign(
+    "HMAC",
+    key,
+    encoder.encode(message),
+  );
   return Array.from(new Uint8Array(signature))
     .map((b) => b.toString(16).padStart(2, "0"))
     .join("");
 }
 
 Deno.serve(async (req) => {
-  if (req.method === 'OPTIONS') {
+  if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
   }
 
-  if (req.method !== 'POST') {
-    return new Response(JSON.stringify({ error: 'Method not allowed' }), {
+  if (req.method !== "POST") {
+    return new Response(JSON.stringify({ error: "Method not allowed" }), {
       status: 405,
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   }
 
   try {
     const url = new URL(req.url);
-    const tenantId = url.searchParams.get('tenant_id');
+    const tenantId = url.searchParams.get("tenant_id");
 
     if (!tenantId) {
-      return new Response(JSON.stringify({ error: 'Missing tenant_id' }), {
+      return new Response(JSON.stringify({ error: "Missing tenant_id" }), {
         status: 400,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
@@ -48,148 +53,179 @@ Deno.serve(async (req) => {
     const { event, payload } = body;
 
     // Create Supabase client with service role
-    const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
-    const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+    const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
+    const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const supabase = createClient(supabaseUrl, supabaseKey);
 
     // Get tenant's Zoom integration settings
     const { data: integration } = await supabase
-      .from('tenant_integrations')
-      .select('settings')
-      .eq('tenant_id', tenantId)
-      .eq('integration_type', 'zoom')
-      .eq('is_active', true)
+      .from("tenant_integrations")
+      .select("settings")
+      .eq("tenant_id", tenantId)
+      .eq("integration_type", "zoom")
+      .eq("is_active", true)
       .maybeSingle();
 
     const settings = integration?.settings as Record<string, string> | null;
     const webhookSecretToken = settings?.webhook_secret_token;
 
     // Handle Zoom endpoint validation challenge
-    if (event === 'endpoint.url_validation') {
+    if (event === "endpoint.url_validation") {
       const plainToken = payload?.plainToken;
       if (!plainToken || !webhookSecretToken) {
-        return new Response(JSON.stringify({ error: 'Missing plainToken or webhook secret' }), {
-          status: 400,
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        });
+        return new Response(
+          JSON.stringify({ error: "Missing plainToken or webhook secret" }),
+          {
+            status: 400,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          },
+        );
       }
 
-      const encryptedToken = await hmacSha256Hex(webhookSecretToken, plainToken);
-
-      return new Response(JSON.stringify({
+      const encryptedToken = await hmacSha256Hex(
+        webhookSecretToken,
         plainToken,
-        encryptedToken,
-      }), {
-        status: 200,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      });
+      );
+
+      return new Response(
+        JSON.stringify({
+          plainToken,
+          encryptedToken,
+        }),
+        {
+          status: 200,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        },
+      );
     }
 
     // Verify Zoom HMAC signature for non-validation events
     if (!webhookSecretToken) {
-      return new Response(JSON.stringify({ error: 'Webhook secret not configured' }), {
-        status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      });
+      return new Response(
+        JSON.stringify({ error: "Webhook secret not configured" }),
+        {
+          status: 500,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        },
+      );
     }
-    const sig = req.headers.get('x-zm-signature') ?? '';
-    const ts = req.headers.get('x-zm-request-timestamp') ?? '';
+    const sig = req.headers.get("x-zm-signature") ?? "";
+    const ts = req.headers.get("x-zm-request-timestamp") ?? "";
     const message = `v0:${ts}:${rawBody}`;
-    const expected = 'v0=' + (await hmacSha256Hex(webhookSecretToken, message));
+    const expected = "v0=" + (await hmacSha256Hex(webhookSecretToken, message));
     if (sig.length !== expected.length) {
-      return new Response('Invalid signature', { status: 403 });
+      return new Response("Invalid signature", { status: 403 });
     }
     let diff = 0;
-    for (let i = 0; i < expected.length; i++) diff |= sig.charCodeAt(i) ^ expected.charCodeAt(i);
+    for (let i = 0; i < expected.length; i++)
+      diff |= sig.charCodeAt(i) ^ expected.charCodeAt(i);
     if (diff !== 0) {
-      return new Response('Invalid signature', { status: 403 });
+      return new Response("Invalid signature", { status: 403 });
     }
 
     // Handle recording.completed event
-    if (event === 'recording.completed') {
+    if (event === "recording.completed") {
       const meetingObject = payload?.object;
       if (!meetingObject) {
-        return new Response(JSON.stringify({ error: 'No meeting object in payload' }), {
-          status: 400,
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        });
+        return new Response(
+          JSON.stringify({ error: "No meeting object in payload" }),
+          {
+            status: 400,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          },
+        );
       }
 
       const recordingFiles = meetingObject.recording_files || [];
       const insertRows = recordingFiles.map((file: any) => ({
         tenant_id: tenantId,
-        meeting_id: String(meetingObject.id || meetingObject.uuid || ''),
+        meeting_id: String(meetingObject.id || meetingObject.uuid || ""),
         meeting_topic: meetingObject.topic || null,
         host_email: meetingObject.host_email || null,
         start_time: meetingObject.start_time || null,
         duration: meetingObject.duration || null,
         recording_url: file.download_url || file.play_url || null,
-        recording_password: payload?.download_token || meetingObject.password || null,
+        recording_password:
+          payload?.download_token || meetingObject.password || null,
         recording_type: file.recording_type || null,
         file_size: file.file_size || null,
       }));
 
       if (insertRows.length > 0) {
         const { error } = await supabase
-          .from('zoom_recordings')
+          .from("zoom_recordings")
           .insert(insertRows);
 
         if (error) {
-          console.error('Error inserting zoom recordings:', error);
-          return new Response(JSON.stringify({ error: 'Failed to save recordings' }), {
-            status: 500,
-            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-          });
+          console.error("Error inserting zoom recordings:", error);
+          return new Response(
+            JSON.stringify({ error: "Failed to save recordings" }),
+            {
+              status: 500,
+              headers: { ...corsHeaders, "Content-Type": "application/json" },
+            },
+          );
         }
       }
 
       // Trigger async processing for each audio recording (fire-and-forget)
-      const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
-      const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+      const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
+      const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 
       if (insertRows.length > 0) {
         // Get the IDs of newly inserted recordings
         const { data: newRecordings } = await supabase
-          .from('zoom_recordings')
-          .select('id, recording_type')
-          .eq('tenant_id', tenantId)
-          .eq('meeting_id', String(meetingObject.id || meetingObject.uuid || ''))
-          .order('created_at', { ascending: false })
+          .from("zoom_recordings")
+          .select("id, recording_type")
+          .eq("tenant_id", tenantId)
+          .eq(
+            "meeting_id",
+            String(meetingObject.id || meetingObject.uuid || ""),
+          )
+          .order("created_at", { ascending: false })
           .limit(insertRows.length);
 
         if (newRecordings) {
           for (const rec of newRecordings) {
             // Only process audio recordings
-            if (rec.recording_type?.toLowerCase().includes('audio')) {
+            if (rec.recording_type?.toLowerCase().includes("audio")) {
               fetch(`${supabaseUrl}/functions/v1/process-new-recording`, {
-                method: 'POST',
+                method: "POST",
                 headers: {
-                  'Content-Type': 'application/json',
-                  'Authorization': `Bearer ${serviceKey}`,
+                  "Content-Type": "application/json",
+                  Authorization: `Bearer ${serviceKey}`,
                 },
-                body: JSON.stringify({ recording_id: rec.id, tenant_id: tenantId }),
-              }).catch(err => console.error('Failed to trigger process-new-recording:', err));
+                body: JSON.stringify({
+                  recording_id: rec.id,
+                  tenant_id: tenantId,
+                }),
+              }).catch((err) =>
+                console.error("Failed to trigger process-new-recording:", err),
+              );
             }
           }
         }
       }
 
-      return new Response(JSON.stringify({ success: true, count: insertRows.length }), {
-        status: 200,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      });
+      return new Response(
+        JSON.stringify({ success: true, count: insertRows.length }),
+        {
+          status: 200,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        },
+      );
     }
 
     // For any other event, acknowledge
     return new Response(JSON.stringify({ received: true }), {
       status: 200,
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
-
   } catch (error) {
-    console.error('Zoom webhook error:', error);
-    return new Response(JSON.stringify({ error: 'Internal server error' }), {
+    console.error("Zoom webhook error:", error);
+    return new Response(JSON.stringify({ error: "Internal server error" }), {
       status: 500,
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   }
 });

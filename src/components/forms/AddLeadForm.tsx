@@ -7,17 +7,54 @@ import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
+import {
+  Form,
+  FormControl,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormMessage,
+} from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from "@/components/ui/command";
 import { Check, ChevronsUpDown } from "lucide-react";
 import { Calendar } from "@/components/ui/calendar";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
 import { useToast } from "@/hooks/use-toast";
-import { Plus, CalendarIcon, Settings2, Tag, Settings, Search } from "lucide-react";
+import {
+  Plus,
+  CalendarIcon,
+  Settings2,
+  Tag,
+  Settings,
+  Search,
+} from "lucide-react";
 import { useAgency } from "@/contexts/AgencyContext";
 import { format } from "date-fns";
 import { cn } from "@/lib/utils";
@@ -73,27 +110,27 @@ export function AddLeadForm() {
   const [isTagsManagerOpen, setIsTagsManagerOpen] = useState(false);
   const [agencyPopoverOpen, setAgencyPopoverOpen] = useState(false);
   const [salesPersonPopoverOpen, setSalesPersonPopoverOpen] = useState(false);
-  const [tagSearchQuery, setTagSearchQuery] = useState('');
+  const [tagSearchQuery, setTagSearchQuery] = useState("");
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const { selectedAgency } = useAgency();
   const { tenantId } = useCurrentTenant();
   const { userId } = useCurrentUser();
-  const { getFieldLabel, isFieldVisible } = useCustomFieldLabels('lead');
+  const { getFieldLabel, isFieldVisible } = useCustomFieldLabels("lead");
   const { activeStatuses: leadStatuses } = useLeadStatuses();
   const { activeStages: pipelineStages } = useLeadPipelineStages();
 
   // Fetch all available tags
   const { data: allTags = [] } = useQuery({
-    queryKey: ['chat-tags', tenantId],
+    queryKey: ["chat-tags", tenantId],
     queryFn: async () => {
       if (!tenantId) return [];
       const { data, error } = await supabase
-        .from('chat_tags')
-        .select('*')
-        .eq('tenant_id', tenantId)
-        .order('sort_order', { ascending: true });
-      
+        .from("chat_tags")
+        .select("*")
+        .eq("tenant_id", tenantId)
+        .order("sort_order", { ascending: true });
+
       if (error) throw error;
       return data as Array<{ id: string; name: string; color: string }>;
     },
@@ -118,7 +155,8 @@ export function AddLeadForm() {
       products: "",
       notes: "",
       sales_person_id: "",
-      agency_id: (selectedAgency && selectedAgency !== "all") ? selectedAgency : "",
+      agency_id:
+        selectedAgency && selectedAgency !== "all" ? selectedAgency : "",
       folder_link: "",
       created_at: new Date(),
     },
@@ -128,8 +166,10 @@ export function AddLeadForm() {
 
   useEffect(() => {
     if (form.getValues("agency_id")) return;
-    const fromHeader = selectedAgency && selectedAgency !== "all" ? selectedAgency : "";
-    const homeAgencyId = fromHeader || pickTenantHomeAgencyId(tenantId, agencies);
+    const fromHeader =
+      selectedAgency && selectedAgency !== "all" ? selectedAgency : "";
+    const homeAgencyId =
+      fromHeader || pickTenantHomeAgencyId(tenantId, agencies);
     if (homeAgencyId) form.setValue("agency_id", homeAgencyId);
   }, [agencies, form, selectedAgency, tenantId]);
 
@@ -154,32 +194,40 @@ export function AddLeadForm() {
   const createMutation = useMutation({
     mutationFn: async (values: FormValues) => {
       if (!tenantId) throw new Error("לא נמצא tenant_id");
-      
+
       // Use contact_name as company_name if company_name is empty
-      const companyName = values.company_name?.trim() || values.contact_name?.trim() || "ליד חדש";
+      const companyName =
+        values.company_name?.trim() || values.contact_name?.trim() || "ליד חדש";
       const resolvedAgencyId =
-        (values.agency_id && values.agency_id !== "none" ? values.agency_id : null)
-        || pickTenantHomeAgencyId(tenantId, agencies)
-        || await fetchTenantHomeAgencyId(tenantId);
-      
-        const submitData: any = {
-          company_name: companyName,
-          contact_name: values.contact_name || null,
-          email: values.email || null,
-          phone: values.phone || null,
-          source: (inferLeadSource(values.source || "paid_ads") as any),
-          campaign_name: (values.campaign_name || "").trim() || null,
-          status: (values.status as any) || "new",
-          response_status: values.response_status && values.response_status !== "none"
-            ? (resolveResponseStatusKey(values.response_status, leadStatuses) || values.response_status)
+        (values.agency_id && values.agency_id !== "none"
+          ? values.agency_id
+          : null) ||
+        pickTenantHomeAgencyId(tenantId, agencies) ||
+        (await fetchTenantHomeAgencyId(tenantId));
+
+      const submitData: any = {
+        company_name: companyName,
+        contact_name: values.contact_name || null,
+        email: values.email || null,
+        phone: values.phone || null,
+        source: inferLeadSource(values.source || "paid_ads") as any,
+        campaign_name: (values.campaign_name || "").trim() || null,
+        status: (values.status as any) || "new",
+        response_status:
+          values.response_status && values.response_status !== "none"
+            ? resolveResponseStatusKey(values.response_status, leadStatuses) ||
+              values.response_status
             : null,
-        monthly_budget: values.monthly_budget 
-          ? parseFloat(values.monthly_budget) 
+        monthly_budget: values.monthly_budget
+          ? parseFloat(values.monthly_budget)
           : null,
         industry: values.industry || null,
         products: values.products || null,
         notes: values.notes || null,
-        sales_person_id: values.sales_person_id && values.sales_person_id !== 'none' ? values.sales_person_id : null,
+        sales_person_id:
+          values.sales_person_id && values.sales_person_id !== "none"
+            ? values.sales_person_id
+            : null,
         agency_id: resolvedAgencyId,
         folder_link: values.folder_link || null,
         created_at: values.created_at || new Date(),
@@ -201,21 +249,19 @@ export function AddLeadForm() {
       queryClient.invalidateQueries({ queryKey: ["leads-kanban", tenantId] });
       queryClient.invalidateQueries({ queryKey: ["leads-table", tenantId] });
       queryClient.invalidateQueries({ queryKey: ["leads-count", tenantId] });
-      
+
       // Add selected tags to the newly created lead
       if (data && selectedTags.length > 0 && userId && tenantId) {
         for (const tagId of selectedTags) {
           try {
-            await supabase
-              .from('chat_contact_tags')
-              .insert({
-                tag_id: tagId,
-                user_id: userId,
-                tenant_id: tenantId,
-                lead_id: data.id,
-              });
+            await supabase.from("chat_contact_tags").insert({
+              tag_id: tagId,
+              user_id: userId,
+              tenant_id: tenantId,
+              lead_id: data.id,
+            });
           } catch (tagError) {
-            console.error('Error adding tag:', tagError);
+            console.error("Error adding tag:", tagError);
           }
         }
       }
@@ -231,13 +277,13 @@ export function AddLeadForm() {
         queryClient.invalidateQueries({ queryKey: ["chat-tags", tenantId] });
         queryClient.invalidateQueries({ queryKey: ["lead-tags", data.id] });
       }
-      
+
       // Trigger lead_created automation
       if (data && tenantId) {
         try {
-          await supabase.functions.invoke('trigger-automation', {
+          await supabase.functions.invoke("trigger-automation", {
             body: {
-              trigger_type: 'lead_created',
+              trigger_type: "lead_created",
               data: {
                 id: data.id,
                 lead_id: data.id,
@@ -254,10 +300,13 @@ export function AddLeadForm() {
             },
           });
         } catch (automationError) {
-          console.error('Error triggering lead_created automation:', automationError);
+          console.error(
+            "Error triggering lead_created automation:",
+            automationError,
+          );
         }
       }
-      
+
       toast({
         title: "ליד נוסף בהצלחה",
       });
@@ -293,15 +342,20 @@ export function AddLeadForm() {
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
             <div className="grid grid-cols-2 gap-4">
-              {isFieldVisible('company_name') && (
+              {isFieldVisible("company_name") && (
                 <FormField
                   control={form.control}
                   name="company_name"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel className="text-sm font-medium">{getFieldLabel('company_name', 'שם העסק')} *</FormLabel>
+                      <FormLabel className="text-sm font-medium">
+                        {getFieldLabel("company_name", "שם העסק")} *
+                      </FormLabel>
                       <FormControl>
-                        <Input {...field} className="rounded-lg border-2 h-11 px-4" />
+                        <Input
+                          {...field}
+                          className="rounded-lg border-2 h-11 px-4"
+                        />
                       </FormControl>
                       <FormMessage />
                     </FormItem>
@@ -314,9 +368,14 @@ export function AddLeadForm() {
                 name="contact_name"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel className="text-sm font-medium">{getFieldLabel('contact_name', 'שם איש קשר')}</FormLabel>
+                    <FormLabel className="text-sm font-medium">
+                      {getFieldLabel("contact_name", "שם איש קשר")}
+                    </FormLabel>
                     <FormControl>
-                      <Input {...field} className="rounded-lg border-2 h-11 px-4" />
+                      <Input
+                        {...field}
+                        className="rounded-lg border-2 h-11 px-4"
+                      />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -329,25 +388,60 @@ export function AddLeadForm() {
               name="agency_id"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel className="text-sm font-medium">{getFieldLabel('agency_id', 'סוכנות')}</FormLabel>
-                  <Popover open={agencyPopoverOpen} onOpenChange={setAgencyPopoverOpen}>
+                  <FormLabel className="text-sm font-medium">
+                    {getFieldLabel("agency_id", "סוכנות")}
+                  </FormLabel>
+                  <Popover
+                    open={agencyPopoverOpen}
+                    onOpenChange={setAgencyPopoverOpen}
+                  >
                     <PopoverTrigger asChild>
                       <FormControl>
-                        <Button variant="outline" role="combobox" className={cn("w-full justify-between rounded-lg border-2 h-11", !field.value && "text-muted-foreground")}>
-                          <span className="text-right flex-1">{field.value ? agencies?.find(a => a.id === field.value)?.name : "בחר סוכנות"}</span>
+                        <Button
+                          variant="outline"
+                          role="combobox"
+                          className={cn(
+                            "w-full justify-between rounded-lg border-2 h-11",
+                            !field.value && "text-muted-foreground",
+                          )}
+                        >
+                          <span className="text-right flex-1">
+                            {field.value
+                              ? agencies?.find((a) => a.id === field.value)
+                                  ?.name
+                              : "בחר סוכנות"}
+                          </span>
                           <ChevronsUpDown className="h-4 w-4 shrink-0 opacity-50" />
                         </Button>
                       </FormControl>
                     </PopoverTrigger>
-                    <PopoverContent className="w-full p-0 bg-background" align="end" dir="rtl">
+                    <PopoverContent
+                      className="w-full p-0 bg-background"
+                      align="end"
+                      dir="rtl"
+                    >
                       <Command>
                         <CommandInput placeholder="חפש סוכנות..." />
                         <CommandList>
                           <CommandEmpty>לא נמצאו סוכנויות</CommandEmpty>
                           <CommandGroup>
                             {agencies?.map((agency) => (
-                              <CommandItem key={agency.id} value={agency.name} onSelect={() => { field.onChange(agency.id); setAgencyPopoverOpen(false); }}>
-                                <Check className={cn("mr-2 h-4 w-4", field.value === agency.id ? "opacity-100" : "opacity-0")} />
+                              <CommandItem
+                                key={agency.id}
+                                value={agency.name}
+                                onSelect={() => {
+                                  field.onChange(agency.id);
+                                  setAgencyPopoverOpen(false);
+                                }}
+                              >
+                                <Check
+                                  className={cn(
+                                    "mr-2 h-4 w-4",
+                                    field.value === agency.id
+                                      ? "opacity-100"
+                                      : "opacity-0",
+                                  )}
+                                />
                                 {agency.name}
                               </CommandItem>
                             ))}
@@ -366,25 +460,60 @@ export function AddLeadForm() {
               name="sales_person_id"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel className="text-sm font-medium">{getFieldLabel('sales_person_id', 'איש מכירות')}</FormLabel>
-                  <Popover open={salesPersonPopoverOpen} onOpenChange={setSalesPersonPopoverOpen}>
+                  <FormLabel className="text-sm font-medium">
+                    {getFieldLabel("sales_person_id", "איש מכירות")}
+                  </FormLabel>
+                  <Popover
+                    open={salesPersonPopoverOpen}
+                    onOpenChange={setSalesPersonPopoverOpen}
+                  >
                     <PopoverTrigger asChild>
                       <FormControl>
-                        <Button variant="outline" role="combobox" className={cn("w-full justify-between rounded-lg border-2 h-11", !field.value && "text-muted-foreground")}>
-                          <span className="text-right flex-1">{field.value ? salesPeople?.find(p => p.id === field.value)?.full_name : "בחר איש מכירות"}</span>
+                        <Button
+                          variant="outline"
+                          role="combobox"
+                          className={cn(
+                            "w-full justify-between rounded-lg border-2 h-11",
+                            !field.value && "text-muted-foreground",
+                          )}
+                        >
+                          <span className="text-right flex-1">
+                            {field.value
+                              ? salesPeople?.find((p) => p.id === field.value)
+                                  ?.full_name
+                              : "בחר איש מכירות"}
+                          </span>
                           <ChevronsUpDown className="h-4 w-4 shrink-0 opacity-50" />
                         </Button>
                       </FormControl>
                     </PopoverTrigger>
-                    <PopoverContent className="w-full p-0 bg-background" align="end" dir="rtl">
+                    <PopoverContent
+                      className="w-full p-0 bg-background"
+                      align="end"
+                      dir="rtl"
+                    >
                       <Command>
                         <CommandInput placeholder="חפש איש מכירות..." />
                         <CommandList>
                           <CommandEmpty>לא נמצאו אנשי מכירות</CommandEmpty>
                           <CommandGroup>
                             {salesPeople?.map((person) => (
-                              <CommandItem key={person.id} value={person.full_name} onSelect={() => { field.onChange(person.id); setSalesPersonPopoverOpen(false); }}>
-                                <Check className={cn("mr-2 h-4 w-4", field.value === person.id ? "opacity-100" : "opacity-0")} />
+                              <CommandItem
+                                key={person.id}
+                                value={person.full_name}
+                                onSelect={() => {
+                                  field.onChange(person.id);
+                                  setSalesPersonPopoverOpen(false);
+                                }}
+                              >
+                                <Check
+                                  className={cn(
+                                    "mr-2 h-4 w-4",
+                                    field.value === person.id
+                                      ? "opacity-100"
+                                      : "opacity-0",
+                                  )}
+                                />
                                 {person.full_name}
                               </CommandItem>
                             ))}
@@ -404,9 +533,15 @@ export function AddLeadForm() {
                 name="email"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel className="text-sm font-medium">אימייל</FormLabel>
+                    <FormLabel className="text-sm font-medium">
+                      אימייל
+                    </FormLabel>
                     <FormControl>
-                      <Input type="email" {...field} className="rounded-lg border-2 h-11 px-4" />
+                      <Input
+                        type="email"
+                        {...field}
+                        className="rounded-lg border-2 h-11 px-4"
+                      />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -420,7 +555,10 @@ export function AddLeadForm() {
                   <FormItem>
                     <FormLabel className="text-sm font-medium">טלפון</FormLabel>
                     <FormControl>
-                      <Input {...field} className="rounded-lg border-2 h-11 px-4" />
+                      <Input
+                        {...field}
+                        className="rounded-lg border-2 h-11 px-4"
+                      />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -433,23 +571,38 @@ export function AddLeadForm() {
                 control={form.control}
                 name="response_status"
                 render={({ field }) => {
-                  const selectedStatus = findLeadStatus(field.value, leadStatuses);
-                  const unmatched = unmatchedResponseStatusValue(field.value, leadStatuses);
+                  const selectedStatus = findLeadStatus(
+                    field.value,
+                    leadStatuses,
+                  );
+                  const unmatched = unmatchedResponseStatusValue(
+                    field.value,
+                    leadStatuses,
+                  );
                   return (
                     <FormItem>
-                      <FormLabel className="text-sm font-medium">סטטוס תגובה</FormLabel>
-                      <Select 
-                        onValueChange={field.onChange} 
-                        value={responseStatusSelectValue(field.value, leadStatuses)}
+                      <FormLabel className="text-sm font-medium">
+                        סטטוס תגובה
+                      </FormLabel>
+                      <Select
+                        onValueChange={field.onChange}
+                        value={responseStatusSelectValue(
+                          field.value,
+                          leadStatuses,
+                        )}
                         open={responseSelectOpen}
                         onOpenChange={setResponseSelectOpen}
                       >
                         <FormControl>
-                          <SelectTrigger 
+                          <SelectTrigger
                             className="rounded-lg border-2 h-11"
-                            style={{ 
-                              backgroundColor: selectedStatus?.color || undefined,
-                              color: field.value && field.value !== "none" ? '#fff' : undefined 
+                            style={{
+                              backgroundColor:
+                                selectedStatus?.color || undefined,
+                              color:
+                                field.value && field.value !== "none"
+                                  ? "#fff"
+                                  : undefined,
                             }}
                           >
                             <SelectValue placeholder="בחר סטטוס" />
@@ -458,21 +611,26 @@ export function AddLeadForm() {
                         <SelectContent className="bg-background z-[100]">
                           <SelectItem value="none">ללא סטטוס</SelectItem>
                           {unmatched && (
-                            <SelectItem value={unmatched}>{unmatched}</SelectItem>
+                            <SelectItem value={unmatched}>
+                              {unmatched}
+                            </SelectItem>
                           )}
                           {leadStatuses.map((status) => (
-                            <SelectItem 
-                              key={status.status_key} 
+                            <SelectItem
+                              key={status.status_key}
                               value={status.status_key}
-                              style={{ backgroundColor: status.color, color: '#fff' }}
+                              style={{
+                                backgroundColor: status.color,
+                                color: "#fff",
+                              }}
                             >
                               {status.label}
                             </SelectItem>
                           ))}
                           <div className="border-t mt-1 pt-1">
-                            <ManageLeadStatusesDialog 
+                            <ManageLeadStatusesDialog
                               trigger={
-                                <button 
+                                <button
                                   type="button"
                                   className="w-full flex items-center gap-2 px-2 py-1.5 text-sm hover:bg-muted rounded cursor-pointer"
                                 >
@@ -495,22 +653,27 @@ export function AddLeadForm() {
                 control={form.control}
                 name="status"
                 render={({ field }) => {
-                  const selectedStage = pipelineStages.find(s => s.stage_key === field.value);
+                  const selectedStage = pipelineStages.find(
+                    (s) => s.stage_key === field.value,
+                  );
                   return (
                     <FormItem>
-                      <FormLabel className="text-sm font-medium">שלב במשפך</FormLabel>
-                      <Select 
-                        onValueChange={field.onChange} 
+                      <FormLabel className="text-sm font-medium">
+                        שלב במשפך
+                      </FormLabel>
+                      <Select
+                        onValueChange={field.onChange}
                         defaultValue={field.value}
                         open={stageSelectOpen}
                         onOpenChange={setStageSelectOpen}
                       >
                         <FormControl>
-                          <SelectTrigger 
+                          <SelectTrigger
                             className="rounded-lg border-2 h-11"
-                            style={{ 
-                              backgroundColor: selectedStage?.color || undefined,
-                              color: field.value ? '#fff' : undefined 
+                            style={{
+                              backgroundColor:
+                                selectedStage?.color || undefined,
+                              color: field.value ? "#fff" : undefined,
                             }}
                           >
                             <SelectValue placeholder="בחר שלב" />
@@ -518,18 +681,21 @@ export function AddLeadForm() {
                         </FormControl>
                         <SelectContent className="bg-background z-[100]">
                           {pipelineStages.map((stage) => (
-                            <SelectItem 
-                              key={stage.stage_key} 
+                            <SelectItem
+                              key={stage.stage_key}
                               value={stage.stage_key}
-                              style={{ backgroundColor: stage.color, color: '#fff' }}
+                              style={{
+                                backgroundColor: stage.color,
+                                color: "#fff",
+                              }}
                             >
                               {stage.label}
                             </SelectItem>
                           ))}
                           <div className="border-t mt-1 pt-1">
-                            <ManagePipelineStagesDialog 
+                            <ManagePipelineStagesDialog
                               trigger={
-                                <button 
+                                <button
                                   type="button"
                                   className="w-full flex items-center gap-2 px-2 py-1.5 text-sm hover:bg-muted rounded cursor-pointer"
                                 >
@@ -553,26 +719,33 @@ export function AddLeadForm() {
             <div className="space-y-2">
               <FormLabel className="text-sm font-medium">תגיות</FormLabel>
               <div className="flex flex-wrap gap-2 items-center">
-                {selectedTags.length > 0 && allTags.filter(t => selectedTags.includes(t.id)).map((tag) => (
-                  <Badge
-                    key={tag.id}
-                    variant="outline"
-                    className="cursor-pointer"
-                    style={{ 
-                      backgroundColor: `${tag.color}20`,
-                      borderColor: tag.color,
-                      color: tag.color 
-                    }}
-                    onClick={() => setSelectedTags(prev => prev.filter(id => id !== tag.id))}
-                  >
-                    {tag.name} ×
-                  </Badge>
-                ))}
-                <Popover 
-                  open={isTagsPopoverOpen} 
+                {selectedTags.length > 0 &&
+                  allTags
+                    .filter((t) => selectedTags.includes(t.id))
+                    .map((tag) => (
+                      <Badge
+                        key={tag.id}
+                        variant="outline"
+                        className="cursor-pointer"
+                        style={{
+                          backgroundColor: `${tag.color}20`,
+                          borderColor: tag.color,
+                          color: tag.color,
+                        }}
+                        onClick={() =>
+                          setSelectedTags((prev) =>
+                            prev.filter((id) => id !== tag.id),
+                          )
+                        }
+                      >
+                        {tag.name} ×
+                      </Badge>
+                    ))}
+                <Popover
+                  open={isTagsPopoverOpen}
                   onOpenChange={(open) => {
                     setIsTagsPopoverOpen(open);
-                    if (!open) setTagSearchQuery('');
+                    if (!open) setTagSearchQuery("");
                   }}
                 >
                   <PopoverTrigger asChild>
@@ -581,7 +754,11 @@ export function AddLeadForm() {
                       הוסף תגית
                     </Button>
                   </PopoverTrigger>
-                  <PopoverContent className="w-64 p-2 bg-background z-[100]" align="start" dir="rtl">
+                  <PopoverContent
+                    className="w-64 p-2 bg-background z-[100]"
+                    align="start"
+                    dir="rtl"
+                  >
                     {allTags.length > 3 && (
                       <div className="relative mb-2">
                         <Search className="absolute right-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
@@ -594,7 +771,7 @@ export function AddLeadForm() {
                         />
                       </div>
                     )}
-                    <div 
+                    <div
                       className="space-y-1 max-h-[250px] overflow-y-auto"
                       onWheel={(e) => e.stopPropagation()}
                     >
@@ -604,7 +781,11 @@ export function AddLeadForm() {
                         </div>
                       ) : (
                         allTags
-                          .filter(tag => tag.name.toLowerCase().includes(tagSearchQuery.toLowerCase()))
+                          .filter((tag) =>
+                            tag.name
+                              .toLowerCase()
+                              .includes(tagSearchQuery.toLowerCase()),
+                          )
                           .map((tag) => {
                             const isSelected = selectedTags.includes(tag.id);
                             return (
@@ -612,10 +793,10 @@ export function AddLeadForm() {
                                 key={tag.id}
                                 className="flex items-center gap-2 p-2 rounded-md hover:bg-muted cursor-pointer"
                                 onClick={() => {
-                                  setSelectedTags(prev => 
-                                    isSelected 
-                                      ? prev.filter(id => id !== tag.id)
-                                      : [...prev, tag.id]
+                                  setSelectedTags((prev) =>
+                                    isSelected
+                                      ? prev.filter((id) => id !== tag.id)
+                                      : [...prev, tag.id],
                                   );
                                 }}
                               >
@@ -624,7 +805,9 @@ export function AddLeadForm() {
                                   className="w-3 h-3 rounded-full flex-shrink-0"
                                   style={{ backgroundColor: tag.color }}
                                 />
-                                <span className="text-sm flex-1">{tag.name}</span>
+                                <span className="text-sm flex-1">
+                                  {tag.name}
+                                </span>
                               </div>
                             );
                           })
@@ -655,15 +838,22 @@ export function AddLeadForm() {
                 name="products"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel className="text-sm font-medium">מוצרים/שירותים</FormLabel>
-                    <Select 
+                    <FormLabel className="text-sm font-medium">
+                      מוצרים/שירותים
+                    </FormLabel>
+                    <Select
                       onValueChange={(value) => {
                         field.onChange(value);
-                        const selectedProduct = products?.find(p => p.id === value);
+                        const selectedProduct = products?.find(
+                          (p) => p.id === value,
+                        );
                         if (selectedProduct) {
-                          form.setValue("estimated_deal_value", selectedProduct.price.toString());
+                          form.setValue(
+                            "estimated_deal_value",
+                            selectedProduct.price.toString(),
+                          );
                         }
-                      }} 
+                      }}
                       defaultValue={field.value}
                     >
                       <FormControl>
@@ -689,9 +879,16 @@ export function AddLeadForm() {
                 name="estimated_deal_value"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel className="text-sm font-medium">שווי שירות (₪)</FormLabel>
+                    <FormLabel className="text-sm font-medium">
+                      שווי שירות (₪)
+                    </FormLabel>
                     <FormControl>
-                      <Input type="number" {...field} placeholder="0" className="rounded-lg border-2 h-11 px-4" />
+                      <Input
+                        type="number"
+                        {...field}
+                        placeholder="0"
+                        className="rounded-lg border-2 h-11 px-4"
+                      />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -705,9 +902,16 @@ export function AddLeadForm() {
                 name="monthly_budget"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel className="text-sm font-medium">{getFieldLabel('monthly_budget', 'תקציב')} (₪)</FormLabel>
+                    <FormLabel className="text-sm font-medium">
+                      {getFieldLabel("monthly_budget", "תקציב")} (₪)
+                    </FormLabel>
                     <FormControl>
-                      <Input type="number" {...field} placeholder="0" className="rounded-lg border-2 h-11 px-4" />
+                      <Input
+                        type="number"
+                        {...field}
+                        placeholder="0"
+                        className="rounded-lg border-2 h-11 px-4"
+                      />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -720,7 +924,9 @@ export function AddLeadForm() {
               name="created_at"
               render={({ field }) => (
                 <FormItem className="flex flex-col">
-                  <FormLabel className="text-sm font-medium">תאריך יצירת ליד</FormLabel>
+                  <FormLabel className="text-sm font-medium">
+                    תאריך יצירת ליד
+                  </FormLabel>
                   <Popover>
                     <PopoverTrigger asChild>
                       <FormControl>
@@ -728,7 +934,7 @@ export function AddLeadForm() {
                           variant={"outline"}
                           className={cn(
                             "w-full pl-3 text-right font-normal rounded-lg border-2 h-11",
-                            !field.value && "text-muted-foreground"
+                            !field.value && "text-muted-foreground",
                           )}
                         >
                           {field.value ? (
@@ -740,7 +946,10 @@ export function AddLeadForm() {
                         </Button>
                       </FormControl>
                     </PopoverTrigger>
-                    <PopoverContent className="w-auto p-0 bg-background z-50" align="start">
+                    <PopoverContent
+                      className="w-auto p-0 bg-background z-50"
+                      align="start"
+                    >
                       <Calendar
                         mode="single"
                         selected={field.value}
@@ -764,9 +973,15 @@ export function AddLeadForm() {
                     <FormLabel className="text-sm font-medium">
                       {getFieldLabel("source", "מקור הליד")}
                     </FormLabel>
-                    <Select onValueChange={field.onChange} value={field.value || "paid_ads"}>
+                    <Select
+                      onValueChange={field.onChange}
+                      value={field.value || "paid_ads"}
+                    >
                       <FormControl>
-                        <SelectTrigger className="rounded-lg border-2 h-11" dir="rtl">
+                        <SelectTrigger
+                          className="rounded-lg border-2 h-11"
+                          dir="rtl"
+                        >
                           <SelectValue placeholder="FB" />
                         </SelectTrigger>
                       </FormControl>
@@ -810,9 +1025,14 @@ export function AddLeadForm() {
               name="industry"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel className="text-sm font-medium">תחום עיסוק</FormLabel>
+                  <FormLabel className="text-sm font-medium">
+                    תחום עיסוק
+                  </FormLabel>
                   <FormControl>
-                    <Input {...field} className="rounded-lg border-2 h-11 px-4" />
+                    <Input
+                      {...field}
+                      className="rounded-lg border-2 h-11 px-4"
+                    />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -824,9 +1044,15 @@ export function AddLeadForm() {
               name="folder_link"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel className="text-sm font-medium">קישור לתיקייה</FormLabel>
+                  <FormLabel className="text-sm font-medium">
+                    קישור לתיקייה
+                  </FormLabel>
                   <FormControl>
-                    <Input {...field} placeholder="https://..." className="rounded-lg border-2 h-11 px-4" />
+                    <Input
+                      {...field}
+                      placeholder="https://..."
+                      className="rounded-lg border-2 h-11 px-4"
+                    />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -840,14 +1066,22 @@ export function AddLeadForm() {
                 <FormItem>
                   <FormLabel className="text-sm font-medium">הערות</FormLabel>
                   <FormControl>
-                    <Textarea {...field} rows={3} className="rounded-lg border-2 px-4 py-3" />
+                    <Textarea
+                      {...field}
+                      rows={3}
+                      className="rounded-lg border-2 px-4 py-3"
+                    />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
               )}
             />
 
-            <Button type="submit" disabled={createMutation.isPending} className="w-full">
+            <Button
+              type="submit"
+              disabled={createMutation.isPending}
+              className="w-full"
+            >
               {createMutation.isPending ? "מוסיף..." : "הוסף ליד"}
             </Button>
           </form>

@@ -16,24 +16,28 @@ export interface LeadStatus {
 export function useLeadStatuses() {
   const { tenantId } = useCurrentTenant();
 
-  const { data: statuses = [], isLoading, refetch } = useQuery({
+  const {
+    data: statuses = [],
+    isLoading,
+    refetch,
+  } = useQuery({
     queryKey: ["lead-statuses", tenantId],
     queryFn: async () => {
       if (!tenantId) return [];
-      
+
       const { data, error } = await supabase
         .from("lead_statuses")
         .select("*")
         .eq("tenant_id", tenantId)
         .order("sort_order");
-      
+
       if (error) throw error;
       return data as LeadStatus[];
     },
     enabled: !!tenantId,
   });
 
-  const activeStatuses = statuses.filter(s => s.is_active);
+  const activeStatuses = statuses.filter((s) => s.is_active);
 
   return { statuses, activeStatuses, isLoading, refetch };
 }
@@ -43,12 +47,24 @@ export function useLeadStatusMutations() {
   const { tenantId } = useCurrentTenant();
 
   const updateStatus = useMutation({
-    mutationFn: async ({ id, label, color, sort_order, is_active }: Partial<LeadStatus> & { id: string }) => {
+    mutationFn: async ({
+      id,
+      label,
+      color,
+      sort_order,
+      is_active,
+    }: Partial<LeadStatus> & { id: string }) => {
       const { error } = await supabase
         .from("lead_statuses")
-        .update({ label, color, sort_order, is_active, updated_at: new Date().toISOString() })
+        .update({
+          label,
+          color,
+          sort_order,
+          is_active,
+          updated_at: new Date().toISOString(),
+        })
         .eq("id", id);
-      
+
       if (error) throw error;
     },
     onSuccess: () => {
@@ -74,16 +90,14 @@ export function useLeadStatusMutations() {
       const maxOrder = existing?.[0]?.sort_order ?? 0;
       const status_key = `custom_${Date.now()}`;
 
-      const { error } = await supabase
-        .from("lead_statuses")
-        .insert({
-          tenant_id: tenantId,
-          status_key,
-          label,
-          color,
-          sort_order: maxOrder + 1,
-        });
-      
+      const { error } = await supabase.from("lead_statuses").insert({
+        tenant_id: tenantId,
+        status_key,
+        label,
+        color,
+        sort_order: maxOrder + 1,
+      });
+
       if (error) throw error;
     },
     onSuccess: () => {
@@ -101,7 +115,7 @@ export function useLeadStatusMutations() {
         .from("lead_statuses")
         .delete()
         .eq("id", id);
-      
+
       if (error) throw error;
     },
     onSuccess: () => {
@@ -120,33 +134,45 @@ export function useLeadStatusMutations() {
           .from("lead_statuses")
           .update({ sort_order: update.sort_order })
           .eq("id", update.id);
-        
+
         if (error) throw error;
       }
     },
     onMutate: async (updates) => {
       // Cancel active queries to prevent overwriting optimistic update
-      await queryClient.cancelQueries({ queryKey: ["lead-statuses", tenantId] });
-      
+      await queryClient.cancelQueries({
+        queryKey: ["lead-statuses", tenantId],
+      });
+
       // Save previous state for rollback
-      const previousStatuses = queryClient.getQueryData<LeadStatus[]>(["lead-statuses", tenantId]);
-      
+      const previousStatuses = queryClient.getQueryData<LeadStatus[]>([
+        "lead-statuses",
+        tenantId,
+      ]);
+
       // Optimistically update the cache
       if (previousStatuses) {
-        const newStatuses = [...previousStatuses].map(status => {
-          const update = updates.find(u => u.id === status.id);
-          return update ? { ...status, sort_order: update.sort_order } : status;
-        }).sort((a, b) => a.sort_order - b.sort_order);
-        
+        const newStatuses = [...previousStatuses]
+          .map((status) => {
+            const update = updates.find((u) => u.id === status.id);
+            return update
+              ? { ...status, sort_order: update.sort_order }
+              : status;
+          })
+          .sort((a, b) => a.sort_order - b.sort_order);
+
         queryClient.setQueryData(["lead-statuses", tenantId], newStatuses);
       }
-      
+
       return { previousStatuses };
     },
     onError: (err, updates, context) => {
       // Rollback on error
       if (context?.previousStatuses) {
-        queryClient.setQueryData(["lead-statuses", tenantId], context.previousStatuses);
+        queryClient.setQueryData(
+          ["lead-statuses", tenantId],
+          context.previousStatuses,
+        );
       }
       toast.error("שגיאה בעדכון סדר הסטטוסים");
     },

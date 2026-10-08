@@ -8,8 +8,20 @@ import { Textarea } from "@/components/ui/textarea";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from "@/components/ui/dialog";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { useCurrentTenant } from "@/hooks/useCurrentTenant";
 import { toast } from "sonner";
 import { Plus, Edit, Trash2, Library, Shield, Zap } from "lucide-react";
@@ -67,7 +79,9 @@ export function ToolRegistryTab() {
     mutationFn: async (tool: AgentTool) => {
       let parsedSchema = tool.input_schema;
       try {
-        parsedSchema = schemaText ? JSON.parse(schemaText) : { type: "object", properties: {} };
+        parsedSchema = schemaText
+          ? JSON.parse(schemaText)
+          : { type: "object", properties: {} };
       } catch {
         throw new Error("Input schema אינו JSON תקין");
       }
@@ -79,7 +93,10 @@ export function ToolRegistryTab() {
         display_name: tool.display_name || tool.name,
       };
       if (tool.id) {
-        const { error } = await supabase.from("agent_tools").update(payload).eq("id", tool.id);
+        const { error } = await supabase
+          .from("agent_tools")
+          .update(payload)
+          .eq("id", tool.id);
         if (error) throw error;
       } else {
         const { error } = await supabase.from("agent_tools").insert(payload);
@@ -96,7 +113,10 @@ export function ToolRegistryTab() {
 
   const remove = useMutation({
     mutationFn: async (id: string) => {
-      const { error } = await supabase.from("agent_tools").delete().eq("id", id);
+      const { error } = await supabase
+        .from("agent_tools")
+        .delete()
+        .eq("id", id);
       if (error) throw error;
     },
     onSuccess: () => {
@@ -108,16 +128,26 @@ export function ToolRegistryTab() {
 
   const toggleEnabled = useMutation({
     mutationFn: async ({ id, enabled }: { id: string; enabled: boolean }) => {
-      const { error } = await supabase.from("agent_tools").update({ enabled }).eq("id", id);
+      const { error } = await supabase
+        .from("agent_tools")
+        .update({ enabled })
+        .eq("id", id);
       if (error) throw error;
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["agent-tools-registry", tenantId] }),
+    onSuccess: () =>
+      qc.invalidateQueries({ queryKey: ["agent-tools-registry", tenantId] }),
   });
 
   const openEditor = (tool?: AgentTool) => {
     const t = tool ? { ...tool } : { ...EMPTY };
     setEditing(t);
-    setSchemaText(JSON.stringify(t.input_schema ?? { type: "object", properties: {} }, null, 2));
+    setSchemaText(
+      JSON.stringify(
+        t.input_schema ?? { type: "object", properties: {} },
+        null,
+        2,
+      ),
+    );
   };
 
   const byCategory: Record<string, AgentTool[]> = {};
@@ -140,7 +170,8 @@ export function ToolRegistryTab() {
       </div>
 
       <p className="text-xs text-muted-foreground">
-        כל הכלים שזמינים לסוכנים. כלי עם <Shield className="inline h-3 w-3 mx-1" /> ידרוש אישור אנושי לפני ביצוע.
+        כל הכלים שזמינים לסוכנים. כלי עם{" "}
+        <Shield className="inline h-3 w-3 mx-1" /> ידרוש אישור אנושי לפני ביצוע.
         ה-<code>handler_ref</code> מציין איזה Edge Function יקבל את הקריאה.
       </p>
 
@@ -153,14 +184,23 @@ export function ToolRegistryTab() {
       ) : (
         Object.entries(byCategory).map(([cat, list]) => (
           <Card key={cat} className="p-3">
-            <h4 className="text-sm font-medium mb-2 text-muted-foreground">{cat}</h4>
+            <h4 className="text-sm font-medium mb-2 text-muted-foreground">
+              {cat}
+            </h4>
             <div className="space-y-2">
               {list.map((t) => (
-                <div key={t.id} className="flex items-center gap-2 p-2 rounded border">
+                <div
+                  key={t.id}
+                  className="flex items-center gap-2 p-2 rounded border"
+                >
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2">
-                      <code className="text-xs bg-muted px-1.5 py-0.5 rounded">{t.name}</code>
-                      <span className="text-sm font-medium truncate">{t.display_name || t.name}</span>
+                      <code className="text-xs bg-muted px-1.5 py-0.5 rounded">
+                        {t.name}
+                      </code>
+                      <span className="text-sm font-medium truncate">
+                        {t.display_name || t.name}
+                      </span>
                       {t.requires_approval && (
                         <Badge variant="outline" className="gap-1">
                           <Shield className="h-3 w-3" />
@@ -171,27 +211,44 @@ export function ToolRegistryTab() {
                         <Zap className="h-3 w-3" />
                         {t.handler_kind}
                       </Badge>
-                      {t.tenant_id === null && <Badge variant="outline">גלובלי</Badge>}
+                      {t.tenant_id === null && (
+                        <Badge variant="outline">גלובלי</Badge>
+                      )}
                     </div>
                     {t.description && (
-                      <p className="text-xs text-muted-foreground mt-1 truncate">{t.description}</p>
+                      <p className="text-xs text-muted-foreground mt-1 truncate">
+                        {t.description}
+                      </p>
                     )}
                     {t.handler_ref && (
-                      <code className="text-[10px] text-muted-foreground">→ {t.handler_ref}</code>
+                      <code className="text-[10px] text-muted-foreground">
+                        → {t.handler_ref}
+                      </code>
                     )}
                   </div>
                   <Switch
                     checked={t.enabled}
-                    onCheckedChange={(v) => t.id && toggleEnabled.mutate({ id: t.id, enabled: v })}
+                    onCheckedChange={(v) =>
+                      t.id && toggleEnabled.mutate({ id: t.id, enabled: v })
+                    }
                     disabled={t.tenant_id === null}
                   />
-                  <Button size="sm" variant="ghost" onClick={() => openEditor(t)} disabled={t.tenant_id === null}>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    onClick={() => openEditor(t)}
+                    disabled={t.tenant_id === null}
+                  >
                     <Edit className="h-4 w-4" />
                   </Button>
                   <Button
                     size="sm"
                     variant="ghost"
-                    onClick={() => t.id && confirm(`למחוק "${t.name}"?`) && remove.mutate(t.id)}
+                    onClick={() =>
+                      t.id &&
+                      confirm(`למחוק "${t.name}"?`) &&
+                      remove.mutate(t.id)
+                    }
                     disabled={t.tenant_id === null}
                   >
                     <Trash2 className="h-4 w-4 text-destructive" />
@@ -215,7 +272,9 @@ export function ToolRegistryTab() {
                   <Label>שם (snake_case)</Label>
                   <Input
                     value={editing.name}
-                    onChange={(e) => setEditing({ ...editing, name: e.target.value })}
+                    onChange={(e) =>
+                      setEditing({ ...editing, name: e.target.value })
+                    }
                     placeholder="send_email"
                   />
                 </div>
@@ -223,7 +282,9 @@ export function ToolRegistryTab() {
                   <Label>תווית (לתצוגה)</Label>
                   <Input
                     value={editing.display_name ?? ""}
-                    onChange={(e) => setEditing({ ...editing, display_name: e.target.value })}
+                    onChange={(e) =>
+                      setEditing({ ...editing, display_name: e.target.value })
+                    }
                     placeholder="שליחת אימייל"
                   />
                 </div>
@@ -232,7 +293,9 @@ export function ToolRegistryTab() {
                 <Label>תיאור (לסוכן)</Label>
                 <Textarea
                   value={editing.description ?? ""}
-                  onChange={(e) => setEditing({ ...editing, description: e.target.value })}
+                  onChange={(e) =>
+                    setEditing({ ...editing, description: e.target.value })
+                  }
                   rows={2}
                   placeholder="מה הכלי עושה ומתי להשתמש בו..."
                 />
@@ -242,16 +305,22 @@ export function ToolRegistryTab() {
                   <Label>קטגוריה</Label>
                   <Input
                     value={editing.category ?? ""}
-                    onChange={(e) => setEditing({ ...editing, category: e.target.value })}
+                    onChange={(e) =>
+                      setEditing({ ...editing, category: e.target.value })
+                    }
                   />
                 </div>
                 <div>
                   <Label>סוג מבצע</Label>
                   <Select
                     value={editing.handler_kind}
-                    onValueChange={(v: any) => setEditing({ ...editing, handler_kind: v })}
+                    onValueChange={(v: any) =>
+                      setEditing({ ...editing, handler_kind: v })
+                    }
                   >
-                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="edge">Edge Function</SelectItem>
                       <SelectItem value="internal">Internal</SelectItem>
@@ -263,7 +332,9 @@ export function ToolRegistryTab() {
                   <Label>שם הפונקציה</Label>
                   <Input
                     value={editing.handler_ref ?? ""}
-                    onChange={(e) => setEditing({ ...editing, handler_ref: e.target.value })}
+                    onChange={(e) =>
+                      setEditing({ ...editing, handler_ref: e.target.value })
+                    }
                     placeholder="send-email"
                   />
                 </div>
@@ -281,7 +352,9 @@ export function ToolRegistryTab() {
                 <label className="flex items-center gap-2 text-sm cursor-pointer">
                   <Switch
                     checked={editing.requires_approval}
-                    onCheckedChange={(v) => setEditing({ ...editing, requires_approval: v })}
+                    onCheckedChange={(v) =>
+                      setEditing({ ...editing, requires_approval: v })
+                    }
                   />
                   <Shield className="h-4 w-4" />
                   דורש אישור אנושי
@@ -289,7 +362,9 @@ export function ToolRegistryTab() {
                 <label className="flex items-center gap-2 text-sm cursor-pointer">
                   <Switch
                     checked={editing.enabled}
-                    onCheckedChange={(v) => setEditing({ ...editing, enabled: v })}
+                    onCheckedChange={(v) =>
+                      setEditing({ ...editing, enabled: v })
+                    }
                   />
                   פעיל
                 </label>
@@ -297,8 +372,13 @@ export function ToolRegistryTab() {
             </div>
           )}
           <DialogFooter>
-            <Button variant="outline" onClick={() => setEditing(null)}>ביטול</Button>
-            <Button onClick={() => editing && save.mutate(editing)} disabled={save.isPending}>
+            <Button variant="outline" onClick={() => setEditing(null)}>
+              ביטול
+            </Button>
+            <Button
+              onClick={() => editing && save.mutate(editing)}
+              disabled={save.isPending}
+            >
               {save.isPending ? "שומר..." : "שמור"}
             </Button>
           </DialogFooter>

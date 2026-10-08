@@ -44,7 +44,10 @@ export async function syncProfileToTeamMember(userId: string): Promise<void> {
         patch.full_name = profile.full_name;
       }
       if (Object.keys(patch).length > 0) {
-        await supabase.from("campaigners").update(patch).eq("id", campaigner.id);
+        await supabase
+          .from("campaigners")
+          .update(patch)
+          .eq("id", campaigner.id);
       }
     }
   }
@@ -98,7 +101,11 @@ export async function syncTeamMemberToProfile(
       .eq("campaigner_id", campaignerId)
       .maybeSingle();
 
-    if (campaigner && profile && (!profile.full_name || profile.full_name === "")) {
+    if (
+      campaigner &&
+      profile &&
+      (!profile.full_name || profile.full_name === "")
+    ) {
       if (campaigner.full_name) {
         await supabase
           .from("profiles")

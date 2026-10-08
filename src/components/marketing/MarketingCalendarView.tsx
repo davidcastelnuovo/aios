@@ -37,7 +37,11 @@ export function MarketingCalendarView({ pipelineId, onSelectItem }: Props) {
               onClick={() => onSelectItem?.(item.id)}
             >
               {imageUrl && (
-                <img src={imageUrl} alt={item.title ?? ""} className="h-40 w-full object-cover" />
+                <img
+                  src={imageUrl}
+                  alt={item.title ?? ""}
+                  className="h-40 w-full object-cover"
+                />
               )}
               <div className="p-3">
                 <div className="mb-1 flex items-center gap-2 text-xs text-muted-foreground">

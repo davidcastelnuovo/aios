@@ -3,7 +3,8 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+  "Access-Control-Allow-Headers":
+    "authorization, x-client-info, apikey, content-type",
 };
 
 interface DuplicateGroup {
@@ -47,11 +48,13 @@ serve(async (req: Request) => {
       throw new Error("tenant_id is required");
     }
 
-
     // Step 1: Find all duplicate phone groups
-    const { data: duplicatePhones, error: dupError } = await supabase.rpc('get_duplicate_lead_phones', {
-      p_tenant_id: tenant_id
-    });
+    const { data: duplicatePhones, error: dupError } = await supabase.rpc(
+      "get_duplicate_lead_phones",
+      {
+        p_tenant_id: tenant_id,
+      },
+    );
 
     if (dupError) {
       // If RPC doesn't exist, do it manually
@@ -61,35 +64,37 @@ serve(async (req: Request) => {
     let allLeads: any[] = [];
     let from = 0;
     const pageSize = 1000;
-    
+
     while (true) {
       const { data: pageLeads, error: pageError } = await supabase
-        .from('leads')
-        .select('id, company_name, phone, status, response_status, created_at, updated_at')
-        .eq('tenant_id', tenant_id)
-        .not('phone', 'is', null)
-        .neq('phone', '')
+        .from("leads")
+        .select(
+          "id, company_name, phone, status, response_status, created_at, updated_at",
+        )
+        .eq("tenant_id", tenant_id)
+        .not("phone", "is", null)
+        .neq("phone", "")
         .range(from, from + pageSize - 1);
-      
+
       if (pageError) throw pageError;
-      
+
       if (!pageLeads || pageLeads.length === 0) break;
-      
+
       allLeads = [...allLeads, ...pageLeads];
-      
+
       if (pageLeads.length < pageSize) break;
       from += pageSize;
     }
-    
+
     const leadsError = null;
 
     if (leadsError) throw leadsError;
 
     // Normalize phones and group duplicates
     const phoneGroups: Map<string, any[]> = new Map();
-    
+
     for (const lead of allLeads || []) {
-      const normalized = lead.phone?.replace(/[^0-9]/g, '') || '';
+      const normalized = lead.phone?.replace(/[^0-9]/g, "") || "";
       if (normalized.length >= 9 && normalized.length <= 15) {
         if (!phoneGroups.has(normalized)) {
           phoneGroups.set(normalized, []);
@@ -100,19 +105,32 @@ serve(async (req: Request) => {
 
     // Filter to only groups with duplicates
     const duplicateGroups: DuplicateGroup[] = [];
-    
+
     for (const [phone, leads] of phoneGroups) {
       if (leads.length > 1) {
         // Get additional info for each lead
         const enrichedLeads: LeadInfo[] = [];
-        
+
         for (const lead of leads) {
-          const [updatesRes, tasksRes, messagesRes, tagsRes] = await Promise.all([
-            supabase.from('lead_updates').select('id', { count: 'exact', head: true }).eq('lead_id', lead.id),
-            supabase.from('tasks').select('id', { count: 'exact', head: true }).eq('lead_id', lead.id),
-            supabase.from('chat_messages').select('id', { count: 'exact', head: true }).eq('lead_id', lead.id),
-            supabase.from('chat_contact_tags').select('id', { count: 'exact', head: true }).eq('lead_id', lead.id),
-          ]);
+          const [updatesRes, tasksRes, messagesRes, tagsRes] =
+            await Promise.all([
+              supabase
+                .from("lead_updates")
+                .select("id", { count: "exact", head: true })
+                .eq("lead_id", lead.id),
+              supabase
+                .from("tasks")
+                .select("id", { count: "exact", head: true })
+                .eq("lead_id", lead.id),
+              supabase
+                .from("chat_messages")
+                .select("id", { count: "exact", head: true })
+                .eq("lead_id", lead.id),
+              supabase
+                .from("chat_contact_tags")
+                .select("id", { count: "exact", head: true })
+                .eq("lead_id", lead.id),
+            ]);
 
           enrichedLeads.push({
             id: lead.id,
@@ -135,7 +153,6 @@ serve(async (req: Request) => {
       }
     }
 
-
     const results = {
       groups_processed: 0,
       leads_deleted: 0,
@@ -149,7 +166,6 @@ serve(async (req: Request) => {
 
     // Process each duplicate group
     for (const group of duplicateGroups) {
-
       // Sort leads to find master:
       // 1. Has updates/tasks/messages (more is better)
       // 2. Has specific status (not default)
@@ -162,20 +178,24 @@ serve(async (req: Request) => {
         if (aActivity !== bActivity) return bActivity - aActivity;
 
         // Has specific response status
-        const aHasStatus = a.response_status && !a.response_status.startsWith('custom_') ? 1 : 0;
-        const bHasStatus = b.response_status && !b.response_status.startsWith('custom_') ? 1 : 0;
+        const aHasStatus =
+          a.response_status && !a.response_status.startsWith("custom_") ? 1 : 0;
+        const bHasStatus =
+          b.response_status && !b.response_status.startsWith("custom_") ? 1 : 0;
         if (aHasStatus !== bHasStatus) return bHasStatus - aHasStatus;
 
         // More tags
         if (a.tags_count !== b.tags_count) return b.tags_count - a.tags_count;
 
         // Oldest
-        return new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
+        return (
+          new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
+        );
       });
 
       const master = sortedLeads[0];
       const duplicates = sortedLeads.slice(1);
-      const duplicateIds = duplicates.map(d => d.id);
+      const duplicateIds = duplicates.map((d) => d.id);
 
       const groupResult = {
         phone: group.normalized_phone,
@@ -189,23 +209,25 @@ serve(async (req: Request) => {
         // Transfer tags from duplicates to master (avoid duplicates)
         for (const dupId of duplicateIds) {
           const { data: dupTags } = await supabase
-            .from('chat_contact_tags')
-            .select('tag_id, tenant_id, user_id')
-            .eq('lead_id', dupId);
+            .from("chat_contact_tags")
+            .select("tag_id, tenant_id, user_id")
+            .eq("lead_id", dupId);
 
           if (dupTags && dupTags.length > 0) {
             // Get existing master tags
             const { data: masterTags } = await supabase
-              .from('chat_contact_tags')
-              .select('tag_id')
-              .eq('lead_id', master.id);
+              .from("chat_contact_tags")
+              .select("tag_id")
+              .eq("lead_id", master.id);
 
-            const existingTagIds = new Set((masterTags || []).map(t => t.tag_id));
+            const existingTagIds = new Set(
+              (masterTags || []).map((t) => t.tag_id),
+            );
 
             for (const tag of dupTags) {
               if (!existingTagIds.has(tag.tag_id)) {
                 const { error: insertError } = await supabase
-                  .from('chat_contact_tags')
+                  .from("chat_contact_tags")
                   .insert({
                     tag_id: tag.tag_id,
                     lead_id: master.id,
@@ -215,102 +237,130 @@ serve(async (req: Request) => {
 
                 if (!insertError) {
                   results.tags_transferred++;
-                  groupResult.actions.push(`Transferred tag ${tag.tag_id} to master`);
+                  groupResult.actions.push(
+                    `Transferred tag ${tag.tag_id} to master`,
+                  );
                 }
               }
             }
 
             // Delete original tags from duplicate
-            await supabase.from('chat_contact_tags').delete().eq('lead_id', dupId);
+            await supabase
+              .from("chat_contact_tags")
+              .delete()
+              .eq("lead_id", dupId);
           }
         }
 
         // Transfer lead_updates
         const { data: updatesToTransfer } = await supabase
-          .from('lead_updates')
+          .from("lead_updates")
           .update({ lead_id: master.id })
-          .in('lead_id', duplicateIds)
+          .in("lead_id", duplicateIds)
           .select();
 
         if (updatesToTransfer) {
           results.updates_transferred += updatesToTransfer.length;
-          groupResult.actions.push(`Transferred ${updatesToTransfer.length} updates`);
+          groupResult.actions.push(
+            `Transferred ${updatesToTransfer.length} updates`,
+          );
         }
 
         // Transfer tasks
         const { data: tasksToTransfer } = await supabase
-          .from('tasks')
+          .from("tasks")
           .update({ lead_id: master.id })
-          .in('lead_id', duplicateIds)
+          .in("lead_id", duplicateIds)
           .select();
 
         if (tasksToTransfer) {
           results.tasks_transferred += tasksToTransfer.length;
-          groupResult.actions.push(`Transferred ${tasksToTransfer.length} tasks`);
+          groupResult.actions.push(
+            `Transferred ${tasksToTransfer.length} tasks`,
+          );
         }
 
         // Transfer chat_messages
         const { data: messagesToTransfer } = await supabase
-          .from('chat_messages')
+          .from("chat_messages")
           .update({ lead_id: master.id })
-          .in('lead_id', duplicateIds)
+          .in("lead_id", duplicateIds)
           .select();
 
         if (messagesToTransfer) {
           results.messages_transferred += messagesToTransfer.length;
-          groupResult.actions.push(`Transferred ${messagesToTransfer.length} messages`);
+          groupResult.actions.push(
+            `Transferred ${messagesToTransfer.length} messages`,
+          );
         }
 
         // Update master status if needed
-        const bestStatus = duplicates.find(d => d.response_status && !d.response_status.startsWith('custom_'));
-        if (bestStatus && (!master.response_status || master.response_status.startsWith('custom_'))) {
+        const bestStatus = duplicates.find(
+          (d) => d.response_status && !d.response_status.startsWith("custom_"),
+        );
+        if (
+          bestStatus &&
+          (!master.response_status ||
+            master.response_status.startsWith("custom_"))
+        ) {
           await supabase
-            .from('leads')
+            .from("leads")
             .update({ response_status: bestStatus.response_status })
-            .eq('id', master.id);
+            .eq("id", master.id);
 
           results.statuses_updated++;
-          groupResult.actions.push(`Updated status to ${bestStatus.response_status}`);
+          groupResult.actions.push(
+            `Updated status to ${bestStatus.response_status}`,
+          );
         }
 
         // Update master company_name if duplicate has a longer/better name
-        const bestName = duplicates.find(d => d.company_name && d.company_name.length > (master.company_name?.length || 0));
+        const bestName = duplicates.find(
+          (d) =>
+            d.company_name &&
+            d.company_name.length > (master.company_name?.length || 0),
+        );
         if (bestName) {
           await supabase
-            .from('leads')
+            .from("leads")
             .update({ company_name: bestName.company_name })
-            .eq('id', master.id);
+            .eq("id", master.id);
 
-          groupResult.actions.push(`Updated company name to ${bestName.company_name}`);
+          groupResult.actions.push(
+            `Updated company name to ${bestName.company_name}`,
+          );
         }
 
         // Delete duplicates
         const { error: deleteError } = await supabase
-          .from('leads')
+          .from("leads")
           .delete()
-          .in('id', duplicateIds);
+          .in("id", duplicateIds);
 
         if (deleteError) {
-          console.error(`Error deleting duplicates for ${group.normalized_phone}:`, deleteError);
+          console.error(
+            `Error deleting duplicates for ${group.normalized_phone}:`,
+            deleteError,
+          );
           groupResult.actions.push(`Error deleting: ${deleteError.message}`);
         } else {
           results.leads_deleted += duplicateIds.length;
-          groupResult.actions.push(`Deleted ${duplicateIds.length} duplicate leads`);
+          groupResult.actions.push(
+            `Deleted ${duplicateIds.length} duplicate leads`,
+          );
         }
       } else {
-        groupResult.actions.push('DRY RUN - no changes made');
+        groupResult.actions.push("DRY RUN - no changes made");
       }
 
       results.groups_processed++;
       results.details.push(groupResult);
     }
 
-
     return new Response(JSON.stringify(results), {
       status: 200,
       headers: { "Content-Type": "application/json", ...corsHeaders },
     });
-
   } catch (error: any) {
     console.error("Error in merge-duplicate-leads:", error);
     return new Response(JSON.stringify({ error: error.message }), {

@@ -12,7 +12,9 @@ export async function fetchActiveCampaigners(
       .select("campaigner_id")
       .in("agency_id", crossTenantAgencyIds);
     crossTenantCampaignerIds = Array.from(
-      new Set((caRows || []).map((r: { campaigner_id: string }) => r.campaigner_id)),
+      new Set(
+        (caRows || []).map((r: { campaigner_id: string }) => r.campaigner_id),
+      ),
     );
   }
 
@@ -23,7 +25,9 @@ export async function fetchActiveCampaigners(
     .order("full_name");
 
   if (crossTenantCampaignerIds.length > 0) {
-    query = query.or(`tenant_id.eq.${tenantId},id.in.(${crossTenantCampaignerIds.join(",")})`);
+    query = query.or(
+      `tenant_id.eq.${tenantId},id.in.(${crossTenantCampaignerIds.join(",")})`,
+    );
   } else {
     query = query.eq("tenant_id", tenantId);
   }

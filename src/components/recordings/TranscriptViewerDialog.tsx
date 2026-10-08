@@ -29,7 +29,13 @@ interface TranscriptViewerDialogProps {
 }
 
 function safeFileName(value: string): string {
-  return value.replace(/[\\/:*?"<>|]+/g, "-").replace(/\s+/g, " ").trim().slice(0, 100) || "transcript";
+  return (
+    value
+      .replace(/[\\/:*?"<>|]+/g, "-")
+      .replace(/\s+/g, " ")
+      .trim()
+      .slice(0, 100) || "transcript"
+  );
 }
 
 export function TranscriptViewerDialog({
@@ -45,8 +51,8 @@ export function TranscriptViewerDialog({
   const ids = recordingIds?.length
     ? recordingIds
     : recording.id
-    ? [recording.id]
-    : [];
+      ? [recording.id]
+      : [];
   const regenerateMutation = useRegenerateRecordingSummary({
     tenantId: tenantId ?? "",
     recordingIds: ids,
@@ -54,7 +60,9 @@ export function TranscriptViewerDialog({
   });
   const canSummarize = !!tenantId && ids.length > 0 && !!transcript;
   const stats = useMemo(() => {
-    const words = transcript ? transcript.split(/\s+/).filter(Boolean).length : 0;
+    const words = transcript
+      ? transcript.split(/\s+/).filter(Boolean).length
+      : 0;
     const speakers = new Set(
       transcript
         .split("\n")
@@ -92,18 +100,32 @@ export function TranscriptViewerDialog({
             תמלול מלא — {recording.meeting_topic || "פגישה"}
           </DialogTitle>
           <DialogDescription>
-            {[meetingDate, `${stats.words.toLocaleString("he-IL")} מילים`, stats.speakers > 0 ? `${stats.speakers} דוברים` : null]
+            {[
+              meetingDate,
+              `${stats.words.toLocaleString("he-IL")} מילים`,
+              stats.speakers > 0 ? `${stats.speakers} דוברים` : null,
+            ]
               .filter(Boolean)
               .join(" · ")}
           </DialogDescription>
         </DialogHeader>
 
         <div className="flex gap-2">
-          <Button size="sm" variant="outline" onClick={() => void copyTranscript()} disabled={!transcript}>
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => void copyTranscript()}
+            disabled={!transcript}
+          >
             <Copy className="h-4 w-4 ml-1" />
             העתק
           </Button>
-          <Button size="sm" variant="outline" onClick={downloadTranscript} disabled={!transcript}>
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={downloadTranscript}
+            disabled={!transcript}
+          >
             <Download className="h-4 w-4 ml-1" />
             הורד TXT
           </Button>
@@ -114,9 +136,11 @@ export function TranscriptViewerDialog({
               disabled={regenerateMutation.isPending}
               title="יוצר סיכום מפורט מהתמלול, לפי מתודת הסיכום הנוכחית"
             >
-              {regenerateMutation.isPending
-                ? <Loader2 className="h-4 w-4 ml-1 animate-spin" />
-                : <Sparkles className="h-4 w-4 ml-1" />}
+              {regenerateMutation.isPending ? (
+                <Loader2 className="h-4 w-4 ml-1 animate-spin" />
+              ) : (
+                <Sparkles className="h-4 w-4 ml-1" />
+              )}
               {regenerateMutation.isPending ? "מסכם מחדש..." : "סכם מחדש מפורט"}
             </Button>
           )}

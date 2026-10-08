@@ -16,7 +16,12 @@ import {
   DropdownMenuSubTrigger,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -99,7 +104,10 @@ interface RecordingCardProps {
   onOpenSummary: (rec: FeedRecording) => void;
   onCreateSummary: (rec: FeedRecording) => void;
   onShare: (rec: FeedRecording) => void;
-  onAssignTarget: (rec: FeedRecording, selection: EntityAssignmentSelection) => void | Promise<void>;
+  onAssignTarget: (
+    rec: FeedRecording,
+    selection: EntityAssignmentSelection,
+  ) => void | Promise<void>;
   onMoveToFolder: (rec: FeedRecording, folderId: string | null) => void;
   onRename: (rec: FeedRecording, name: string) => Promise<void>;
   onDelete: (rec: FeedRecording) => void;
@@ -109,14 +117,21 @@ interface RecordingCardProps {
 
 const sourceLabel = (source: string | null) => {
   switch (source) {
-    case "zoom": return "Zoom";
-    case "manual": return "העלאה ידנית";
-    case "chrome_extension": return "הקלטת מסך";
-    case "google_meet": return "Google Meet";
-    case "meeting_bot": return "כרמן";
+    case "zoom":
+      return "Zoom";
+    case "manual":
+      return "העלאה ידנית";
+    case "chrome_extension":
+      return "הקלטת מסך";
+    case "google_meet":
+      return "Google Meet";
+    case "meeting_bot":
+      return "כרמן";
     case "microsoft_teams":
-    case "teams": return "Teams";
-    default: return source || "Zoom";
+    case "teams":
+      return "Teams";
+    default:
+      return source || "Zoom";
   }
 };
 
@@ -146,9 +161,10 @@ export function RecordingCard({
   onRejectSuggestion,
 }: RecordingCardProps) {
   const { buildPath } = useTenantPath();
-  const suggestedClientName = rec.suggested_client_id && !rec.client_id
-    ? clients.find((c) => c.id === rec.suggested_client_id)?.name ?? null
-    : null;
+  const suggestedClientName =
+    rec.suggested_client_id && !rec.client_id
+      ? (clients.find((c) => c.id === rec.suggested_client_id)?.name ?? null)
+      : null;
   const [playOpen, setPlayOpen] = useState(false);
   const [renameOpen, setRenameOpen] = useState(false);
   const [renameValue, setRenameValue] = useState("");
@@ -161,10 +177,10 @@ export function RecordingCard({
   const currentAssignment: EntityAssignmentSelection = rec.client_id
     ? { type: "client", ids: [rec.client_id] }
     : (rec.campaigner_ids || []).length > 0
-    ? { type: "team", ids: rec.campaigner_ids || [] }
-    : rec.agency_id
-    ? { type: "agency", ids: [rec.agency_id] }
-    : null;
+      ? { type: "team", ids: rec.campaigner_ids || [] }
+      : rec.agency_id
+        ? { type: "agency", ids: [rec.agency_id] }
+        : null;
 
   const { data: thumbnailUrl } = useQuery({
     queryKey: ["recording-thumb", rec.thumbnail_path],
@@ -198,22 +214,34 @@ export function RecordingCard({
   const statusBadge = () => {
     if (rec.transcription) {
       return (
-        <Badge variant="outline" className="text-green-600 border-green-600 bg-background/90">
-          <CheckCircle2 className="h-3 w-3 ml-1" />תומלל
+        <Badge
+          variant="outline"
+          className="text-green-600 border-green-600 bg-background/90"
+        >
+          <CheckCircle2 className="h-3 w-3 ml-1" />
+          תומלל
         </Badge>
       );
     }
     if (rec.transcription_status === "processing") {
       return (
-        <Badge variant="outline" className="text-blue-600 border-blue-600 bg-background/90">
-          <Loader2 className="h-3 w-3 ml-1 animate-spin" />מתמלל
+        <Badge
+          variant="outline"
+          className="text-blue-600 border-blue-600 bg-background/90"
+        >
+          <Loader2 className="h-3 w-3 ml-1 animate-spin" />
+          מתמלל
         </Badge>
       );
     }
     if (rec.transcription_status === "failed") {
       return (
-        <Badge variant="outline" className="text-destructive border-destructive bg-background/90">
-          <AlertCircle className="h-3 w-3 ml-1" />נכשל
+        <Badge
+          variant="outline"
+          className="text-destructive border-destructive bg-background/90"
+        >
+          <AlertCircle className="h-3 w-3 ml-1" />
+          נכשל
         </Badge>
       );
     }
@@ -253,15 +281,24 @@ export function RecordingCard({
           title="נגן הקלטה"
         >
           {thumbnailUrl ? (
-            <img src={thumbnailUrl} alt="" className="w-full h-full object-cover" loading="lazy" />
+            <img
+              src={thumbnailUrl}
+              alt=""
+              className="w-full h-full object-cover"
+              loading="lazy"
+            />
           ) : (
-            <div className={cn(
-              "w-full h-full flex items-center justify-center",
-              "bg-gradient-to-br from-primary/15 via-primary/5 to-muted"
-            )}>
-              {isAudioOnly
-                ? <Mic className="h-10 w-10 text-primary/50" />
-                : <Video className="h-10 w-10 text-primary/50" />}
+            <div
+              className={cn(
+                "w-full h-full flex items-center justify-center",
+                "bg-gradient-to-br from-primary/15 via-primary/5 to-muted",
+              )}
+            >
+              {isAudioOnly ? (
+                <Mic className="h-10 w-10 text-primary/50" />
+              ) : (
+                <Video className="h-10 w-10 text-primary/50" />
+              )}
             </div>
           )}
           <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity bg-black/25">
@@ -285,14 +322,22 @@ export function RecordingCard({
                 {rec.meeting_topic || "ללא נושא"}
               </div>
               <div className="text-xs text-muted-foreground mt-1 flex items-center gap-2 flex-wrap">
-                {rec.start_time && <span>{format(new Date(rec.start_time), "dd/MM/yy HH:mm")}</span>}
+                {rec.start_time && (
+                  <span>
+                    {format(new Date(rec.start_time), "dd/MM/yy HH:mm")}
+                  </span>
+                )}
                 <span>{sourceLabel(rec.source)}</span>
               </div>
             </div>
 
             <DropdownMenu dir="rtl">
               <DropdownMenuTrigger asChild>
-                <Button variant="ghost" size="icon" className="h-7 w-7 shrink-0">
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-7 w-7 shrink-0"
+                >
                   <MoreVertical className="h-4 w-4" />
                 </Button>
               </DropdownMenuTrigger>
@@ -332,9 +377,13 @@ export function RecordingCard({
                       <DropdownMenuItem
                         key={f.id}
                         onClick={() => onMoveToFolder(rec, f.id)}
-                        className={cn(rec.folder_id === f.id && "font-semibold text-primary")}
+                        className={cn(
+                          rec.folder_id === f.id &&
+                            "font-semibold text-primary",
+                        )}
                       >
-                        {f.icon ? `${f.icon} ` : ""}{f.name}
+                        {f.icon ? `${f.icon} ` : ""}
+                        {f.name}
                       </DropdownMenuItem>
                     ))}
                     {folders.length === 0 && (
@@ -346,7 +395,10 @@ export function RecordingCard({
                 </DropdownMenuSub>
 
                 <DropdownMenuSeparator />
-                <DropdownMenuItem className="text-destructive focus:text-destructive" onClick={() => setDeleteOpen(true)}>
+                <DropdownMenuItem
+                  className="text-destructive focus:text-destructive"
+                  onClick={() => setDeleteOpen(true)}
+                >
                   <Trash2 className="h-4 w-4 ml-2" />
                   מחק הקלטה
                 </DropdownMenuItem>
@@ -358,11 +410,23 @@ export function RecordingCard({
           {suggestedClientName && (
             <div className="flex items-center gap-1.5 rounded-md bg-primary/5 border border-primary/20 px-2 py-1">
               <Sparkles className="h-3.5 w-3.5 text-primary shrink-0" />
-              <span className="text-[11px] flex-1 truncate">הצעה: {suggestedClientName}</span>
-              <Button size="sm" variant="ghost" className="h-5 px-1.5 text-[11px] text-green-600" onClick={() => onAcceptSuggestion?.(rec)}>
+              <span className="text-[11px] flex-1 truncate">
+                הצעה: {suggestedClientName}
+              </span>
+              <Button
+                size="sm"
+                variant="ghost"
+                className="h-5 px-1.5 text-[11px] text-green-600"
+                onClick={() => onAcceptSuggestion?.(rec)}
+              >
                 אשר
               </Button>
-              <Button size="sm" variant="ghost" className="h-5 px-1.5 text-[11px] text-muted-foreground" onClick={() => onRejectSuggestion?.(rec)}>
+              <Button
+                size="sm"
+                variant="ghost"
+                className="h-5 px-1.5 text-[11px] text-muted-foreground"
+                onClick={() => onRejectSuggestion?.(rec)}
+              >
                 דחה
               </Button>
             </div>
@@ -371,9 +435,14 @@ export function RecordingCard({
           {/* Client chip + actions */}
           <div className="flex items-center justify-between gap-2">
             {rec.clients?.name && rec.client_id ? (
-              <Badge variant="secondary" className="text-[11px] max-w-[45%] truncate p-0">
+              <Badge
+                variant="secondary"
+                className="text-[11px] max-w-[45%] truncate p-0"
+              >
                 <Link
-                  to={buildPath(`/clients?clientId=${rec.client_id}&tab=recordings`)}
+                  to={buildPath(
+                    `/clients?clientId=${rec.client_id}&tab=recordings`,
+                  )}
                   className="block truncate px-2.5 py-0.5"
                   title="פתח בכרטיס הלקוח"
                 >
@@ -381,40 +450,72 @@ export function RecordingCard({
                 </Link>
               </Badge>
             ) : rec.clients?.name ? (
-              <Badge variant="secondary" className="text-[11px] max-w-[45%] truncate">
+              <Badge
+                variant="secondary"
+                className="text-[11px] max-w-[45%] truncate"
+              >
                 {rec.clients.name}
               </Badge>
             ) : campaignerNames.length > 0 ? (
-              <Badge variant="outline" className="text-[11px] max-w-[55%] truncate" title={campaignerNames.join(", ")}>
+              <Badge
+                variant="outline"
+                className="text-[11px] max-w-[55%] truncate"
+                title={campaignerNames.join(", ")}
+              >
                 פנימי · {campaignerNames.join(", ")}
               </Badge>
             ) : assignedAgencyName || rec.agencies?.name ? (
-              <Badge variant="outline" className="text-[11px] max-w-[55%] truncate">
+              <Badge
+                variant="outline"
+                className="text-[11px] max-w-[55%] truncate"
+              >
                 סוכנות · {assignedAgencyName || rec.agencies?.name}
               </Badge>
             ) : (
-              <span className="text-[11px] text-muted-foreground">ללא שיוך</span>
+              <span className="text-[11px] text-muted-foreground">
+                ללא שיוך
+              </span>
             )}
             <div className="flex gap-1">
               {rec.transcription && (
-                <Button size="sm" variant="ghost" className="h-7 px-2" onClick={() => onOpenTranscript(rec)}>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  className="h-7 px-2"
+                  onClick={() => onOpenTranscript(rec)}
+                >
                   <Mic className="h-3.5 w-3.5 ml-1" />
                   תמלול
                 </Button>
               )}
               {hasSummary ? (
-                <Button size="sm" variant="ghost" className="h-7 px-2 text-green-600" onClick={() => onOpenSummary(rec)}>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  className="h-7 px-2 text-green-600"
+                  onClick={() => onOpenSummary(rec)}
+                >
                   <FileText className="h-3.5 w-3.5 ml-1" />
                   סיכום
                 </Button>
               ) : (
-                <Button size="sm" variant="ghost" className="h-7 px-2 text-primary" onClick={() => onCreateSummary(rec)}>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  className="h-7 px-2 text-primary"
+                  onClick={() => onCreateSummary(rec)}
+                >
                   <Sparkles className="h-3.5 w-3.5 ml-1" />
                   סכם
                 </Button>
               )}
               {hasSummary && (
-                <Button size="sm" variant="ghost" className="h-7 px-2" onClick={() => onShare(rec)}>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  className="h-7 px-2"
+                  onClick={() => onShare(rec)}
+                >
                   <Share2 className="h-3.5 w-3.5" />
                 </Button>
               )}
@@ -436,7 +537,9 @@ export function RecordingCard({
             options: clients.map((client) => ({
               id: client.id,
               label: client.name,
-              description: agencies.find((agency) => agency.id === client.agency_id)?.name,
+              description: agencies.find(
+                (agency) => agency.id === client.agency_id,
+              )?.name,
             })),
             emptyLabel: "לא נמצאו לקוחות",
           },
@@ -486,7 +589,11 @@ export function RecordingCard({
               maxLength={200}
             />
             <div className="flex justify-end gap-2">
-              <Button type="button" variant="outline" onClick={() => setRenameOpen(false)}>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setRenameOpen(false)}
+              >
                 ביטול
               </Button>
               <Button
@@ -497,7 +604,9 @@ export function RecordingCard({
                   renameValue.trim() === (rec.meeting_topic || "").trim()
                 }
               >
-                {isRenaming && <Loader2 className="h-4 w-4 ml-2 animate-spin" />}
+                {isRenaming && (
+                  <Loader2 className="h-4 w-4 ml-2 animate-spin" />
+                )}
                 שמור
               </Button>
             </div>
@@ -515,11 +624,17 @@ export function RecordingCard({
             isAudioOnly ? (
               <audio src={playbackUrl} controls autoPlay className="w-full" />
             ) : (
-              <video src={playbackUrl} controls autoPlay className="w-full max-h-[70vh] rounded-md bg-black" />
+              <video
+                src={playbackUrl}
+                controls
+                autoPlay
+                className="w-full max-h-[70vh] rounded-md bg-black"
+              />
             )
           ) : (
             <div className="flex items-center justify-center py-10 text-muted-foreground">
-              <Loader2 className="h-5 w-5 animate-spin ml-2" />טוען...
+              <Loader2 className="h-5 w-5 animate-spin ml-2" />
+              טוען...
             </div>
           )}
         </DialogContent>
@@ -531,7 +646,8 @@ export function RecordingCard({
           <AlertDialogHeader>
             <AlertDialogTitle>למחוק את ההקלטה?</AlertDialogTitle>
             <AlertDialogDescription>
-              "{rec.meeting_topic || "ללא נושא"}" — ההקלטה, התמלול והקבצים יימחקו לצמיתות.
+              "{rec.meeting_topic || "ללא נושא"}" — ההקלטה, התמלול והקבצים
+              יימחקו לצמיתות.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

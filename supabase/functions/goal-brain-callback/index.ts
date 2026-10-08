@@ -7,7 +7,8 @@ import { verifyGoalBrainToken } from "../_shared/goal-cursor-brain.ts";
 
 const cors = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, idempotency-key",
+  "Access-Control-Allow-Headers":
+    "authorization, x-client-info, apikey, content-type, idempotency-key",
 };
 
 function json(status: number, body: unknown) {
@@ -18,7 +19,8 @@ function json(status: number, body: unknown) {
 }
 
 function bearerFrom(req: Request): string {
-  const h = req.headers.get("authorization") || req.headers.get("Authorization") || "";
+  const h =
+    req.headers.get("authorization") || req.headers.get("Authorization") || "";
   const m = h.match(/^Bearer\s+(.+)$/i);
   return m ? m[1].trim() : "";
 }
@@ -41,7 +43,9 @@ Deno.serve(async (req) => {
   const token = bearerFrom(req);
 
   if (!requestId || !goalId || !tenantId || !content) {
-    return json(400, { error: "request_id, goal_id, tenant_id, and content are required" });
+    return json(400, {
+      error: "request_id, goal_id, tenant_id, and content are required",
+    });
   }
   if (!token) return json(401, { error: "Missing callback token" });
 
@@ -53,7 +57,8 @@ Deno.serve(async (req) => {
     Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
   );
 
-  const { data: request, error } = await supabase.from("goal_brain_requests")
+  const { data: request, error } = await supabase
+    .from("goal_brain_requests")
     .select("*")
     .eq("id", requestId)
     .eq("goal_id", goalId)
@@ -72,15 +77,21 @@ Deno.serve(async (req) => {
   try {
     const result = await applyBrainResponse(supabase, request, content);
     if (!result.ok) {
-      await supabase.from("goal_brain_requests").update({
-        status: "failed",
-        error_message: result.error,
-        updated_at: new Date().toISOString(),
-      }).eq("id", requestId);
-      await supabase.from("goals").update({
-        engine_status: "EXECUTING",
-        next_run_at: new Date(Date.now() + 60_000).toISOString(),
-      }).eq("id", goalId);
+      await supabase
+        .from("goal_brain_requests")
+        .update({
+          status: "failed",
+          error_message: result.error,
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", requestId);
+      await supabase
+        .from("goals")
+        .update({
+          engine_status: "EXECUTING",
+          next_run_at: new Date(Date.now() + 60_000).toISOString(),
+        })
+        .eq("id", goalId);
       return json(422, { error: result.error });
     }
 
@@ -92,15 +103,22 @@ Deno.serve(async (req) => {
       detail: { request_id: requestId, request_type: request.request_type },
     });
 
-    return json(200, { ok: true, request_id: requestId, request_type: request.request_type });
+    return json(200, {
+      ok: true,
+      request_id: requestId,
+      request_type: request.request_type,
+    });
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
     console.error("[goal-brain-callback]", msg);
-    await supabase.from("goal_brain_requests").update({
-      status: "failed",
-      error_message: msg,
-      updated_at: new Date().toISOString(),
-    }).eq("id", requestId);
+    await supabase
+      .from("goal_brain_requests")
+      .update({
+        status: "failed",
+        error_message: msg,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", requestId);
     return json(500, { error: msg });
   }
 });

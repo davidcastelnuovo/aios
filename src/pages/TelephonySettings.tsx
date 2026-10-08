@@ -3,7 +3,13 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useCurrentTenant } from "@/hooks/useCurrentTenant";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import {
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+  CardDescription,
+} from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
@@ -65,7 +71,11 @@ export default function TelephonySettings() {
     setIsInitialized(true);
   }
 
-  if (paycallIntegration && !apiKey && (paycallIntegration as any).settings?.api_key) {
+  if (
+    paycallIntegration &&
+    !apiKey &&
+    (paycallIntegration as any).settings?.api_key
+  ) {
     setApiKey((paycallIntegration as any).settings.api_key);
   }
 
@@ -76,14 +86,17 @@ export default function TelephonySettings() {
       // Upsert telephony settings
       const { error: settingsError } = await supabase
         .from("telephony_settings")
-        .upsert({
-          tenant_id: tenantId,
-          user_id: userId,
-          personal_phone: personalPhone || null,
-          virtual_number: virtualNumber || null,
-          auto_record: autoRecord,
-          provider: "paycall",
-        }, { onConflict: "tenant_id,user_id" });
+        .upsert(
+          {
+            tenant_id: tenantId,
+            user_id: userId,
+            personal_phone: personalPhone || null,
+            virtual_number: virtualNumber || null,
+            auto_record: autoRecord,
+            provider: "paycall",
+          },
+          { onConflict: "tenant_id,user_id" },
+        );
 
       if (settingsError) throw settingsError;
 
@@ -91,20 +104,27 @@ export default function TelephonySettings() {
       if (apiKey.trim()) {
         const { error: integrationError } = await supabase
           .from("tenant_integrations")
-          .upsert({
-            tenant_id: tenantId,
-            integration_type: "paycall",
-            is_active: true,
-            settings: { api_key: apiKey },
-          }, { onConflict: "tenant_id,integration_type" });
+          .upsert(
+            {
+              tenant_id: tenantId,
+              integration_type: "paycall",
+              is_active: true,
+              settings: { api_key: apiKey },
+            },
+            { onConflict: "tenant_id,integration_type" },
+          );
 
         if (integrationError) throw integrationError;
       }
     },
     onSuccess: () => {
       toast.success("הגדרות טלפוניה נשמרו בהצלחה");
-      queryClient.invalidateQueries({ queryKey: ["telephony-settings", tenantId] });
-      queryClient.invalidateQueries({ queryKey: ["paycall-integration", tenantId] });
+      queryClient.invalidateQueries({
+        queryKey: ["telephony-settings", tenantId],
+      });
+      queryClient.invalidateQueries({
+        queryKey: ["paycall-integration", tenantId],
+      });
     },
     onError: (err: any) => {
       toast.error("שגיאה בשמירת הגדרות", { description: err.message });
@@ -131,7 +151,10 @@ export default function TelephonySettings() {
             הגדר את פרטי הטלפוניה שלך לביצוע וקבלת שיחות דרך המערכת
           </p>
         </div>
-        <Button variant="outline" onClick={() => navigate(buildPath("integrations"))}>
+        <Button
+          variant="outline"
+          onClick={() => navigate(buildPath("integrations"))}
+        >
           <ArrowRight className="h-4 w-4 ml-2" />
           חזרה לאינטגרציות
         </Button>
@@ -176,9 +199,7 @@ export default function TelephonySettings() {
               <Phone className="h-5 w-5" />
               הגדרות טלפון
             </CardTitle>
-            <CardDescription>
-              המספרים שישמשו לשיחות יוצאות
-            </CardDescription>
+            <CardDescription>המספרים שישמשו לשיחות יוצאות</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="space-y-2">

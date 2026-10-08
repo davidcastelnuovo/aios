@@ -19,7 +19,10 @@ export function describeTaskAssignment(
   fallbackClientName?: string | null,
 ): TaskAssignmentLabels {
   return {
-    assignedTo: task.campaigners?.full_name?.trim() || task.sales_people?.full_name?.trim() || null,
+    assignedTo:
+      task.campaigners?.full_name?.trim() ||
+      task.sales_people?.full_name?.trim() ||
+      null,
     client: task.clients?.name?.trim() || fallbackClientName?.trim() || null,
     lead: task.leads?.company_name?.trim() || null,
     givenBy: task.creator_name?.trim() || null,

@@ -2,12 +2,12 @@
 
 AIOS already created these via the ManyChat API on page **DMM-WA**:
 
-| Custom field | Field ID | Maps from AIOS |
-|---|---|---|
-| `client_name` | `14845212` | `{{client_name}}` |
-| `lead_name` | `14845211` | `{{lead_name}}` |
-| `lead_phone` | `14845213` | `{{lead_phone}}` |
-| `lead_email` | `14845214` | `{{lead_email}}` |
+| Custom field      | Field ID   | Maps from AIOS        |
+| ----------------- | ---------- | --------------------- |
+| `client_name`     | `14845212` | `{{client_name}}`     |
+| `lead_name`       | `14845211` | `{{lead_name}}`       |
+| `lead_phone`      | `14845213` | `{{lead_phone}}`      |
+| `lead_email`      | `14845214` | `{{lead_email}}`      |
 | `form_qa_summary` | `14845215` | `{{form_qa_summary}}` |
 
 Tag: **`aios_lead_alert`** (ID `93553458`)
@@ -16,20 +16,21 @@ Automation: **התראת ליד ללקוח מ-Make / Webhook** (`314a7c5a-d7e3-4
 
 ## Status checklist
 
-| Step | Owner | Status |
-|---|---|---|
-| Custom fields + tag in ManyChat | AIOS API | ✅ Done |
-| `send_whatsapp` supports `custom_fields` + `phone_field=client_phone` | AIOS code | ✅ Done |
-| Flow builder UI: tag / phone field / “מלא התראת ליד” | AIOS UI | ✅ Done |
-| removeTag before addTag (repeat alerts re-fire) | AIOS code | ✅ Done |
-| Switch to tag delivery + field resync | AIOS code | ✅ Done |
-| **ManyChat Flow: Set Fields + Delay + template map** | **David (UI)** | ⏳ **Blocking** |
+| Step                                                                  | Owner          | Status          |
+| --------------------------------------------------------------------- | -------------- | --------------- |
+| Custom fields + tag in ManyChat                                       | AIOS API       | ✅ Done         |
+| `send_whatsapp` supports `custom_fields` + `phone_field=client_phone` | AIOS code      | ✅ Done         |
+| Flow builder UI: tag / phone field / “מלא התראת ליד”                  | AIOS UI        | ✅ Done         |
+| removeTag before addTag (repeat alerts re-fire)                       | AIOS code      | ✅ Done         |
+| Switch to tag delivery + field resync                                 | AIOS code      | ✅ Done         |
+| **ManyChat Flow: Set Fields + Delay + template map**                  | **David (UI)** | ⏳ **Blocking** |
 
 📖 **מדריך צעד-אחר-צעד:** [manychat-flow-remap-guide.md](./manychat-flow-remap-guide.md)
 
 ## Delivery path (recommended)
 
 AIOS now:
+
 1. Finds/creates the **client** subscriber by `client_phone`
 2. Clears + writes all 5 custom fields (empty → `-`)
 3. **Verifies** fields on the contact (retries + stable reads)
@@ -96,11 +97,31 @@ When the Flow is live — tell AIOS/Cursor and we’ll switch the Make automatio
   "phone_mode": "field",
   "phone_field": "client_phone",
   "custom_fields": [
-    { "field_id": 14845212, "field_name": "client_name", "value_template": "{{client_name}}" },
-    { "field_id": 14845211, "field_name": "lead_name", "value_template": "{{lead_name}}" },
-    { "field_id": 14845213, "field_name": "lead_phone", "value_template": "{{lead_phone}}" },
-    { "field_id": 14845214, "field_name": "lead_email", "value_template": "{{lead_email}}" },
-    { "field_id": 14845215, "field_name": "form_qa_summary", "value_template": "{{form_qa_summary}}" }
+    {
+      "field_id": 14845212,
+      "field_name": "client_name",
+      "value_template": "{{client_name}}"
+    },
+    {
+      "field_id": 14845211,
+      "field_name": "lead_name",
+      "value_template": "{{lead_name}}"
+    },
+    {
+      "field_id": 14845213,
+      "field_name": "lead_phone",
+      "value_template": "{{lead_phone}}"
+    },
+    {
+      "field_id": 14845214,
+      "field_name": "lead_email",
+      "value_template": "{{lead_email}}"
+    },
+    {
+      "field_id": 14845215,
+      "field_name": "form_qa_summary",
+      "value_template": "{{form_qa_summary}}"
+    }
   ]
 }
 ```

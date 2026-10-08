@@ -17,7 +17,11 @@ export function isClipboardImage(file: File): boolean {
 
 export function filesFromClipboardData(
   data: {
-    items?: Iterable<{ kind?: string; type?: string; getAsFile?: () => File | null }>;
+    items?: Iterable<{
+      kind?: string;
+      type?: string;
+      getAsFile?: () => File | null;
+    }>;
     files?: Iterable<File> | FileList | null;
   } | null,
 ): File[] {
@@ -35,7 +39,10 @@ export function filesFromClipboardData(
   if (data.items) {
     for (const item of Array.from(data.items)) {
       const imageItem = (item.type || "").startsWith("image/");
-      if (typeof item.getAsFile === "function" && (item.kind === "file" || imageItem)) {
+      if (
+        typeof item.getAsFile === "function" &&
+        (item.kind === "file" || imageItem)
+      ) {
         push(item.getAsFile());
       }
     }
@@ -55,15 +62,24 @@ export function isFilePasteField(target: EventTarget | null): boolean {
     closest?: (selector: string) => EventTarget | null;
   };
   if (el.dataset?.filePaste === "true") return true;
-  if (typeof el.getAttribute === "function" && el.getAttribute("data-file-paste") === "true") return true;
-  if (typeof el.closest === "function" && el.closest("[data-file-paste]")) return true;
+  if (
+    typeof el.getAttribute === "function" &&
+    el.getAttribute("data-file-paste") === "true"
+  )
+    return true;
+  if (typeof el.closest === "function" && el.closest("[data-file-paste]"))
+    return true;
   return false;
 }
 
 /** Page-level Ctrl+V: images leave notes and become attachments; other text stays in the field. */
-export function shouldUploadClipboardPaste(target: EventTarget | null, files: File[]): boolean {
+export function shouldUploadClipboardPaste(
+  target: EventTarget | null,
+  files: File[],
+): boolean {
   if (!files.length) return false;
-  if (isClipboardTypingTarget(target) && !files.some(isClipboardImage)) return false;
+  if (isClipboardTypingTarget(target) && !files.some(isClipboardImage))
+    return false;
   return true;
 }
 

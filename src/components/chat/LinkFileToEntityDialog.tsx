@@ -1,8 +1,19 @@
 import { useState } from "react";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { supabase } from "@/integrations/supabase/client";
 import { useQuery } from "@tanstack/react-query";
 import { toast } from "sonner";
@@ -23,7 +34,13 @@ interface LinkFileToEntityDialogProps {
   onLinked: () => void;
 }
 
-export function LinkFileToEntityDialog({ open, onOpenChange, tenantId, files, onLinked }: LinkFileToEntityDialogProps) {
+export function LinkFileToEntityDialog({
+  open,
+  onOpenChange,
+  tenantId,
+  files,
+  onLinked,
+}: LinkFileToEntityDialogProps) {
   const [clientId, setClientId] = useState("");
   const [leadId, setLeadId] = useState("");
   const [saving, setSaving] = useState(false);
@@ -34,7 +51,9 @@ export function LinkFileToEntityDialog({ open, onOpenChange, tenantId, files, on
     queryFn: async () => {
       let query = supabase.from("clients").select("id, name");
       if (crossTenantAgencyIds.length > 0) {
-        query = query.or(`tenant_id.eq.${tenantId},agency_id.in.(${crossTenantAgencyIds.join(",")})`);
+        query = query.or(
+          `tenant_id.eq.${tenantId},agency_id.in.(${crossTenantAgencyIds.join(",")})`,
+        );
       } else {
         query = query.eq("tenant_id", tenantId);
       }
@@ -47,7 +66,12 @@ export function LinkFileToEntityDialog({ open, onOpenChange, tenantId, files, on
   const { data: leads = [] } = useQuery({
     queryKey: ["leads-for-link", tenantId],
     queryFn: async () => {
-      const { data } = await supabase.from("leads").select("id, company_name, contact_name").eq("tenant_id", tenantId).order("created_at", { ascending: false }).limit(100);
+      const { data } = await supabase
+        .from("leads")
+        .select("id, company_name, contact_name")
+        .eq("tenant_id", tenantId)
+        .order("created_at", { ascending: false })
+        .limit(100);
       return data || [];
     },
     enabled: !!tenantId && open,
@@ -65,7 +89,10 @@ export function LinkFileToEntityDialog({ open, onOpenChange, tenantId, files, on
       if (leadId && leadId !== "none") updates.lead_id = leadId;
 
       for (const file of files) {
-        await supabase.from("team_chat_files").update(updates).eq("id", file.id);
+        await supabase
+          .from("team_chat_files")
+          .update(updates)
+          .eq("id", file.id);
       }
       toast.success(`${files.length} קבצים שויכו בהצלחה`);
       onLinked();
@@ -85,34 +112,56 @@ export function LinkFileToEntityDialog({ open, onOpenChange, tenantId, files, on
         </DialogHeader>
         <div className="space-y-3">
           <p className="text-sm text-muted-foreground">
-            {files.length === 1 ? `קובץ: ${files[0].file_name}` : `${files.length} קבצים הועלו`}
+            {files.length === 1
+              ? `קובץ: ${files[0].file_name}`
+              : `${files.length} קבצים הועלו`}
           </p>
 
           <div>
-            <Label className="flex items-center gap-1 text-sm"><User className="h-3.5 w-3.5" /> לקוח</Label>
-            <Select value={clientId} onValueChange={(v) => { setClientId(v); if (v !== "none") setLeadId(""); }}>
+            <Label className="flex items-center gap-1 text-sm">
+              <User className="h-3.5 w-3.5" /> לקוח
+            </Label>
+            <Select
+              value={clientId}
+              onValueChange={(v) => {
+                setClientId(v);
+                if (v !== "none") setLeadId("");
+              }}
+            >
               <SelectTrigger className="mt-1">
                 <SelectValue placeholder="בחר לקוח (אופציונלי)" />
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="none">ללא</SelectItem>
                 {clients.map((c: any) => (
-                  <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
+                  <SelectItem key={c.id} value={c.id}>
+                    {c.name}
+                  </SelectItem>
                 ))}
               </SelectContent>
             </Select>
           </div>
 
           <div>
-            <Label className="flex items-center gap-1 text-sm"><Target className="h-3.5 w-3.5" /> ליד</Label>
-            <Select value={leadId} onValueChange={(v) => { setLeadId(v); if (v !== "none") setClientId(""); }}>
+            <Label className="flex items-center gap-1 text-sm">
+              <Target className="h-3.5 w-3.5" /> ליד
+            </Label>
+            <Select
+              value={leadId}
+              onValueChange={(v) => {
+                setLeadId(v);
+                if (v !== "none") setClientId("");
+              }}
+            >
               <SelectTrigger className="mt-1">
                 <SelectValue placeholder="בחר ליד (אופציונלי)" />
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="none">ללא</SelectItem>
                 {leads.map((l: any) => (
-                  <SelectItem key={l.id} value={l.id}>{l.company_name || l.contact_name}</SelectItem>
+                  <SelectItem key={l.id} value={l.id}>
+                    {l.company_name || l.contact_name}
+                  </SelectItem>
                 ))}
               </SelectContent>
             </Select>

@@ -8,7 +8,12 @@ import {
   type GoalCriterionRow,
 } from "./autonomous-goal-engine.ts";
 
-function criterion(overrides: Partial<GoalCriterionRow> & { criterion_key: string; status: GoalCriterionRow["status"] }): GoalCriterionRow {
+function criterion(
+  overrides: Partial<GoalCriterionRow> & {
+    criterion_key: string;
+    status: GoalCriterionRow["status"];
+  },
+): GoalCriterionRow {
   return {
     id: "c1",
     goal_id: "g1",
@@ -50,7 +55,11 @@ Deno.test("checkCompletionGate requires all required PASS", () => {
 
 Deno.test("detectStuckPatterns increments on repeated hash", () => {
   const h = hashInput({ same: true });
-  const actions = Array.from({ length: 4 }, () => ({ input_hash: h, status: "failed", error: "e" }));
+  const actions = Array.from({ length: 4 }, () => ({
+    input_hash: h,
+    status: "failed",
+    error: "e",
+  }));
   const r = detectStuckPatterns(actions, 0);
   if (!r.stuck) throw new Error("expected stuck");
   if (r.score < 4) throw new Error("score too low");

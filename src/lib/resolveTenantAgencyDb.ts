@@ -19,7 +19,9 @@ export async function fetchTenantHomeAgencyId(
       .eq("tenant_id", tenantId),
     supabase
       .from("agency_tenant_access")
-      .select("agency_id, agencies(id, tenant_id, is_default, status, created_at, name)")
+      .select(
+        "agency_id, agencies(id, tenant_id, is_default, status, created_at, name)",
+      )
       .eq("accessing_tenant_id", tenantId),
   ]);
   if (ownedError) throw ownedError;
@@ -27,7 +29,10 @@ export async function fetchTenantHomeAgencyId(
   const shared = (sharedAccess || []).flatMap((row) =>
     agenciesFromJoin((row as { agencies?: unknown }).agencies),
   );
-  return pickTenantHomeAgencyId(tenantId, mergeAgencyLists(owned || [], shared));
+  return pickTenantHomeAgencyId(
+    tenantId,
+    mergeAgencyLists(owned || [], shared),
+  );
 }
 
 /**

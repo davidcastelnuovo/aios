@@ -1,10 +1,16 @@
 /** Client API for Goal Execution Mode + Autonomous Goal Engine in Command Center. */
 
 export type ExecutionGoalStatus =
-  | "active" | "in_progress" | "blocked" | "completed" | "cancelled" | "paused";
+  "active" | "in_progress" | "blocked" | "completed" | "cancelled" | "paused";
 
 export type EngineStatus =
-  | "PLANNING" | "EXECUTING" | "VERIFYING" | "REPLANNING" | "BLOCKED" | "COMPLETED" | "AWAITING_BRAIN";
+  | "PLANNING"
+  | "EXECUTING"
+  | "VERIFYING"
+  | "REPLANNING"
+  | "BLOCKED"
+  | "COMPLETED"
+  | "AWAITING_BRAIN";
 
 export type CriterionStatus = "PASS" | "FAIL" | "UNKNOWN" | "NOT_TESTED";
 
@@ -49,15 +55,27 @@ export type AutonomousEngineSnapshot = {
     status: string;
     cursor_session_url?: string | null;
   }>;
-  completion_gate: { complete: boolean; pending: GoalCriterion[]; failed: GoalCriterion[] };
-  recent_iterations: Array<{ iteration_number: number; phase: string; status: string; summary?: string | null }>;
+  completion_gate: {
+    complete: boolean;
+    pending: GoalCriterion[];
+    failed: GoalCriterion[];
+  };
+  recent_iterations: Array<{
+    iteration_number: number;
+    phase: string;
+    status: string;
+    summary?: string | null;
+  }>;
   blockers: Array<{ title: string }>;
 };
 
 const FN = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/goal-execution-center`;
 
 async function authHeader(token: string) {
-  return { "Content-Type": "application/json", Authorization: `Bearer ${token}` };
+  return {
+    "Content-Type": "application/json",
+    Authorization: `Bearer ${token}`,
+  };
 }
 
 export async function listExecutionGoals(
@@ -68,14 +86,23 @@ export async function listExecutionGoals(
   const res = await fetch(FN, {
     method: "POST",
     headers: await authHeader(token),
-    body: JSON.stringify({ action: "list", tenant_id: tenantId, ...filters, limit: 80 }),
+    body: JSON.stringify({
+      action: "list",
+      tenant_id: tenantId,
+      ...filters,
+      limit: 80,
+    }),
   });
   const json = await res.json();
   if (!res.ok) throw new Error(json.error || "list failed");
   return json.goals || [];
 }
 
-export async function getExecutionGoal(token: string, tenantId: string, id: string) {
+export async function getExecutionGoal(
+  token: string,
+  tenantId: string,
+  id: string,
+) {
   const res = await fetch(FN, {
     method: "POST",
     headers: await authHeader(token),
@@ -94,8 +121,13 @@ export type CreateExecutionGoalResult = {
   notice?: string;
 };
 
-export function parseCreateGoalResponse(raw: unknown): CreateExecutionGoalResult {
-  const row = (raw && typeof raw === "object" ? raw : {}) as Record<string, unknown>;
+export function parseCreateGoalResponse(
+  raw: unknown,
+): CreateExecutionGoalResult {
+  const row = (raw && typeof raw === "object" ? raw : {}) as Record<
+    string,
+    unknown
+  >;
   const goal = row.goal as ExecutionGoal | undefined;
   if (!goal?.id) {
     const serverError = row.error || row.message;
@@ -132,7 +164,11 @@ export async function createExecutionGoal(
     objective?: string;
     completion_criteria?: string;
   },
-): Promise<CreateExecutionGoalResult & { kick?: { status?: string; summary?: string; error?: string } }> {
+): Promise<
+  CreateExecutionGoalResult & {
+    kick?: { status?: string; summary?: string; error?: string };
+  }
+> {
   const raw = await goalExecutionAction(token, {
     action: "create",
     tenant_id: tenantId,
@@ -144,9 +180,11 @@ export async function createExecutionGoal(
     completion_criteria: args.completion_criteria,
   });
   const parsed = parseCreateGoalResponse(raw);
-  const kick = (raw && typeof raw === "object" ? (raw as { kick?: unknown }).kick : undefined) as
-    | { status?: string; summary?: string; error?: string }
-    | undefined;
+  const kick = (
+    raw && typeof raw === "object"
+      ? (raw as { kick?: unknown }).kick
+      : undefined
+  ) as { status?: string; summary?: string; error?: string } | undefined;
   return { ...parsed, kick };
 }
 
@@ -161,17 +199,27 @@ export async function goalExecutionAction(
   });
   const json = await res.json().catch(() => ({}));
   if (!res.ok) {
-    const detail = json?.error || json?.message || json?.details || `HTTP ${res.status}`;
+    const detail =
+      json?.error || json?.message || json?.details || `HTTP ${res.status}`;
     throw new Error(String(detail));
   }
-  if (payload.action === "create" && json && typeof json === "object" && !(json as { goal?: unknown }).goal) {
+  if (
+    payload.action === "create" &&
+    json &&
+    typeof json === "object" &&
+    !(json as { goal?: unknown }).goal
+  ) {
     const err = (json as { error?: string }).error;
     if (err) throw new Error(String(err));
   }
   return json;
 }
 
-export async function runGoalIteration(token: string, tenantId: string, goalId: string) {
+export async function runGoalIteration(
+  token: string,
+  tenantId: string,
+  goalId: string,
+) {
   return goalExecutionAction(token, {
     action: "run_iteration",
     tenant_id: tenantId,

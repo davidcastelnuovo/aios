@@ -83,19 +83,25 @@ export function useAutoCreateTeamMember() {
         if (campaignerError) throw campaignerError;
         campaigner = { id: created.id, reused: false as const };
       } else if (!(existing?.email || "").trim() && params.email) {
-        await supabase.from("campaigners").update({ email: params.email }).eq("id", existing.id);
+        await supabase
+          .from("campaigners")
+          .update({ email: params.email })
+          .eq("id", existing.id);
       }
 
       // 2. קישור לסוכנויות
       if (params.agencyIds && params.agencyIds.length > 0) {
-        const agencyLinks = params.agencyIds.map(agencyId => ({
+        const agencyLinks = params.agencyIds.map((agencyId) => ({
           campaigner_id: campaigner.id,
           agency_id: agencyId,
         }));
 
         const { error: linksError } = await supabase
           .from("campaigner_agencies")
-          .upsert(agencyLinks, { onConflict: "campaigner_id,agency_id", ignoreDuplicates: true });
+          .upsert(agencyLinks, {
+            onConflict: "campaigner_id,agency_id",
+            ignoreDuplicates: true,
+          });
 
         if (linksError) throw linksError;
       }
@@ -112,9 +118,15 @@ export function useAutoCreateTeamMember() {
     },
     onSuccess: (campaigner) => {
       queryClient.invalidateQueries({ queryKey: ["campaigners", tenantId] });
-      queryClient.invalidateQueries({ queryKey: ["campaigner_agencies", tenantId] });
-      queryClient.invalidateQueries({ queryKey: ["users-with-roles", tenantId] });
-      queryClient.invalidateQueries({ queryKey: ["user-campaigner", tenantId] });
+      queryClient.invalidateQueries({
+        queryKey: ["campaigner_agencies", tenantId],
+      });
+      queryClient.invalidateQueries({
+        queryKey: ["users-with-roles", tenantId],
+      });
+      queryClient.invalidateQueries({
+        queryKey: ["user-campaigner", tenantId],
+      });
       toast.success(
         campaigner.reused
           ? "המשתמש שויך לאיש הצוות הקיים"
@@ -178,7 +190,10 @@ export function useAutoCreateTeamMember() {
         if (salesPersonError) throw salesPersonError;
         salesPerson = { id: created.id, reused: false as const };
       } else if (!(existing?.email || "").trim() && params.email) {
-        await supabase.from("sales_people").update({ email: params.email }).eq("id", existing.id);
+        await supabase
+          .from("sales_people")
+          .update({ email: params.email })
+          .eq("id", existing.id);
       }
 
       // 2. קישור איש המכירות למשתמש
@@ -193,8 +208,12 @@ export function useAutoCreateTeamMember() {
     },
     onSuccess: (salesPerson) => {
       queryClient.invalidateQueries({ queryKey: ["sales-people", tenantId] });
-      queryClient.invalidateQueries({ queryKey: ["users-with-roles", tenantId] });
-      queryClient.invalidateQueries({ queryKey: ["user-sales-person", tenantId] });
+      queryClient.invalidateQueries({
+        queryKey: ["users-with-roles", tenantId],
+      });
+      queryClient.invalidateQueries({
+        queryKey: ["user-sales-person", tenantId],
+      });
       toast.success(
         salesPerson.reused
           ? "המשתמש שויך לאיש המכירות הקיים"

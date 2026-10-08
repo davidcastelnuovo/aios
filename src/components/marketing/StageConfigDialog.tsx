@@ -1,13 +1,25 @@
 import { useEffect, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from "@/components/ui/dialog";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
 import { toast } from "sonner";
 import { useClientConnections } from "./lib/useClientConnections";
@@ -78,8 +90,7 @@ const TOOLS_BY_STAGE: Record<string, { id: string; label: string }[]> = {
 const DEFAULT_PROMPTS: Record<string, string> = {
   strategy:
     "אתה אסטרטג שיווקי בכיר. הפק בריף שיווקי מובנה לפריט הזה: קהל יעד מדויק, כאבים מרכזיים, הצעת ערך ייחודית, 3-5 מסרים מרכזיים, טון תקשורת, ו-KPIs מדידים. השתמש במידע על הלקוח שניתן לך.",
-  copy:
-    "אתה קופירייטר מקצועי. כתוב את הקופי לפי הבריף שניתן לך. שמור על נימה התואמת למותג, באורך מתאים לערוץ הפרסום. כתוב טקסט שיווקי משכנע, ברור ועם call to action חזק.",
+  copy: "אתה קופירייטר מקצועי. כתוב את הקופי לפי הבריף שניתן לך. שמור על נימה התואמת למותג, באורך מתאים לערוץ הפרסום. כתוב טקסט שיווקי משכנע, ברור ועם call to action חזק.",
   creative:
     "אתה Art Director. צור תמונה שיווקית מקצועית התואמת לקופי שניתן לך. תמונה ברורה, מודרנית, מעוצבת, מתאימה לפלטפורמה. ללא טקסט מודבק על התמונה (אלא אם התבקש במפורש).",
   target_paid:
@@ -92,11 +103,20 @@ const DEFAULT_PROMPTS: Record<string, string> = {
     "אתה אנליסט שיווק. סכם את ביצועי הפריט מהנתונים שניתנו לך: מדדים מרכזיים, השוואה ליעדים, נקודות חוזק וחולשה, והמלצות פעולה לשיפור.",
 };
 
-export function StageConfigDialog({ stage, tenantId, clientId, track, onClose, onSaved }: Props) {
+export function StageConfigDialog({
+  stage,
+  tenantId,
+  clientId,
+  track,
+  onClose,
+  onSaved,
+}: Props) {
   const queryClient = useQueryClient();
   const [name, setName] = useState("");
   const [agentId, setAgentId] = useState<string | null>(null);
-  const [approvalMode, setApprovalMode] = useState<"manual" | "auto" | "hybrid">("manual");
+  const [approvalMode, setApprovalMode] = useState<
+    "manual" | "auto" | "hybrid"
+  >("manual");
   const [instructions, setInstructions] = useState("");
   const [tools, setTools] = useState<string[]>([]);
   const [target, setTarget] = useState<any>({});
@@ -149,7 +169,9 @@ export function StageConfigDialog({ stage, tenantId, clientId, track, onClose, o
   const stageTools = TOOLS_BY_STAGE[stage.stage_type] ?? [];
 
   const toggleTool = (id: string) =>
-    setTools((prev) => (prev.includes(id) ? prev.filter((t) => t !== id) : [...prev, id]));
+    setTools((prev) =>
+      prev.includes(id) ? prev.filter((t) => t !== id) : [...prev, id],
+    );
 
   const handleSave = async () => {
     setSaving(true);
@@ -165,7 +187,9 @@ export function StageConfigDialog({ stage, tenantId, clientId, track, onClose, o
         .eq("id", stage.id);
       if (error) throw error;
       toast.success("✓ השלב נשמר בהצלחה");
-      queryClient.invalidateQueries({ queryKey: ["marketing-stages", stage.pipeline_id, tenantId] });
+      queryClient.invalidateQueries({
+        queryKey: ["marketing-stages", stage.pipeline_id, tenantId],
+      });
       onSaved();
       onClose();
     } catch (e: any) {
@@ -201,23 +225,21 @@ export function StageConfigDialog({ stage, tenantId, clientId, track, onClose, o
       toast.error("לא ניתן לשמור כתבנית — חסר טראק");
       return;
     }
-    const { error } = await supabase
-      .from("marketing_stage_templates")
-      .upsert(
-        {
-          tenant_id: tenantId,
-          track,
-          stage_type: stage.stage_type,
-          name,
-          default_agent_id: agentId,
-          default_approval_mode: approvalMode,
-          default_instructions: instructions,
-          default_tools: tools as any,
-          default_target: target,
-          is_system: false,
-        },
-        { onConflict: "tenant_id,track,stage_type" },
-      );
+    const { error } = await supabase.from("marketing_stage_templates").upsert(
+      {
+        tenant_id: tenantId,
+        track,
+        stage_type: stage.stage_type,
+        name,
+        default_agent_id: agentId,
+        default_approval_mode: approvalMode,
+        default_instructions: instructions,
+        default_tools: tools as any,
+        default_target: target,
+        is_system: false,
+      },
+      { onConflict: "tenant_id,track,stage_type" },
+    );
     if (error) {
       toast.error("שגיאה בשמירת תבנית: " + error.message);
       return;
@@ -227,7 +249,11 @@ export function StageConfigDialog({ stage, tenantId, clientId, track, onClose, o
 
   const applyToAllClients = async () => {
     if (!track) return;
-    if (!confirm("להחיל את ההגדרות האלה על כל הלקוחות בטראק זה? (לא ידרוס שינויים שכבר נעשו ידנית)"))
+    if (
+      !confirm(
+        "להחיל את ההגדרות האלה על כל הלקוחות בטראק זה? (לא ידרוס שינויים שכבר נעשו ידנית)",
+      )
+    )
       return;
     // Find all pipelines for this tenant + track
     const { data: pipelines } = await supabase
@@ -255,7 +281,11 @@ export function StageConfigDialog({ stage, tenantId, clientId, track, onClose, o
         .update({
           agent_id: agentId,
           approval_mode: approvalMode,
-          configuration: { instructions, tools, target: existingCfg.target ?? {} },
+          configuration: {
+            instructions,
+            tools,
+            target: existingCfg.target ?? {},
+          },
         })
         .eq("id", s.id);
       updated++;
@@ -265,7 +295,10 @@ export function StageConfigDialog({ stage, tenantId, clientId, track, onClose, o
 
   return (
     <Dialog open={!!stage} onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto" dir="rtl">
+      <DialogContent
+        className="max-w-2xl max-h-[85vh] overflow-y-auto"
+        dir="rtl"
+      >
         <DialogHeader>
           <DialogTitle>הגדרת שלב — {stage.name}</DialogTitle>
         </DialogHeader>
@@ -304,12 +337,23 @@ export function StageConfigDialog({ stage, tenantId, clientId, track, onClose, o
             </div>
             <div>
               <Label>מצב אישור</Label>
-              <Select value={approvalMode} onValueChange={(v: any) => setApprovalMode(v)}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
+              <Select
+                value={approvalMode}
+                onValueChange={(v: any) => setApprovalMode(v)}
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="manual">ידני — דרוש אישור אנושי</SelectItem>
-                  <SelectItem value="auto">אוטומטי — האייג'נט מתקדם לבד</SelectItem>
-                  <SelectItem value="hybrid">היברידי — אישור רק על מקרי קצה</SelectItem>
+                  <SelectItem value="manual">
+                    ידני — דרוש אישור אנושי
+                  </SelectItem>
+                  <SelectItem value="auto">
+                    אוטומטי — האייג'נט מתקדם לבד
+                  </SelectItem>
+                  <SelectItem value="hybrid">
+                    היברידי — אישור רק על מקרי קצה
+                  </SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -327,12 +371,19 @@ export function StageConfigDialog({ stage, tenantId, clientId, track, onClose, o
           <TabsContent value="agent" className="space-y-3 pt-4">
             <div>
               <Label>אייג'נט אחראי</Label>
-              <Select value={agentId ?? "none"} onValueChange={(v) => setAgentId(v === "none" ? null : v)}>
-                <SelectTrigger><SelectValue placeholder="בחר אייג'נט" /></SelectTrigger>
+              <Select
+                value={agentId ?? "none"}
+                onValueChange={(v) => setAgentId(v === "none" ? null : v)}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="בחר אייג'נט" />
+                </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="none">ללא אייג'נט</SelectItem>
                   {agents.map((a: any) => (
-                    <SelectItem key={a.id} value={a.id}>{a.name}</SelectItem>
+                    <SelectItem key={a.id} value={a.id}>
+                      {a.name}
+                    </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
@@ -348,8 +399,14 @@ export function StageConfigDialog({ stage, tenantId, clientId, track, onClose, o
             <Label>כלים זמינים בשלב זה</Label>
             <div className="grid grid-cols-2 gap-2">
               {stageTools.map((t) => (
-                <label key={t.id} className="flex items-center gap-2 rounded-md border p-2 cursor-pointer hover:bg-muted/40">
-                  <Checkbox checked={tools.includes(t.id)} onCheckedChange={() => toggleTool(t.id)} />
+                <label
+                  key={t.id}
+                  className="flex items-center gap-2 rounded-md border p-2 cursor-pointer hover:bg-muted/40"
+                >
+                  <Checkbox
+                    checked={tools.includes(t.id)}
+                    onCheckedChange={() => toggleTool(t.id)}
+                  />
                   <span className="text-sm">{t.label}</span>
                 </label>
               ))}
@@ -376,7 +433,9 @@ export function StageConfigDialog({ stage, tenantId, clientId, track, onClose, o
         </Tabs>
 
         <DialogFooter>
-          <Button variant="ghost" onClick={onClose} disabled={saving}>ביטול</Button>
+          <Button variant="ghost" onClick={onClose} disabled={saving}>
+            ביטול
+          </Button>
           <Button onClick={handleSave} disabled={saving}>
             {saving && <Loader2 className="ml-2 h-4 w-4 animate-spin" />}
             שמור
@@ -412,7 +471,9 @@ function TargetSection({
     const togglePage = (id: string) =>
       setTarget({
         ...target,
-        page_ids: selected.includes(id) ? selected.filter((p: string) => p !== id) : [...selected, id],
+        page_ids: selected.includes(id)
+          ? selected.filter((p: string) => p !== id)
+          : [...selected, id],
       });
 
     return (
@@ -420,20 +481,36 @@ function TargetSection({
         <div>
           <Label>עמודי סושיאל מחוברים</Label>
           {pages.length === 0 ? (
-            <p className="mt-1 text-sm text-muted-foreground">אין עמודים מחוברים ללקוח. הוסף עמוד למטה.</p>
+            <p className="mt-1 text-sm text-muted-foreground">
+              אין עמודים מחוברים ללקוח. הוסף עמוד למטה.
+            </p>
           ) : (
             <div className="mt-2 space-y-2">
               {pages.map((p: any) => (
-                <label key={p.id} className="flex items-center gap-2 rounded-md border p-2 cursor-pointer hover:bg-muted/40">
-                  <Checkbox checked={selected.includes(p.id)} onCheckedChange={() => togglePage(p.id)} />
-                  <span className="text-sm font-medium">{p.page_name || p.page_id}</span>
-                  <span className="ms-auto text-xs text-muted-foreground">{p.platform}</span>
+                <label
+                  key={p.id}
+                  className="flex items-center gap-2 rounded-md border p-2 cursor-pointer hover:bg-muted/40"
+                >
+                  <Checkbox
+                    checked={selected.includes(p.id)}
+                    onCheckedChange={() => togglePage(p.id)}
+                  />
+                  <span className="text-sm font-medium">
+                    {p.page_name || p.page_id}
+                  </span>
+                  <span className="ms-auto text-xs text-muted-foreground">
+                    {p.platform}
+                  </span>
                 </label>
               ))}
             </div>
           )}
         </div>
-        <AddSocialPageInline clientId={clientId} tenantId={tenantId} onAdded={onConnectionsChanged} />
+        <AddSocialPageInline
+          clientId={clientId}
+          tenantId={tenantId}
+          onAdded={onConnectionsChanged}
+        />
       </div>
     );
   }
@@ -456,7 +533,10 @@ function TargetSection({
           onClick={async () => {
             const url = target.website || website;
             if (!url) return;
-            await supabase.from("clients").update({ website: url }).eq("id", clientId);
+            await supabase
+              .from("clients")
+              .update({ website: url })
+              .eq("id", clientId);
             toast.success("האתר נשמר בכרטיס הלקוח");
             onConnectionsChanged();
           }}
@@ -475,7 +555,9 @@ function TargetSection({
           <Label>חשבון Meta Ads</Label>
           <Input
             value={target.meta_ad_account ?? c?.meta_ads_account_id ?? ""}
-            onChange={(e) => setTarget({ ...target, meta_ad_account: e.target.value })}
+            onChange={(e) =>
+              setTarget({ ...target, meta_ad_account: e.target.value })
+            }
             placeholder="act_123456789"
           />
         </div>
@@ -483,7 +565,9 @@ function TargetSection({
           <Label>חשבון Google Ads</Label>
           <Input
             value={target.google_ad_account ?? c?.google_ads_account_id ?? ""}
-            onChange={(e) => setTarget({ ...target, google_ad_account: e.target.value })}
+            onChange={(e) =>
+              setTarget({ ...target, google_ad_account: e.target.value })
+            }
             placeholder="123-456-7890"
           />
         </div>
@@ -498,7 +582,15 @@ function TargetSection({
   );
 }
 
-function AddSocialPageInline({ clientId, tenantId, onAdded }: { clientId: string; tenantId: string; onAdded: () => void }) {
+function AddSocialPageInline({
+  clientId,
+  tenantId,
+  onAdded,
+}: {
+  clientId: string;
+  tenantId: string;
+  onAdded: () => void;
+}) {
   const [open, setOpen] = useState(false);
   const [platform, setPlatform] = useState("facebook");
   const [pageId, setPageId] = useState("");
@@ -542,7 +634,9 @@ function AddSocialPageInline({ clientId, tenantId, onAdded }: { clientId: string
     <div className="rounded-md border bg-muted/30 p-3 space-y-2">
       <div className="grid grid-cols-3 gap-2">
         <Select value={platform} onValueChange={setPlatform}>
-          <SelectTrigger><SelectValue /></SelectTrigger>
+          <SelectTrigger>
+            <SelectValue />
+          </SelectTrigger>
           <SelectContent>
             <SelectItem value="facebook">Facebook</SelectItem>
             <SelectItem value="instagram">Instagram</SelectItem>
@@ -551,12 +645,24 @@ function AddSocialPageInline({ clientId, tenantId, onAdded }: { clientId: string
             <SelectItem value="youtube">YouTube</SelectItem>
           </SelectContent>
         </Select>
-        <Input placeholder="Page ID" value={pageId} onChange={(e) => setPageId(e.target.value)} />
-        <Input placeholder="שם העמוד" value={pageName} onChange={(e) => setPageName(e.target.value)} />
+        <Input
+          placeholder="Page ID"
+          value={pageId}
+          onChange={(e) => setPageId(e.target.value)}
+        />
+        <Input
+          placeholder="שם העמוד"
+          value={pageName}
+          onChange={(e) => setPageName(e.target.value)}
+        />
       </div>
       <div className="flex gap-2 justify-end">
-        <Button size="sm" variant="ghost" onClick={() => setOpen(false)}>ביטול</Button>
-        <Button size="sm" onClick={save} disabled={saving}>שמור</Button>
+        <Button size="sm" variant="ghost" onClick={() => setOpen(false)}>
+          ביטול
+        </Button>
+        <Button size="sm" onClick={save} disabled={saving}>
+          שמור
+        </Button>
       </div>
     </div>
   );

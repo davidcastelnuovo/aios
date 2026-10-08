@@ -7,29 +7,53 @@ import { useAgency } from "@/contexts/AgencyContext";
 import { useCrossTenantAgencyIds } from "@/hooks/useCrossTenantAgencyIds";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+  DialogDescription,
+} from "@/components/ui/dialog";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
 import { Checkbox } from "@/components/ui/checkbox";
 import { InvoiceIntakeTab } from "@/components/accounting/InvoiceIntakeTab";
 import { CashFlowTab } from "@/components/accounting/CashFlowTab";
 import { Filter } from "lucide-react";
 import { toast } from "sonner";
-import { 
-  Users, 
-  Search, 
+import {
+  Users,
+  Search,
   TrendingUp,
   TrendingDown,
   DollarSign,
   Pencil,
   Plus,
   Trash2,
-  CalendarIcon
+  CalendarIcon,
 } from "lucide-react";
 import { Label } from "@/components/ui/label";
 import { EditClientDialog } from "@/components/forms/EditClientDialog";
@@ -42,7 +66,7 @@ const getMonthOptions = () => {
     const date = subMonths(new Date(), i);
     months.push({
       value: format(date, "yyyy-MM"),
-      label: format(date, "MMMM yyyy", { locale: he })
+      label: format(date, "MMMM yyyy", { locale: he }),
     });
   }
   return months;
@@ -54,20 +78,30 @@ export default function AccountingIntegrations() {
   const { selectedAgency } = useAgency();
   const { crossTenantAgencyIds } = useCrossTenantAgencyIds();
   const queryClient = useQueryClient();
-  
+
   const [searchQuery, setSearchQuery] = useState("");
   const [agencyFilter, setAgencyFilter] = useState<string>("all");
-  const [clientStatusFilter, setClientStatusFilter] = useState<string>("active");
-  const [selectedMonth, setSelectedMonth] = useState(() => format(subMonths(new Date(), 1), "yyyy-MM"));
+  const [clientStatusFilter, setClientStatusFilter] =
+    useState<string>("active");
+  const [selectedMonth, setSelectedMonth] = useState(() =>
+    format(subMonths(new Date(), 1), "yyyy-MM"),
+  );
   const [editingClient, setEditingClient] = useState<any | null>(null);
-  const [typeFilter, setTypeFilter] = useState<string[]>(["retainer", "one_time", "client_expense", "supplier_expense"]);
+  const [typeFilter, setTypeFilter] = useState<string[]>([
+    "retainer",
+    "one_time",
+    "client_expense",
+    "supplier_expense",
+  ]);
   const toggleType = (key: string) =>
-    setTypeFilter((prev) => (prev.includes(key) ? prev.filter((x) => x !== key) : [...prev, key]));
+    setTypeFilter((prev) =>
+      prev.includes(key) ? prev.filter((x) => x !== key) : [...prev, key],
+    );
   const showRetainer = typeFilter.includes("retainer");
   const showOneTime = typeFilter.includes("one_time");
   const showClientExp = typeFilter.includes("client_expense");
   const showSupplierExp = typeFilter.includes("supplier_expense");
-  
+
   // One-time income dialog
   const [addOneTimeIncomeOpen, setAddOneTimeIncomeOpen] = useState(false);
   const [oneTimeIncomeForm, setOneTimeIncomeForm] = useState({
@@ -100,13 +134,16 @@ export default function AccountingIntegrations() {
 
   // Fetch clients
   const { data: clients, isLoading: clientsLoading } = useQuery({
-    queryKey: ["accounting-clients", currentTenantId, agencyFilter, crossTenantAgencyIds],
+    queryKey: [
+      "accounting-clients",
+      currentTenantId,
+      agencyFilter,
+      crossTenantAgencyIds,
+    ],
     queryFn: async () => {
       if (!currentTenantId) return [];
 
-      let query = supabase
-        .from("clients")
-        .select(`
+      let query = supabase.from("clients").select(`
           id, name, contact_name, email, phone, status, retainer, monthly_budget,
           agency_id, updated_at, is_seo_client, services, monthly_fixed_expense,
           start_date, end_date,
@@ -121,7 +158,7 @@ export default function AccountingIntegrations() {
         const hasShared = crossTenantAgencyIds.length > 0;
         if (hasShared) {
           query = query.or(
-            `tenant_id.eq.${currentTenantId},agency_id.in.(${crossTenantAgencyIds.join(",")})`
+            `tenant_id.eq.${currentTenantId},agency_id.in.(${crossTenantAgencyIds.join(",")})`,
           );
         } else {
           query = query.eq("tenant_id", currentTenantId);
@@ -131,7 +168,7 @@ export default function AccountingIntegrations() {
       const { data: clientsData, error } = await query;
       if (error) throw error;
 
-      const clientIds = (clientsData || []).map(c => c.id);
+      const clientIds = (clientsData || []).map((c) => c.id);
       const { data: financialData } = clientIds.length
         ? await supabase
             .from("client_tenant_financial_data")
@@ -141,13 +178,14 @@ export default function AccountingIntegrations() {
         : { data: [] as any[] };
 
       const financialMap = new Map(
-        (financialData || []).map(f => [f.client_id, f])
+        (financialData || []).map((f) => [f.client_id, f]),
       );
 
-      return (clientsData || []).map(client => ({
+      return (clientsData || []).map((client) => ({
         ...client,
         retainer: financialMap.get(client.id)?.retainer ?? client.retainer,
-        monthly_budget: financialMap.get(client.id)?.monthly_budget ?? client.monthly_budget,
+        monthly_budget:
+          financialMap.get(client.id)?.monthly_budget ?? client.monthly_budget,
       }));
     },
     enabled: !!currentTenantId,
@@ -158,29 +196,41 @@ export default function AccountingIntegrations() {
     queryKey: ["accounting-campaigner-payments", currentTenantId, agencyFilter],
     queryFn: async () => {
       if (!currentTenantId) return [];
-      
-      const [{ data: ownedAgencies }, { data: sharedAgencies }] = await Promise.all([
-        supabase.from("agencies").select("id").eq("tenant_id", currentTenantId),
-        supabase.from("agency_tenant_access").select("agency_id").eq("accessing_tenant_id", currentTenantId),
-      ]);
-      
+
+      const [{ data: ownedAgencies }, { data: sharedAgencies }] =
+        await Promise.all([
+          supabase
+            .from("agencies")
+            .select("id")
+            .eq("tenant_id", currentTenantId),
+          supabase
+            .from("agency_tenant_access")
+            .select("agency_id")
+            .eq("accessing_tenant_id", currentTenantId),
+        ]);
+
       let agencyIds = [
-        ...(ownedAgencies || []).map(a => a.id),
-        ...(sharedAgencies || []).map(a => a.agency_id)
+        ...(ownedAgencies || []).map((a) => a.id),
+        ...(sharedAgencies || []).map((a) => a.agency_id),
       ];
       if (agencyFilter && agencyFilter !== "all") {
-        agencyIds = agencyIds.filter(id => id === agencyFilter);
+        agencyIds = agencyIds.filter((id) => id === agencyFilter);
       }
       if (agencyIds.length === 0) return [];
 
       const { data: clientsData } = await supabase
-        .from("clients").select("id").in("agency_id", agencyIds).in("status", ["active", "onboarding"]);
-      const clientIds = (clientsData || []).map(c => c.id);
+        .from("clients")
+        .select("id")
+        .in("agency_id", agencyIds)
+        .in("status", ["active", "onboarding"]);
+      const clientIds = (clientsData || []).map((c) => c.id);
       if (clientIds.length === 0) return [];
 
       const { data, error } = await supabase
         .from("client_team")
-        .select(`id, campaigner_payment, campaigner_id, client_id, campaigners (id, full_name), clients (id, name, agency_id)`)
+        .select(
+          `id, campaigner_payment, campaigner_id, client_id, campaigners (id, full_name), clients (id, name, agency_id)`,
+        )
         .in("client_id", clientIds);
       if (error) throw error;
       return data || [];
@@ -195,13 +245,15 @@ export default function AccountingIntegrations() {
       if (!currentTenantId) return [];
       const { data, error } = await supabase
         .from("suppliers")
-        .select(`
+        .select(
+          `
           id, name, payment_1, payment_2, payment_3,
           agency_id_1, agency_id_2, agency_id_3, related_campaigner_id,
           agency_1:agencies!suppliers_agency_id_1_fkey(id, name),
           agency_2:agencies!suppliers_agency_id_2_fkey(id, name),
           agency_3:agencies!suppliers_agency_id_3_fkey(id, name)
-        `)
+        `,
+        )
         .eq("tenant_id", currentTenantId);
       if (error) throw error;
       return data || [];
@@ -233,7 +285,10 @@ export default function AccountingIntegrations() {
       if (!currentTenantId) return [];
 
       const monthStart = `${selectedMonth}-01`;
-      const nextMonthStart = format(addMonths(new Date(monthStart), 1), "yyyy-MM-dd");
+      const nextMonthStart = format(
+        addMonths(new Date(monthStart), 1),
+        "yyyy-MM-dd",
+      );
 
       const { data, error } = await supabase
         .from("finance")
@@ -249,12 +304,15 @@ export default function AccountingIntegrations() {
     enabled: !!currentTenantId,
   });
 
-
-
-
   // Create one-time income
   const createOneTimeIncome = useMutation({
-    mutationFn: async (data: { client_id: string; product_name: string; amount: number; payment_month: string; notes?: string; }) => {
+    mutationFn: async (data: {
+      client_id: string;
+      product_name: string;
+      amount: number;
+      payment_month: string;
+      notes?: string;
+    }) => {
       const { error } = await supabase.from("one_time_incomes").insert({
         tenant_id: currentTenantId,
         client_id: data.client_id,
@@ -268,11 +326,21 @@ export default function AccountingIntegrations() {
     },
     onSuccess: (payment_month) => {
       if (payment_month) setSelectedMonth(payment_month);
-      queryClient.invalidateQueries({ queryKey: ["one-time-incomes-all", currentTenantId] });
-      queryClient.invalidateQueries({ queryKey: ["finance-summary", currentTenantId] });
+      queryClient.invalidateQueries({
+        queryKey: ["one-time-incomes-all", currentTenantId],
+      });
+      queryClient.invalidateQueries({
+        queryKey: ["finance-summary", currentTenantId],
+      });
       toast.success("הכנסה חד פעמית נוספה");
       setAddOneTimeIncomeOpen(false);
-      setOneTimeIncomeForm({ client_id: "", product_name: "", amount: "", income_date: "", notes: "" });
+      setOneTimeIncomeForm({
+        client_id: "",
+        product_name: "",
+        amount: "",
+        income_date: "",
+        notes: "",
+      });
     },
     onError: () => toast.error("שגיאה בשמירה"),
   });
@@ -280,31 +348,50 @@ export default function AccountingIntegrations() {
   // Delete one-time income
   const deleteOneTimeIncome = useMutation({
     mutationFn: async (id: string) => {
-      const { error } = await supabase.from("one_time_incomes").delete().eq("id", id);
+      const { error } = await supabase
+        .from("one_time_incomes")
+        .delete()
+        .eq("id", id);
       if (error) throw error;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["one-time-incomes-all", currentTenantId] });
+      queryClient.invalidateQueries({
+        queryKey: ["one-time-incomes-all", currentTenantId],
+      });
       toast.success("נמחק");
     },
   });
 
   // Update client status
   const updateClientStatus = useMutation({
-    mutationFn: async ({ clientId, status }: { clientId: string; status: string }) => {
-      const { error } = await supabase.from("clients").update({ status: status as any }).eq("id", clientId);
+    mutationFn: async ({
+      clientId,
+      status,
+    }: {
+      clientId: string;
+      status: string;
+    }) => {
+      const { error } = await supabase
+        .from("clients")
+        .update({ status: status as any })
+        .eq("id", clientId);
       if (error) throw error;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["accounting-clients", currentTenantId] });
-      queryClient.invalidateQueries({ queryKey: ["finance-summary", currentTenantId] });
+      queryClient.invalidateQueries({
+        queryKey: ["accounting-clients", currentTenantId],
+      });
+      queryClient.invalidateQueries({
+        queryKey: ["finance-summary", currentTenantId],
+      });
       toast.success("סטטוס עודכן");
     },
   });
 
   // Helpers to detect SEO clients (kept for legacy display purposes)
   const isSeoClient = (c: any) =>
-    !!c?.is_seo_client || (Array.isArray(c?.services) && c.services.includes("seo"));
+    !!c?.is_seo_client ||
+    (Array.isArray(c?.services) && c.services.includes("seo"));
 
   // Build a synthetic "fixed monthly expense" line per client based on the
   // manually-edited `monthly_fixed_expense` field on the client. This shows
@@ -316,10 +403,14 @@ export default function AccountingIntegrations() {
       (financeExpenses || [])
         .filter((e: any) => (e.category || "") === "הוצאה קבועה")
         .map((e: any) => e.client_id)
-        .filter(Boolean)
+        .filter(Boolean),
     );
     return clients
-      .filter((c: any) => Number(c?.monthly_fixed_expense || 0) > 0 && !haveFixedFinance.has(c.id))
+      .filter(
+        (c: any) =>
+          Number(c?.monthly_fixed_expense || 0) > 0 &&
+          !haveFixedFinance.has(c.id),
+      )
       .map((c: any) => ({
         id: `auto-fixed-${c.id}-${selectedMonth}`,
         client_id: c.id,
@@ -336,15 +427,21 @@ export default function AccountingIntegrations() {
   const clientExpensesMap = useMemo(() => {
     const map = new Map<string, number>();
     // Campaigner payments per client
-    campaignerPayments?.forEach(p => {
+    campaignerPayments?.forEach((p) => {
       if (p.campaigner_payment && p.campaigner_payment > 0) {
-        map.set(p.client_id, (map.get(p.client_id) || 0) + p.campaigner_payment);
+        map.set(
+          p.client_id,
+          (map.get(p.client_id) || 0) + p.campaigner_payment,
+        );
       }
     });
     // Finance expenses per client, strictly scoped to the active tenant + selected month
     financeExpenses?.forEach((expense) => {
       if (expense.client_id && expense.amount) {
-        map.set(expense.client_id, (map.get(expense.client_id) || 0) + Number(expense.amount));
+        map.set(
+          expense.client_id,
+          (map.get(expense.client_id) || 0) + Number(expense.amount),
+        );
       }
     });
     // Synthetic SEO ₪850 for SEO clients without a finance row
@@ -373,7 +470,7 @@ export default function AccountingIntegrations() {
   // One-time incomes grouped by client
   const clientOneTimeMap = useMemo(() => {
     const map = new Map<string, Array<any>>();
-    oneTimeIncomes?.forEach(oti => {
+    oneTimeIncomes?.forEach((oti) => {
       const list = map.get(oti.client_id) || [];
       list.push(oti);
       map.set(oti.client_id, list);
@@ -391,7 +488,8 @@ export default function AccountingIntegrations() {
         if (amount <= 0) return;
         const agency = s[`agency_${i}`];
         const agencyId = s[`agency_id_${i}`];
-        if (agencyFilter && agencyFilter !== "all" && agencyId !== agencyFilter) return;
+        if (agencyFilter && agencyFilter !== "all" && agencyId !== agencyFilter)
+          return;
         rows.push({
           id: `${s.id}-${i}`,
           supplier_name: s.name,
@@ -405,10 +503,10 @@ export default function AccountingIntegrations() {
   }, [suppliers, agencyFilter]);
 
   const totalSupplierExpenses = useMemo(
-    () => supplierExpenseRows.reduce((sum, r) => sum + Number(r.amount || 0), 0),
-    [supplierExpenseRows]
+    () =>
+      supplierExpenseRows.reduce((sum, r) => sum + Number(r.amount || 0), 0),
+    [supplierExpenseRows],
   );
-
 
   // Filter clients
   // Helper: was the client active during the selected month?
@@ -442,20 +540,26 @@ export default function AccountingIntegrations() {
     const thirtyDaysAgo = new Date();
     thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
 
-    return clients.filter(client => {
+    return clients.filter((client) => {
       const matchesSearch =
         client.name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
         client.contact_name?.toLowerCase().includes(searchQuery.toLowerCase());
-      const matchesAgency = agencyFilter === "all" || client.agency_id === agencyFilter;
+      const matchesAgency =
+        agencyFilter === "all" || client.agency_id === agencyFilter;
 
-      const isCurrentlyActive = client.status === "active" || client.status === "onboarding";
+      const isCurrentlyActive =
+        client.status === "active" || client.status === "onboarding";
       // Was active during the selected month even if currently paused/ended
       const activeInPeriod = !isCurrentlyActive && wasActiveInMonth(client);
 
       let matchesStatus = true;
       if (clientStatusFilter === "active_relevant") {
-        const isPausedRecently = client.status === "paused" && client.updated_at && new Date(client.updated_at) >= thirtyDaysAgo;
-        matchesStatus = isCurrentlyActive || !!isPausedRecently || activeInPeriod;
+        const isPausedRecently =
+          client.status === "paused" &&
+          client.updated_at &&
+          new Date(client.updated_at) >= thirtyDaysAgo;
+        matchesStatus =
+          isCurrentlyActive || !!isPausedRecently || activeInPeriod;
       } else if (clientStatusFilter === "active_onboarding") {
         matchesStatus = isCurrentlyActive || activeInPeriod;
       } else if (clientStatusFilter === "active") {
@@ -481,7 +585,13 @@ export default function AccountingIntegrations() {
   ];
 
   const getStatusBadge = (status: string) => {
-    const statusMap: Record<string, { variant: "default" | "secondary" | "destructive" | "outline"; label: string }> = {
+    const statusMap: Record<
+      string,
+      {
+        variant: "default" | "secondary" | "destructive" | "outline";
+        label: string;
+      }
+    > = {
       active: { variant: "default", label: "פעיל" },
       onboarding: { variant: "outline", label: "בקליטה" },
       paused: { variant: "secondary", label: "מושהה" },
@@ -491,17 +601,29 @@ export default function AccountingIntegrations() {
     return <Badge variant={config.variant}>{config.label}</Badge>;
   };
 
-  const selectedMonthLabel = monthOptions.find(m => m.value === selectedMonth)?.label || selectedMonth;
+  const selectedMonthLabel =
+    monthOptions.find((m) => m.value === selectedMonth)?.label || selectedMonth;
 
   // Totals - calculated from table data, gated by typeFilter
-  const totalRetainer = showRetainer ? filteredClients.reduce((sum, c) => sum + (c.retainer || 0), 0) : 0;
-  const clientExpensesOnly = showClientExp ? filteredClients.reduce((sum, c) => sum + (clientExpensesMap.get(c.id) || 0), 0) : 0;
+  const totalRetainer = showRetainer
+    ? filteredClients.reduce((sum, c) => sum + (c.retainer || 0), 0)
+    : 0;
+  const clientExpensesOnly = showClientExp
+    ? filteredClients.reduce(
+        (sum, c) => sum + (clientExpensesMap.get(c.id) || 0),
+        0,
+      )
+    : 0;
   const supplierTotal = showSupplierExp ? totalSupplierExpenses : 0;
   const totalExpenses = clientExpensesOnly + supplierTotal;
-  const totalOneTime = showOneTime ? filteredClients.reduce((sum, c) => {
-    const items = clientOneTimeMap.get(c.id) || [];
-    return sum + items.reduce((s: number, i: any) => s + (i.amount || 0), 0);
-  }, 0) : 0;
+  const totalOneTime = showOneTime
+    ? filteredClients.reduce((sum, c) => {
+        const items = clientOneTimeMap.get(c.id) || [];
+        return (
+          sum + items.reduce((s: number, i: any) => s + (i.amount || 0), 0)
+        );
+      }, 0)
+    : 0;
   const totalIncome = totalRetainer + totalOneTime;
   const profit = totalIncome - totalExpenses;
 
@@ -510,7 +632,9 @@ export default function AccountingIntegrations() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-3xl font-bold">הנהלת חשבונות</h1>
-          <p className="text-muted-foreground mt-2">ניהול פיננסי של לקוחות, ספקים וצוות</p>
+          <p className="text-muted-foreground mt-2">
+            ניהול פיננסי של לקוחות, ספקים וצוות
+          </p>
         </div>
       </div>
 
@@ -530,401 +654,523 @@ export default function AccountingIntegrations() {
         </TabsContent>
 
         <TabsContent value="overview" className="mt-4 space-y-6">
+          {/* Summary Cards */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between pb-2">
+                <CardTitle className="text-sm font-medium">הכנסות</CardTitle>
+                <TrendingUp className="h-4 w-4 text-green-600" />
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold text-green-600">
+                  {formatCurrency(totalIncome)}
+                </div>
+                <p className="text-xs text-muted-foreground mt-1">
+                  חד פעמי ב{selectedMonthLabel}: {formatCurrency(totalOneTime)}
+                </p>
+              </CardContent>
+            </Card>
 
-      {/* Summary Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium">הכנסות</CardTitle>
-            <TrendingUp className="h-4 w-4 text-green-600" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-green-600">{formatCurrency(totalIncome)}</div>
-            <p className="text-xs text-muted-foreground mt-1">חד פעמי ב{selectedMonthLabel}: {formatCurrency(totalOneTime)}</p>
-          </CardContent>
-        </Card>
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between pb-2">
+                <CardTitle className="text-sm font-medium">הוצאות</CardTitle>
+                <TrendingDown className="h-4 w-4 text-red-600" />
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold text-red-600">
+                  {formatCurrency(totalExpenses)}
+                </div>
+                {totalSupplierExpenses > 0 && (
+                  <p className="text-xs text-muted-foreground mt-1">
+                    כולל {formatCurrency(totalSupplierExpenses)} תשלומי ספקים
+                  </p>
+                )}
+              </CardContent>
+            </Card>
 
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium">הוצאות</CardTitle>
-            <TrendingDown className="h-4 w-4 text-red-600" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-red-600">{formatCurrency(totalExpenses)}</div>
-            {totalSupplierExpenses > 0 && (
-              <p className="text-xs text-muted-foreground mt-1">
-                כולל {formatCurrency(totalSupplierExpenses)} תשלומי ספקים
-              </p>
-            )}
-          </CardContent>
-        </Card>
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between pb-2">
+                <CardTitle className="text-sm font-medium">רווח</CardTitle>
+                <DollarSign
+                  className={`h-4 w-4 ${profit >= 0 ? "text-green-600" : "text-red-600"}`}
+                />
+              </CardHeader>
+              <CardContent>
+                <div
+                  className={`text-2xl font-bold ${profit >= 0 ? "text-green-600" : "text-red-600"}`}
+                >
+                  {formatCurrency(profit)}
+                </div>
+              </CardContent>
+            </Card>
+          </div>
 
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium">רווח</CardTitle>
-            <DollarSign className={`h-4 w-4 ${profit >= 0 ? "text-green-600" : "text-red-600"}`} />
-          </CardHeader>
-          <CardContent>
-            <div className={`text-2xl font-bold ${profit >= 0 ? "text-green-600" : "text-red-600"}`}>
-              {formatCurrency(profit)}
-            </div>
-          </CardContent>
-        </Card>
-      </div>
+          {/* Filters */}
+          <Card>
+            <CardContent className="pt-6">
+              <div className="flex flex-wrap gap-3 items-center">
+                <Select value={selectedMonth} onValueChange={setSelectedMonth}>
+                  <SelectTrigger className="w-[180px]">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {monthOptions.map((month) => (
+                      <SelectItem key={month.value} value={month.value}>
+                        {month.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
 
-      {/* Filters */}
-      <Card>
-        <CardContent className="pt-6">
-          <div className="flex flex-wrap gap-3 items-center">
-            <Select value={selectedMonth} onValueChange={setSelectedMonth}>
-              <SelectTrigger className="w-[180px]">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {monthOptions.map((month) => (
-                  <SelectItem key={month.value} value={month.value}>{month.label}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+                {agencies && agencies.length > 1 && (
+                  <Select value={agencyFilter} onValueChange={setAgencyFilter}>
+                    <SelectTrigger className="w-[180px]">
+                      <SelectValue placeholder="כל הסוכנויות" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">כל הסוכנויות</SelectItem>
+                      {agencies.map((agency) => (
+                        <SelectItem key={agency.id} value={agency.id}>
+                          {agency.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                )}
 
-            {agencies && agencies.length > 1 && (
-              <Select value={agencyFilter} onValueChange={setAgencyFilter}>
-                <SelectTrigger className="w-[180px]">
-                  <SelectValue placeholder="כל הסוכנויות" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">כל הסוכנויות</SelectItem>
-                  {agencies.map((agency) => (
-                    <SelectItem key={agency.id} value={agency.id}>{agency.name}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            )}
+                <Select
+                  value={clientStatusFilter}
+                  onValueChange={setClientStatusFilter}
+                >
+                  <SelectTrigger className="w-[200px]">
+                    <Users className="h-4 w-4 ml-2" />
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">כל הלקוחות</SelectItem>
+                    <SelectItem value="active_relevant">
+                      פעילים + עזבו ב-30 יום
+                    </SelectItem>
+                    <SelectItem value="active_onboarding">
+                      פעילים + בקליטה
+                    </SelectItem>
+                    <SelectItem value="active">פעילים בלבד</SelectItem>
+                    <SelectItem value="onboarding">בקליטה</SelectItem>
+                    <SelectItem value="paused">מושהים</SelectItem>
+                    <SelectItem value="ended">סיימו</SelectItem>
+                  </SelectContent>
+                </Select>
 
-            <Select value={clientStatusFilter} onValueChange={setClientStatusFilter}>
-              <SelectTrigger className="w-[200px]">
-                <Users className="h-4 w-4 ml-2" />
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">כל הלקוחות</SelectItem>
-                <SelectItem value="active_relevant">פעילים + עזבו ב-30 יום</SelectItem>
-                <SelectItem value="active_onboarding">פעילים + בקליטה</SelectItem>
-                <SelectItem value="active">פעילים בלבד</SelectItem>
-                <SelectItem value="onboarding">בקליטה</SelectItem>
-                <SelectItem value="paused">מושהים</SelectItem>
-                <SelectItem value="ended">סיימו</SelectItem>
-              </SelectContent>
-            </Select>
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <Button variant="outline" size="sm" className="relative">
+                      <Filter className="h-4 w-4 ml-2" />
+                      סוגי תנועות ({typeFilter.length}/4)
+                      {typeFilter.length < 4 && (
+                        <span className="absolute -top-1 -right-1 h-2 w-2 rounded-full bg-primary" />
+                      )}
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-56" align="end">
+                    <div className="space-y-2">
+                      {[
+                        { key: "retainer", label: "הכנסות ריטיינר" },
+                        { key: "one_time", label: "הכנסות חד פעמיות" },
+                        { key: "client_expense", label: "הוצאות לקוחות" },
+                        { key: "supplier_expense", label: "הוצאות ספקים" },
+                      ].map((opt) => (
+                        <label
+                          key={opt.key}
+                          className="flex items-center gap-2 cursor-pointer text-sm"
+                        >
+                          <Checkbox
+                            checked={typeFilter.includes(opt.key)}
+                            onCheckedChange={() => toggleType(opt.key)}
+                          />
+                          {opt.label}
+                        </label>
+                      ))}
+                    </div>
+                  </PopoverContent>
+                </Popover>
 
-            <Popover>
-              <PopoverTrigger asChild>
-                <Button variant="outline" size="sm" className="relative">
-                  <Filter className="h-4 w-4 ml-2" />
-                  סוגי תנועות ({typeFilter.length}/4)
-                  {typeFilter.length < 4 && (
-                    <span className="absolute -top-1 -right-1 h-2 w-2 rounded-full bg-primary" />
-                  )}
+                <Badge variant="secondary" className="whitespace-nowrap">
+                  {filteredClients.length} לקוחות
+                </Badge>
+
+                <Button
+                  size="sm"
+                  onClick={() => {
+                    setOneTimeIncomeForm({
+                      client_id: "",
+                      product_name: "",
+                      amount: "",
+                      income_date: "",
+                      notes: "",
+                    });
+                    setAddOneTimeIncomeOpen(true);
+                  }}
+                >
+                  <Plus className="h-4 w-4 ml-2" />
+                  הכנסה חד פעמית
                 </Button>
-              </PopoverTrigger>
-              <PopoverContent className="w-56" align="end">
-                <div className="space-y-2">
-                  {[
-                    { key: "retainer", label: "הכנסות ריטיינר" },
-                    { key: "one_time", label: "הכנסות חד פעמיות" },
-                    { key: "client_expense", label: "הוצאות לקוחות" },
-                    { key: "supplier_expense", label: "הוצאות ספקים" },
-                  ].map((opt) => (
-                    <label key={opt.key} className="flex items-center gap-2 cursor-pointer text-sm">
-                      <Checkbox
-                        checked={typeFilter.includes(opt.key)}
-                        onCheckedChange={() => toggleType(opt.key)}
-                      />
-                      {opt.label}
-                    </label>
+
+                <div className="relative flex-1 min-w-[150px]">
+                  <Search className="absolute right-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                  <Input
+                    placeholder="חיפוש..."
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    className="pr-10"
+                  />
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Unified Client Table */}
+          <Card>
+            <CardContent className="pt-6">
+              {clientsLoading ? (
+                <div className="space-y-4">
+                  {[...Array(5)].map((_, i) => (
+                    <Skeleton key={i} className="h-12 w-full" />
                   ))}
                 </div>
-              </PopoverContent>
-            </Popover>
-
-            
-            <Badge variant="secondary" className="whitespace-nowrap">
-              {filteredClients.length} לקוחות
-            </Badge>
-
-            <Button size="sm" onClick={() => {
-              setOneTimeIncomeForm({ client_id: "", product_name: "", amount: "", income_date: "", notes: "" });
-              setAddOneTimeIncomeOpen(true);
-            }}>
-              <Plus className="h-4 w-4 ml-2" />
-              הכנסה חד פעמית
-            </Button>
-            
-            <div className="relative flex-1 min-w-[150px]">
-              <Search className="absolute right-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-              <Input
-                placeholder="חיפוש..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="pr-10"
-              />
-            </div>
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Unified Client Table */}
-      <Card>
-        <CardContent className="pt-6">
-          {clientsLoading ? (
-            <div className="space-y-4">
-              {[...Array(5)].map((_, i) => <Skeleton key={i} className="h-12 w-full" />)}
-            </div>
-          ) : (
-            <div className="overflow-x-auto">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead className="text-right">שם לקוח</TableHead>
-                    <TableHead className="text-right">סוכנות</TableHead>
-                    <TableHead className="text-right">צוות</TableHead>
-                    <TableHead className="text-right">ריטיינר</TableHead>
-                    <TableHead className="text-right">הוצאות קבועות</TableHead>
-                    <TableHead className="text-right">הכנסה חד פעמית</TableHead>
-                    <TableHead className="text-right">סטטוס</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {filteredClients.length === 0 ? (
-                    <TableRow>
-                      <TableCell colSpan={7} className="text-center text-muted-foreground">
-                        לא נמצאו לקוחות
-                      </TableCell>
-                    </TableRow>
-                  ) : (
-                    filteredClients.map((client) => {
-                      const clientTeam = campaignerPayments?.filter(p => p.client_id === client.id) || [];
-                      const teamCount = clientTeam.length;
-                      const teamCost = clientTeam.reduce((sum, p) => sum + (p.campaigner_payment || 0), 0);
-                      const fixedExpenses = clientExpensesMap.get(client.id) || 0;
-                      const financeExpenseItems = clientFinanceExpensesMap.get(client.id) || [];
-                      const oneTimeItems = clientOneTimeMap.get(client.id) || [];
-                      const oneTimeTotal = oneTimeItems.reduce((s: number, i: any) => s + (i.amount || 0), 0);
-
-                      return (
-                        <TableRow key={client.id}>
-                          <TableCell className="font-medium text-right">
-                            <div className="flex items-center justify-end gap-2 flex-wrap">
-                              <Button
-                                variant="link"
-                                className="p-0 h-auto font-medium text-foreground hover:underline"
-                                onClick={() => setEditingClient(client)}
-                              >
-                                {client.name}
-                                <Pencil className="h-3 w-3 mr-1 opacity-50" />
-                              </Button>
-                              {(client.status === "paused" || client.status === "ended") && (client as any).end_date && (
-                                <Badge variant="secondary" className="text-[10px]">
-                                  היה פעיל עד {format(new Date((client as any).end_date), "dd/MM/yyyy")}
-                                </Badge>
-                              )}
-                            </div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead className="text-right">שם לקוח</TableHead>
+                        <TableHead className="text-right">סוכנות</TableHead>
+                        <TableHead className="text-right">צוות</TableHead>
+                        <TableHead className="text-right">ריטיינר</TableHead>
+                        <TableHead className="text-right">
+                          הוצאות קבועות
+                        </TableHead>
+                        <TableHead className="text-right">
+                          הכנסה חד פעמית
+                        </TableHead>
+                        <TableHead className="text-right">סטטוס</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {filteredClients.length === 0 ? (
+                        <TableRow>
+                          <TableCell
+                            colSpan={7}
+                            className="text-center text-muted-foreground"
+                          >
+                            לא נמצאו לקוחות
                           </TableCell>
-                          <TableCell className="text-right">{(client.agencies as any)?.name || "-"}</TableCell>
-                          <TableCell className="text-right">
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              className="text-xs h-auto p-1"
-                              onClick={() => setEditingClient(client)}
-                            >
-                              {teamCount > 0 ? (
-                                <span className="flex items-center gap-1">
-                                  <Users className="h-3 w-3" />
-                                  {teamCount} ({formatCurrency(teamCost)})
-                                </span>
-                              ) : (
-                                <span className="text-muted-foreground">+ שייך</span>
-                              )}
-                            </Button>
-                          </TableCell>
-                          <TableCell className="text-right font-medium">
-                            {formatCurrency(client.retainer)}
-                          </TableCell>
-                          <TableCell className="text-right">
-                            {fixedExpenses > 0 ? (
-                              <div className="space-y-1">
-                                <span className="text-red-600 font-medium">{formatCurrency(fixedExpenses)}</span>
-                                {financeExpenseItems.length > 0 && (
-                                  <div className="text-xs text-muted-foreground">
-                                    {financeExpenseItems.map((expense) => (
-                                      <div key={expense.id}>
-                                        {expense.category || "הוצאה"}: {formatCurrency(Number(expense.amount || 0))}
+                        </TableRow>
+                      ) : (
+                        filteredClients.map((client) => {
+                          const clientTeam =
+                            campaignerPayments?.filter(
+                              (p) => p.client_id === client.id,
+                            ) || [];
+                          const teamCount = clientTeam.length;
+                          const teamCost = clientTeam.reduce(
+                            (sum, p) => sum + (p.campaigner_payment || 0),
+                            0,
+                          );
+                          const fixedExpenses =
+                            clientExpensesMap.get(client.id) || 0;
+                          const financeExpenseItems =
+                            clientFinanceExpensesMap.get(client.id) || [];
+                          const oneTimeItems =
+                            clientOneTimeMap.get(client.id) || [];
+                          const oneTimeTotal = oneTimeItems.reduce(
+                            (s: number, i: any) => s + (i.amount || 0),
+                            0,
+                          );
+
+                          return (
+                            <TableRow key={client.id}>
+                              <TableCell className="font-medium text-right">
+                                <div className="flex items-center justify-end gap-2 flex-wrap">
+                                  <Button
+                                    variant="link"
+                                    className="p-0 h-auto font-medium text-foreground hover:underline"
+                                    onClick={() => setEditingClient(client)}
+                                  >
+                                    {client.name}
+                                    <Pencil className="h-3 w-3 mr-1 opacity-50" />
+                                  </Button>
+                                  {(client.status === "paused" ||
+                                    client.status === "ended") &&
+                                    (client as any).end_date && (
+                                      <Badge
+                                        variant="secondary"
+                                        className="text-[10px]"
+                                      >
+                                        היה פעיל עד{" "}
+                                        {format(
+                                          new Date((client as any).end_date),
+                                          "dd/MM/yyyy",
+                                        )}
+                                      </Badge>
+                                    )}
+                                </div>
+                              </TableCell>
+                              <TableCell className="text-right">
+                                {(client.agencies as any)?.name || "-"}
+                              </TableCell>
+                              <TableCell className="text-right">
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  className="text-xs h-auto p-1"
+                                  onClick={() => setEditingClient(client)}
+                                >
+                                  {teamCount > 0 ? (
+                                    <span className="flex items-center gap-1">
+                                      <Users className="h-3 w-3" />
+                                      {teamCount} ({formatCurrency(teamCost)})
+                                    </span>
+                                  ) : (
+                                    <span className="text-muted-foreground">
+                                      + שייך
+                                    </span>
+                                  )}
+                                </Button>
+                              </TableCell>
+                              <TableCell className="text-right font-medium">
+                                {formatCurrency(client.retainer)}
+                              </TableCell>
+                              <TableCell className="text-right">
+                                {fixedExpenses > 0 ? (
+                                  <div className="space-y-1">
+                                    <span className="text-red-600 font-medium">
+                                      {formatCurrency(fixedExpenses)}
+                                    </span>
+                                    {financeExpenseItems.length > 0 && (
+                                      <div className="text-xs text-muted-foreground">
+                                        {financeExpenseItems.map((expense) => (
+                                          <div key={expense.id}>
+                                            {expense.category || "הוצאה"}:{" "}
+                                            {formatCurrency(
+                                              Number(expense.amount || 0),
+                                            )}
+                                          </div>
+                                        ))}
+                                      </div>
+                                    )}
+                                  </div>
+                                ) : (
+                                  <span className="text-muted-foreground">
+                                    -
+                                  </span>
+                                )}
+                              </TableCell>
+                              <TableCell className="text-right">
+                                {oneTimeItems.length > 0 ? (
+                                  <div className="space-y-1">
+                                    {oneTimeItems.map((oti: any) => (
+                                      <div
+                                        key={oti.id}
+                                        className="flex items-center gap-2 text-sm"
+                                      >
+                                        <span className="text-green-600 font-medium">
+                                          {formatCurrency(oti.amount)}
+                                        </span>
+                                        <span className="text-muted-foreground truncate max-w-[120px]">
+                                          {oti.product_name}
+                                        </span>
+                                        {oti.payment_month && (
+                                          <span className="text-xs text-muted-foreground flex items-center gap-0.5">
+                                            <CalendarIcon className="h-3 w-3" />
+                                            {oti.payment_month}
+                                          </span>
+                                        )}
+                                        <Button
+                                          variant="ghost"
+                                          size="sm"
+                                          className="h-5 w-5 p-0"
+                                          onClick={() =>
+                                            deleteOneTimeIncome.mutate(oti.id)
+                                          }
+                                        >
+                                          <Trash2 className="h-3 w-3 text-destructive" />
+                                        </Button>
                                       </div>
                                     ))}
                                   </div>
+                                ) : (
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    className="text-xs h-auto p-1 text-muted-foreground"
+                                    onClick={() => {
+                                      setOneTimeIncomeForm({
+                                        client_id: client.id,
+                                        product_name: "",
+                                        amount: "",
+                                        income_date: selectedMonth,
+                                        notes: "",
+                                      });
+                                      setAddOneTimeIncomeOpen(true);
+                                    }}
+                                  >
+                                    <Plus className="h-3 w-3 ml-1" />
+                                    הוסף
+                                  </Button>
                                 )}
-                              </div>
-                            ) : (
-                              <span className="text-muted-foreground">-</span>
-                            )}
-                          </TableCell>
+                              </TableCell>
+                              <TableCell className="text-right">
+                                <Select
+                                  value={client.status}
+                                  onValueChange={(value) =>
+                                    updateClientStatus.mutate({
+                                      clientId: client.id,
+                                      status: value,
+                                    })
+                                  }
+                                >
+                                  <SelectTrigger className="h-7 w-[100px] text-xs border-none bg-transparent p-0 focus:ring-0 focus:ring-offset-0">
+                                    <SelectValue>
+                                      {getStatusBadge(client.status)}
+                                    </SelectValue>
+                                  </SelectTrigger>
+                                  <SelectContent className="bg-popover z-[9999]">
+                                    {clientStatusOptions.map((opt) => (
+                                      <SelectItem
+                                        key={opt.value}
+                                        value={opt.value}
+                                      >
+                                        <div className="flex items-center gap-2">
+                                          <span
+                                            className={`h-2 w-2 rounded-full ${opt.color}`}
+                                          />
+                                          {opt.label}
+                                        </div>
+                                      </SelectItem>
+                                    ))}
+                                  </SelectContent>
+                                </Select>
+                              </TableCell>
+                            </TableRow>
+                          );
+                        })
+                      )}
+                      {/* Totals Row */}
+                      {filteredClients.length > 0 && (
+                        <TableRow className="bg-muted/50 font-bold">
+                          <TableCell className="text-right">סה״כ</TableCell>
+                          <TableCell />
+                          <TableCell />
                           <TableCell className="text-right">
-                            {oneTimeItems.length > 0 ? (
-                              <div className="space-y-1">
-                                {oneTimeItems.map((oti: any) => (
-                                  <div key={oti.id} className="flex items-center gap-2 text-sm">
-                                    <span className="text-green-600 font-medium">{formatCurrency(oti.amount)}</span>
-                                    <span className="text-muted-foreground truncate max-w-[120px]">{oti.product_name}</span>
-                                    {oti.payment_month && (
-                                      <span className="text-xs text-muted-foreground flex items-center gap-0.5">
-                                        <CalendarIcon className="h-3 w-3" />
-                                        {oti.payment_month}
-                                      </span>
-                                    )}
-                                    <Button
-                                      variant="ghost"
-                                      size="sm"
-                                      className="h-5 w-5 p-0"
-                                      onClick={() => deleteOneTimeIncome.mutate(oti.id)}
-                                    >
-                                      <Trash2 className="h-3 w-3 text-destructive" />
-                                    </Button>
-                                  </div>
-                                ))}
-                              </div>
-                            ) : (
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                className="text-xs h-auto p-1 text-muted-foreground"
-                                onClick={() => {
-                                  setOneTimeIncomeForm({
-                                    client_id: client.id,
-                                    product_name: "",
-                                    amount: "",
-                                    income_date: selectedMonth,
-                                    notes: "",
-                                  });
-                                  setAddOneTimeIncomeOpen(true);
-                                }}
-                              >
-                                <Plus className="h-3 w-3 ml-1" />
-                                הוסף
-                              </Button>
-                            )}
+                            {formatCurrency(totalRetainer)}
                           </TableCell>
-                          <TableCell className="text-right">
-                            <Select
-                              value={client.status}
-                              onValueChange={(value) => updateClientStatus.mutate({ clientId: client.id, status: value })}
-                            >
-                              <SelectTrigger className="h-7 w-[100px] text-xs border-none bg-transparent p-0 focus:ring-0 focus:ring-offset-0">
-                                <SelectValue>{getStatusBadge(client.status)}</SelectValue>
-                              </SelectTrigger>
-                              <SelectContent className="bg-popover z-[9999]">
-                                {clientStatusOptions.map((opt) => (
-                                  <SelectItem key={opt.value} value={opt.value}>
-                                    <div className="flex items-center gap-2">
-                                      <span className={`h-2 w-2 rounded-full ${opt.color}`} />
-                                      {opt.label}
-                                    </div>
-                                  </SelectItem>
-                                ))}
-                              </SelectContent>
-                            </Select>
+                          <TableCell className="text-right text-red-600">
+                            {formatCurrency(totalExpenses)}
+                          </TableCell>
+                          <TableCell className="text-right text-green-600">
+                            {formatCurrency(totalOneTime)}
+                          </TableCell>
+                          <TableCell />
+                        </TableRow>
+                      )}
+                    </TableBody>
+                  </Table>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* Suppliers Expenses */}
+          {showSupplierExp && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-right flex items-center justify-between">
+                  <span>הוצאות ספקים</span>
+                  <span className="text-sm font-normal text-muted-foreground">
+                    סה״כ:{" "}
+                    <span className="text-red-600 font-bold">
+                      {formatCurrency(totalSupplierExpenses)}
+                    </span>
+                  </span>
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                {supplierExpenseRows.length === 0 ? (
+                  <p className="text-center text-muted-foreground py-6">
+                    אין הוצאות ספקים להצגה
+                  </p>
+                ) : (
+                  <div className="overflow-x-auto">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead className="text-right">שם ספק</TableHead>
+                          <TableHead className="text-right">סוכנות</TableHead>
+                          <TableHead className="text-right">
+                            תשלום חודשי
+                          </TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {supplierExpenseRows.map((row) => (
+                          <TableRow key={row.id}>
+                            <TableCell className="text-right font-medium">
+                              {row.supplier_name}
+                            </TableCell>
+                            <TableCell className="text-right">
+                              {row.agency_name}
+                            </TableCell>
+                            <TableCell className="text-right text-red-600 font-medium">
+                              {formatCurrency(row.amount)}
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                        <TableRow className="bg-muted/50 font-bold">
+                          <TableCell className="text-right">סה״כ</TableCell>
+                          <TableCell />
+                          <TableCell className="text-right text-red-600">
+                            {formatCurrency(totalSupplierExpenses)}
                           </TableCell>
                         </TableRow>
-                      );
-                    })
-                  )}
-                  {/* Totals Row */}
-                  {filteredClients.length > 0 && (
-                    <TableRow className="bg-muted/50 font-bold">
-                      <TableCell className="text-right">סה״כ</TableCell>
-                      <TableCell />
-                      <TableCell />
-                      <TableCell className="text-right">{formatCurrency(totalRetainer)}</TableCell>
-                      <TableCell className="text-right text-red-600">{formatCurrency(totalExpenses)}</TableCell>
-                      <TableCell className="text-right text-green-600">{formatCurrency(totalOneTime)}</TableCell>
-                      <TableCell />
-                    </TableRow>
-                  )}
-                </TableBody>
-              </Table>
-            </div>
+                      </TableBody>
+                    </Table>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
           )}
-        </CardContent>
-      </Card>
-
-      {/* Suppliers Expenses */}
-      {showSupplierExp && (
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-right flex items-center justify-between">
-            <span>הוצאות ספקים</span>
-            <span className="text-sm font-normal text-muted-foreground">
-              סה״כ: <span className="text-red-600 font-bold">{formatCurrency(totalSupplierExpenses)}</span>
-            </span>
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          {supplierExpenseRows.length === 0 ? (
-            <p className="text-center text-muted-foreground py-6">אין הוצאות ספקים להצגה</p>
-          ) : (
-            <div className="overflow-x-auto">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead className="text-right">שם ספק</TableHead>
-                    <TableHead className="text-right">סוכנות</TableHead>
-                    <TableHead className="text-right">תשלום חודשי</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {supplierExpenseRows.map((row) => (
-                    <TableRow key={row.id}>
-                      <TableCell className="text-right font-medium">{row.supplier_name}</TableCell>
-                      <TableCell className="text-right">{row.agency_name}</TableCell>
-                      <TableCell className="text-right text-red-600 font-medium">
-                        {formatCurrency(row.amount)}
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                  <TableRow className="bg-muted/50 font-bold">
-                    <TableCell className="text-right">סה״כ</TableCell>
-                    <TableCell />
-                    <TableCell className="text-right text-red-600">
-                      {formatCurrency(totalSupplierExpenses)}
-                    </TableCell>
-                  </TableRow>
-                </TableBody>
-              </Table>
-            </div>
-          )}
-        </CardContent>
-      </Card>
-      )}
         </TabsContent>
       </Tabs>
 
       {/* Add One-Time Income Dialog */}
-      <Dialog open={addOneTimeIncomeOpen} onOpenChange={setAddOneTimeIncomeOpen}>
+      <Dialog
+        open={addOneTimeIncomeOpen}
+        onOpenChange={setAddOneTimeIncomeOpen}
+      >
         <DialogContent dir="rtl">
           <DialogHeader>
             <DialogTitle>הוספת הכנסה חד פעמית</DialogTitle>
-            <DialogDescription>הוסף מוצר או שירות חד פעמי ושייך ללקוח</DialogDescription>
+            <DialogDescription>
+              הוסף מוצר או שירות חד פעמי ושייך ללקוח
+            </DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-4">
             <div className="space-y-2">
               <Label>לקוח</Label>
-              <Select value={oneTimeIncomeForm.client_id} onValueChange={(val) => setOneTimeIncomeForm(f => ({...f, client_id: val}))}>
+              <Select
+                value={oneTimeIncomeForm.client_id}
+                onValueChange={(val) =>
+                  setOneTimeIncomeForm((f) => ({ ...f, client_id: val }))
+                }
+              >
                 <SelectTrigger>
                   <SelectValue placeholder="בחר לקוח" />
                 </SelectTrigger>
                 <SelectContent>
                   {clients?.map((client: any) => (
-                    <SelectItem key={client.id} value={client.id}>{client.name}</SelectItem>
+                    <SelectItem key={client.id} value={client.id}>
+                      {client.name}
+                    </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
@@ -933,7 +1179,12 @@ export default function AccountingIntegrations() {
               <Label>שם מוצר/שירות</Label>
               <Input
                 value={oneTimeIncomeForm.product_name}
-                onChange={(e) => setOneTimeIncomeForm(f => ({...f, product_name: e.target.value}))}
+                onChange={(e) =>
+                  setOneTimeIncomeForm((f) => ({
+                    ...f,
+                    product_name: e.target.value,
+                  }))
+                }
                 placeholder="לדוגמה: בניית אתר"
               />
             </div>
@@ -942,19 +1193,31 @@ export default function AccountingIntegrations() {
               <Input
                 type="number"
                 value={oneTimeIncomeForm.amount}
-                onChange={(e) => setOneTimeIncomeForm(f => ({...f, amount: e.target.value}))}
+                onChange={(e) =>
+                  setOneTimeIncomeForm((f) => ({
+                    ...f,
+                    amount: e.target.value,
+                  }))
+                }
                 placeholder="0"
               />
             </div>
             <div className="space-y-2">
               <Label>תאריך / חודש שיוך</Label>
-              <Select value={oneTimeIncomeForm.income_date} onValueChange={(val) => setOneTimeIncomeForm(f => ({...f, income_date: val}))}>
+              <Select
+                value={oneTimeIncomeForm.income_date}
+                onValueChange={(val) =>
+                  setOneTimeIncomeForm((f) => ({ ...f, income_date: val }))
+                }
+              >
                 <SelectTrigger>
                   <SelectValue placeholder="בחר חודש" />
                 </SelectTrigger>
                 <SelectContent>
                   {monthOptions.map((month) => (
-                    <SelectItem key={month.value} value={month.value}>{month.label}</SelectItem>
+                    <SelectItem key={month.value} value={month.value}>
+                      {month.label}
+                    </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
@@ -963,16 +1226,28 @@ export default function AccountingIntegrations() {
               <Label>הערות (אופציונלי)</Label>
               <Input
                 value={oneTimeIncomeForm.notes}
-                onChange={(e) => setOneTimeIncomeForm(f => ({...f, notes: e.target.value}))}
+                onChange={(e) =>
+                  setOneTimeIncomeForm((f) => ({ ...f, notes: e.target.value }))
+                }
                 placeholder="הערות"
               />
             </div>
           </div>
           <DialogFooter className="gap-2">
-            <Button variant="outline" onClick={() => setAddOneTimeIncomeOpen(false)}>ביטול</Button>
-            <Button 
+            <Button
+              variant="outline"
+              onClick={() => setAddOneTimeIncomeOpen(false)}
+            >
+              ביטול
+            </Button>
+            <Button
               onClick={() => {
-                if (!oneTimeIncomeForm.client_id || !oneTimeIncomeForm.product_name || !oneTimeIncomeForm.amount || !oneTimeIncomeForm.income_date) {
+                if (
+                  !oneTimeIncomeForm.client_id ||
+                  !oneTimeIncomeForm.product_name ||
+                  !oneTimeIncomeForm.amount ||
+                  !oneTimeIncomeForm.income_date
+                ) {
                   toast.error("נא למלא את כל השדות");
                   return;
                 }

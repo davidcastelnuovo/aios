@@ -15,12 +15,19 @@ export type SeoKeywordRelevanceLists = {
 const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
-export function isSeoRelevanceClientId(value: string | undefined | null): boolean {
+export function isSeoRelevanceClientId(
+  value: string | undefined | null,
+): boolean {
   return !!value && UUID_RE.test(value);
 }
 
-export function parseSeoKeywordRelevance(raw: unknown): SeoKeywordRelevanceLists {
-  const empty: SeoKeywordRelevanceLists = { forceRelevant: [], forceIrrelevant: [] };
+export function parseSeoKeywordRelevance(
+  raw: unknown,
+): SeoKeywordRelevanceLists {
+  const empty: SeoKeywordRelevanceLists = {
+    forceRelevant: [],
+    forceIrrelevant: [],
+  };
   if (!raw || typeof raw !== "object") return empty;
   const obj = raw as Record<string, unknown>;
   const normalizeList = (v: unknown): string[] => {

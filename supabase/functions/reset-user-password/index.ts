@@ -3,7 +3,8 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+  "Access-Control-Allow-Headers":
+    "authorization, x-client-info, apikey, content-type",
 };
 
 serve(async (req) => {
@@ -14,7 +15,7 @@ serve(async (req) => {
   try {
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-    
+
     // Create admin client
     const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey);
 
@@ -22,22 +23,28 @@ serve(async (req) => {
 
     if (!userId || !newPassword) {
       return new Response(
-        JSON.stringify({ success: false, error: "Missing userId or newPassword" }),
-        { 
+        JSON.stringify({
+          success: false,
+          error: "Missing userId or newPassword",
+        }),
+        {
           headers: { ...corsHeaders, "Content-Type": "application/json" },
           status: 400,
-        }
+        },
       );
     }
 
     // Validate password length
     if (newPassword.length < 6) {
       return new Response(
-        JSON.stringify({ success: false, error: "הסיסמה חייבת להכיל לפחות 6 תווים" }),
-        { 
+        JSON.stringify({
+          success: false,
+          error: "הסיסמה חייבת להכיל לפחות 6 תווים",
+        }),
+        {
           headers: { ...corsHeaders, "Content-Type": "application/json" },
           status: 400,
-        }
+        },
       );
     }
 
@@ -45,24 +52,30 @@ serve(async (req) => {
     const authHeader = req.headers.get("Authorization");
     if (!authHeader) {
       return new Response(
-        JSON.stringify({ success: false, error: "Missing authorization header" }),
-        { 
+        JSON.stringify({
+          success: false,
+          error: "Missing authorization header",
+        }),
+        {
           headers: { ...corsHeaders, "Content-Type": "application/json" },
           status: 401,
-        }
+        },
       );
     }
 
     const token = authHeader.replace("Bearer ", "");
-    const { data: { user: currentUser }, error: authError } = await supabaseAdmin.auth.getUser(token);
+    const {
+      data: { user: currentUser },
+      error: authError,
+    } = await supabaseAdmin.auth.getUser(token);
 
     if (authError || !currentUser) {
       return new Response(
         JSON.stringify({ success: false, error: "Unauthorized" }),
-        { 
+        {
           headers: { ...corsHeaders, "Content-Type": "application/json" },
           status: 401,
-        }
+        },
       );
     }
 
@@ -78,47 +91,48 @@ serve(async (req) => {
 
     if (!isOwner && !isSuperAdmin) {
       return new Response(
-        JSON.stringify({ success: false, error: "Only owners and super admins can reset passwords" }),
-        { 
+        JSON.stringify({
+          success: false,
+          error: "Only owners and super admins can reset passwords",
+        }),
+        {
           headers: { ...corsHeaders, "Content-Type": "application/json" },
           status: 403,
-        }
+        },
       );
     }
 
     // Reset the user's password using admin API
     const { data, error } = await supabaseAdmin.auth.admin.updateUserById(
       userId,
-      { password: newPassword }
+      { password: newPassword },
     );
 
     if (error) {
       console.error("Error resetting password:", error);
       return new Response(
         JSON.stringify({ success: false, error: error.message }),
-        { 
+        {
           headers: { ...corsHeaders, "Content-Type": "application/json" },
           status: 500,
-        }
+        },
       );
     }
 
-    return new Response(
-      JSON.stringify({ success: true, data }),
-      { 
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-        status: 200,
-      }
-    );
+    return new Response(JSON.stringify({ success: true, data }), {
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+      status: 200,
+    });
   } catch (error) {
     console.error("Error in reset-user-password function:", error);
-    const errorMessage = error instanceof Error ? error.message : "Unknown error occurred";
+    const errorMessage =
+      error instanceof Error ? error.message : "Unknown error occurred";
     return new Response(
       JSON.stringify({ success: false, error: errorMessage }),
-      { 
+      {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
         status: 500,
-      }
+      },
     );
   }
 });

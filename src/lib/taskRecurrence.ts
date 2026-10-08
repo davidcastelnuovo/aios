@@ -10,11 +10,12 @@ export const WEEKDAY_OPTIONS = [
   { value: 6, label: "יום שבת" },
 ] as const;
 
-export const RECURRENCE_FREQUENCY_LABELS: Record<RecurrenceFrequency, string> = {
-  daily: "כל יום",
-  weekly: "כל שבוע",
-  monthly: "כל חודש",
-};
+export const RECURRENCE_FREQUENCY_LABELS: Record<RecurrenceFrequency, string> =
+  {
+    daily: "כל יום",
+    weekly: "כל שבוע",
+    monthly: "כל חודש",
+  };
 
 export function describeRecurrence(options: {
   frequency?: RecurrenceFrequency | null;
@@ -25,7 +26,9 @@ export function describeRecurrence(options: {
   if (!options.frequency) return null;
   const parts = [RECURRENCE_FREQUENCY_LABELS[options.frequency]];
   if (options.frequency === "weekly" && options.weekday != null) {
-    const weekday = WEEKDAY_OPTIONS.find((item) => item.value === options.weekday);
+    const weekday = WEEKDAY_OPTIONS.find(
+      (item) => item.value === options.weekday,
+    );
     if (weekday) parts.push(weekday.label);
   }
   if (options.frequency === "monthly" && options.monthday != null) {
@@ -45,7 +48,11 @@ function addDays(date: Date, days: number): Date {
 
 function addMonthsClamped(date: Date, months: number, monthday: number): Date {
   const next = new Date(date.getFullYear(), date.getMonth() + months, 1);
-  const lastDay = new Date(next.getFullYear(), next.getMonth() + 1, 0).getDate();
+  const lastDay = new Date(
+    next.getFullYear(),
+    next.getMonth() + 1,
+    0,
+  ).getDate();
   next.setDate(Math.min(monthday, lastDay));
   return next;
 }
@@ -103,7 +110,9 @@ export function computeFirstOccurrenceDate(options: {
   asOf?: Date;
 }): Date {
   const asOf = startOfLocalDay(options.asOf ?? new Date());
-  const preferred = options.preferredDate ? startOfLocalDay(options.preferredDate) : null;
+  const preferred = options.preferredDate
+    ? startOfLocalDay(options.preferredDate)
+    : null;
   const from = preferred && preferred >= asOf ? preferred : asOf;
 
   if (options.frequency === "daily") {
@@ -117,7 +126,11 @@ export function computeFirstOccurrenceDate(options: {
   }
 
   const monthday = options.monthday ?? from.getDate();
-  const thisMonth = addMonthsClamped(new Date(from.getFullYear(), from.getMonth(), 1), 0, monthday);
+  const thisMonth = addMonthsClamped(
+    new Date(from.getFullYear(), from.getMonth(), 1),
+    0,
+    monthday,
+  );
   if (thisMonth >= from) return thisMonth;
   return addMonthsClamped(thisMonth, 1, monthday);
 }

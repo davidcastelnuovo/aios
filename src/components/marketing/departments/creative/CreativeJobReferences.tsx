@@ -1,7 +1,10 @@
 import { useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { CreativeImage } from "@/components/marketing/departments/creative/CreativeImage";
-import { uploadCreativeAsset, type StyleReference } from "@/components/marketing/departments/creative/brandKit";
+import {
+  uploadCreativeAsset,
+  type StyleReference,
+} from "@/components/marketing/departments/creative/brandKit";
 import { supabase } from "@/integrations/supabase/client";
 import { Loader2, Trash2, Upload } from "lucide-react";
 import { toast } from "sonner";
@@ -14,7 +17,13 @@ interface Props {
   disabled?: boolean;
 }
 
-export function CreativeJobReferences({ tenantId, itemId, references, onChange, disabled }: Props) {
+export function CreativeJobReferences({
+  tenantId,
+  itemId,
+  references,
+  onChange,
+  disabled,
+}: Props) {
   const inputRef = useRef<HTMLInputElement>(null);
   const [uploading, setUploading] = useState(false);
 
@@ -34,9 +43,15 @@ export function CreativeJobReferences({ tenantId, itemId, references, onChange, 
         uploaded.push({ url: asset.url, name: asset.name });
       }
       onChange([...references, ...uploaded]);
-      toast.success(uploaded.length === 1 ? "הרפרנס צורף לרג׳קט" : `${uploaded.length} רפרנסים צורפו`);
+      toast.success(
+        uploaded.length === 1
+          ? "הרפרנס צורף לרג׳קט"
+          : `${uploaded.length} רפרנסים צורפו`,
+      );
     } catch (error: unknown) {
-      toast.error(error instanceof Error ? error.message : "העלאת הרפרנס נכשלה");
+      toast.error(
+        error instanceof Error ? error.message : "העלאת הרפרנס נכשלה",
+      );
     } finally {
       setUploading(false);
       if (inputRef.current) inputRef.current.value = "";
@@ -45,16 +60,29 @@ export function CreativeJobReferences({ tenantId, itemId, references, onChange, 
 
   return (
     <div className="space-y-2" dir="rtl">
-      <p className="text-[11px] text-muted-foreground">רפרנסים לטעם שאתם רוצים במקום — תאורה, קרופ, חומר. לא חובה.</p>
+      <p className="text-[11px] text-muted-foreground">
+        רפרנסים לטעם שאתם רוצים במקום — תאורה, קרופ, חומר. לא חובה.
+      </p>
       {references.length > 0 && (
         <div className="flex flex-wrap gap-2">
           {references.map((reference, index) => (
-            <div key={`${reference.url}-${index}`} className="relative h-16 w-16 overflow-hidden rounded-lg border">
-              <CreativeImage src={reference.url} alt={reference.name || "רפרנס"} className="h-full w-full object-cover" />
+            <div
+              key={`${reference.url}-${index}`}
+              className="relative h-16 w-16 overflow-hidden rounded-lg border"
+            >
+              <CreativeImage
+                src={reference.url}
+                alt={reference.name || "רפרנס"}
+                className="h-full w-full object-cover"
+              />
               <button
                 type="button"
                 className="absolute start-0.5 top-0.5 rounded bg-background/80 p-0.5 text-destructive"
-                onClick={() => onChange(references.filter((_, itemIndex) => itemIndex !== index))}
+                onClick={() =>
+                  onChange(
+                    references.filter((_, itemIndex) => itemIndex !== index),
+                  )
+                }
                 disabled={disabled || uploading}
                 aria-label="הסר רפרנס"
               >
@@ -80,7 +108,11 @@ export function CreativeJobReferences({ tenantId, itemId, references, onChange, 
         onClick={() => inputRef.current?.click()}
         disabled={disabled || uploading}
       >
-        {uploading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Upload className="h-3.5 w-3.5" />}
+        {uploading ? (
+          <Loader2 className="h-3.5 w-3.5 animate-spin" />
+        ) : (
+          <Upload className="h-3.5 w-3.5" />
+        )}
         הוסף רפרנס
       </Button>
     </div>

@@ -7,20 +7,21 @@ import {
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+  "Access-Control-Allow-Headers":
+    "authorization, x-client-info, apikey, content-type",
 };
 
 const reply = (body: unknown, status = 200) =>
   new Response(JSON.stringify(body), {
     status,
-    headers: { ...corsHeaders, "Content-Type": "application/json", "Cache-Control": "no-store" },
+    headers: {
+      ...corsHeaders,
+      "Content-Type": "application/json",
+      "Cache-Control": "no-store",
+    },
   });
 
-const graphRequest = async (
-  url: URL,
-  token: string,
-  init?: RequestInit,
-) => {
+const graphRequest = async (url: URL, token: string, init?: RequestInit) => {
   const response = await fetch(url, {
     ...init,
     headers: {
@@ -41,7 +42,8 @@ const graphRequest = async (
     return {
       ok: false as const,
       status: response.status || 502,
-      error: error.error_user_msg || error.message || "Meta template request failed",
+      error:
+        error.error_user_msg || error.message || "Meta template request failed",
       metaError: error,
     };
   }
@@ -58,8 +60,13 @@ const explainTemplateMetaError = (
 ) => {
   const subcode = Number(metaError?.error_subcode ?? 0);
   const userMsg = String(metaError?.error_user_msg ?? "").trim();
-  if (subcode === 2494160 || /not allowed to create or update templates/i.test(userMsg)) {
-    const platform = String(integrationSettings?.platform_type ?? "").toUpperCase();
+  if (
+    subcode === 2494160 ||
+    /not allowed to create or update templates/i.test(userMsg)
+  ) {
+    const platform = String(
+      integrationSettings?.platform_type ?? "",
+    ).toUpperCase();
     if (platform === "ON_PREMISE") {
       return {
         error:
@@ -70,8 +77,7 @@ const explainTemplateMetaError = (
       };
     }
     return {
-      error:
-        "חשבון WhatsApp Business זה עדיין לא מאושר ליצירת תבניות ב-Meta.",
+      error: "חשבון WhatsApp Business זה עדיין לא מאושר ליצירת תבניות ב-Meta.",
       code: "waba_template_creation_blocked",
       guidance:
         "WhatsApp Manager → Phone numbers → ודאו Cloud API (לא On-Premise) · אימות מספר · Billing על ה-WABA הנכון.",
@@ -81,53 +87,64 @@ const explainTemplateMetaError = (
 };
 
 const decodeBase64Payload = (value: string): Uint8Array => {
-  const normalized = value.includes(",") ? value.split(",").pop() ?? value : value;
+  const normalized = value.includes(",")
+    ? (value.split(",").pop() ?? value)
+    : value;
   const binary = atob(normalized.trim());
   const bytes = new Uint8Array(binary.length);
-  for (let index = 0; index < binary.length; index++) bytes[index] = binary.charCodeAt(index);
+  for (let index = 0; index < binary.length; index++)
+    bytes[index] = binary.charCodeAt(index);
   return bytes;
 };
 
 Deno.serve(async (request) => {
-  if (request.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
-  if (request.method !== "POST") return reply({ error: "method_not_allowed" }, 405);
+  if (request.method === "OPTIONS")
+    return new Response(null, { headers: corsHeaders });
+  if (request.method !== "POST")
+    return reply({ error: "method_not_allowed" }, 405);
 
   try {
     const supabaseUrl = Deno.env.get("SUPABASE_URL") ?? "";
     const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
     const authHeader = request.headers.get("Authorization") ?? "";
     const jwt = authHeader.replace(/^Bearer\s+/i, "");
-    if (!supabaseUrl || !serviceKey || !jwt) return reply({ error: "unauthorized" }, 401);
+    if (!supabaseUrl || !serviceKey || !jwt)
+      return reply({ error: "unauthorized" }, 401);
 
     const admin = createClient(supabaseUrl, serviceKey, {
       auth: { persistSession: false, autoRefreshToken: false },
     });
     const { data: authData, error: authError } = await admin.auth.getUser(jwt);
-    if (authError || !authData.user) return reply({ error: "unauthorized" }, 401);
+    if (authError || !authData.user)
+      return reply({ error: "unauthorized" }, 401);
 
     const body = await request.json().catch(() => ({}));
     const action = typeof body.action === "string" ? body.action : "list";
     const tenantId = typeof body.tenant_id === "string" ? body.tenant_id : "";
-    const integrationId = typeof body.integration_id === "string" ? body.integration_id : "";
+    const integrationId =
+      typeof body.integration_id === "string" ? body.integration_id : "";
     if (!tenantId || !integrationId) {
       return reply({ error: "tenant_id_and_integration_id_required" }, 400);
     }
 
-    const [{ data: membership }, { data: superAdmin }, { data: integration }] = await Promise.all([
-      admin
-        .from("tenant_users")
-        .select("user_id")
-        .eq("tenant_id", tenantId)
-        .eq("user_id", authData.user.id)
-        .maybeSingle(),
-      admin.rpc("is_super_admin", { _user_id: authData.user.id }),
-      admin
-        .from("tenant_integrations")
-        .select("id,tenant_id,user_id,connection_visibility,settings,is_active")
-        .eq("id", integrationId)
-        .eq("integration_type", "meta_whatsapp")
-        .maybeSingle(),
-    ]);
+    const [{ data: membership }, { data: superAdmin }, { data: integration }] =
+      await Promise.all([
+        admin
+          .from("tenant_users")
+          .select("user_id")
+          .eq("tenant_id", tenantId)
+          .eq("user_id", authData.user.id)
+          .maybeSingle(),
+        admin.rpc("is_super_admin", { _user_id: authData.user.id }),
+        admin
+          .from("tenant_integrations")
+          .select(
+            "id,tenant_id,user_id,connection_visibility,settings,is_active",
+          )
+          .eq("id", integrationId)
+          .eq("integration_type", "meta_whatsapp")
+          .maybeSingle(),
+      ]);
     if ((!membership && superAdmin !== true) || !integration?.is_active) {
       return reply({ error: "forbidden" }, 403);
     }
@@ -135,12 +152,17 @@ Deno.serve(async (request) => {
     const isSharedAcrossTenants = integration.tenant_id !== tenantId;
     const canManage =
       superAdmin === true || integration.user_id === authData.user.id;
-    let canUse = canManage || (!isSharedAcrossTenants && integration.connection_visibility === "org");
+    let canUse =
+      canManage ||
+      (!isSharedAcrossTenants && integration.connection_visibility === "org");
     if (isSharedAcrossTenants) {
-      const { data: tenantCanUse, error: accessError } = await admin.rpc("tenant_can_use_integration", {
-        p_tenant_id: tenantId,
-        p_integration_id: integrationId,
-      });
+      const { data: tenantCanUse, error: accessError } = await admin.rpc(
+        "tenant_can_use_integration",
+        {
+          p_tenant_id: tenantId,
+          p_integration_id: integrationId,
+        },
+      );
       if (accessError) throw accessError;
       canUse = tenantCanUse === true;
     }
@@ -154,14 +176,18 @@ Deno.serve(async (request) => {
       canUse = Boolean(permission);
     }
     if (!canUse) return reply({ error: "integration_access_denied" }, 403);
-    if (action !== "list" && !canManage) return reply({ error: "manage_access_required" }, 403);
+    if (action !== "list" && !canManage)
+      return reply({ error: "manage_access_required" }, 403);
 
     const settings = (integration.settings ?? {}) as Record<string, any>;
     const wabaId = String(settings.waba_id ?? "");
     const graphVersion = String(
-      settings.graph_version ?? Deno.env.get("META_GRAPH_API_VERSION") ?? DEFAULT_META_GRAPH_VERSION,
+      settings.graph_version ??
+        Deno.env.get("META_GRAPH_API_VERSION") ??
+        DEFAULT_META_GRAPH_VERSION,
     );
-    const appId = Deno.env.get("FACEBOOK_APP_ID") ?? Deno.env.get("META_APP_ID") ?? "";
+    const appId =
+      Deno.env.get("FACEBOOK_APP_ID") ?? Deno.env.get("META_APP_ID") ?? "";
     if (!wabaId) return reply({ error: "waba_id_missing" }, 400);
 
     const { data: tokenRow, error: tokenError } = await admin
@@ -170,7 +196,8 @@ Deno.serve(async (request) => {
       .eq("integration_id", integrationId)
       .maybeSingle();
     if (tokenError) throw tokenError;
-    if (!tokenRow?.access_token) return reply({ error: "meta_whatsapp_token_missing" }, 400);
+    if (!tokenRow?.access_token)
+      return reply({ error: "meta_whatsapp_token_missing" }, 400);
 
     const baseUrl = `https://graph.facebook.com/${graphVersion}/${wabaId}/message_templates`;
 
@@ -187,7 +214,11 @@ Deno.serve(async (request) => {
         url.searchParams.set("limit", "100");
         if (after) url.searchParams.set("after", after);
         const result = await graphRequest(url, tokenRow.access_token);
-        if (!result.ok) return reply({ error: result.error, meta_error: result.metaError }, result.status);
+        if (!result.ok)
+          return reply(
+            { error: result.error, meta_error: result.metaError },
+            result.status,
+          );
         templates.push(...(result.data.data ?? []));
         after = String(result.data.paging?.cursors?.after ?? "");
         pageCount++;
@@ -204,8 +235,11 @@ Deno.serve(async (request) => {
       if (!canManage) return reply({ error: "manage_access_required" }, 403);
       if (!appId) return reply({ error: "meta_app_id_not_configured" }, 503);
 
-      const mimeTypeRaw = String(body.mime_type ?? "").trim().toLowerCase();
-      const fileName = String(body.file_name ?? "template-media").trim() || "template-media";
+      const mimeTypeRaw = String(body.mime_type ?? "")
+        .trim()
+        .toLowerCase();
+      const fileName =
+        String(body.file_name ?? "template-media").trim() || "template-media";
       const base64 = String(body.file_base64 ?? "");
       const mimeType = mimeTypeRaw === "image/jpg" ? "image/jpeg" : mimeTypeRaw;
       if (!mimeType || !META_TEMPLATE_HEADER_FORMAT_BY_MIME[mimeType]) {
@@ -238,9 +272,13 @@ Deno.serve(async (request) => {
           byte_length: fileBytes.byteLength,
         });
       } catch (error) {
-        return reply({
-          error: error instanceof Error ? error.message : "media_upload_failed",
-        }, 400);
+        return reply(
+          {
+            error:
+              error instanceof Error ? error.message : "media_upload_failed",
+          },
+          400,
+        );
       }
     }
 
@@ -254,13 +292,18 @@ Deno.serve(async (request) => {
       const examples: string[] = Array.isArray(template.examples)
         ? template.examples.map((value: unknown) => String(value).trim())
         : [];
-      const headerFormat = String(template.header_format ?? "NONE").toUpperCase();
+      const headerFormat = String(
+        template.header_format ?? "NONE",
+      ).toUpperCase();
       const headerText = String(template.header_text ?? "").trim();
       const headerExample = String(template.header_example ?? "").trim();
       const headerHandle = String(template.header_handle ?? "").trim();
 
       if (!/^[a-z0-9_]{1,512}$/.test(name)) {
-        return reply({ error: "template_name_must_be_lowercase_snake_case" }, 400);
+        return reply(
+          { error: "template_name_must_be_lowercase_snake_case" },
+          400,
+        );
       }
       if (!["UTILITY", "MARKETING"].includes(category)) {
         return reply({ error: "unsupported_template_category" }, 400);
@@ -269,9 +312,13 @@ Deno.serve(async (request) => {
         return reply({ error: "invalid_language_code" }, 400);
       }
       if (!bodyText || bodyText.length > 1024) {
-        return reply({ error: "template_body_must_be_1_to_1024_characters" }, 400);
+        return reply(
+          { error: "template_body_must_be_1_to_1024_characters" },
+          400,
+        );
       }
-      if (footerText.length > 60) return reply({ error: "footer_too_long" }, 400);
+      if (footerText.length > 60)
+        return reply({ error: "footer_too_long" }, 400);
       if (footerText.includes("{{") || footerText.includes("}}")) {
         return reply({ error: "footer_variables_are_not_supported" }, 400);
       }
@@ -282,47 +329,81 @@ Deno.serve(async (request) => {
         bodyWithoutValidTokens.includes("{{") ||
         bodyWithoutValidTokens.includes("}}")
       ) {
-        return reply({ error: "only_positional_variables_like_double_brace_1_are_supported" }, 400);
+        return reply(
+          {
+            error:
+              "only_positional_variables_like_double_brace_1_are_supported",
+          },
+          400,
+        );
       }
 
       const indexes = placeholderIndexes(bodyText);
       const uniqueIndexes = [...new Set(indexes)].sort((a, b) => a - b);
       if (uniqueIndexes.some((value, index) => value !== index + 1)) {
-        return reply({ error: "template_variables_must_be_sequential_from_1" }, 400);
+        return reply(
+          { error: "template_variables_must_be_sequential_from_1" },
+          400,
+        );
       }
-      if (examples.length !== uniqueIndexes.length || examples.some((value) => !value)) {
-        return reply({ error: "one_non_empty_example_required_per_variable" }, 400);
+      if (
+        examples.length !== uniqueIndexes.length ||
+        examples.some((value) => !value)
+      ) {
+        return reply(
+          { error: "one_non_empty_example_required_per_variable" },
+          400,
+        );
       }
 
-      const bodyComponent: Record<string, unknown> = { type: "BODY", text: bodyText };
+      const bodyComponent: Record<string, unknown> = {
+        type: "BODY",
+        text: bodyText,
+      };
       if (examples.length) bodyComponent.example = { body_text: [examples] };
       const components: Array<Record<string, unknown>> = [];
 
       if (headerFormat !== "NONE") {
         if (headerFormat === "TEXT") {
           if (!headerText || headerText.length > 60) {
-            return reply({ error: "header_text_must_be_1_to_60_characters" }, 400);
+            return reply(
+              { error: "header_text_must_be_1_to_60_characters" },
+              400,
+            );
           }
           const headerIndexes = placeholderIndexes(headerText);
-          const uniqueHeaderIndexes = [...new Set(headerIndexes)].sort((a, b) => a - b);
+          const uniqueHeaderIndexes = [...new Set(headerIndexes)].sort(
+            (a, b) => a - b,
+          );
           if (uniqueHeaderIndexes.some((value, index) => value !== index + 1)) {
-            return reply({ error: "header_variables_must_be_sequential_from_1" }, 400);
+            return reply(
+              { error: "header_variables_must_be_sequential_from_1" },
+              400,
+            );
           }
           if (uniqueHeaderIndexes.length > 1) {
-            return reply({ error: "header_supports_at_most_one_variable" }, 400);
+            return reply(
+              { error: "header_supports_at_most_one_variable" },
+              400,
+            );
           }
           if (uniqueHeaderIndexes.length === 1 && !headerExample) {
-            return reply({ error: "header_example_required_for_variable" }, 400);
+            return reply(
+              { error: "header_example_required_for_variable" },
+              400,
+            );
           }
           const headerComponent: Record<string, unknown> = {
             type: "HEADER",
             format: "TEXT",
             text: headerText,
           };
-          if (headerExample) headerComponent.example = { header_text: [headerExample] };
+          if (headerExample)
+            headerComponent.example = { header_text: [headerExample] };
           components.push(headerComponent);
         } else if (["IMAGE", "VIDEO", "DOCUMENT"].includes(headerFormat)) {
-          if (!headerHandle) return reply({ error: "header_handle_required_for_media" }, 400);
+          if (!headerHandle)
+            return reply({ error: "header_handle_required_for_media" }, 400);
           components.push({
             type: "HEADER",
             format: headerFormat,
@@ -337,14 +418,15 @@ Deno.serve(async (request) => {
       if (footerText) components.push({ type: "FOOTER", text: footerText });
 
       // Optional QUICK_REPLY buttons (e.g. lead opt-in warm template).
-      const quickReplies: Array<{ text: string; payload?: string }> = Array.isArray(template.quick_replies)
-        ? template.quick_replies
-          .map((row: any) => ({
-            text: String(row?.text ?? "").trim(),
-            payload: row?.payload ? String(row.payload).trim() : undefined,
-          }))
-          .filter((row: { text: string }) => row.text.length > 0)
-        : [];
+      const quickReplies: Array<{ text: string; payload?: string }> =
+        Array.isArray(template.quick_replies)
+          ? template.quick_replies
+              .map((row: any) => ({
+                text: String(row?.text ?? "").trim(),
+                payload: row?.payload ? String(row.payload).trim() : undefined,
+              }))
+              .filter((row: { text: string }) => row.text.length > 0)
+          : [];
       if (quickReplies.length > 3) {
         return reply({ error: "max_3_quick_reply_buttons" }, 400);
       }
@@ -367,7 +449,10 @@ Deno.serve(async (request) => {
         language,
         components,
       };
-      if (uniqueIndexes.length > 0 || (headerFormat === "TEXT" && placeholderIndexes(headerText).length > 0)) {
+      if (
+        uniqueIndexes.length > 0 ||
+        (headerFormat === "TEXT" && placeholderIndexes(headerText).length > 0)
+      ) {
         createPayload.parameter_format = "positional";
       }
 
@@ -380,8 +465,15 @@ Deno.serve(async (request) => {
         },
       );
       if (!result.ok) {
-        const explained = explainTemplateMetaError(result.metaError, result.error, settings);
-        return reply({ ...explained, meta_error: result.metaError }, result.status);
+        const explained = explainTemplateMetaError(
+          result.metaError,
+          result.error,
+          settings,
+        );
+        return reply(
+          { ...explained, meta_error: result.metaError },
+          result.status,
+        );
       }
       return reply({ success: true, template: result.data });
     }
@@ -395,14 +487,23 @@ Deno.serve(async (request) => {
       const url = new URL(baseUrl);
       url.searchParams.set("name", templateName);
       if (templateId) url.searchParams.set("hsm_id", templateId);
-      const result = await graphRequest(url, tokenRow.access_token, { method: "DELETE" });
-      if (!result.ok) return reply({ error: result.error, meta_error: result.metaError }, result.status);
+      const result = await graphRequest(url, tokenRow.access_token, {
+        method: "DELETE",
+      });
+      if (!result.ok)
+        return reply(
+          { error: result.error, meta_error: result.metaError },
+          result.status,
+        );
       return reply({ success: true });
     }
 
     return reply({ error: "unsupported_action" }, 400);
   } catch (error) {
     console.error("meta-whatsapp-templates error", error);
-    return reply({ error: error instanceof Error ? error.message : "unknown_error" }, 500);
+    return reply(
+      { error: error instanceof Error ? error.message : "unknown_error" },
+      500,
+    );
   }
 });

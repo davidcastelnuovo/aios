@@ -3,7 +3,8 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+  "Access-Control-Allow-Headers":
+    "authorization, x-client-info, apikey, content-type",
 };
 
 serve(async (req: Request) => {
@@ -18,7 +19,10 @@ serve(async (req: Request) => {
     if (!supabaseUrl || !serviceRoleKey) {
       return new Response(
         JSON.stringify({ error: "Missing Supabase environment variables" }),
-        { status: 500, headers: { "Content-Type": "application/json", ...corsHeaders } }
+        {
+          status: 500,
+          headers: { "Content-Type": "application/json", ...corsHeaders },
+        },
       );
     }
 
@@ -41,14 +45,17 @@ serve(async (req: Request) => {
       });
     }
 
-    return new Response(
-      JSON.stringify({ removed: deleted?.length || 0 }),
-      { status: 200, headers: { "Content-Type": "application/json", ...corsHeaders } }
-    );
-  } catch (e: any) {
-    return new Response(JSON.stringify({ error: e?.message || "Unknown error" }), {
-      status: 500,
+    return new Response(JSON.stringify({ removed: deleted?.length || 0 }), {
+      status: 200,
       headers: { "Content-Type": "application/json", ...corsHeaders },
     });
+  } catch (e: any) {
+    return new Response(
+      JSON.stringify({ error: e?.message || "Unknown error" }),
+      {
+        status: 500,
+        headers: { "Content-Type": "application/json", ...corsHeaders },
+      },
+    );
   }
 });

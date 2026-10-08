@@ -1,59 +1,66 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.75.0";
 
 const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-  'Access-Control-Allow-Methods': 'POST, OPTIONS',
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Headers":
+    "authorization, x-client-info, apikey, content-type",
+  "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
 
 Deno.serve(async (req) => {
-  if (req.method === 'OPTIONS') {
+  if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
   }
 
   try {
-    const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
-    const supabaseAnonKey = Deno.env.get('SUPABASE_ANON_KEY')!;
+    const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
+    const supabaseAnonKey = Deno.env.get("SUPABASE_ANON_KEY")!;
     const supabase = createClient(supabaseUrl, supabaseAnonKey, {
-      global: { headers: { Authorization: req.headers.get('Authorization')! } },
+      global: { headers: { Authorization: req.headers.get("Authorization")! } },
     });
 
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
+    const {
+      data: { user },
+      error: authError,
+    } = await supabase.auth.getUser();
     if (authError || !user) {
-      return new Response(JSON.stringify({ error: 'Unauthorized' }), {
+      return new Response(JSON.stringify({ error: "Unauthorized" }), {
         status: 401,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
     const { table_id } = await req.json();
     if (!table_id) {
-      return new Response(JSON.stringify({ error: 'table_id required' }), {
+      return new Response(JSON.stringify({ error: "table_id required" }), {
         status: 400,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
     // Get table with integration settings
     const { data: table, error: tableError } = await supabase
-      .from('crm_tables')
-      .select('*')
-      .eq('id', table_id)
+      .from("crm_tables")
+      .select("*")
+      .eq("id", table_id)
       .maybeSingle();
 
     if (tableError || !table) {
-      return new Response(JSON.stringify({ error: 'Table not found' }), {
+      return new Response(JSON.stringify({ error: "Table not found" }), {
         status: 404,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
-    const validTypes = ['meta_ads', 'facebook_insights', 'facebook_ecommerce'];
+    const validTypes = ["meta_ads", "facebook_insights", "facebook_ecommerce"];
     if (!validTypes.includes(table.integration_type)) {
-      return new Response(JSON.stringify({ error: 'Table is not a Meta Ads / Facebook table' }), {
-        status: 400,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      });
+      return new Response(
+        JSON.stringify({ error: "Table is not a Meta Ads / Facebook table" }),
+        {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        },
+      );
     }
 
     const settings = table.integration_settings || {};
@@ -61,90 +68,120 @@ Deno.serve(async (req) => {
 
     // Get unified connection for Meta Ads
     const { data: integration } = await supabase
-      .from('tenant_integrations')
-      .select('*')
-      .eq('tenant_id', tenantId)
-      .eq('integration_type', 'unified_ads')
-      .eq('is_active', true)
+      .from("tenant_integrations")
+      .select("*")
+      .eq("tenant_id", tenantId)
+      .eq("integration_type", "unified_ads")
+      .eq("is_active", true)
       .maybeSingle();
 
     if (!integration?.settings?.unified_connection_id) {
-      return new Response(JSON.stringify({ error: 'Meta Ads not connected via Unified' }), {
-        status: 400,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      });
+      return new Response(
+        JSON.stringify({ error: "Meta Ads not connected via Unified" }),
+        {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        },
+      );
     }
 
     const connectionId = integration.settings.unified_connection_id;
-    const unifiedApiKey = Deno.env.get('UNIFIED_API_KEY');
+    const unifiedApiKey = Deno.env.get("UNIFIED_API_KEY");
     if (!unifiedApiKey) {
-      return new Response(JSON.stringify({ error: 'UNIFIED_API_KEY not configured' }), {
-        status: 500,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      });
+      return new Response(
+        JSON.stringify({ error: "UNIFIED_API_KEY not configured" }),
+        {
+          status: 500,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        },
+      );
     }
 
     // Calculate date range
-    const dateRange = settings.date_range || 'last_30_days';
+    const dateRange = settings.date_range || "last_30_days";
     const now = new Date();
     let startDate: Date;
     const endDate = new Date(now);
 
     switch (dateRange) {
-      case 'today':
+      case "today":
         startDate = new Date(now.getFullYear(), now.getMonth(), now.getDate());
         break;
-      case 'yesterday':
-        startDate = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1);
+      case "yesterday":
+        startDate = new Date(
+          now.getFullYear(),
+          now.getMonth(),
+          now.getDate() - 1,
+        );
         endDate.setDate(endDate.getDate() - 1);
         break;
-      case 'last_7_days':
-        startDate = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 6);
+      case "last_7_days":
+        startDate = new Date(
+          now.getFullYear(),
+          now.getMonth(),
+          now.getDate() - 6,
+        );
         break;
-      case 'last_14_days':
-        startDate = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 14);
+      case "last_14_days":
+        startDate = new Date(
+          now.getFullYear(),
+          now.getMonth(),
+          now.getDate() - 14,
+        );
         break;
-      case 'this_month':
+      case "this_month":
         startDate = new Date(now.getFullYear(), now.getMonth(), 1);
         break;
-      case 'last_90_days':
-        startDate = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 90);
+      case "last_90_days":
+        startDate = new Date(
+          now.getFullYear(),
+          now.getMonth(),
+          now.getDate() - 90,
+        );
         break;
       default: // last_30_days
-        startDate = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 30);
+        startDate = new Date(
+          now.getFullYear(),
+          now.getMonth(),
+          now.getDate() - 30,
+        );
     }
 
     const startStr = startDate.toISOString();
     const endStr = endDate.toISOString();
 
     // Step 1: Fetch campaigns
-    console.log('Fetching Meta Ads campaigns...');
+    console.log("Fetching Meta Ads campaigns...");
     const campaignsResp = await fetch(
       `https://api.unified.to/ads/${connectionId}/campaign?limit=100`,
       {
         headers: {
-          'Authorization': `Bearer ${unifiedApiKey}`,
-          'Content-Type': 'application/json',
+          Authorization: `Bearer ${unifiedApiKey}`,
+          "Content-Type": "application/json",
         },
-      }
+      },
     );
     const campaigns = await campaignsResp.json();
 
     if (!campaignsResp.ok) {
-      console.error('Failed to fetch campaigns:', campaigns);
-      return new Response(JSON.stringify({
-        error: 'Failed to fetch campaigns from Meta Ads',
-        details: campaigns?.message || campaigns?.error || JSON.stringify(campaigns),
-      }), {
-        status: 400,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      });
+      console.error("Failed to fetch campaigns:", campaigns);
+      return new Response(
+        JSON.stringify({
+          error: "Failed to fetch campaigns from Meta Ads",
+          details:
+            campaigns?.message || campaigns?.error || JSON.stringify(campaigns),
+        }),
+        {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        },
+      );
     }
 
     // Step 2: Fetch reports
-    console.log('Fetching Meta Ads reports...');
+    console.log("Fetching Meta Ads reports...");
     const reportsParams = new URLSearchParams({
-      limit: '200',
+      limit: "200",
       start_gte: startStr,
       end_lt: endStr,
     });
@@ -153,22 +190,26 @@ Deno.serve(async (req) => {
       `https://api.unified.to/ads/${connectionId}/report?${reportsParams.toString()}`,
       {
         headers: {
-          'Authorization': `Bearer ${unifiedApiKey}`,
-          'Content-Type': 'application/json',
+          Authorization: `Bearer ${unifiedApiKey}`,
+          "Content-Type": "application/json",
         },
-      }
+      },
     );
     const reports = await reportsResp.json();
 
     if (!reportsResp.ok) {
-      console.error('Failed to fetch reports:', reports);
-      return new Response(JSON.stringify({
-        error: 'Failed to fetch reports from Meta Ads',
-        details: reports?.message || reports?.error || JSON.stringify(reports),
-      }), {
-        status: 400,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      });
+      console.error("Failed to fetch reports:", reports);
+      return new Response(
+        JSON.stringify({
+          error: "Failed to fetch reports from Meta Ads",
+          details:
+            reports?.message || reports?.error || JSON.stringify(reports),
+        }),
+        {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        },
+      );
     }
 
     // Build campaign name lookup
@@ -205,18 +246,19 @@ Deno.serve(async (req) => {
         const clicks = metrics.clicks || metrics.CLICKS || 0;
         const cost = metrics.cost || metrics.COST || metrics.spend || 0;
         const conversions = metrics.conversions || metrics.CONVERSIONS || 0;
-        const conversionValue = metrics.conversion_value || metrics.CONVERSION_VALUE || 0;
+        const conversionValue =
+          metrics.conversion_value || metrics.CONVERSION_VALUE || 0;
 
         const ctr = impressions > 0 ? (clicks / impressions) * 100 : 0;
         const cpc = clicks > 0 ? cost / clicks : 0;
         const costPerConversion = conversions > 0 ? cost / conversions : 0;
         const roas = cost > 0 ? conversionValue / cost : 0;
 
-        const campaignId = report.campaign_id || report.organization_id || '';
-        const campaignName = campaignMap[campaignId] || campaignId || 'Unknown';
+        const campaignId = report.campaign_id || report.organization_id || "";
+        const campaignName = campaignMap[campaignId] || campaignId || "Unknown";
 
         records.push({
-          date: report.start_at ? report.start_at.split('T')[0] : '',
+          date: report.start_at ? report.start_at.split("T")[0] : "",
           campaign_name: campaignName,
           campaign_id: campaignId,
           impressions,
@@ -235,9 +277,11 @@ Deno.serve(async (req) => {
     if (records.length === 0 && Array.isArray(campaigns)) {
       for (const c of campaigns) {
         records.push({
-          date: c.updated_at ? c.updated_at.split('T')[0] : new Date().toISOString().split('T')[0],
-          campaign_name: c.name || 'Unknown',
-          campaign_id: c.id || '',
+          date: c.updated_at
+            ? c.updated_at.split("T")[0]
+            : new Date().toISOString().split("T")[0],
+          campaign_name: c.name || "Unknown",
+          campaign_id: c.id || "",
           impressions: 0,
           clicks: 0,
           ctr: 0,
@@ -253,20 +297,56 @@ Deno.serve(async (req) => {
     console.log(`Processed ${records.length} Meta Ads records`);
 
     // Create fields if they don't exist
-    const fieldKeys = ['date', 'campaign_name', 'campaign_id', 'impressions', 'clicks', 'ctr', 'cpc', 'cost', 'conversions', 'cost_per_conversion', 'roas'];
-    const fieldNames = ['תאריך', 'שם הקמפיין', 'מזהה קמפיין', 'חשיפות', 'קליקים', 'אחוז קליקים', 'עלות לקליק', 'הוצאה', 'המרות', 'עלות להמרה', 'ROAS'];
-    const fieldTypes = ['date', 'text', 'text', 'number', 'number', 'number', 'number', 'number', 'number', 'number', 'number'];
+    const fieldKeys = [
+      "date",
+      "campaign_name",
+      "campaign_id",
+      "impressions",
+      "clicks",
+      "ctr",
+      "cpc",
+      "cost",
+      "conversions",
+      "cost_per_conversion",
+      "roas",
+    ];
+    const fieldNames = [
+      "תאריך",
+      "שם הקמפיין",
+      "מזהה קמפיין",
+      "חשיפות",
+      "קליקים",
+      "אחוז קליקים",
+      "עלות לקליק",
+      "הוצאה",
+      "המרות",
+      "עלות להמרה",
+      "ROAS",
+    ];
+    const fieldTypes = [
+      "date",
+      "text",
+      "text",
+      "number",
+      "number",
+      "number",
+      "number",
+      "number",
+      "number",
+      "number",
+      "number",
+    ];
 
     for (let i = 0; i < fieldKeys.length; i++) {
       const { data: existingField } = await supabase
-        .from('crm_fields')
-        .select('id')
-        .eq('table_id', table_id)
-        .eq('key', fieldKeys[i])
+        .from("crm_fields")
+        .select("id")
+        .eq("table_id", table_id)
+        .eq("key", fieldKeys[i])
         .single();
 
       if (!existingField) {
-        await supabase.from('crm_fields').insert({
+        await supabase.from("crm_fields").insert({
           table_id,
           key: fieldKeys[i],
           name: fieldNames[i],
@@ -278,13 +358,13 @@ Deno.serve(async (req) => {
 
     // Delete existing records and insert new ones
     await supabase
-      .from('crm_records')
+      .from("crm_records")
       .delete()
-      .eq('table_id', table_id)
-      .eq('tenant_id', tenantId);
+      .eq("table_id", table_id)
+      .eq("tenant_id", tenantId);
 
     for (const record of records) {
-      await supabase.from('crm_records').insert({
+      await supabase.from("crm_records").insert({
         table_id,
         tenant_id: tenantId,
         created_by: user.id,
@@ -294,35 +374,40 @@ Deno.serve(async (req) => {
 
     // Update last_sync_at without wiping concurrent currency / settings edits
     const { data: freshTable } = await supabase
-      .from('crm_tables')
-      .select('integration_settings')
-      .eq('id', table_id)
+      .from("crm_tables")
+      .select("integration_settings")
+      .eq("id", table_id)
       .maybeSingle();
-    const currentSettings = (freshTable?.integration_settings || settings || {}) as Record<string, unknown>;
+    const currentSettings = (freshTable?.integration_settings ||
+      settings ||
+      {}) as Record<string, unknown>;
     await supabase
-      .from('crm_tables')
+      .from("crm_tables")
       .update({
         integration_settings: {
           ...currentSettings,
           last_sync_at: new Date().toISOString(),
         },
       })
-      .eq('id', table_id);
+      .eq("id", table_id);
 
-    return new Response(JSON.stringify({
-      success: true,
-      records_synced: records.length,
-      campaigns_found: Array.isArray(campaigns) ? campaigns.length : 0,
-      reports_found: Array.isArray(reports) ? reports.length : 0,
-      last_sync_at: new Date().toISOString(),
-    }), {
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-    });
+    return new Response(
+      JSON.stringify({
+        success: true,
+        records_synced: records.length,
+        campaigns_found: Array.isArray(campaigns) ? campaigns.length : 0,
+        reports_found: Array.isArray(reports) ? reports.length : 0,
+        last_sync_at: new Date().toISOString(),
+      }),
+      {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      },
+    );
   } catch (error: any) {
-    console.error('Error in sync-meta-ads-data:', error);
+    console.error("Error in sync-meta-ads-data:", error);
     return new Response(JSON.stringify({ error: error.message }), {
       status: 500,
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   }
 });

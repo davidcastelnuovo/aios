@@ -21,9 +21,16 @@ export function detectMediaKind(
   return "other";
 }
 
-export function mediaKindFromFile(file: File | null | undefined): SignatureMediaKind {
+export function mediaKindFromFile(
+  file: File | null | undefined,
+): SignatureMediaKind {
   if (!file) return "other";
-  if (file.type === "application/pdf" || /\.pdf$/i.test(file.name)) return "pdf";
-  if (file.type.startsWith("image/") || /\.(png|jpg|jpeg|gif|webp)$/i.test(file.name)) return "image";
+  if (file.type === "application/pdf" || /\.pdf$/i.test(file.name))
+    return "pdf";
+  if (
+    file.type.startsWith("image/") ||
+    /\.(png|jpg|jpeg|gif|webp)$/i.test(file.name)
+  )
+    return "image";
   return "other";
 }

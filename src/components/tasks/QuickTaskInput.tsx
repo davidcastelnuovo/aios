@@ -3,8 +3,19 @@ import { format } from "date-fns";
 import { he } from "date-fns/locale";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from "@/components/ui/command";
 import { Calendar } from "@/components/ui/calendar";
 import {
   Plus,
@@ -22,7 +33,10 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { TimeSlotPicker } from "./TimeSlotPicker";
-import { TaskRecurrenceFields, type TaskRecurrenceValue } from "./TaskRecurrenceFields";
+import {
+  TaskRecurrenceFields,
+  type TaskRecurrenceValue,
+} from "./TaskRecurrenceFields";
 import {
   computeFirstOccurrenceDate,
   describeRecurrence,
@@ -56,7 +70,14 @@ interface QuickTaskInputProps {
 
 const COMPACT_WIDTH = 420;
 
-type LinksPanel = "menu" | "client" | "campaigner" | "execution" | "target" | "recurrence" | "team";
+type LinksPanel =
+  | "menu"
+  | "client"
+  | "campaigner"
+  | "execution"
+  | "target"
+  | "recurrence"
+  | "team";
 
 export function QuickTaskInput({
   onAddTask,
@@ -69,14 +90,18 @@ export function QuickTaskInput({
   const [compact, setCompact] = useState(true);
   const [title, setTitle] = useState("");
   const [clientId, setClientId] = useState<string | null>(null);
-  const [campaignerId, setCampaignerId] = useState<string | null>(defaultCampaignerId ?? null);
+  const [campaignerId, setCampaignerId] = useState<string | null>(
+    defaultCampaignerId ?? null,
+  );
   const [clientOpen, setClientOpen] = useState(false);
   const [campaignerOpen, setCampaignerOpen] = useState(false);
   const [clientSearch, setClientSearch] = useState("");
   const [campaignerSearch, setCampaignerSearch] = useState("");
   const [reminderEnabled, setReminderEnabled] = useState(false);
   const [reminderAt, setReminderAt] = useState("");
-  const [executionDate, setExecutionDate] = useState<Date | undefined>(undefined);
+  const [executionDate, setExecutionDate] = useState<Date | undefined>(
+    undefined,
+  );
   const [executionTime, setExecutionTime] = useState<string | null>(null);
   const [targetDate, setTargetDate] = useState<Date | undefined>(undefined);
   const [recurrence, setRecurrence] = useState<TaskRecurrenceValue>({
@@ -105,7 +130,7 @@ export function QuickTaskInput({
   const isTyping = title.trim().length > 0;
   const effectiveCampaignerId = campaignerId ?? defaultCampaignerId ?? null;
   const canSetReminder = Boolean(
-    defaultCampaignerId && effectiveCampaignerId === defaultCampaignerId
+    defaultCampaignerId && effectiveCampaignerId === defaultCampaignerId,
   );
 
   const filteredClients = useMemo(() => {
@@ -123,7 +148,9 @@ export function QuickTaskInput({
   }, [campaignersList, campaignerSearch]);
 
   const selectedClientName = clientsList?.find((c) => c.id === clientId)?.name;
-  const selectedCampaignerName = campaignersList?.find((c) => c.id === effectiveCampaignerId)?.full_name;
+  const selectedCampaignerName = campaignersList?.find(
+    (c) => c.id === effectiveCampaignerId,
+  )?.full_name;
 
   const executionLabel = executionDate
     ? format(executionDate, "dd/MM", { locale: he }) +
@@ -163,7 +190,12 @@ export function QuickTaskInput({
     setExecutionDate(undefined);
     setExecutionTime(null);
     setTargetDate(undefined);
-    setRecurrence({ frequency: null, weekday: null, monthday: null, time: null });
+    setRecurrence({
+      frequency: null,
+      weekday: null,
+      monthday: null,
+      time: null,
+    });
     setCollaboratorIds([]);
     setLinksOpen(false);
     setLinksPanel("menu");
@@ -176,7 +208,9 @@ export function QuickTaskInput({
 
     if (reminderEnabled && !reminderAt) return;
 
-    let nextExecutionDate = executionDate ? format(executionDate, "yyyy-MM-dd") : null;
+    let nextExecutionDate = executionDate
+      ? format(executionDate, "yyyy-MM-dd")
+      : null;
     let nextExecutionTime = executionTime ?? null;
     if (recurrence.frequency) {
       const first = computeFirstOccurrenceDate({
@@ -202,8 +236,10 @@ export function QuickTaskInput({
       executionTime: nextExecutionTime,
       targetDate: targetDate ? format(targetDate, "yyyy-MM-dd") : null,
       recurrenceFrequency: recurrence.frequency,
-      recurrenceWeekday: recurrence.frequency === "weekly" ? recurrence.weekday : null,
-      recurrenceMonthday: recurrence.frequency === "monthly" ? recurrence.monthday : null,
+      recurrenceWeekday:
+        recurrence.frequency === "weekly" ? recurrence.weekday : null,
+      recurrenceMonthday:
+        recurrence.frequency === "monthly" ? recurrence.monthday : null,
     });
     resetForm();
   };
@@ -214,7 +250,12 @@ export function QuickTaskInput({
   const clientPicker = clientsList ? (
     <Popover open={clientOpen} onOpenChange={setClientOpen}>
       <PopoverTrigger asChild>
-        <Button type="button" variant="outline" size="sm" className={cn(chipClass(Boolean(clientId)), "max-w-[140px]")}>
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          className={cn(chipClass(Boolean(clientId)), "max-w-[140px]")}
+        >
           <Users className="h-3.5 w-3.5 shrink-0" />
           <span className="truncate">{selectedClientName || "שייך לקוח"}</span>
         </Button>
@@ -237,9 +278,19 @@ export function QuickTaskInput({
   const campaignerPicker = campaignersList ? (
     <Popover open={campaignerOpen} onOpenChange={setCampaignerOpen}>
       <PopoverTrigger asChild>
-        <Button type="button" variant="outline" size="sm" className={cn(chipClass(Boolean(effectiveCampaignerId)), "max-w-[140px]")}>
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          className={cn(
+            chipClass(Boolean(effectiveCampaignerId)),
+            "max-w-[140px]",
+          )}
+        >
           <Megaphone className="h-3.5 w-3.5 shrink-0" />
-          <span className="truncate">{selectedCampaignerName || "שייך קמפיינר"}</span>
+          <span className="truncate">
+            {selectedCampaignerName || "שייך קמפיינר"}
+          </span>
         </Button>
       </PopoverTrigger>
       <PopoverContent className="w-[220px] p-0 z-50" align="start">
@@ -264,7 +315,11 @@ export function QuickTaskInput({
           type="button"
           variant="outline"
           size="sm"
-          className={cn(chipClass(Boolean(executionDate)), "max-w-[150px]", executionDate && "border-primary/40 bg-primary/5")}
+          className={cn(
+            chipClass(Boolean(executionDate)),
+            "max-w-[150px]",
+            executionDate && "border-primary/40 bg-primary/5",
+          )}
         >
           <CalendarDays className="h-3.5 w-3.5 shrink-0" />
           <span className="truncate">{executionLabel}</span>
@@ -289,7 +344,10 @@ export function QuickTaskInput({
           type="button"
           variant="outline"
           size="sm"
-          className={cn("h-8 gap-1 text-xs min-w-0 max-w-[130px]", targetDate && "border-amber-500/40 bg-amber-500/5")}
+          className={cn(
+            "h-8 gap-1 text-xs min-w-0 max-w-[130px]",
+            targetDate && "border-amber-500/40 bg-amber-500/5",
+          )}
         >
           <Flag className="h-3.5 w-3.5 shrink-0" />
           <span className="truncate">{targetLabel}</span>
@@ -335,15 +393,26 @@ export function QuickTaskInput({
           type="button"
           variant="outline"
           size="sm"
-          className={cn(chipClass(Boolean(recurrence.frequency)), "max-w-[180px]")}
+          className={cn(
+            chipClass(Boolean(recurrence.frequency)),
+            "max-w-[180px]",
+          )}
         >
           <Repeat className="h-3.5 w-3.5 shrink-0" />
           <span className="truncate">{recurrenceLabel || "משימה חוזרת"}</span>
         </Button>
       </PopoverTrigger>
-      <PopoverContent className="w-[280px] p-3 z-50" align="start" onOpenAutoFocus={(e) => e.preventDefault()}>
+      <PopoverContent
+        className="w-[280px] p-3 z-50"
+        align="start"
+        onOpenAutoFocus={(e) => e.preventDefault()}
+      >
         <p className="text-xs font-medium mb-2">משימה חוזרת</p>
-        <TaskRecurrenceFields compact value={recurrence} onChange={setRecurrence} />
+        <TaskRecurrenceFields
+          compact
+          value={recurrence}
+          onChange={setRecurrence}
+        />
       </PopoverContent>
     </Popover>
   );
@@ -359,12 +428,16 @@ export function QuickTaskInput({
         >
           <UserPlus className="h-3.5 w-3.5 shrink-0" />
           <span className="truncate">
-            {collaboratorIds.length > 0 ? `${collaboratorIds.length} בצוות` : "הוסף אנשים"}
+            {collaboratorIds.length > 0
+              ? `${collaboratorIds.length} בצוות`
+              : "הוסף אנשים"}
           </span>
         </Button>
       </PopoverTrigger>
       <PopoverContent className="w-[240px] p-2 z-50" align="start">
-        <p className="text-[11px] text-muted-foreground px-1 pb-1">אנשים נוספים על המשימה</p>
+        <p className="text-[11px] text-muted-foreground px-1 pb-1">
+          אנשים נוספים על המשימה
+        </p>
         <Command>
           <CommandInput
             placeholder="חיפוש איש צוות..."
@@ -384,11 +457,18 @@ export function QuickTaskInput({
                       key={c.id}
                       onSelect={() => {
                         setCollaboratorIds((prev) =>
-                          selected ? prev.filter((id) => id !== c.id) : [...prev, c.id],
+                          selected
+                            ? prev.filter((id) => id !== c.id)
+                            : [...prev, c.id],
                         );
                       }}
                     >
-                      <Check className={cn("h-3 w-3 mr-1", selected ? "opacity-100" : "opacity-0")} />
+                      <Check
+                        className={cn(
+                          "h-3 w-3 mr-1",
+                          selected ? "opacity-100" : "opacity-0",
+                        )}
+                      />
                       {c.full_name}
                     </CommandItem>
                   );
@@ -400,10 +480,15 @@ export function QuickTaskInput({
     </Popover>
   ) : null;
 
-  const showExtras = isTyping && (clientsList || campaignersList || canSetReminder);
+  const showExtras =
+    isTyping && (clientsList || campaignersList || canSetReminder);
 
   return (
-    <form ref={formRef} onSubmit={handleSubmit} className="space-y-1.5 min-w-0 overflow-hidden">
+    <form
+      ref={formRef}
+      onSubmit={handleSubmit}
+      className="space-y-1.5 min-w-0 overflow-hidden"
+    >
       <div className="flex gap-1.5 min-w-0">
         <Input
           value={title}
@@ -416,7 +501,9 @@ export function QuickTaskInput({
         <Button
           type="submit"
           size="icon"
-          disabled={!title.trim() || disabled || (reminderEnabled && !reminderAt)}
+          disabled={
+            !title.trim() || disabled || (reminderEnabled && !reminderAt)
+          }
           className="h-8 w-8 shrink-0 bg-emerald-600 text-white hover:bg-emerald-500 hover:text-white shadow-sm shadow-emerald-600/30 disabled:bg-emerald-600/45 disabled:text-white/90 disabled:opacity-100"
           aria-label="הוסף משימה"
         >
@@ -499,11 +586,17 @@ export function QuickTaskInput({
                   <MenuRow
                     icon={UserPlus}
                     label="צוות"
-                    value={collaboratorIds.length > 0 ? `${collaboratorIds.length} אנשים` : "ללא"}
+                    value={
+                      collaboratorIds.length > 0
+                        ? `${collaboratorIds.length} אנשים`
+                        : "ללא"
+                    }
                     onClick={() => setLinksPanel("team")}
                   />
                 )}
-                {reminderBlock && <div className="pt-1.5 px-1">{reminderBlock}</div>}
+                {reminderBlock && (
+                  <div className="pt-1.5 px-1">{reminderBlock}</div>
+                )}
               </div>
             )}
             {linksPanel === "client" && clientsList && (
@@ -538,7 +631,10 @@ export function QuickTaskInput({
             )}
             {linksPanel === "execution" && (
               <div className="space-y-2">
-                <BackRow label="תאריך ביצוע" onBack={() => setLinksPanel("menu")} />
+                <BackRow
+                  label="תאריך ביצוע"
+                  onBack={() => setLinksPanel("menu")}
+                />
                 <ExecutionCalendar
                   date={executionDate}
                   time={executionTime}
@@ -550,19 +646,32 @@ export function QuickTaskInput({
             )}
             {linksPanel === "target" && (
               <div className="space-y-2">
-                <BackRow label="תאריך יעד" onBack={() => setLinksPanel("menu")} />
+                <BackRow
+                  label="תאריך יעד"
+                  onBack={() => setLinksPanel("menu")}
+                />
                 <TargetCalendar date={targetDate} onDate={setTargetDate} />
               </div>
             )}
             {linksPanel === "recurrence" && (
               <div className="space-y-2">
-                <BackRow label="משימה חוזרת" onBack={() => setLinksPanel("menu")} />
-                <TaskRecurrenceFields compact value={recurrence} onChange={setRecurrence} />
+                <BackRow
+                  label="משימה חוזרת"
+                  onBack={() => setLinksPanel("menu")}
+                />
+                <TaskRecurrenceFields
+                  compact
+                  value={recurrence}
+                  onChange={setRecurrence}
+                />
               </div>
             )}
             {linksPanel === "team" && campaignersList && (
               <div className="space-y-2">
-                <BackRow label="אנשים נוספים" onBack={() => setLinksPanel("menu")} />
+                <BackRow
+                  label="אנשים נוספים"
+                  onBack={() => setLinksPanel("menu")}
+                />
                 <Command>
                   <CommandInput
                     placeholder="חיפוש איש צוות..."
@@ -582,11 +691,18 @@ export function QuickTaskInput({
                               key={c.id}
                               onSelect={() => {
                                 setCollaboratorIds((prev) =>
-                                  selected ? prev.filter((id) => id !== c.id) : [...prev, c.id],
+                                  selected
+                                    ? prev.filter((id) => id !== c.id)
+                                    : [...prev, c.id],
                                 );
                               }}
                             >
-                              <Check className={cn("h-3 w-3 mr-1", selected ? "opacity-100" : "opacity-0")} />
+                              <Check
+                                className={cn(
+                                  "h-3 w-3 mr-1",
+                                  selected ? "opacity-100" : "opacity-0",
+                                )}
+                              />
                               {c.full_name}
                             </CommandItem>
                           );
@@ -680,12 +796,22 @@ function ClientCommand({
         <CommandEmpty>לא נמצא</CommandEmpty>
         <CommandGroup>
           <CommandItem onSelect={() => onSelect(null)}>
-            <Check className={cn("h-3 w-3 mr-1", !selectedId ? "opacity-100" : "opacity-0")} />
+            <Check
+              className={cn(
+                "h-3 w-3 mr-1",
+                !selectedId ? "opacity-100" : "opacity-0",
+              )}
+            />
             ללא לקוח
           </CommandItem>
           {items.map((c) => (
             <CommandItem key={c.id} onSelect={() => onSelect(c.id)}>
-              <Check className={cn("h-3 w-3 mr-1", selectedId === c.id ? "opacity-100" : "opacity-0")} />
+              <Check
+                className={cn(
+                  "h-3 w-3 mr-1",
+                  selectedId === c.id ? "opacity-100" : "opacity-0",
+                )}
+              />
               {c.name}
             </CommandItem>
           ))}
@@ -720,13 +846,21 @@ function CampaignerCommand({
         <CommandEmpty>לא נמצא</CommandEmpty>
         <CommandGroup>
           <CommandItem onSelect={() => onSelect(null)}>
-            <Check className={cn("h-3 w-3 mr-1", !selectedId ? "opacity-100" : "opacity-0")} />
+            <Check
+              className={cn(
+                "h-3 w-3 mr-1",
+                !selectedId ? "opacity-100" : "opacity-0",
+              )}
+            />
             ללא קמפיינר
           </CommandItem>
           {items.map((c) => (
             <CommandItem key={c.id} onSelect={() => onSelect(c.id)}>
               <Check
-                className={cn("h-3 w-3 mr-1", selectedId === c.id ? "opacity-100" : "opacity-0")}
+                className={cn(
+                  "h-3 w-3 mr-1",
+                  selectedId === c.id ? "opacity-100" : "opacity-0",
+                )}
               />
               {c.full_name}
             </CommandItem>
@@ -752,7 +886,9 @@ function ExecutionCalendar({
 }) {
   return (
     <>
-      <p className="text-xs font-medium text-muted-foreground">מתי לבצע / להציג ביומן</p>
+      <p className="text-xs font-medium text-muted-foreground">
+        מתי לבצע / להציג ביומן
+      </p>
       <Calendar
         mode="single"
         selected={date}
@@ -786,7 +922,9 @@ function TargetCalendar({
 }) {
   return (
     <>
-      <p className="text-xs font-medium text-muted-foreground">עד מתי להשלים (דדליין)</p>
+      <p className="text-xs font-medium text-muted-foreground">
+        עד מתי להשלים (דדליין)
+      </p>
       <Calendar
         mode="single"
         selected={date}
@@ -794,7 +932,13 @@ function TargetCalendar({
         initialFocus
         className="p-0 pointer-events-auto"
       />
-      <Button type="button" variant="ghost" size="sm" className="w-full h-7 text-xs" onClick={() => onDate(undefined)}>
+      <Button
+        type="button"
+        variant="ghost"
+        size="sm"
+        className="w-full h-7 text-xs"
+        onClick={() => onDate(undefined)}
+      >
         נקה תאריך יעד
       </Button>
     </>

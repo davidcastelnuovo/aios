@@ -2,13 +2,27 @@ import { useState, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useCurrentTenant } from "@/hooks/useCurrentTenant";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import {
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+  CardDescription,
+} from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
-import { Phone, Settings, Save, Loader2, ArrowRight, RefreshCw, Copy } from "lucide-react";
+import {
+  Phone,
+  Settings,
+  Save,
+  Loader2,
+  ArrowRight,
+  RefreshCw,
+  Copy,
+} from "lucide-react";
 import { toast } from "sonner";
 import { useNavigate } from "react-router-dom";
 import { useTenantPath } from "@/hooks/useTenantPath";
@@ -55,29 +69,39 @@ export default function MaskyooSettings() {
   const saveMutation = useMutation({
     mutationFn: async () => {
       if (!tenantId) throw new Error("Missing tenant");
-      const { error } = await supabase.from("maskyoo_settings" as any).upsert({
-        tenant_id: tenantId,
-        base_url: baseUrl.trim(),
-        api_token: apiToken.trim(),
-        default_user_phone: defaultUserPhone || null,
-        click2call_service: click2callService || "onetouch",
-        webhook_secret: webhookSecret || null,
-        is_active: isActive,
-      }, { onConflict: "tenant_id" });
+      const { error } = await supabase.from("maskyoo_settings" as any).upsert(
+        {
+          tenant_id: tenantId,
+          base_url: baseUrl.trim(),
+          api_token: apiToken.trim(),
+          default_user_phone: defaultUserPhone || null,
+          click2call_service: click2callService || "onetouch",
+          webhook_secret: webhookSecret || null,
+          is_active: isActive,
+        },
+        { onConflict: "tenant_id" },
+      );
       if (error) throw error;
     },
     onSuccess: () => {
       toast.success("הגדרות Maskyoo נשמרו");
-      queryClient.invalidateQueries({ queryKey: ["maskyoo-settings", tenantId] });
+      queryClient.invalidateQueries({
+        queryKey: ["maskyoo-settings", tenantId],
+      });
     },
-    onError: (e: any) => toast.error("שגיאה בשמירה", { description: e.message }),
+    onError: (e: any) =>
+      toast.error("שגיאה בשמירה", { description: e.message }),
   });
 
   const projectId = import.meta.env.VITE_SUPABASE_PROJECT_ID;
   const webhookUrl = `https://${projectId}.supabase.co/functions/v1/maskyoo-webhook?tenant_id=${tenantId}${webhookSecret ? `&secret=${webhookSecret}` : ""}`;
 
   if (isLoading) {
-    return <div className="container mx-auto p-6 flex items-center justify-center"><Loader2 className="h-6 w-6 animate-spin" /></div>;
+    return (
+      <div className="container mx-auto p-6 flex items-center justify-center">
+        <Loader2 className="h-6 w-6 animate-spin" />
+      </div>
+    );
   }
 
   return (
@@ -88,9 +112,14 @@ export default function MaskyooSettings() {
             <Phone className="h-8 w-8 text-primary" />
             הגדרות Maskyoo (מסקיו)
           </h1>
-          <p className="text-muted-foreground mt-2">חיבור למרכזיית Maskyoo - חיוג, היסטוריה והקלטות</p>
+          <p className="text-muted-foreground mt-2">
+            חיבור למרכזיית Maskyoo - חיוג, היסטוריה והקלטות
+          </p>
         </div>
-        <Button variant="outline" onClick={() => navigate(buildPath("integrations"))}>
+        <Button
+          variant="outline"
+          onClick={() => navigate(buildPath("integrations"))}
+        >
           <ArrowRight className="h-4 w-4 ml-2" /> חזרה לאינטגרציות
         </Button>
       </div>
@@ -98,21 +127,38 @@ export default function MaskyooSettings() {
       <div className="grid gap-6 md:grid-cols-2">
         <Card>
           <CardHeader>
-            <CardTitle className="flex items-center gap-2"><Settings className="h-5 w-5" /> חיבור API</CardTitle>
+            <CardTitle className="flex items-center gap-2">
+              <Settings className="h-5 w-5" /> חיבור API
+            </CardTitle>
             <CardDescription>פרטי הגישה שקיבלת מ-Maskyoo</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="space-y-2">
               <Label>Base URL</Label>
-              <Input dir="ltr" placeholder="https://yourcompany.maskyoo.com" value={baseUrl} onChange={(e) => setBaseUrl(e.target.value)} />
+              <Input
+                dir="ltr"
+                placeholder="https://yourcompany.maskyoo.com"
+                value={baseUrl}
+                onChange={(e) => setBaseUrl(e.target.value)}
+              />
             </div>
             <div className="space-y-2">
               <Label>API Token (Bearer)</Label>
-              <Input dir="ltr" type="password" value={apiToken} onChange={(e) => setApiToken(e.target.value)} />
+              <Input
+                dir="ltr"
+                type="password"
+                value={apiToken}
+                onChange={(e) => setApiToken(e.target.value)}
+              />
             </div>
             <div className="space-y-2">
               <Label>שירות Click2Call</Label>
-              <Input dir="ltr" value={click2callService} onChange={(e) => setClick2callService(e.target.value)} placeholder="onetouch" />
+              <Input
+                dir="ltr"
+                value={click2callService}
+                onChange={(e) => setClick2callService(e.target.value)}
+                placeholder="onetouch"
+              />
             </div>
             <div className="flex items-center justify-between">
               <Label>פעיל</Label>
@@ -129,23 +175,49 @@ export default function MaskyooSettings() {
 
         <Card>
           <CardHeader>
-            <CardTitle className="flex items-center gap-2"><Phone className="h-5 w-5" /> הגדרות שיחה</CardTitle>
+            <CardTitle className="flex items-center gap-2">
+              <Phone className="h-5 w-5" /> הגדרות שיחה
+            </CardTitle>
             <CardDescription>ברירות מחדל לחיוג</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="space-y-2">
-              <Label>מספר משתמש ברירת מחדל (אם לא מוגדר ב-Telephony Settings)</Label>
-              <Input dir="ltr" value={defaultUserPhone} onChange={(e) => setDefaultUserPhone(e.target.value)} placeholder="05X-XXXXXXX" />
+              <Label>
+                מספר משתמש ברירת מחדל (אם לא מוגדר ב-Telephony Settings)
+              </Label>
+              <Input
+                dir="ltr"
+                value={defaultUserPhone}
+                onChange={(e) => setDefaultUserPhone(e.target.value)}
+                placeholder="05X-XXXXXXX"
+              />
             </div>
             <div className="space-y-2">
               <Label>Webhook Secret (אופציונלי)</Label>
-              <Input dir="ltr" value={webhookSecret} onChange={(e) => setWebhookSecret(e.target.value)} placeholder="טקסט סודי לאימות webhook" />
+              <Input
+                dir="ltr"
+                value={webhookSecret}
+                onChange={(e) => setWebhookSecret(e.target.value)}
+                placeholder="טקסט סודי לאימות webhook"
+              />
             </div>
             <div className="space-y-2">
               <Label>Webhook URL (להגדיר ב-Maskyoo)</Label>
               <div className="flex gap-2">
-                <Input dir="ltr" value={webhookUrl} readOnly className="text-xs" />
-                <Button variant="outline" size="icon" onClick={() => { navigator.clipboard.writeText(webhookUrl); toast.success("הועתק"); }}>
+                <Input
+                  dir="ltr"
+                  value={webhookUrl}
+                  readOnly
+                  className="text-xs"
+                />
+                <Button
+                  variant="outline"
+                  size="icon"
+                  onClick={() => {
+                    navigator.clipboard.writeText(webhookUrl);
+                    toast.success("הועתק");
+                  }}
+                >
                   <Copy className="h-4 w-4" />
                 </Button>
               </div>
@@ -155,8 +227,16 @@ export default function MaskyooSettings() {
       </div>
 
       <div className="flex gap-3">
-        <Button onClick={() => saveMutation.mutate()} disabled={saveMutation.isPending} size="lg">
-          {saveMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin ml-2" /> : <Save className="h-4 w-4 ml-2" />}
+        <Button
+          onClick={() => saveMutation.mutate()}
+          disabled={saveMutation.isPending}
+          size="lg"
+        >
+          {saveMutation.isPending ? (
+            <Loader2 className="h-4 w-4 animate-spin ml-2" />
+          ) : (
+            <Save className="h-4 w-4 ml-2" />
+          )}
           שמור הגדרות
         </Button>
       </div>
@@ -167,9 +247,9 @@ export default function MaskyooSettings() {
         <CardContent className="p-4">
           <h4 className="font-semibold mb-2">⚠️ חשוב: עובדים רק עם Webhook</h4>
           <p className="text-sm text-muted-foreground mb-2">
-            מסקיו חוסמים גישת API לפי IP, ול-Supabase Edge Functions אין IP קבוע.
-            לכן <strong>לא ניתן למשוך היסטוריה</strong> ממסקיו - חובה להגדיר את ה-Webhook למעלה,
-            ומסקיו ישלחו אלינו כל שיחה בזמן אמת.
+            מסקיו חוסמים גישת API לפי IP, ול-Supabase Edge Functions אין IP
+            קבוע. לכן <strong>לא ניתן למשוך היסטוריה</strong> ממסקיו - חובה
+            להגדיר את ה-Webhook למעלה, ומסקיו ישלחו אלינו כל שיחה בזמן אמת.
           </p>
         </CardContent>
       </Card>
@@ -178,9 +258,14 @@ export default function MaskyooSettings() {
         <CardContent className="p-4">
           <h4 className="font-semibold mb-2">📞 איך זה עובד?</h4>
           <ul className="text-sm text-muted-foreground space-y-1.5 list-disc list-inside">
-            <li><strong>Webhook (חובה):</strong> מסקיו שולחים אלינו כל שיחה בזמן אמת לכתובת למעלה</li>
+            <li>
+              <strong>Webhook (חובה):</strong> מסקיו שולחים אלינו כל שיחה בזמן
+              אמת לכתובת למעלה
+            </li>
             <li>שיוך אוטומטי לליד/לקוח לפי 9 ספרות אחרונות של מספר הטלפון</li>
-            <li>היסטוריית שיחות זמינה בכרטיסיית "היסטוריית שיחות" של ליד/לקוח</li>
+            <li>
+              היסטוריית שיחות זמינה בכרטיסיית "היסטוריית שיחות" של ליד/לקוח
+            </li>
             <li>הקלטות נטענות לפי דרישה דרך Maskyoo API (אם זמינות)</li>
           </ul>
         </CardContent>

@@ -1,4 +1,7 @@
-export function grokUsesExistingWebhook(url?: string | null, key?: string | null): boolean {
+export function grokUsesExistingWebhook(
+  url?: string | null,
+  key?: string | null,
+): boolean {
   return Boolean(String(url || "").trim() && String(key || "").trim());
 }
 

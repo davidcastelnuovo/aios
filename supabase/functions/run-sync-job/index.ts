@@ -1,8 +1,9 @@
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Headers":
+    "authorization, x-client-info, apikey, content-type",
 };
 
 // Edge functions have execution time limits. Running a long sync (minutes) in a single invocation
@@ -15,13 +16,33 @@ const RUNNING_STALE_AFTER_MS = 60_000; // if no heartbeat/progress update for 60
 function isInternationalPhone(phone: string): boolean {
   if (!phone) return false;
   const trimmed = phone.trim();
-  if (trimmed.startsWith('+') && !trimmed.startsWith('+972')) return true;
-  if (trimmed.startsWith('00') && !trimmed.startsWith('00972')) return true;
-  const digits = trimmed.replace(/\D/g, '');
-  if (digits.length >= 10 && !digits.startsWith('972') && !digits.startsWith('0')) {
-    const intlPrefixes = ['1', '44', '49', '43', '33', '39', '34', '31', '32', '41', '61', '81', '86', '91'];
+  if (trimmed.startsWith("+") && !trimmed.startsWith("+972")) return true;
+  if (trimmed.startsWith("00") && !trimmed.startsWith("00972")) return true;
+  const digits = trimmed.replace(/\D/g, "");
+  if (
+    digits.length >= 10 &&
+    !digits.startsWith("972") &&
+    !digits.startsWith("0")
+  ) {
+    const intlPrefixes = [
+      "1",
+      "44",
+      "49",
+      "43",
+      "33",
+      "39",
+      "34",
+      "31",
+      "32",
+      "41",
+      "61",
+      "81",
+      "86",
+      "91",
+    ];
     for (const prefix of intlPrefixes) {
-      if (digits.startsWith(prefix) && digits.length >= prefix.length + 8) return true;
+      if (digits.startsWith(prefix) && digits.length >= prefix.length + 8)
+        return true;
     }
   }
   return false;
@@ -29,18 +50,19 @@ function isInternationalPhone(phone: string): boolean {
 
 function formatInternationalPhone(phone: string): string {
   const trimmed = phone.trim();
-  if (trimmed.startsWith('+')) return trimmed.replace(/[^\d+]/g, '');
-  if (trimmed.startsWith('00')) return '+' + trimmed.slice(2).replace(/\D/g, '');
-  return '+' + trimmed.replace(/\D/g, '');
+  if (trimmed.startsWith("+")) return trimmed.replace(/[^\d+]/g, "");
+  if (trimmed.startsWith("00"))
+    return "+" + trimmed.slice(2).replace(/\D/g, "");
+  return "+" + trimmed.replace(/\D/g, "");
 }
 
 function normalizePhone(phone: string): string {
-  if (!phone) return '';
-  let cleaned = phone.replace(/\D/g, '');
-  if (cleaned.startsWith('972')) {
+  if (!phone) return "";
+  let cleaned = phone.replace(/\D/g, "");
+  if (cleaned.startsWith("972")) {
     cleaned = cleaned.slice(3);
   }
-  if (cleaned.startsWith('0')) {
+  if (cleaned.startsWith("0")) {
     cleaned = cleaned.slice(1);
   }
   return cleaned;
@@ -49,7 +71,7 @@ function normalizePhone(phone: string): string {
 function formatPhoneForManyChat(phone: string): string {
   if (isInternationalPhone(phone)) {
     const formatted = formatInternationalPhone(phone);
-    return formatted.startsWith('+') ? formatted.slice(1) : formatted;
+    return formatted.startsWith("+") ? formatted.slice(1) : formatted;
   }
   const cleaned = normalizePhone(phone);
   return `972${cleaned}`;
@@ -58,19 +80,23 @@ function formatPhoneForManyChat(phone: string): string {
 function getPhoneLookupCandidates(phone: string): string[] {
   if (isInternationalPhone(phone)) {
     const formatted = formatInternationalPhone(phone);
-    const withoutPlus = formatted.startsWith('+') ? formatted.slice(1) : formatted;
+    const withoutPlus = formatted.startsWith("+")
+      ? formatted.slice(1)
+      : formatted;
     return [formatted, withoutPlus].filter(Boolean);
   }
   const cleaned = normalizePhone(phone);
   if (!cleaned) return [];
   const withCountry = `972${cleaned}`;
-  return [`+${withCountry}`, withCountry, `0${cleaned}`, cleaned].filter(Boolean);
+  return [`+${withCountry}`, withCountry, `0${cleaned}`, cleaned].filter(
+    Boolean,
+  );
 }
 
 async function safeJson(res: Response): Promise<any> {
-  const contentType = res.headers.get('content-type') || '';
+  const contentType = res.headers.get("content-type") || "";
   const text = await res.text();
-  if (!contentType.includes('application/json')) {
+  if (!contentType.includes("application/json")) {
     return { __nonJson: true, status: res.status, text: text.slice(0, 500) };
   }
   try {
@@ -83,31 +109,31 @@ async function safeJson(res: Response): Promise<any> {
 async function triggerNextRun(
   supabaseUrl: string,
   supabaseServiceKey: string,
-  jobId: string
+  jobId: string,
 ): Promise<void> {
   const runUrl = `${supabaseUrl}/functions/v1/run-sync-job`;
   fetch(runUrl, {
-    method: 'POST',
+    method: "POST",
     headers: {
-      'Content-Type': 'application/json',
+      "Content-Type": "application/json",
       Authorization: `Bearer ${supabaseServiceKey}`,
     },
     body: JSON.stringify({ jobId }),
   }).catch((err) => {
-    console.error('Failed to trigger next run-sync-job:', err);
+    console.error("Failed to trigger next run-sync-job:", err);
   });
 }
 
 async function getPhoneNumberFieldId(
   apiKey: string,
   supabase: any,
-  tenantId: string
+  tenantId: string,
 ): Promise<number | null> {
   const { data: integration } = await supabase
-    .from('tenant_integrations')
-    .select('settings')
-    .eq('tenant_id', tenantId)
-    .eq('integration_type', 'manychat')
+    .from("tenant_integrations")
+    .select("settings")
+    .eq("tenant_id", tenantId)
+    .eq("integration_type", "manychat")
     .single();
 
   const settings = (integration?.settings as Record<string, any>) || {};
@@ -115,58 +141,74 @@ async function getPhoneNumberFieldId(
     return settings.phone_number_field_id;
   }
 
-  const res = await fetch('https://api.manychat.com/fb/page/getCustomFields', {
+  const res = await fetch("https://api.manychat.com/fb/page/getCustomFields", {
     headers: {
       Authorization: `Bearer ${apiKey}`,
-      'Content-Type': 'application/json',
+      "Content-Type": "application/json",
     },
   });
 
   const data = await safeJson(res);
-  if (data?.status === 'success' && Array.isArray(data?.data)) {
-    const phoneField = data.data.find((f: any) => f.name?.toLowerCase() === 'phone_number');
+  if (data?.status === "success" && Array.isArray(data?.data)) {
+    const phoneField = data.data.find(
+      (f: any) => f.name?.toLowerCase() === "phone_number",
+    );
     if (phoneField?.id) {
       await supabase
-        .from('tenant_integrations')
-        .update({ settings: { ...settings, phone_number_field_id: phoneField.id } })
-        .eq('tenant_id', tenantId)
-        .eq('integration_type', 'manychat');
+        .from("tenant_integrations")
+        .update({
+          settings: { ...settings, phone_number_field_id: phoneField.id },
+        })
+        .eq("tenant_id", tenantId)
+        .eq("integration_type", "manychat");
       return phoneField.id;
     }
   }
   return null;
 }
 
-async function findSubscriberByPhone(apiKey: string, candidates: string[]): Promise<string | null> {
+async function findSubscriberByPhone(
+  apiKey: string,
+  candidates: string[],
+): Promise<string | null> {
   for (const candidate of candidates) {
     const url = `https://api.manychat.com/fb/subscriber/findBySystemField?phone=${encodeURIComponent(candidate)}`;
     const res = await fetch(url, {
-      headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        "Content-Type": "application/json",
+      },
     });
     if (res.status === 429) {
       await new Promise((r) => setTimeout(r, 2000));
       continue;
     }
     const data = await safeJson(res);
-    if (data?.status === 'success' && data?.data?.id) {
+    if (data?.status === "success" && data?.data?.id) {
       return String(data.data.id);
     }
   }
   return null;
 }
 
-async function findSubscriberByEmail(apiKey: string, email?: string | null): Promise<string | null> {
+async function findSubscriberByEmail(
+  apiKey: string,
+  email?: string | null,
+): Promise<string | null> {
   if (!email) return null;
   const url = `https://api.manychat.com/fb/subscriber/findBySystemField?email=${encodeURIComponent(email)}`;
   const res = await fetch(url, {
-    headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
+    headers: {
+      Authorization: `Bearer ${apiKey}`,
+      "Content-Type": "application/json",
+    },
   });
   if (res.status === 429) {
     await new Promise((r) => setTimeout(r, 2000));
     return null;
   }
   const data = await safeJson(res);
-  if (data?.status === 'success' && data?.data?.id) {
+  if (data?.status === "success" && data?.data?.id) {
     return String(data.data.id);
   }
   return null;
@@ -175,19 +217,22 @@ async function findSubscriberByEmail(apiKey: string, email?: string | null): Pro
 async function findSubscriberByCustomField(
   apiKey: string,
   fieldId: number,
-  candidates: string[]
+  candidates: string[],
 ): Promise<string | null> {
   for (const candidate of candidates) {
     const url = `https://api.manychat.com/fb/subscriber/findByCustomField?field_id=${fieldId}&field_value=${encodeURIComponent(candidate)}`;
     const res = await fetch(url, {
-      headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        "Content-Type": "application/json",
+      },
     });
     if (res.status === 429) {
       await new Promise((r) => setTimeout(r, 2000));
       continue;
     }
     const data = await safeJson(res);
-    if (data?.status === 'success' && data?.data?.id) {
+    if (data?.status === "success" && data?.data?.id) {
       return String(data.data.id);
     }
   }
@@ -198,15 +243,25 @@ async function setCustomField(
   apiKey: string,
   subscriberId: string,
   fieldId: number,
-  value: string
+  value: string,
 ): Promise<boolean> {
-  const res = await fetch('https://api.manychat.com/fb/subscriber/setCustomField', {
-    method: 'POST',
-    headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ subscriber_id: subscriberId, field_id: fieldId, field_value: value }),
-  });
+  const res = await fetch(
+    "https://api.manychat.com/fb/subscriber/setCustomField",
+    {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        subscriber_id: subscriberId,
+        field_id: fieldId,
+        field_value: value,
+      }),
+    },
+  );
   const data = await safeJson(res);
-  return data?.status === 'success';
+  return data?.status === "success";
 }
 
 interface SyncResult {
@@ -219,77 +274,89 @@ interface SyncResult {
 }
 
 Deno.serve(async (req) => {
-  if (req.method === 'OPTIONS') {
+  if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
   }
 
   try {
-    const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
-    const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+    const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
+    const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
     const { jobId } = await req.json();
 
     if (!jobId) {
-      return new Response(
-        JSON.stringify({ error: 'Missing jobId' }),
-        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
+      return new Response(JSON.stringify({ error: "Missing jobId" }), {
+        status: 400,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
     }
 
     // Get job details
     const { data: job, error: jobError } = await supabase
-      .from('sync_jobs')
-      .select('*')
-      .eq('id', jobId)
+      .from("sync_jobs")
+      .select("*")
+      .eq("id", jobId)
       .single();
 
     if (jobError || !job) {
-      return new Response(
-        JSON.stringify({ error: 'Job not found' }),
-        { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
+      return new Response(JSON.stringify({ error: "Job not found" }), {
+        status: 404,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
     }
 
     // Check if job should run
-    if (job.status === 'stopped' || job.status === 'completed' || job.status === 'failed') {
+    if (
+      job.status === "stopped" ||
+      job.status === "completed" ||
+      job.status === "failed"
+    ) {
       return new Response(
         JSON.stringify({ success: true, message: `Job is ${job.status}` }),
-        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        { headers: { ...corsHeaders, "Content-Type": "application/json" } },
       );
     }
 
     // Prevent overlapping runners (can happen if the function is triggered multiple times).
     // If the job is already running and has recent updates, we assume another runner is active.
-    const jobUpdatedAt = job.updated_at ? new Date(job.updated_at).getTime() : 0;
+    const jobUpdatedAt = job.updated_at
+      ? new Date(job.updated_at).getTime()
+      : 0;
     const nowMs = Date.now();
     const isFreshRunning =
-      job.status === 'running' && jobUpdatedAt > 0 && nowMs - jobUpdatedAt < RUNNING_STALE_AFTER_MS;
+      job.status === "running" &&
+      jobUpdatedAt > 0 &&
+      nowMs - jobUpdatedAt < RUNNING_STALE_AFTER_MS;
 
     // Internal self-invocations (using the service role key) MUST be allowed.
     // Otherwise, the "batch + self-trigger" pattern stops after the first chunk.
-    const authHeader = req.headers.get('Authorization') || '';
+    const authHeader = req.headers.get("Authorization") || "";
     const isInternalServiceCall = authHeader === `Bearer ${supabaseServiceKey}`;
 
     if (isFreshRunning && !isInternalServiceCall) {
       return new Response(
-        JSON.stringify({ success: true, message: 'Job already running' }),
-        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        JSON.stringify({ success: true, message: "Job already running" }),
+        { headers: { ...corsHeaders, "Content-Type": "application/json" } },
       );
     }
 
     // Update status to running (and refresh heartbeat)
-    if (job.status === 'pending') {
+    if (job.status === "pending") {
       await supabase
-        .from('sync_jobs')
-        .update({ status: 'running', started_at: new Date().toISOString(), updated_at: new Date().toISOString() })
-        .eq('id', jobId);
+        .from("sync_jobs")
+        .update({
+          status: "running",
+          started_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", jobId);
     } else {
       // stale runner recovery: mark a heartbeat so UI shows it's alive again
       await supabase
-        .from('sync_jobs')
-        .update({ status: 'running', updated_at: new Date().toISOString() })
-        .eq('id', jobId);
+        .from("sync_jobs")
+        .update({ status: "running", updated_at: new Date().toISOString() })
+        .eq("id", jobId);
     }
 
     const tenantId = job.tenant_id;
@@ -300,25 +367,35 @@ Deno.serve(async (req) => {
 
     // Get ManyChat integration
     const { data: integration } = await supabase
-      .from('tenant_integrations')
-      .select('api_key, is_active, settings')
-      .eq('tenant_id', tenantId)
-      .eq('integration_type', 'manychat')
+      .from("tenant_integrations")
+      .select("api_key, is_active, settings")
+      .eq("tenant_id", tenantId)
+      .eq("integration_type", "manychat")
       .single();
 
     if (!integration?.api_key || !integration.is_active) {
       await supabase
-        .from('sync_jobs')
-        .update({ status: 'failed', error_message: 'ManyChat integration not found or inactive' })
-        .eq('id', jobId);
+        .from("sync_jobs")
+        .update({
+          status: "failed",
+          error_message: "ManyChat integration not found or inactive",
+        })
+        .eq("id", jobId);
       return new Response(
-        JSON.stringify({ error: 'ManyChat integration not found' }),
-        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        JSON.stringify({ error: "ManyChat integration not found" }),
+        {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        },
       );
     }
 
     const apiKey = integration.api_key;
-    const phoneFieldId = await getPhoneNumberFieldId(apiKey, supabase, tenantId);
+    const phoneFieldId = await getPhoneNumberFieldId(
+      apiKey,
+      supabase,
+      tenantId,
+    );
 
     const startedAtMs = Date.now();
     let processedThisRun = 0;
@@ -328,37 +405,39 @@ Deno.serve(async (req) => {
     let failedTotal = (job.progress as any)?.failed || 0;
     let conflictsTotal = (job.progress as any)?.conflicts || 0;
     const totalLeads = (job.progress as any)?.total || 0;
-    const allResults: SyncResult[] = ((job.progress as any)?.results || []).slice(-50); // Keep last 50 results
+    const allResults: SyncResult[] = (
+      (job.progress as any)?.results || []
+    ).slice(-50); // Keep last 50 results
 
-     while (true) {
-       // Stop if we are close to runtime limits
-       if (Date.now() - startedAtMs > MAX_RUNTIME_MS) {
-         break;
-       }
+    while (true) {
+      // Stop if we are close to runtime limits
+      if (Date.now() - startedAtMs > MAX_RUNTIME_MS) {
+        break;
+      }
 
-       // Stop if we processed enough in this run
-       if (processedThisRun >= batchSize) {
-         break;
-       }
+      // Stop if we processed enough in this run
+      if (processedThisRun >= batchSize) {
+        break;
+      }
 
       // Re-check job status (in case it was stopped/failed by user)
       const { data: currentJob } = await supabase
-        .from('sync_jobs')
-        .select('status')
-        .eq('id', jobId)
+        .from("sync_jobs")
+        .select("status")
+        .eq("id", jobId)
         .single();
 
-      if (currentJob?.status === 'stopped' || currentJob?.status === 'failed') {
+      if (currentJob?.status === "stopped" || currentJob?.status === "failed") {
         break;
       }
 
       // Fetch one lead
       const { data: leads } = await supabase
-        .from('leads')
-        .select('id, contact_name, phone, email, company_name')
-        .eq('tenant_id', tenantId)
-        .is('manychat_subscriber_id', null)
-        .not('phone', 'is', null)
+        .from("leads")
+        .select("id, contact_name, phone, email, company_name")
+        .eq("tenant_id", tenantId)
+        .is("manychat_subscriber_id", null)
+        .not("phone", "is", null)
         .limit(1);
 
       if (!leads || leads.length === 0) {
@@ -369,8 +448,7 @@ Deno.serve(async (req) => {
       const lead = leads[0];
       const formattedPhone = formatPhoneForManyChat(lead.phone);
       const phoneCandidates = getPhoneLookupCandidates(lead.phone);
-      const leadName = lead.contact_name || lead.company_name || 'Unknown';
-
+      const leadName = lead.contact_name || lead.company_name || "Unknown";
 
       let subscriberId: string | null = null;
       let wasSkipped = false;
@@ -379,40 +457,58 @@ Deno.serve(async (req) => {
       try {
         // Find existing subscriber
         subscriberId = await findSubscriberByPhone(apiKey, phoneCandidates);
-        if (!subscriberId) subscriberId = await findSubscriberByEmail(apiKey, lead.email);
+        if (!subscriberId)
+          subscriberId = await findSubscriberByEmail(apiKey, lead.email);
         if (!subscriberId && phoneFieldId) {
-          subscriberId = await findSubscriberByCustomField(apiKey, phoneFieldId, phoneCandidates);
+          subscriberId = await findSubscriberByCustomField(
+            apiKey,
+            phoneFieldId,
+            phoneCandidates,
+          );
         }
 
         // Create if not found
         if (!subscriberId) {
-          const nameParts = (lead.contact_name || '').split(' ');
-          const firstName = nameParts[0] || lead.company_name || 'Lead';
-          const lastName = nameParts.slice(1).join(' ') || '';
+          const nameParts = (lead.contact_name || "").split(" ");
+          const firstName = nameParts[0] || lead.company_name || "Lead";
+          const lastName = nameParts.slice(1).join(" ") || "";
 
-          const createRes = await fetch('https://api.manychat.com/fb/subscriber/createSubscriber', {
-            method: 'POST',
-            headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              first_name: firstName,
-              last_name: lastName,
-              phone: `+${formattedPhone}`,
-              whatsapp_phone: `+${formattedPhone}`,
-              email: lead.email || undefined,
-              has_opt_in_sms: true,
-              has_opt_in_email: !!lead.email,
-              consent_phrase: 'אני מאשר קבלת הודעות',
-            }),
-          });
+          const createRes = await fetch(
+            "https://api.manychat.com/fb/subscriber/createSubscriber",
+            {
+              method: "POST",
+              headers: {
+                Authorization: `Bearer ${apiKey}`,
+                "Content-Type": "application/json",
+              },
+              body: JSON.stringify({
+                first_name: firstName,
+                last_name: lastName,
+                phone: `+${formattedPhone}`,
+                whatsapp_phone: `+${formattedPhone}`,
+                email: lead.email || undefined,
+                has_opt_in_sms: true,
+                has_opt_in_email: !!lead.email,
+                consent_phrase: "אני מאשר קבלת הודעות",
+              }),
+            },
+          );
 
           const createData = await safeJson(createRes);
-          if (createData.status === 'success' && createData.data?.id) {
+          if (createData.status === "success" && createData.data?.id) {
             subscriberId = createData.data.id;
-          } else if (JSON.stringify(createData).toLowerCase().includes('already exists')) {
+          } else if (
+            JSON.stringify(createData).toLowerCase().includes("already exists")
+          ) {
             subscriberId = await findSubscriberByPhone(apiKey, phoneCandidates);
-            if (!subscriberId) subscriberId = await findSubscriberByEmail(apiKey, lead.email);
+            if (!subscriberId)
+              subscriberId = await findSubscriberByEmail(apiKey, lead.email);
             if (!subscriberId && phoneFieldId) {
-              subscriberId = await findSubscriberByCustomField(apiKey, phoneFieldId, phoneCandidates);
+              subscriberId = await findSubscriberByCustomField(
+                apiKey,
+                phoneFieldId,
+                phoneCandidates,
+              );
             }
           }
 
@@ -420,42 +516,53 @@ Deno.serve(async (req) => {
             wasSkipped = true;
             errorMessage = `Could not create/find subscriber`;
             await supabase
-              .from('leads')
-              .update({ manychat_subscriber_id: 'SYNC_CONFLICT' })
-              .eq('id', lead.id);
+              .from("leads")
+              .update({ manychat_subscriber_id: "SYNC_CONFLICT" })
+              .eq("id", lead.id);
           }
         }
 
         // Set custom field and add tag
         if (subscriberId && !wasSkipped) {
           if (phoneFieldId) {
-            await setCustomField(apiKey, subscriberId, phoneFieldId, `+${formattedPhone}`);
+            await setCustomField(
+              apiKey,
+              subscriberId,
+              phoneFieldId,
+              `+${formattedPhone}`,
+            );
           }
 
-          await fetch('https://api.manychat.com/fb/subscriber/addTag', {
-            method: 'POST',
-            headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
-            body: JSON.stringify({ subscriber_id: subscriberId, tag_id: tagId }),
+          await fetch("https://api.manychat.com/fb/subscriber/addTag", {
+            method: "POST",
+            headers: {
+              Authorization: `Bearer ${apiKey}`,
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+              subscriber_id: subscriberId,
+              tag_id: tagId,
+            }),
           });
 
           await supabase
-            .from('leads')
+            .from("leads")
             .update({ manychat_subscriber_id: subscriberId })
-            .eq('id', lead.id);
+            .eq("id", lead.id);
         }
       } catch (err) {
         wasSkipped = true;
-        errorMessage = err instanceof Error ? err.message : 'Unknown error';
+        errorMessage = err instanceof Error ? err.message : "Unknown error";
 
         // Avoid infinite retries on a lead that keeps failing: mark it as needing manual attention.
         // (Keeps the job moving instead of getting stuck repeatedly on the same bad record.)
         try {
           await supabase
-            .from('leads')
-            .update({ manychat_subscriber_id: 'NEEDS_MANUAL_LINK' })
-            .eq('id', lead.id);
+            .from("leads")
+            .update({ manychat_subscriber_id: "NEEDS_MANUAL_LINK" })
+            .eq("id", lead.id);
         } catch (updateErr) {
-          console.error('Failed to mark lead as NEEDS_MANUAL_LINK:', updateErr);
+          console.error("Failed to mark lead as NEEDS_MANUAL_LINK:", updateErr);
         }
       }
 
@@ -467,7 +574,7 @@ Deno.serve(async (req) => {
         processedTotal++;
       }
 
-       processedThisRun++;
+      processedThisRun++;
 
       // Add result
       allResults.push({
@@ -486,21 +593,21 @@ Deno.serve(async (req) => {
 
       // Count remaining
       const { count: remainingCount } = await supabase
-        .from('leads')
-        .select('id', { count: 'exact', head: true })
-        .eq('tenant_id', tenantId)
-        .is('manychat_subscriber_id', null)
-        .not('phone', 'is', null);
+        .from("leads")
+        .select("id", { count: "exact", head: true })
+        .eq("tenant_id", tenantId)
+        .is("manychat_subscriber_id", null)
+        .not("phone", "is", null);
 
       const { count: conflictCount } = await supabase
-        .from('leads')
-        .select('id', { count: 'exact', head: true })
-        .eq('tenant_id', tenantId)
-        .eq('manychat_subscriber_id', 'SYNC_CONFLICT');
+        .from("leads")
+        .select("id", { count: "exact", head: true })
+        .eq("tenant_id", tenantId)
+        .eq("manychat_subscriber_id", "SYNC_CONFLICT");
 
       // Update job progress
       await supabase
-        .from('sync_jobs')
+        .from("sync_jobs")
         .update({
           progress: {
             processed: processedTotal,
@@ -512,7 +619,7 @@ Deno.serve(async (req) => {
           },
           updated_at: new Date().toISOString(),
         })
-        .eq('id', jobId);
+        .eq("id", jobId);
 
       // If no more leads, we're done
       if (!remainingCount || remainingCount === 0) {
@@ -525,63 +632,65 @@ Deno.serve(async (req) => {
 
     // Re-check job status BEFORE deciding whether to continue
     const { data: finalJobStatus } = await supabase
-      .from('sync_jobs')
-      .select('status')
-      .eq('id', jobId)
+      .from("sync_jobs")
+      .select("status")
+      .eq("id", jobId)
       .single();
 
     // If job was stopped/failed by user, do NOT continue
-    if (finalJobStatus?.status === 'stopped' || finalJobStatus?.status === 'failed') {
+    if (
+      finalJobStatus?.status === "stopped" ||
+      finalJobStatus?.status === "failed"
+    ) {
       return new Response(
         JSON.stringify({
           success: true,
-          message: 'Job stopped by user',
+          message: "Job stopped by user",
           processed: processedTotal,
           failed: failedTotal,
         }),
-        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        { headers: { ...corsHeaders, "Content-Type": "application/json" } },
       );
     }
 
     // Check if anything remains; if yes, self-invoke again. If not, complete.
     const { count: remainingAfter } = await supabase
-      .from('leads')
-      .select('id', { count: 'exact', head: true })
-      .eq('tenant_id', tenantId)
-      .is('manychat_subscriber_id', null)
-      .not('phone', 'is', null);
+      .from("leads")
+      .select("id", { count: "exact", head: true })
+      .eq("tenant_id", tenantId)
+      .is("manychat_subscriber_id", null)
+      .not("phone", "is", null);
 
     if (remainingAfter && remainingAfter > 0) {
       // Keep status running and schedule next chunk
       await supabase
-        .from('sync_jobs')
-        .update({ status: 'running', updated_at: new Date().toISOString() })
-        .eq('id', jobId);
+        .from("sync_jobs")
+        .update({ status: "running", updated_at: new Date().toISOString() })
+        .eq("id", jobId);
 
       await triggerNextRun(supabaseUrl, supabaseServiceKey, jobId);
 
       return new Response(
         JSON.stringify({
           success: true,
-          message: 'Continuing in background',
+          message: "Continuing in background",
           processed: processedTotal,
           failed: failedTotal,
           remaining: remainingAfter,
         }),
-        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        { headers: { ...corsHeaders, "Content-Type": "application/json" } },
       );
     }
 
     // Mark job as completed
     await supabase
-      .from('sync_jobs')
+      .from("sync_jobs")
       .update({
-        status: 'completed',
+        status: "completed",
         completed_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
       })
-      .eq('id', jobId);
-
+      .eq("id", jobId);
 
     return new Response(
       JSON.stringify({
@@ -590,13 +699,18 @@ Deno.serve(async (req) => {
         failed: failedTotal,
         conflicts: conflictsTotal,
       }),
-      { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      { headers: { ...corsHeaders, "Content-Type": "application/json" } },
     );
   } catch (error) {
-    console.error('Run sync job error:', error);
+    console.error("Run sync job error:", error);
     return new Response(
-      JSON.stringify({ error: error instanceof Error ? error.message : 'Unknown error' }),
-      { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      JSON.stringify({
+        error: error instanceof Error ? error.message : "Unknown error",
+      }),
+      {
+        status: 500,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      },
     );
   }
 });

@@ -1,284 +1,331 @@
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.75.0'
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2.75.0";
 import {
   processAutomationOnlyLeadWebhook,
   resolveLeadAlertAutomation,
-} from '../_shared/automation-only-lead-webhook.ts'
+} from "../_shared/automation-only-lead-webhook.ts";
 import {
   buildLeadRoutingPayload,
   isClientLeadAlertPayload,
   resolveLeadClient,
-} from '../_shared/lead-routing.ts'
-import { unarchiveExistingLead } from '../_shared/unarchive-lead.ts'
+} from "../_shared/lead-routing.ts";
+import { unarchiveExistingLead } from "../_shared/unarchive-lead.ts";
 import {
   applyRepeatInboundReopen,
   updateLeadWithRepeatReopen,
-} from '../_shared/lead-repeat-reopen.ts'
-import { resolveTenantHomeAgencyId } from '../_shared/resolve-tenant-agency.ts'
+} from "../_shared/lead-repeat-reopen.ts";
+import { resolveTenantHomeAgencyId } from "../_shared/resolve-tenant-agency.ts";
 
 const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-webhook-secret',
-}
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Headers":
+    "authorization, x-client-info, apikey, content-type, x-webhook-secret",
+};
 
 interface LeadPayload {
-  company_name?: string
-  contact_name?: string
-  email?: string
-  phone?: string
-  source?: string
-  campaign_name?: string
-  notes?: string
-  monthly_budget?: number
-  three_month_budget?: number
-  products?: string
-  industry?: string
-  agency_id?: string
-  client_id?: string
-  form_data?: Record<string, string>
-  manychat_subscriber_id?: string
-  tag_name?: string
-  tenant_slug?: string
-  tenant_id?: string
-  automation_id?: string
-  crm_intake?: boolean
-  create_crm_lead?: boolean
+  company_name?: string;
+  contact_name?: string;
+  email?: string;
+  phone?: string;
+  source?: string;
+  campaign_name?: string;
+  notes?: string;
+  monthly_budget?: number;
+  three_month_budget?: number;
+  products?: string;
+  industry?: string;
+  agency_id?: string;
+  client_id?: string;
+  form_data?: Record<string, string>;
+  manychat_subscriber_id?: string;
+  tag_name?: string;
+  tenant_slug?: string;
+  tenant_id?: string;
+  automation_id?: string;
+  crm_intake?: boolean;
+  create_crm_lead?: boolean;
 }
 
-function pickCampaignName(body: Record<string, unknown> | null | undefined): string | undefined {
-  if (!body) return undefined
+function pickCampaignName(
+  body: Record<string, unknown> | null | undefined,
+): string | undefined {
+  if (!body) return undefined;
   const candidates = [
     body.campaign_name,
     body.campaign,
-    body['קמפיין'],
-    body['שם קמפיין'],
-    body['שם הקמפיין'],
-  ]
+    body["קמפיין"],
+    body["שם קמפיין"],
+    body["שם הקמפיין"],
+  ];
   for (const candidate of candidates) {
-    if (typeof candidate === 'string' && candidate.trim()) return candidate.trim()
+    if (typeof candidate === "string" && candidate.trim())
+      return candidate.trim();
   }
-  return undefined
+  return undefined;
 }
 
 // Normalize phone for comparison
 function normalizePhone(phone: string | null | undefined): string | null {
   if (!phone) return null;
-  return phone.replace(/[\s\-\(\)\.+]/g, '').replace(/^0/, '972');
+  return phone.replace(/[\s\-\(\)\.+]/g, "").replace(/^0/, "972");
 }
 
 Deno.serve(async (req) => {
   // Handle CORS preflight
-  if (req.method === 'OPTIONS') {
-    return new Response(null, { headers: corsHeaders })
+  if (req.method === "OPTIONS") {
+    return new Response(null, { headers: corsHeaders });
   }
 
   // Optional shared secret (WEBHOOK_LEAD_INTAKE_SECRET). When set in Supabase
   // secrets, callers must pass x-webhook-secret header or ?secret= query param.
   // When unset, requests are accepted for backward compatibility with existing
   // Wix / Make / Zapier integrations until URLs are updated.
-  const expectedSecret = Deno.env.get('WEBHOOK_LEAD_INTAKE_SECRET')
+  const expectedSecret = Deno.env.get("WEBHOOK_LEAD_INTAKE_SECRET");
   if (expectedSecret) {
-    const providedSecret = req.headers.get('x-webhook-secret')
-      ?? new URL(req.url).searchParams.get('secret')
+    const providedSecret =
+      req.headers.get("x-webhook-secret") ??
+      new URL(req.url).searchParams.get("secret");
     if (providedSecret !== expectedSecret) {
-      return new Response(JSON.stringify({ error: 'Unauthorized' }), {
+      return new Response(JSON.stringify({ error: "Unauthorized" }), {
         status: 401,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      })
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
     }
   }
 
   try {
-    
-    const supabaseUrl = Deno.env.get('SUPABASE_URL')!
-    const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
-    const supabase = createClient(supabaseUrl, supabaseKey)
+    const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
+    const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+    const supabase = createClient(supabaseUrl, supabaseKey);
 
     // Parse query parameters from URL
-    const url = new URL(req.url)
-    const queryTenantSlug = url.searchParams.get('tenant_slug')
-    const queryTenantId = url.searchParams.get('tenant_id')
-    const queryAgencyId = url.searchParams.get('agency_id')
+    const url = new URL(req.url);
+    const queryTenantSlug = url.searchParams.get("tenant_slug");
+    const queryTenantId = url.searchParams.get("tenant_id");
+    const queryAgencyId = url.searchParams.get("agency_id");
 
     // Parse incoming data
-    const rawBody = await req.json()
+    const rawBody = await req.json();
     if (queryTenantSlug || queryTenantId || queryAgencyId) {
     }
 
     // ========== WIX FORM PARSER ==========
     // Wix sends data nested in data.submissions[] with {label, value} objects
-    let payload: LeadPayload
-    let parsedFormData: Record<string, string> = {}
-    const wixSubmissions = rawBody?.data?.submissions
+    let payload: LeadPayload;
+    let parsedFormData: Record<string, string> = {};
+    const wixSubmissions = rawBody?.data?.submissions;
     if (wixSubmissions && Array.isArray(wixSubmissions)) {
-      const parsed: Record<string, string> = {}
-      
+      const parsed: Record<string, string> = {};
+
       for (const sub of wixSubmissions) {
-        const label = (sub.label || '').trim().toLowerCase()
-        const value = (sub.value || '').trim()
-        if (!value) continue
-        parsedFormData[String(sub.label || label)] = value
+        const label = (sub.label || "").trim().toLowerCase();
+        const value = (sub.value || "").trim();
+        if (!value) continue;
+        parsedFormData[String(sub.label || label)] = value;
 
         // Map Hebrew and English Wix form labels to lead fields
-        if (['שם מלא', 'full name', 'name', 'שם'].includes(label)) {
-          parsed.contact_name = value
-        } else if (['שם חברה', 'company name', 'company', 'חברה'].includes(label)) {
-          parsed.company_name = value
-        } else if (['כתובת אימייל', 'email', 'אימייל', 'מייל', 'דוא"ל'].includes(label)) {
-          parsed.email = value
-        } else if (['טלפון', 'phone', 'מספר טלפון', 'נייד', 'telephone'].includes(label)) {
-          parsed.phone = value
-        } else if (['הערות', 'notes', 'הודעה', 'message', 'תיאור'].includes(label)) {
-          parsed.notes = (parsed.notes ? parsed.notes + '\n' : '') + value
-        } else if (['תקציב', 'budget', 'תקציב חודשי', 'monthly budget'].includes(label)) {
-          parsed.monthly_budget = value
-        } else if (['תעשייה', 'industry', 'תחום'].includes(label)) {
-          parsed.industry = value
-        } else if (['מוצרים', 'products', 'שירותים', 'services'].includes(label)) {
-          parsed.products = value
-        } else if (['קמפיין', 'שם קמפיין', 'שם הקמפיין', 'campaign', 'campaign name', 'campaign_name'].includes(label)) {
-          parsed.campaign_name = value
+        if (["שם מלא", "full name", "name", "שם"].includes(label)) {
+          parsed.contact_name = value;
+        } else if (
+          ["שם חברה", "company name", "company", "חברה"].includes(label)
+        ) {
+          parsed.company_name = value;
+        } else if (
+          ["כתובת אימייל", "email", "אימייל", "מייל", 'דוא"ל'].includes(label)
+        ) {
+          parsed.email = value;
+        } else if (
+          ["טלפון", "phone", "מספר טלפון", "נייד", "telephone"].includes(label)
+        ) {
+          parsed.phone = value;
+        } else if (
+          ["הערות", "notes", "הודעה", "message", "תיאור"].includes(label)
+        ) {
+          parsed.notes = (parsed.notes ? parsed.notes + "\n" : "") + value;
+        } else if (
+          ["תקציב", "budget", "תקציב חודשי", "monthly budget"].includes(label)
+        ) {
+          parsed.monthly_budget = value;
+        } else if (["תעשייה", "industry", "תחום"].includes(label)) {
+          parsed.industry = value;
+        } else if (
+          ["מוצרים", "products", "שירותים", "services"].includes(label)
+        ) {
+          parsed.products = value;
+        } else if (
+          [
+            "קמפיין",
+            "שם קמפיין",
+            "שם הקמפיין",
+            "campaign",
+            "campaign name",
+            "campaign_name",
+          ].includes(label)
+        ) {
+          parsed.campaign_name = value;
         } else {
           // Unknown fields go to notes
-          parsed.notes = (parsed.notes ? parsed.notes + '\n' : '') + `${sub.label}: ${value}`
+          parsed.notes =
+            (parsed.notes ? parsed.notes + "\n" : "") +
+            `${sub.label}: ${value}`;
         }
       }
 
       // Also check Wix contact object for fallbacks
-      const wixContact = rawBody?.data?.contact
+      const wixContact = rawBody?.data?.contact;
       if (wixContact) {
         if (!parsed.contact_name && wixContact.name) {
-          parsed.contact_name = [wixContact.name.first, wixContact.name.last].filter(Boolean).join(' ')
+          parsed.contact_name = [wixContact.name.first, wixContact.name.last]
+            .filter(Boolean)
+            .join(" ");
         }
         if (!parsed.email && wixContact.email) {
-          parsed.email = wixContact.email
+          parsed.email = wixContact.email;
         }
       }
 
       // Add form name as source context
-      const formName = rawBody?.data?.formName
+      const formName = rawBody?.data?.formName;
       if (formName) {
-        parsed.notes = (parsed.notes ? parsed.notes + '\n' : '') + `טופס: ${formName}`
+        parsed.notes =
+          (parsed.notes ? parsed.notes + "\n" : "") + `טופס: ${formName}`;
       }
 
-
       payload = {
-        company_name: parsed.company_name || parsed.contact_name || '',
+        company_name: parsed.company_name || parsed.contact_name || "",
         contact_name: parsed.contact_name || undefined,
         email: parsed.email || undefined,
         phone: parsed.phone || undefined,
         notes: parsed.notes || undefined,
-        monthly_budget: parsed.monthly_budget ? Number(parsed.monthly_budget) || undefined : undefined,
+        monthly_budget: parsed.monthly_budget
+          ? Number(parsed.monthly_budget) || undefined
+          : undefined,
         industry: parsed.industry || undefined,
         products: parsed.products || undefined,
         campaign_name: parsed.campaign_name || undefined,
-        source: 'website',
+        source: "website",
         // Preserve any tenant/agency from body-level fields
         tenant_slug: rawBody.tenant_slug || undefined,
         tenant_id: rawBody.tenant_id || undefined,
         agency_id: rawBody.agency_id || undefined,
         client_id: rawBody.client_id || undefined,
         form_data: parsedFormData,
-      }
+      };
     } else {
       // Standard flat JSON payload
-      payload = rawBody as LeadPayload
-      payload.campaign_name = pickCampaignName(rawBody) || payload.campaign_name
-      const suppliedAnswers = rawBody?.form_data ?? rawBody?.answers ?? rawBody?.questions_and_answers
-      if (suppliedAnswers && typeof suppliedAnswers === 'object' && !Array.isArray(suppliedAnswers)) {
+      payload = rawBody as LeadPayload;
+      payload.campaign_name =
+        pickCampaignName(rawBody) || payload.campaign_name;
+      const suppliedAnswers =
+        rawBody?.form_data ??
+        rawBody?.answers ??
+        rawBody?.questions_and_answers;
+      if (
+        suppliedAnswers &&
+        typeof suppliedAnswers === "object" &&
+        !Array.isArray(suppliedAnswers)
+      ) {
         parsedFormData = Object.fromEntries(
           Object.entries(suppliedAnswers)
             .filter(([, value]) => value != null && String(value).trim())
             .map(([key, value]) => [key, String(value)]),
-        )
+        );
       }
     }
     // ========== END WIX FORM PARSER ==========
 
-    payload.campaign_name = payload.campaign_name || pickCampaignName(rawBody)
+    payload.campaign_name = payload.campaign_name || pickCampaignName(rawBody);
 
     // Merge: body takes priority, then query params
-    let agencyId = payload.agency_id || queryAgencyId || undefined
-    let tenantId: string | null = payload.tenant_id || queryTenantId || null
-    const effectiveTenantSlug = payload.tenant_slug || queryTenantSlug || null
-    
+    let agencyId = payload.agency_id || queryAgencyId || undefined;
+    let tenantId: string | null = payload.tenant_id || queryTenantId || null;
+    const effectiveTenantSlug = payload.tenant_slug || queryTenantSlug || null;
+
     // Resolve tenant from tenant_slug if provided
     if (!tenantId && effectiveTenantSlug) {
       const { data: tenantData, error: tenantError } = await supabase
-        .from('tenants')
-        .select('id')
-        .eq('slug', effectiveTenantSlug)
-        .single()
-      
+        .from("tenants")
+        .select("id")
+        .eq("slug", effectiveTenantSlug)
+        .single();
+
       if (tenantError || !tenantData) {
-        console.error('❌ Tenant not found for slug:', effectiveTenantSlug)
+        console.error("❌ Tenant not found for slug:", effectiveTenantSlug);
         return new Response(
-          JSON.stringify({ 
-            success: false, 
+          JSON.stringify({
+            success: false,
             error: `Tenant not found for slug: ${effectiveTenantSlug}`,
           }),
-          { 
-            status: 400, 
-            headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
-          }
-        )
+          {
+            status: 400,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          },
+        );
       }
-      tenantId = tenantData.id
+      tenantId = tenantData.id;
     }
 
     // If agency_id is provided, use it and get tenant_id from it
     if (agencyId) {
-      
       const { data: agency, error: agencyError } = await supabase
-        .from('agencies')
-        .select('tenant_id')
-        .eq('id', agencyId)
-        .single()
-      
+        .from("agencies")
+        .select("tenant_id")
+        .eq("id", agencyId)
+        .single();
+
       if (agencyError) {
-        console.error('❌ Error querying agency:', agencyError)
+        console.error("❌ Error querying agency:", agencyError);
         return new Response(
-          JSON.stringify({ 
-            success: false, 
-            error: 'Agency not found',
-            details: agencyError.message
+          JSON.stringify({
+            success: false,
+            error: "Agency not found",
+            details: agencyError.message,
           }),
-          { 
-            status: 400, 
-            headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
-          }
-        )
+          {
+            status: 400,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          },
+        );
       }
-      
-      tenantId = agency.tenant_id
-    } 
+
+      tenantId = agency.tenant_id;
+    }
     // If no agency_id but we have tenant_id, find the default or first agency
     else if (tenantId) {
-      agencyId = await resolveTenantHomeAgencyId(supabase, tenantId)
+      agencyId = await resolveTenantHomeAgencyId(supabase, tenantId);
       if (!agencyId) {
-        console.warn('⚠️ No owned or shared agency found for tenant; creating lead without agency_id')
+        console.warn(
+          "⚠️ No owned or shared agency found for tenant; creating lead without agency_id",
+        );
       }
     } else {
       // No tenant identification provided
-      console.error('❌ No tenant_slug, tenant_id, or agency_id provided')
+      console.error("❌ No tenant_slug, tenant_id, or agency_id provided");
       return new Response(
-        JSON.stringify({ 
-          success: false, 
-          error: 'Missing tenant identification. Please provide tenant_slug, tenant_id, or agency_id in the payload.',
+        JSON.stringify({
+          success: false,
+          error:
+            "Missing tenant identification. Please provide tenant_slug, tenant_id, or agency_id in the payload.",
         }),
-        { 
-          status: 400, 
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
-        }
-      )
+        {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        },
+      );
     }
 
     const alertPayload: Record<string, unknown> = {
-      ...(typeof rawBody === 'object' && rawBody ? rawBody as Record<string, unknown> : {}),
+      ...(typeof rawBody === "object" && rawBody
+        ? (rawBody as Record<string, unknown>)
+        : {}),
       ...(payload as Record<string, unknown>),
-    }
-    const queryAutomationId = url.searchParams.get('automation_id')?.trim() || undefined
-    const explicitAutomationId = queryAutomationId
-      || (typeof payload.automation_id === 'string' ? payload.automation_id.trim() : undefined)
+    };
+    const queryAutomationId =
+      url.searchParams.get("automation_id")?.trim() || undefined;
+    const explicitAutomationId =
+      queryAutomationId ||
+      (typeof payload.automation_id === "string"
+        ? payload.automation_id.trim()
+        : undefined);
 
     if (explicitAutomationId || isClientLeadAlertPayload(alertPayload)) {
       const resolvedAutomation = await resolveLeadAlertAutomation(
@@ -286,21 +333,21 @@ Deno.serve(async (req) => {
         tenantId!,
         explicitAutomationId || null,
         payload.client_id,
-      )
+      );
 
       if (!resolvedAutomation) {
         return new Response(
           JSON.stringify({
             success: false,
-            error: 'lead_alert_automation_not_found',
-            hint: 'Configure an active flow with trigger inbound_webhook_lead, or POST to automation-lead-webhook?automation_id=… with x-webhook-secret.',
+            error: "lead_alert_automation_not_found",
+            hint: "Configure an active flow with trigger inbound_webhook_lead, or POST to automation-lead-webhook?automation_id=… with x-webhook-secret.",
             crm_lead_created: false,
           }),
           {
             status: 404,
-            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
           },
-        )
+        );
       }
 
       const result = await processAutomationOnlyLeadWebhook(
@@ -311,153 +358,167 @@ Deno.serve(async (req) => {
           tenantId: tenantId!,
           automationId: resolvedAutomation.automationId,
           triggerConfiguration: resolvedAutomation.configuration,
-          body: typeof rawBody === 'object' && rawBody ? rawBody as Record<string, unknown> : {},
+          body:
+            typeof rawBody === "object" && rawBody
+              ? (rawBody as Record<string, unknown>)
+              : {},
           payload: alertPayload,
-          source: 'webhook_intake_redirect',
+          source: "webhook_intake_redirect",
         },
-      )
+      );
 
       return new Response(JSON.stringify(result.body), {
         status: result.status,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      })
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
     }
 
     // Agency is optional — tenant_slug / tenant_id is enough to create the lead.
 
-    const routedClient = await resolveLeadClient(supabase, tenantId!, payload.client_id)
-    const routingPayload = buildLeadRoutingPayload(routedClient, parsedFormData)
+    const routedClient = await resolveLeadClient(
+      supabase,
+      tenantId!,
+      payload.client_id,
+    );
+    const routingPayload = buildLeadRoutingPayload(
+      routedClient,
+      parsedFormData,
+    );
 
     // Map source into DB enum values (lead_source)
     // Allowed enum values: website, referral, social_media, paid_ads, cold_call, email_campaign, event, other
     const sourceMap: Record<string, string> = {
       // website
-      'website': 'website',
-      'site': 'website',
-      'form': 'website',
-      'contact_form': 'website',
-      'אתר': 'website',
-      'טופס': 'website',
+      website: "website",
+      site: "website",
+      form: "website",
+      contact_form: "website",
+      אתר: "website",
+      טופס: "website",
 
       // referral
-      'referral': 'referral',
-      'recommendation': 'referral',
-      'המלצה': 'referral',
+      referral: "referral",
+      recommendation: "referral",
+      המלצה: "referral",
 
       // social media
-      'social': 'social_media',
-      'social_media': 'social_media',
-      'facebook': 'social_media',
-      'instagram': 'social_media',
-      'linkedin': 'social_media',
-      'tiktok': 'social_media',
-      'סושיאל': 'social_media',
+      social: "social_media",
+      social_media: "social_media",
+      facebook: "social_media",
+      instagram: "social_media",
+      linkedin: "social_media",
+      tiktok: "social_media",
+      סושיאל: "social_media",
 
       // paid ads
-      'paid_ads': 'paid_ads',
-      'ads': 'paid_ads',
-      'google_ads': 'paid_ads',
-      'facebook_ads': 'paid_ads',
-      'ממומן': 'paid_ads',
+      paid_ads: "paid_ads",
+      ads: "paid_ads",
+      google_ads: "paid_ads",
+      facebook_ads: "paid_ads",
+      ממומן: "paid_ads",
 
       // cold call
-      'cold_call': 'cold_call',
-      'call': 'cold_call',
-      'phone_call': 'cold_call',
-      'שיחה': 'cold_call',
+      cold_call: "cold_call",
+      call: "cold_call",
+      phone_call: "cold_call",
+      שיחה: "cold_call",
 
       // email campaign
-      'email_campaign': 'email_campaign',
-      'email': 'email_campaign',
-      'newsletter': 'email_campaign',
-      'דיוור': 'email_campaign',
+      email_campaign: "email_campaign",
+      email: "email_campaign",
+      newsletter: "email_campaign",
+      דיוור: "email_campaign",
 
       // event
-      'event': 'event',
-      'webinar': 'event',
-      'conference': 'event',
-      'כנס': 'event',
+      event: "event",
+      webinar: "event",
+      conference: "event",
+      כנס: "event",
 
       // tooling / misc
-      'make': 'other',
-      'zapier': 'other',
+      make: "other",
+      zapier: "other",
 
       // messaging channels - now has dedicated enum value
-      'whatsapp': 'whatsapp',
-      'ווטסאפ': 'whatsapp',
-    }
+      whatsapp: "whatsapp",
+      ווטסאפ: "whatsapp",
+    };
 
-    const normalizedSource = payload.source?.toString().trim().toLowerCase() || ''
-    const leadSource = normalizedSource ? (sourceMap[normalizedSource] || 'other') : 'other'
+    const normalizedSource =
+      payload.source?.toString().trim().toLowerCase() || "";
+    const leadSource = normalizedSource
+      ? sourceMap[normalizedSource] || "other"
+      : "other";
 
     // ========== DEDUPLICATION LOGIC ==========
     // Check for existing lead by phone or email
     const normalizedPhone = normalizePhone(payload.phone);
     const normalizedEmail = payload.email?.trim().toLowerCase() || null;
-    
+
     let existingLead = null;
-    
+
     if (normalizedPhone || normalizedEmail) {
-      
       // First try to find by phone
       if (normalizedPhone) {
         // Build possible phone variants for DB-level filtering
         const phoneVariants = [
-          payload.phone,                                    // original
-          normalizedPhone,                                  // stripped
-          normalizedPhone.replace(/^972/, '0'),             // local format
-          '+' + normalizedPhone,                            // with +
-          '+972' + normalizedPhone.replace(/^972/, ''),     // international
+          payload.phone, // original
+          normalizedPhone, // stripped
+          normalizedPhone.replace(/^972/, "0"), // local format
+          "+" + normalizedPhone, // with +
+          "+972" + normalizedPhone.replace(/^972/, ""), // international
         ].filter(Boolean) as string[];
         const uniqueVariants = [...new Set(phoneVariants)];
 
         const { data: leadsByPhone } = await supabase
-          .from('leads')
-          .select('*')
-          .eq('tenant_id', tenantId)
-          .in('phone', uniqueVariants)
+          .from("leads")
+          .select("*")
+          .eq("tenant_id", tenantId)
+          .in("phone", uniqueVariants)
           .limit(1);
-        
+
         existingLead = leadsByPhone?.[0] || null;
 
         // If not found by exact variants, do a broader but limited search
         if (!existingLead) {
           const { data: recentLeads } = await supabase
-            .from('leads')
-            .select('*')
-            .eq('tenant_id', tenantId)
-            .not('phone', 'is', null)
-            .order('created_at', { ascending: false })
+            .from("leads")
+            .select("*")
+            .eq("tenant_id", tenantId)
+            .not("phone", "is", null)
+            .order("created_at", { ascending: false })
             .limit(500);
-          existingLead = recentLeads?.find(l => normalizePhone(l.phone) === normalizedPhone) || null;
+          existingLead =
+            recentLeads?.find(
+              (l) => normalizePhone(l.phone) === normalizedPhone,
+            ) || null;
         }
-        
+
         if (existingLead) {
         }
       }
-      
+
       // If not found by phone, try email
       if (!existingLead && normalizedEmail) {
         const { data: leadByEmail } = await supabase
-          .from('leads')
-          .select('*')
-          .eq('tenant_id', tenantId)
-          .ilike('email', normalizedEmail)
+          .from("leads")
+          .select("*")
+          .eq("tenant_id", tenantId)
+          .ilike("email", normalizedEmail)
           .limit(1)
           .maybeSingle();
-        
+
         if (leadByEmail) {
           existingLead = leadByEmail;
         }
       }
     }
-    
+
     // If existing lead found - update with new info if available
     if (existingLead) {
-      
       const updates: Record<string, any> = {};
       let hasUpdates = false;
-      
+
       // Only update fields that are empty in existing lead but have values in payload
       if (!existingLead.contact_name && payload.contact_name) {
         updates.contact_name = payload.contact_name;
@@ -491,16 +552,19 @@ Deno.serve(async (req) => {
         updates.campaign_name = payload.campaign_name;
         hasUpdates = true;
       }
-      if (!existingLead.manychat_subscriber_id && payload.manychat_subscriber_id) {
+      if (
+        !existingLead.manychat_subscriber_id &&
+        payload.manychat_subscriber_id
+      ) {
         updates.manychat_subscriber_id = payload.manychat_subscriber_id;
         hasUpdates = true;
       }
-      
+
       // Append notes if there are new notes
       if (payload.notes && payload.notes.trim()) {
-        const existingNotes = existingLead.notes || '';
+        const existingNotes = existingLead.notes || "";
         if (!existingNotes.includes(payload.notes.trim())) {
-          updates.notes = existingNotes 
+          updates.notes = existingNotes
             ? `${existingNotes}\n\n[${new Date().toISOString()}] ${payload.notes.trim()}`
             : payload.notes.trim();
           hasUpdates = true;
@@ -511,98 +575,101 @@ Deno.serve(async (req) => {
         hasUpdates = true;
       }
 
-      Object.assign(updates, applyRepeatInboundReopen(existingLead, { source: leadSource }));
+      Object.assign(
+        updates,
+        applyRepeatInboundReopen(existingLead, { source: leadSource }),
+      );
       hasUpdates = true;
-      
+
       if (hasUpdates) {
         updates.updated_at = new Date().toISOString();
-        
+
         const { error: updateError } = await updateLeadWithRepeatReopen(
           supabase,
           existingLead.id,
           updates,
         );
-        
+
         if (updateError) {
-          console.error('❌ Error updating existing lead:', updateError);
+          console.error("❌ Error updating existing lead:", updateError);
         } else {
         }
       } else {
       }
-      
+
       // Handle tag_name for existing lead
       if (payload.tag_name && tenantId) {
         try {
           const tagName = payload.tag_name.trim();
-          
+
           const { data: existingTag } = await supabase
-            .from('chat_tags')
-            .select('id')
-            .eq('tenant_id', tenantId)
-            .eq('name', tagName)
+            .from("chat_tags")
+            .select("id")
+            .eq("tenant_id", tenantId)
+            .eq("name", tagName)
             .maybeSingle();
-          
+
           let tagId = existingTag?.id;
-          
+
           if (!tagId) {
             const { data: newTag } = await supabase
-              .from('chat_tags')
+              .from("chat_tags")
               .insert({
                 tenant_id: tenantId,
                 name: tagName,
-                color: '#3b82f6'
+                color: "#3b82f6",
               })
-              .select('id')
+              .select("id")
               .single();
             tagId = newTag?.id;
           }
-          
+
           if (tagId) {
             // Check if tag already applied
             const { data: existingTagLink } = await supabase
-              .from('chat_contact_tags')
-              .select('id')
-              .eq('lead_id', existingLead.id)
-              .eq('tag_id', tagId)
+              .from("chat_contact_tags")
+              .select("id")
+              .eq("lead_id", existingLead.id)
+              .eq("tag_id", tagId)
               .maybeSingle();
-            
+
             if (!existingTagLink) {
-              await supabase
-                .from('chat_contact_tags')
-                .insert({
-                  tenant_id: tenantId,
-                  tag_id: tagId,
-                  lead_id: existingLead.id,
-                  user_id: '00000000-0000-0000-0000-000000000000'
-                });
+              await supabase.from("chat_contact_tags").insert({
+                tenant_id: tenantId,
+                tag_id: tagId,
+                lead_id: existingLead.id,
+                user_id: "00000000-0000-0000-0000-000000000000",
+              });
             }
           }
         } catch (tagError) {
-          console.error('⚠️ Error processing tag for existing lead:', tagError);
+          console.error("⚠️ Error processing tag for existing lead:", tagError);
         }
       }
-      
+
       return new Response(
-        JSON.stringify({ 
-          success: true, 
+        JSON.stringify({
+          success: true,
           lead_id: existingLead.id,
-          message: hasUpdates ? 'Existing lead updated with new information' : 'Lead already exists, no new information',
+          message: hasUpdates
+            ? "Existing lead updated with new information"
+            : "Lead already exists, no new information",
           duplicate: true,
-          updated: hasUpdates
+          updated: hasUpdates,
         }),
-        { 
-          status: 200, 
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
-        }
+        {
+          status: 200,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        },
       );
     }
     // ========== END DEDUPLICATION LOGIC ==========
 
     // Insert new lead - all fields optional
     const { data: lead, error } = await supabase
-      .from('leads')
+      .from("leads")
       .insert({
-        company_name: payload.company_name || '',
+        company_name: payload.company_name || "",
         contact_name: payload.contact_name || null,
         email: payload.email || null,
         phone: payload.phone || null,
@@ -619,85 +686,84 @@ Deno.serve(async (req) => {
         form_qa_summary: routingPayload.form_qa_summary,
         tenant_id: tenantId,
         manychat_subscriber_id: payload.manychat_subscriber_id || null,
-        status: 'new'
+        status: "new",
       })
       .select()
-      .single()
+      .single();
 
     if (error) {
-      console.error('❌ Error inserting lead:', error)
+      console.error("❌ Error inserting lead:", error);
       return new Response(
-        JSON.stringify({ 
-          success: false, 
-          error: 'Failed to create lead',
+        JSON.stringify({
+          success: false,
+          error: "Failed to create lead",
           details: error.message,
-          code: error.code
+          code: error.code,
         }),
-        { 
-          status: 500, 
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
-        }
-      )
+        {
+          status: 500,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        },
+      );
     }
-
 
     // Handle tag_name - find or create tag and apply it
     if (payload.tag_name && tenantId) {
       try {
-        const tagName = payload.tag_name.trim()
-        
+        const tagName = payload.tag_name.trim();
+
         // Check if tag exists
         const { data: existingTag, error: tagQueryError } = await supabase
-          .from('chat_tags')
-          .select('id')
-          .eq('tenant_id', tenantId)
-          .eq('name', tagName)
-          .maybeSingle()
-        
+          .from("chat_tags")
+          .select("id")
+          .eq("tenant_id", tenantId)
+          .eq("name", tagName)
+          .maybeSingle();
+
         if (tagQueryError) {
-          console.error('⚠️ Error querying existing tag:', tagQueryError)
+          console.error("⚠️ Error querying existing tag:", tagQueryError);
         } else {
-          let tagId = existingTag?.id
-          
+          let tagId = existingTag?.id;
+
           // Create tag if it doesn't exist
           if (!tagId) {
             const { data: newTag, error: createTagError } = await supabase
-              .from('chat_tags')
+              .from("chat_tags")
               .insert({
                 tenant_id: tenantId,
                 name: tagName,
-                color: '#3b82f6' // default blue color
+                color: "#3b82f6", // default blue color
               })
-              .select('id')
-              .single()
-            
+              .select("id")
+              .single();
+
             if (createTagError) {
-              console.error('⚠️ Error creating tag:', createTagError)
+              console.error("⚠️ Error creating tag:", createTagError);
             } else {
-              tagId = newTag.id
+              tagId = newTag.id;
             }
           } else {
           }
-          
+
           // Apply tag to lead
           if (tagId) {
             const { error: applyTagError } = await supabase
-              .from('chat_contact_tags')
+              .from("chat_contact_tags")
               .insert({
                 tenant_id: tenantId,
                 tag_id: tagId,
                 lead_id: lead.id,
-                user_id: '00000000-0000-0000-0000-000000000000' // system user placeholder
-              })
-            
+                user_id: "00000000-0000-0000-0000-000000000000", // system user placeholder
+              });
+
             if (applyTagError) {
-              console.error('⚠️ Error applying tag to lead:', applyTagError)
+              console.error("⚠️ Error applying tag to lead:", applyTagError);
             } else {
             }
           }
         }
       } catch (tagError) {
-        console.error('⚠️ Error processing tag:', tagError)
+        console.error("⚠️ Error processing tag:", tagError);
       }
     }
 
@@ -706,13 +772,13 @@ Deno.serve(async (req) => {
       const automationAbort = new AbortController();
       setTimeout(() => automationAbort.abort(), 5000); // 5s max
       fetch(`${supabaseUrl}/functions/v1/trigger-automation`, {
-        method: 'POST',
+        method: "POST",
         headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${supabaseKey}`,
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${supabaseKey}`,
         },
         body: JSON.stringify({
-          trigger_type: 'lead_created',
+          trigger_type: "lead_created",
           data: {
             id: lead.id,
             lead_id: lead.id,
@@ -730,39 +796,44 @@ Deno.serve(async (req) => {
           tenant_id: tenantId,
         }),
         signal: automationAbort.signal,
-      }).then(r => {
-        if (!r.ok) r.text().then(t => console.error('⚠️ Automation trigger failed:', t));
-      }).catch(e => console.error('⚠️ Automation trigger error:', e.message));
+      })
+        .then((r) => {
+          if (!r.ok)
+            r.text().then((t) =>
+              console.error("⚠️ Automation trigger failed:", t),
+            );
+        })
+        .catch((e) => console.error("⚠️ Automation trigger error:", e.message));
     }
 
     return new Response(
-      JSON.stringify({ 
-        success: true, 
+      JSON.stringify({
+        success: true,
         lead_id: lead.id,
-        message: 'Lead created successfully',
-        duplicate: false
+        message: "Lead created successfully",
+        duplicate: false,
       }),
-      { 
-        status: 200, 
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
-      }
-    )
-
+      {
+        status: 200,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      },
+    );
   } catch (error) {
-    console.error('💥 Webhook error:', error)
-    const errorMessage = error instanceof Error ? error.message : 'Internal server error'
-    const errorStack = error instanceof Error ? error.stack : undefined
-    
+    console.error("💥 Webhook error:", error);
+    const errorMessage =
+      error instanceof Error ? error.message : "Internal server error";
+    const errorStack = error instanceof Error ? error.stack : undefined;
+
     return new Response(
-      JSON.stringify({ 
-        success: false, 
+      JSON.stringify({
+        success: false,
         error: errorMessage,
-        stack: errorStack
+        stack: errorStack,
       }),
-      { 
-        status: 500, 
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
-      }
-    )
+      {
+        status: 500,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      },
+    );
   }
-})
+});

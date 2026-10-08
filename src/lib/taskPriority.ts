@@ -8,4 +8,9 @@ export function priorityBarColor(priority: number): string {
   return "#ef4444";
 }
 
-export const PRIORITY_BAR_LABELS = ["נמוכה", "בינונית", "גבוהה", "דחופה"] as const;
+export const PRIORITY_BAR_LABELS = [
+  "נמוכה",
+  "בינונית",
+  "גבוהה",
+  "דחופה",
+] as const;

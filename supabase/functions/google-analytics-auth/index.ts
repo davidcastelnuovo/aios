@@ -1,113 +1,134 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { gaHostsMatch, listedPropertyMatchesDomain, normalizeGaHost } from "../_shared/gaDomain.ts";
+import {
+  gaHostsMatch,
+  listedPropertyMatchesDomain,
+  normalizeGaHost,
+} from "../_shared/gaDomain.ts";
 
 const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Headers":
+    "authorization, x-client-info, apikey, content-type",
 };
 
 serve(async (req) => {
   // Handle CORS preflight requests
-  if (req.method === 'OPTIONS') {
+  if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
   }
 
   const url = new URL(req.url);
-  const action = url.searchParams.get('action');
-
+  const action = url.searchParams.get("action");
 
   // OAuth configuration
-  const clientId = Deno.env.get('GOOGLE_CLIENT_ID');
-  const clientSecret = Deno.env.get('GOOGLE_CLIENT_SECRET');
-  const redirectUri = `${Deno.env.get('SUPABASE_URL')}/functions/v1/google-analytics-auth?action=oauth_callback`;
+  const clientId = Deno.env.get("GOOGLE_CLIENT_ID");
+  const clientSecret = Deno.env.get("GOOGLE_CLIENT_SECRET");
+  const redirectUri = `${Deno.env.get("SUPABASE_URL")}/functions/v1/google-analytics-auth?action=oauth_callback`;
 
   if (!clientId || !clientSecret) {
-    console.error('Missing Google OAuth credentials');
+    console.error("Missing Google OAuth credentials");
     return new Response(
-      JSON.stringify({ error: 'Google OAuth credentials not configured' }),
-      { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      JSON.stringify({ error: "Google OAuth credentials not configured" }),
+      {
+        status: 500,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      },
     );
   }
 
   // Handle OAuth initiation
-  if (action === 'authorize') {
-    const authHeader = req.headers.get('Authorization');
+  if (action === "authorize") {
+    const authHeader = req.headers.get("Authorization");
     if (!authHeader) {
       return new Response(
-        JSON.stringify({ error: 'Missing authorization header' }),
-        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        JSON.stringify({ error: "Missing authorization header" }),
+        {
+          status: 401,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        },
       );
     }
 
     try {
       const { tenantId, userId, addNew, origin, loginHint } = await req.json();
-      
+
       if (!tenantId || !userId) {
         return new Response(
-          JSON.stringify({ error: 'Missing tenantId or userId' }),
-          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          JSON.stringify({ error: "Missing tenantId or userId" }),
+          {
+            status: 400,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          },
         );
       }
 
       // Google Analytics scopes
       const scopes = [
-        'https://www.googleapis.com/auth/analytics.readonly',
-        'https://www.googleapis.com/auth/userinfo.email',
-      ].join(' ');
+        "https://www.googleapis.com/auth/analytics.readonly",
+        "https://www.googleapis.com/auth/userinfo.email",
+      ].join(" ");
 
-      const state = btoa(JSON.stringify({ tenantId, userId, addNew: !!addNew, origin: origin || null }));
+      const state = btoa(
+        JSON.stringify({
+          tenantId,
+          userId,
+          addNew: !!addNew,
+          origin: origin || null,
+        }),
+      );
 
-      const authUrl = new URL('https://accounts.google.com/o/oauth2/v2/auth');
-      authUrl.searchParams.set('client_id', clientId);
-      authUrl.searchParams.set('redirect_uri', redirectUri);
-      authUrl.searchParams.set('response_type', 'code');
-      authUrl.searchParams.set('scope', scopes);
-      authUrl.searchParams.set('access_type', 'offline');
+      const authUrl = new URL("https://accounts.google.com/o/oauth2/v2/auth");
+      authUrl.searchParams.set("client_id", clientId);
+      authUrl.searchParams.set("redirect_uri", redirectUri);
+      authUrl.searchParams.set("response_type", "code");
+      authUrl.searchParams.set("scope", scopes);
+      authUrl.searchParams.set("access_type", "offline");
       if (loginHint) {
         // Reconnect flow: preselect the specific Google account being renewed.
-        authUrl.searchParams.set('prompt', 'consent');
-        authUrl.searchParams.set('login_hint', String(loginHint));
+        authUrl.searchParams.set("prompt", "consent");
+        authUrl.searchParams.set("login_hint", String(loginHint));
       } else if (addNew) {
         // Adding another account: force the account chooser.
-        authUrl.searchParams.set('prompt', 'select_account consent');
+        authUrl.searchParams.set("prompt", "select_account consent");
       } else {
-        authUrl.searchParams.set('prompt', 'consent');
+        authUrl.searchParams.set("prompt", "consent");
       }
-      authUrl.searchParams.set('state', state);
+      authUrl.searchParams.set("state", state);
 
-
-      return new Response(
-        JSON.stringify({ authUrl: authUrl.toString() }),
-        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
+      return new Response(JSON.stringify({ authUrl: authUrl.toString() }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
     } catch (error) {
-      console.error('Error generating auth URL:', error);
+      console.error("Error generating auth URL:", error);
       return new Response(
-        JSON.stringify({ error: 'Failed to generate authorization URL' }),
-        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        JSON.stringify({ error: "Failed to generate authorization URL" }),
+        {
+          status: 500,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        },
       );
     }
   }
 
   // Handle OAuth callback
-  if (action === 'oauth_callback') {
-    const code = url.searchParams.get('code');
-    const state = url.searchParams.get('state');
-    const error = url.searchParams.get('error');
+  if (action === "oauth_callback") {
+    const code = url.searchParams.get("code");
+    const state = url.searchParams.get("state");
+    const error = url.searchParams.get("error");
 
     const supabase = createClient(
-      Deno.env.get('SUPABASE_URL') ?? '',
-      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
+      Deno.env.get("SUPABASE_URL") ?? "",
+      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "",
     );
 
     async function getTenantSlug(tenantId: string): Promise<string> {
       const { data: tenant } = await supabase
-        .from('tenants')
-        .select('slug')
-        .eq('id', tenantId)
+        .from("tenants")
+        .select("slug")
+        .eq("id", tenantId)
         .single();
-      return tenant?.slug || 'app';
+      return tenant?.slug || "app";
     }
 
     let stateOrigin: string | null = null;
@@ -117,22 +138,28 @@ serve(async (req) => {
         const parsed = JSON.parse(atob(state));
         stateOrigin = parsed.origin || null;
         stateTenantId = parsed.tenantId || null;
-      } catch { /* noop */ }
+      } catch {
+        /* noop */
+      }
     }
     // Strip any trailing slash so `${APP_BASE}/t/...` never produces a double slash.
-    const APP_BASE = (stateOrigin || Deno.env.get('APP_URL') || 'https://after-lead.com').replace(/\/+$/, '');
+    const APP_BASE = (
+      stateOrigin ||
+      Deno.env.get("APP_URL") ||
+      "https://after-lead.com"
+    ).replace(/\/+$/, "");
 
     if (error) {
-      const slug = stateTenantId ? await getTenantSlug(stateTenantId) : 'app';
+      const slug = stateTenantId ? await getTenantSlug(stateTenantId) : "app";
       const redirectUrl = `${APP_BASE}/t/${slug}/integrations?error=${error}`;
       return new Response(null, {
         status: 302,
-        headers: { Location: redirectUrl }
+        headers: { Location: redirectUrl },
       });
     }
 
     if (!code || !state) {
-      return new Response('Missing code or state', { status: 400 });
+      return new Response("Missing code or state", { status: 400 });
     }
 
     try {
@@ -140,73 +167,85 @@ serve(async (req) => {
       const tenantSlug = await getTenantSlug(tenantId);
 
       // Exchange code for tokens
-      const tokenResponse = await fetch('https://oauth2.googleapis.com/token', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      const tokenResponse = await fetch("https://oauth2.googleapis.com/token", {
+        method: "POST",
+        headers: { "Content-Type": "application/x-www-form-urlencoded" },
         body: new URLSearchParams({
           code,
           client_id: clientId,
           client_secret: clientSecret,
           redirect_uri: redirectUri,
-          grant_type: 'authorization_code',
+          grant_type: "authorization_code",
         }),
       });
 
       const tokens = await tokenResponse.json();
 
       if (tokens.error) {
-        console.error('Token exchange error:', tokens);
+        console.error("Token exchange error:", tokens);
         throw new Error(tokens.error_description || tokens.error);
       }
 
-      const expiresAt = new Date(Date.now() + (tokens.expires_in * 1000)).toISOString();
+      const expiresAt = new Date(
+        Date.now() + tokens.expires_in * 1000,
+      ).toISOString();
 
       // Fetch the Google email for this account
-      let googleEmail = '';
+      let googleEmail = "";
       try {
-        const userInfoResponse = await fetch('https://www.googleapis.com/oauth2/v2/userinfo', {
-          headers: { Authorization: `Bearer ${tokens.access_token}` },
-        });
+        const userInfoResponse = await fetch(
+          "https://www.googleapis.com/oauth2/v2/userinfo",
+          {
+            headers: { Authorization: `Bearer ${tokens.access_token}` },
+          },
+        );
         const userInfo = await userInfoResponse.json();
-        googleEmail = userInfo.email || '';
+        googleEmail = userInfo.email || "";
       } catch (e) {
-        console.error('Failed to fetch Google user info:', e);
+        console.error("Failed to fetch Google user info:", e);
       }
 
       const { data: allGa, error: allGaError } = await supabase
-        .from('tenant_integrations')
-        .select('id, user_id, settings')
-        .eq('tenant_id', tenantId)
-        .eq('integration_type', 'google_analytics');
+        .from("tenant_integrations")
+        .select("id, user_id, settings")
+        .eq("tenant_id", tenantId)
+        .eq("integration_type", "google_analytics");
 
       if (allGaError) {
         throw allGaError;
       }
 
-      const existingForUser = allGa?.find((row: any) => row.user_id === userId) || null;
+      const existingForUser =
+        allGa?.find((row: any) => row.user_id === userId) || null;
       const existingForEmail = googleEmail
-        ? allGa?.find((row: any) => row.settings?.google_email === googleEmail) || null
+        ? allGa?.find(
+            (row: any) => row.settings?.google_email === googleEmail,
+          ) || null
         : null;
       // Only OVERWRITE an existing row when the SAME Google account reconnects
       // (matched by email). A different email for the same user is an ADDITIONAL
       // account → insert a new row, so connecting a second Analytics account no
       // longer overwrites the first. If the email couldn't be read, fall back to
       // the user's existing row to avoid creating duplicates.
-      const existingIntegration = existingForEmail || (googleEmail ? null : existingForUser);
-      const existingSettings = (existingIntegration?.settings as Record<string, unknown> | null) || null;
+      const existingIntegration =
+        existingForEmail || (googleEmail ? null : existingForUser);
+      const existingSettings =
+        (existingIntegration?.settings as Record<string, unknown> | null) ||
+        null;
 
       const integrationData = {
         is_active: true,
         // Analytics connections are for the whole tenant (SEO reports), not only
         // the person who completed Google OAuth.
-        connection_visibility: 'org',
+        connection_visibility: "org",
         api_key: tokens.access_token,
         settings: {
           ...existingSettings,
-          refresh_token: tokens.refresh_token || existingSettings?.refresh_token,
+          refresh_token:
+            tokens.refresh_token || existingSettings?.refresh_token,
           expires_at: expiresAt,
           connected_at: new Date().toISOString(),
-          google_email: googleEmail || existingSettings?.google_email || '',
+          google_email: googleEmail || existingSettings?.google_email || "",
           // Clear any stale reconnect flags now that the user has re-authorized.
           needs_reauth: false,
           reauth_reason: null,
@@ -218,50 +257,51 @@ serve(async (req) => {
       let saveError;
       if (existingIntegration) {
         const { error } = await supabase
-          .from('tenant_integrations')
+          .from("tenant_integrations")
           .update(integrationData)
-          .eq('id', existingIntegration.id);
+          .eq("id", existingIntegration.id);
         saveError = error;
       } else {
-        const { error } = await supabase
-          .from('tenant_integrations')
-          .insert({
-            tenant_id: tenantId,
-            user_id: userId,
-            integration_type: 'google_analytics',
-            ...integrationData,
-          });
+        const { error } = await supabase.from("tenant_integrations").insert({
+          tenant_id: tenantId,
+          user_id: userId,
+          integration_type: "google_analytics",
+          ...integrationData,
+        });
         saveError = error;
       }
 
       if (saveError) {
-        console.error('Error saving tokens:', saveError);
+        console.error("Error saving tokens:", saveError);
         throw saveError;
       }
 
       const redirectUrl = `${APP_BASE}/t/${tenantSlug}/integrations?google_analytics=connected`;
       return new Response(null, {
         status: 302,
-        headers: { Location: redirectUrl }
+        headers: { Location: redirectUrl },
       });
     } catch (error) {
-      console.error('OAuth callback error:', error);
-      const slug = stateTenantId ? await getTenantSlug(stateTenantId) : 'app';
+      console.error("OAuth callback error:", error);
+      const slug = stateTenantId ? await getTenantSlug(stateTenantId) : "app";
       const redirectUrl = `${APP_BASE}/t/${slug}/integrations?error=auth_failed`;
       return new Response(null, {
         status: 302,
-        headers: { Location: redirectUrl }
+        headers: { Location: redirectUrl },
       });
     }
   }
 
   // Get Google Analytics properties
-  if (action === 'get_properties') {
-    const authHeader = req.headers.get('Authorization');
+  if (action === "get_properties") {
+    const authHeader = req.headers.get("Authorization");
     if (!authHeader) {
       return new Response(
-        JSON.stringify({ error: 'Missing authorization header' }),
-        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        JSON.stringify({ error: "Missing authorization header" }),
+        {
+          status: 401,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        },
       );
     }
 
@@ -269,84 +309,101 @@ serve(async (req) => {
       const body = await req.json();
       const integrationId = body?.integrationId;
       const matchDomain = body?.matchDomain;
-      const domainQuery = typeof matchDomain === "string" ? matchDomain.trim() : "";
+      const domainQuery =
+        typeof matchDomain === "string" ? matchDomain.trim() : "";
       // A domain search looks at several logins. It must not flip their
       // reconnect flag or overwrite the stored token metadata.
       const probe = body?.probe === true;
-      
+
       const supabase = createClient(
-        Deno.env.get('SUPABASE_URL') ?? '',
-        Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
+        Deno.env.get("SUPABASE_URL") ?? "",
+        Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "",
       );
 
       const supabaseUser = createClient(
-        Deno.env.get('SUPABASE_URL') ?? '',
-        Deno.env.get('SUPABASE_ANON_KEY') ?? '',
+        Deno.env.get("SUPABASE_URL") ?? "",
+        Deno.env.get("SUPABASE_ANON_KEY") ?? "",
         { global: { headers: { Authorization: authHeader } } },
       );
-      const { data: userData, error: userError } = await supabaseUser.auth.getUser();
+      const { data: userData, error: userError } =
+        await supabaseUser.auth.getUser();
       const user = userData?.user;
       if (userError || !user) {
-        return new Response(
-          JSON.stringify({ error: 'Unauthorized' }),
-          { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-        );
+        return new Response(JSON.stringify({ error: "Unauthorized" }), {
+          status: 401,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
       }
 
       const { data: allowed, error: permissionError } = await supabase.rpc(
-        'user_has_integration_permission',
+        "user_has_integration_permission",
         { p_user_id: user.id, p_integration_id: integrationId },
       );
       if (permissionError || !allowed) {
         return new Response(
-          JSON.stringify({ error: 'Integration not found or access denied', properties: [] }),
-          { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          JSON.stringify({
+            error: "Integration not found or access denied",
+            properties: [],
+          }),
+          {
+            status: 403,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          },
         );
       }
 
       const { data: integration, error: integrationError } = await supabase
-        .from('tenant_integrations')
-        .select('*')
-        .eq('id', integrationId)
-        .eq('integration_type', 'google_analytics')
-        .eq('is_active', true)
+        .from("tenant_integrations")
+        .select("*")
+        .eq("id", integrationId)
+        .eq("integration_type", "google_analytics")
+        .eq("is_active", true)
         .single();
 
       if (integrationError || !integration) {
-        throw new Error('Integration not found');
+        throw new Error("Integration not found");
       }
 
       let accessToken = integration.api_key;
       let settings = integration.settings as any;
       const ownerEmail = settings?.google_email || null;
 
-      const refreshAccessToken = async (): Promise<{ ok: boolean; reason?: string }> => {
-        if (!settings?.refresh_token) return { ok: false, reason: 'missing_refresh_token' };
-        const refreshResponse = await fetch('https://oauth2.googleapis.com/token', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-          body: new URLSearchParams({
-            client_id: clientId,
-            client_secret: clientSecret,
-            refresh_token: settings.refresh_token,
-            grant_type: 'refresh_token',
-          }),
-        });
+      const refreshAccessToken = async (): Promise<{
+        ok: boolean;
+        reason?: string;
+      }> => {
+        if (!settings?.refresh_token)
+          return { ok: false, reason: "missing_refresh_token" };
+        const refreshResponse = await fetch(
+          "https://oauth2.googleapis.com/token",
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/x-www-form-urlencoded" },
+            body: new URLSearchParams({
+              client_id: clientId,
+              client_secret: clientSecret,
+              refresh_token: settings.refresh_token,
+              grant_type: "refresh_token",
+            }),
+          },
+        );
         const refreshData = await refreshResponse.json().catch(() => ({}));
         if (refreshData.access_token) {
           accessToken = refreshData.access_token;
-          const newExpiresAt = new Date(Date.now() + (refreshData.expires_in * 1000)).toISOString();
+          const newExpiresAt = new Date(
+            Date.now() + refreshData.expires_in * 1000,
+          ).toISOString();
           settings = { ...settings, expires_at: newExpiresAt };
           await supabase
-            .from('tenant_integrations')
+            .from("tenant_integrations")
             .update({
               api_key: accessToken,
               settings,
             })
-            .eq('id', integrationId);
+            .eq("id", integrationId);
           return { ok: true };
         }
-        return { ok: false, reason: refreshData.error || 'refresh_failed' };
+        return { ok: false, reason: refreshData.error || "refresh_failed" };
       };
 
       // Proactive refresh if expired
@@ -359,23 +416,28 @@ serve(async (req) => {
       // with 100+ accounts is not cut off after the first page.
       const fetchAccounts = async () => {
         const accountSummaries: any[] = [];
-        let pageToken = '';
+        let pageToken = "";
         for (let page = 0; page < 20; page++) {
-          const url = new URL('https://analyticsadmin.googleapis.com/v1beta/accountSummaries');
-          url.searchParams.set('pageSize', '200');
-          if (pageToken) url.searchParams.set('pageToken', pageToken);
+          const url = new URL(
+            "https://analyticsadmin.googleapis.com/v1beta/accountSummaries",
+          );
+          url.searchParams.set("pageSize", "200");
+          if (pageToken) url.searchParams.set("pageToken", pageToken);
           const response = await fetch(url.toString(), {
             headers: { Authorization: `Bearer ${accessToken}` },
           });
-          const data: any = await response.clone().json().catch(() => ({}));
+          const data: any = await response
+            .clone()
+            .json()
+            .catch(() => ({}));
           if (!response.ok || data?.error) return response;
           accountSummaries.push(...(data.accountSummaries || []));
-          pageToken = data.nextPageToken || '';
+          pageToken = data.nextPageToken || "";
           if (!pageToken) break;
         }
         return new Response(JSON.stringify({ accountSummaries }), {
           status: 200,
-          headers: { 'Content-Type': 'application/json' },
+          headers: { "Content-Type": "application/json" },
         });
       };
 
@@ -386,7 +448,9 @@ serve(async (req) => {
       const looksUnauthorized =
         accountsResponse.status === 401 ||
         accountsData?.error?.code === 401 ||
-        /invalid.*credential|invalid_grant|unauthorized/i.test(accountsData?.error?.message || '');
+        /invalid.*credential|invalid_grant|unauthorized/i.test(
+          accountsData?.error?.message || "",
+        );
 
       // Persist the broken state so the settings page shows the red
       // "reconnect needed" state — not only when a data sync fails.
@@ -394,7 +458,7 @@ serve(async (req) => {
         if (probe) return;
         try {
           await supabase
-            .from('tenant_integrations')
+            .from("tenant_integrations")
             .update({
               settings: {
                 ...settings,
@@ -403,8 +467,10 @@ serve(async (req) => {
                 reauth_marked_at: new Date().toISOString(),
               },
             })
-            .eq('id', integrationId);
-        } catch (_e) { /* non-fatal */ }
+            .eq("id", integrationId);
+        } catch (_e) {
+          /* non-fatal */
+        }
       };
 
       if (looksUnauthorized) {
@@ -413,7 +479,7 @@ serve(async (req) => {
           accountsResponse = await fetchAccounts();
           accountsData = await accountsResponse.json().catch(() => ({}));
         } else {
-          const reason = refreshResult.reason || 'token_revoked';
+          const reason = refreshResult.reason || "token_revoked";
           await markNeedsReauth(reason);
           return new Response(
             JSON.stringify({
@@ -422,7 +488,7 @@ serve(async (req) => {
               owner_email: ownerEmail,
               reason,
             }),
-            { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+            { headers: { ...corsHeaders, "Content-Type": "application/json" } },
           );
         }
       }
@@ -430,35 +496,43 @@ serve(async (req) => {
       if (accountsData?.error) {
         const stillUnauthorized =
           accountsData.error.code === 401 ||
-          /invalid.*credential|invalid_grant|unauthorized/i.test(accountsData.error.message || '');
+          /invalid.*credential|invalid_grant|unauthorized/i.test(
+            accountsData.error.message || "",
+          );
         if (stillUnauthorized) {
-          await markNeedsReauth('token_revoked');
+          await markNeedsReauth("token_revoked");
           return new Response(
             JSON.stringify({
               properties: [],
               needs_reconnect: true,
               owner_email: ownerEmail,
-              reason: 'token_revoked',
+              reason: "token_revoked",
             }),
-            { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+            { headers: { ...corsHeaders, "Content-Type": "application/json" } },
           );
         }
         // Non-auth Google error (e.g. 403 / API not enabled / quota). Do NOT crash
         // with an opaque 500 — log the full error for diagnosis and fall back to any
         // previously cached property list so the UI stays usable.
-        console.error('GA get_properties Google API error:', JSON.stringify(accountsData.error));
-        const cachedOnError = Array.isArray(settings?.available_properties) ? settings.available_properties : [];
+        console.error(
+          "GA get_properties Google API error:",
+          JSON.stringify(accountsData.error),
+        );
+        const cachedOnError = Array.isArray(settings?.available_properties)
+          ? settings.available_properties
+          : [];
         return new Response(
           JSON.stringify({
             properties: cachedOnError,
             needs_reconnect: cachedOnError.length === 0,
             owner_email: ownerEmail,
-            reason: 'google_api_error',
-            error_detail: accountsData.error.message || String(accountsData.error),
+            reason: "google_api_error",
+            error_detail:
+              accountsData.error.message || String(accountsData.error),
             error_code: accountsData.error.code ?? null,
             error_status: accountsData.error.status ?? null,
           }),
-          { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          { headers: { ...corsHeaders, "Content-Type": "application/json" } },
         );
       }
 
@@ -481,27 +555,36 @@ serve(async (req) => {
       // A domain that is not the property title lives on the web stream URL.
       // Only scan streams when the caller is resolving a domain and the
       // account/property names did not already match.
-      if (domainQuery && !properties.some((property) => listedPropertyMatchesDomain(property, domainQuery))) {
+      if (
+        domainQuery &&
+        !properties.some((property) =>
+          listedPropertyMatchesDomain(property, domainQuery),
+        )
+      ) {
         const wantedHost = normalizeGaHost(domainQuery);
         let exact = false;
         for (let index = 0; index < properties.length && !exact; index += 8) {
           const batch = properties.slice(index, index + 8);
-          await Promise.all(batch.map(async (property) => {
-            try {
-              const response = await fetch(
-                `https://analyticsadmin.googleapis.com/v1beta/${property.id}/dataStreams?pageSize=20`,
-                { headers: { Authorization: `Bearer ${accessToken}` } },
-              );
-              if (!response.ok) return;
-              const data = await response.json().catch(() => ({}));
-              for (const stream of data.dataStreams || []) {
-                const uri = stream?.webStreamData?.defaultUri;
-                if (!uri || !gaHostsMatch(uri, domainQuery)) continue;
-                property.websiteUrl = uri;
-                if (normalizeGaHost(uri) === wantedHost) exact = true;
+          await Promise.all(
+            batch.map(async (property) => {
+              try {
+                const response = await fetch(
+                  `https://analyticsadmin.googleapis.com/v1beta/${property.id}/dataStreams?pageSize=20`,
+                  { headers: { Authorization: `Bearer ${accessToken}` } },
+                );
+                if (!response.ok) return;
+                const data = await response.json().catch(() => ({}));
+                for (const stream of data.dataStreams || []) {
+                  const uri = stream?.webStreamData?.defaultUri;
+                  if (!uri || !gaHostsMatch(uri, domainQuery)) continue;
+                  property.websiteUrl = uri;
+                  if (normalizeGaHost(uri) === wantedHost) exact = true;
+                }
+              } catch (_e) {
+                /* this property has no readable stream */
               }
-            } catch (_e) { /* this property has no readable stream */ }
-          }));
+            }),
+          );
         }
       }
 
@@ -511,7 +594,7 @@ serve(async (req) => {
       if (!probe) {
         try {
           await supabase
-            .from('tenant_integrations')
+            .from("tenant_integrations")
             .update({
               settings: {
                 ...settings,
@@ -520,25 +603,30 @@ serve(async (req) => {
                 reauth_reason: null,
               },
             })
-            .eq('id', integrationId);
-        } catch (_e) { /* non-fatal */ }
+            .eq("id", integrationId);
+        } catch (_e) {
+          /* non-fatal */
+        }
       }
 
       return new Response(
         JSON.stringify({ properties, owner_email: ownerEmail }),
-        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        { headers: { ...corsHeaders, "Content-Type": "application/json" } },
       );
-  } catch (error: any) {
-    console.error('Error fetching properties:', error);
-    return new Response(
-      JSON.stringify({ error: error.message || String(error) }),
-      { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-    );
+    } catch (error: any) {
+      console.error("Error fetching properties:", error);
+      return new Response(
+        JSON.stringify({ error: error.message || String(error) }),
+        {
+          status: 500,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        },
+      );
     }
   }
 
-  return new Response(
-    JSON.stringify({ error: 'Invalid action' }),
-    { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-  );
+  return new Response(JSON.stringify({ error: "Invalid action" }), {
+    status: 400,
+    headers: { ...corsHeaders, "Content-Type": "application/json" },
+  });
 });

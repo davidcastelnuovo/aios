@@ -23,15 +23,17 @@ export function MaskyooSiblingCard({
 }) {
   const { data: seoScope, isLoading: scopeLoading } = useSeoScope(clientId);
 
-  const accessibleTenantIds =
-    seoScope?.accessibleTenantIds?.length
-      ? seoScope.accessibleTenantIds
-      : fallbackTenantId
-        ? [fallbackTenantId]
-        : [];
+  const accessibleTenantIds = seoScope?.accessibleTenantIds?.length
+    ? seoScope.accessibleTenantIds
+    : fallbackTenantId
+      ? [fallbackTenantId]
+      : [];
 
   const storageTenantId =
-    seoScope?.clientTenantId || fallbackTenantId || accessibleTenantIds[0] || "";
+    seoScope?.clientTenantId ||
+    fallbackTenantId ||
+    accessibleTenantIds[0] ||
+    "";
 
   const { data: rows, isLoading: numbersLoading } = useQuery({
     queryKey: ["maskyoo-numbers-by-client", clientId, accessibleTenantIds],

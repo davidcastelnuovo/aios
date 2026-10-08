@@ -14,7 +14,10 @@ import {
 
 const SURFACES = [
   ["COMBINED_DASHBOARD_DATE_FILTERS", COMBINED_DASHBOARD_DATE_FILTERS],
-  ["SHARED_COMBINED_DASHBOARD_DATE_FILTERS", SHARED_COMBINED_DASHBOARD_DATE_FILTERS],
+  [
+    "SHARED_COMBINED_DASHBOARD_DATE_FILTERS",
+    SHARED_COMBINED_DASHBOARD_DATE_FILTERS,
+  ],
   ["SHARED_TABLE_DATE_FILTERS", SHARED_TABLE_DATE_FILTERS],
   ["ADS_TABLE_CREATE_DATE_RANGE_OPTIONS", ADS_TABLE_CREATE_DATE_RANGE_OPTIONS],
 ];
@@ -39,36 +42,56 @@ test("REQUIRED_COMBINED_DATE_FILTERS lists Hebrew week labels", () => {
 
 test("assertCombinedDateFilters fails when week presets are dropped", () => {
   assert.throws(
-    () => assertCombinedDateFilters([{ value: "today", label: "היום" }], "broken"),
+    () =>
+      assertCombinedDateFilters([{ value: "today", label: "היום" }], "broken"),
     /missing required date filter/,
   );
 });
 
 test("getDashboardDateRange last_week is previous Sun–Sat", () => {
   // Wednesday 2026-08-05 local → last week Sun 2026-07-26 .. Sat 2026-08-01
-  const range = getDashboardDateRange("last_week", new Date(2026, 7, 5, 12, 0, 0));
+  const range = getDashboardDateRange(
+    "last_week",
+    new Date(2026, 7, 5, 12, 0, 0),
+  );
   assert.equal(range.startDate, "2026-07-26");
   assert.equal(range.endDate, "2026-08-01");
 });
 
 test("getDashboardDateRange this_week is Sun through today", () => {
-  const range = getDashboardDateRange("this_week", new Date(2026, 7, 5, 12, 0, 0));
+  const range = getDashboardDateRange(
+    "this_week",
+    new Date(2026, 7, 5, 12, 0, 0),
+  );
   assert.equal(range.startDate, "2026-08-02");
   assert.equal(range.endDate, "2026-08-05");
 });
 
 test("getDashboardDateRange last_14_days is 14 rolling days ending yesterday", () => {
-  const range = getDashboardDateRange("last_14_days", new Date(2026, 7, 19, 12, 0, 0));
+  const range = getDashboardDateRange(
+    "last_14_days",
+    new Date(2026, 7, 19, 12, 0, 0),
+  );
   assert.equal(range.startDate, "2026-08-05");
   assert.equal(range.endDate, "2026-08-18");
 });
 
 test("SHARED_COMBINED_DASHBOARD_DATE_FILTERS includes 14-day preset", () => {
-  assert.equal(dateFilterHasOption(SHARED_COMBINED_DASHBOARD_DATE_FILTERS, "last_14_days", "14 יום אחרונים"), true);
+  assert.equal(
+    dateFilterHasOption(
+      SHARED_COMBINED_DASHBOARD_DATE_FILTERS,
+      "last_14_days",
+      "14 יום אחרונים",
+    ),
+    true,
+  );
 });
 
 test("getDashboardDateRange last_7_days is 7 rolling days ending yesterday", () => {
-  const range = getDashboardDateRange("last_7_days", new Date(2026, 7, 19, 12, 0, 0));
+  const range = getDashboardDateRange(
+    "last_7_days",
+    new Date(2026, 7, 19, 12, 0, 0),
+  );
   assert.equal(range.startDate, "2026-08-12");
   assert.equal(range.endDate, "2026-08-18");
 });
@@ -76,6 +99,10 @@ test("getDashboardDateRange last_7_days is 7 rolling days ending yesterday", () 
 test("no duplicate values in combined / shared preset lists", () => {
   for (const [name, options] of SURFACES) {
     const values = options.map((o) => o.value);
-    assert.equal(new Set(values).size, values.length, `${name} has duplicate values`);
+    assert.equal(
+      new Set(values).size,
+      values.length,
+      `${name} has duplicate values`,
+    );
   }
 });

@@ -2,7 +2,9 @@ import { EmailRecipient } from "@/components/automations/EmailRecipientsListEdit
 
 const TEMPLATE_VAR_RE = /\{\{\s*([a-zA-Z0-9_]+)\s*\}\}/g;
 
-export function extractTemplateVariables(template: string | undefined | null): string[] {
+export function extractTemplateVariables(
+  template: string | undefined | null,
+): string[] {
   if (!template) return [];
   const keys = new Set<string>();
   for (const match of template.matchAll(TEMPLATE_VAR_RE)) {
@@ -60,10 +62,16 @@ export function collectEmailMappedFields(
     usage.get(key)!.add(where);
   };
 
-  extractTemplateVariables(configuration?.subject_template).forEach((k) => mark(k, "subject"));
-  extractTemplateVariables(configuration?.body_template).forEach((k) => mark(k, "body"));
+  extractTemplateVariables(configuration?.subject_template).forEach((k) =>
+    mark(k, "subject"),
+  );
+  extractTemplateVariables(configuration?.body_template).forEach((k) =>
+    mark(k, "body"),
+  );
 
-  const recipients = Array.isArray(configuration?.email_recipients) ? configuration.email_recipients : [];
+  const recipients = Array.isArray(configuration?.email_recipients)
+    ? configuration.email_recipients
+    : [];
   for (const recipient of recipients as EmailRecipient[]) {
     if (recipient?.type === "email_field" && recipient.field) {
       mark(recipient.field, "recipient");
@@ -89,7 +97,9 @@ export function buildSampleWebhookJsonFromAvailableFields(
   return payload;
 }
 
-export function buildSampleWebhookJson(fields: EmailMappedField[]): Record<string, string> {
+export function buildSampleWebhookJson(
+  fields: EmailMappedField[],
+): Record<string, string> {
   const payload: Record<string, string> = {};
   for (const field of fields) {
     payload[field.key] = sampleValueForKey(field.key);

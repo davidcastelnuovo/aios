@@ -50,7 +50,8 @@ export const magazineThemes: MagazineTheme[] = [
     surface: "#FFFFFF",
     displayFont: "'Frank Ruhl Libre', serif",
     bodyFont: "'Assistant', sans-serif",
-    googleFonts: "Frank+Ruhl+Libre:wght@500;700&family=Assistant:wght@400;600;700",
+    googleFonts:
+      "Frank+Ruhl+Libre:wght@500;700&family=Assistant:wght@400;600;700",
     radius: "0px",
   },
   {
@@ -152,7 +153,8 @@ export const magazineThemes: MagazineTheme[] = [
     surface: "#FFF9F3",
     displayFont: "'Frank Ruhl Libre', serif",
     bodyFont: "'Assistant', sans-serif",
-    googleFonts: "Frank+Ruhl+Libre:wght@600;700&family=Assistant:wght@400;600;700",
+    googleFonts:
+      "Frank+Ruhl+Libre:wght@600;700&family=Assistant:wght@400;600;700",
     radius: "16px",
   },
   {
@@ -193,7 +195,9 @@ export const magazineThemes: MagazineTheme[] = [
 
 export const themeForSite = (siteKey: string) => {
   const numericSuffix = Number(siteKey.match(/(\d+)(?!.*\d)/)?.[1] ?? 1);
-  return magazineThemes[(Math.max(1, numericSuffix) - 1) % magazineThemes.length];
+  return magazineThemes[
+    (Math.max(1, numericSuffix) - 1) % magazineThemes.length
+  ];
 };
 
 const themeVariables = (theme: MagazineTheme) =>
@@ -213,7 +217,12 @@ const magazineImg = (src, alt = "", attrs = "") => {
 };
 `;
 
-const homeShell = (siteId: string, theme: MagazineTheme, css: string, bodyHtml: string) => `
+const homeShell = (
+  siteId: string,
+  theme: MagazineTheme,
+  css: string,
+  bodyHtml: string,
+) => `
 ${sharedHelpers}
 module.exports = async (request, response) => {
   const feedUrl = process.env.PUBLISHING_FEED_URL ||
@@ -458,9 +467,12 @@ const classicHomeBodyFixed = (theme: MagazineTheme) => `
 `;
 
 export function homeFunction(siteId: string, theme: MagazineTheme) {
-  if (theme.layout === "signal") return homeShell(siteId, theme, signalHomeCss, signalHomeBody);
-  if (theme.layout === "ledger") return homeShell(siteId, theme, ledgerHomeCss, ledgerHomeBody);
-  if (theme.layout === "atelier") return homeShell(siteId, theme, atelierHomeCss, atelierHomeBody);
+  if (theme.layout === "signal")
+    return homeShell(siteId, theme, signalHomeCss, signalHomeBody);
+  if (theme.layout === "ledger")
+    return homeShell(siteId, theme, ledgerHomeCss, ledgerHomeBody);
+  if (theme.layout === "atelier")
+    return homeShell(siteId, theme, atelierHomeCss, atelierHomeBody);
   return homeShell(siteId, theme, classicHomeCss, classicHomeBodyFixed(theme));
 }
 
@@ -482,7 +494,9 @@ ul{background:var(--accent-soft);border-radius:var(--radius);padding:20px 42px}
 @media(max-width:650px){.info-grid{grid-template-columns:1fr}}
 `;
   if (theme.layout === "signal") {
-    return base + `
+    return (
+      base +
+      `
 body{background:var(--paper);color:var(--ink)}
 .top{padding:24px clamp(18px,4vw,48px);display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid #ffffff14}
 .top a{font-family:var(--display);font-size:22px;font-weight:800;text-decoration:none;color:var(--ink)}
@@ -494,10 +508,13 @@ h1{font-size:clamp(32px,5vw,56px);line-height:1.12;margin:.2em 0;font-weight:800
 main{max-width:760px;margin:0 auto;padding:36px clamp(18px,4vw,48px) 80px}
 .hero-inline{display:none}figure img{border-radius:4px}
 footer{padding:28px;text-align:center;color:var(--muted);border-top:1px solid #ffffff14}
-`;
+`
+    );
   }
   if (theme.layout === "ledger") {
-    return base + `
+    return (
+      base +
+      `
 body{background:linear-gradient(180deg,#e8eef5 0%,var(--paper) 180px)}
 .top{max-width:820px;margin:0 auto;padding:28px 24px 12px}
 .top a{font-family:var(--display);font-size:clamp(28px,4vw,40px);font-weight:700;text-decoration:none;color:var(--ink);display:block}
@@ -508,10 +525,13 @@ body{background:linear-gradient(180deg,#e8eef5 0%,var(--paper) 180px)}
 main{max-width:820px;margin:0 auto;padding:8px 24px 80px;background:transparent;box-shadow:none}
 .hero-inline{display:none}figure img{border-radius:0}
 footer{max-width:820px;margin:0 auto;padding:24px;color:var(--muted);border-top:1px solid #c5ced8}
-`;
+`
+    );
   }
   if (theme.layout === "atelier") {
-    return base + `
+    return (
+      base +
+      `
 .top{background:var(--ink);padding:22px 28px}.top a{font-family:var(--display);font-size:24px;text-decoration:none;color:#f4efe7}
 .top .studio{color:var(--accent);font-size:11px;letter-spacing:.14em;text-transform:uppercase;margin-top:6px}
 .hero-wrap{display:none}
@@ -520,9 +540,12 @@ main{max-width:820px;margin:24px auto 60px;background:var(--surface);border-radi
 .hero-inline{width:100%;border-radius:var(--radius);max-height:460px;object-fit:cover;margin:8px 0 28px}
 figure img{border-radius:var(--radius)}
 footer{text-align:center;padding:24px;color:var(--muted)}
-`;
+`
+    );
   }
-  return base + `
+  return (
+    base +
+    `
 header,main,footer{max-width:940px;margin:auto;padding:24px}
 header{border-bottom:1px solid color-mix(in srgb,var(--ink) 14%,transparent)}
 header a{color:var(--accent);text-decoration:none;font:800 24px var(--display)}
@@ -532,7 +555,8 @@ h1{font-size:clamp(30px,5vw,48px);line-height:1.2;margin:.3em 0}h2{font-size:26p
 figure img{border-radius:16px}
 footer{color:var(--muted);border-top:1px solid color-mix(in srgb,var(--ink) 14%,transparent)}
 .hero-wrap,.hero-copy,.top,.studio,.hero-inline{/* classic uses .hero inside main */}
-`;
+`
+  );
 };
 
 const articleBodyMarkup = (theme: MagazineTheme) => {

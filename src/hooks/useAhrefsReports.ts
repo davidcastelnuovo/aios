@@ -92,10 +92,9 @@ export function useAhrefsReports(options: UseAhrefsReportsOptions = {}) {
         // ahrefs_reports rows were saved under client B for the same domain.
         const normalized = normalizeSeoDomain(domain);
         if (normalized) {
-          const { data: domainRows, error: domainError } = await scopeByTenants(baseQuery()).ilike(
-            "domain",
-            `%${normalized}%`,
-          );
+          const { data: domainRows, error: domainError } = await scopeByTenants(
+            baseQuery(),
+          ).ilike("domain", `%${normalized}%`);
           if (domainError) {
             if (domainError.code === "42P01") return [];
             throw domainError;

@@ -1,335 +1,370 @@
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.75.0'
-import { resolveTenantHomeAgencyId } from '../_shared/resolve-tenant-agency.ts'
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2.75.0";
+import { resolveTenantHomeAgencyId } from "../_shared/resolve-tenant-agency.ts";
 
 const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-}
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Headers":
+    "authorization, x-client-info, apikey, content-type",
+};
 
 interface TaskPayload {
   // For updating existing task
-  action?: 'create' | 'update'
-  task_id?: string
-  
+  action?: "create" | "update";
+  task_id?: string;
+
   // Common fields
-  tenant_slug?: string
-  tenant_id?: string
-  title?: string
-  notes?: string
-  due_date?: string
-  due_time?: string
-  priority?: number
-  status?: string
-  
+  tenant_slug?: string;
+  tenant_id?: string;
+  title?: string;
+  notes?: string;
+  due_date?: string;
+  due_time?: string;
+  priority?: number;
+  status?: string;
+
   // Associations
-  campaigner_name?: string
-  campaigner_id?: string
-  client_name?: string
-  client_id?: string
-  agency_id?: string
-  lead_name?: string
-  lead_id?: string
-  sales_person_name?: string
-  sales_person_id?: string
+  campaigner_name?: string;
+  campaigner_id?: string;
+  client_name?: string;
+  client_id?: string;
+  agency_id?: string;
+  lead_name?: string;
+  lead_id?: string;
+  sales_person_name?: string;
+  sales_person_id?: string;
 }
 
 Deno.serve(async (req) => {
   // Handle CORS preflight
-  if (req.method === 'OPTIONS') {
-    return new Response(null, { headers: corsHeaders })
+  if (req.method === "OPTIONS") {
+    return new Response(null, { headers: corsHeaders });
   }
 
   // Require shared secret for this webhook (header or query string)
-  const expectedSecret = Deno.env.get('WEBHOOK_TASK_INTAKE_SECRET')
+  const expectedSecret = Deno.env.get("WEBHOOK_TASK_INTAKE_SECRET");
   if (!expectedSecret) {
-    return new Response(JSON.stringify({ error: 'Server misconfigured: missing webhook secret' }), {
-      status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-    })
+    return new Response(
+      JSON.stringify({ error: "Server misconfigured: missing webhook secret" }),
+      {
+        status: 500,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      },
+    );
   }
-  const providedSecret = req.headers.get('x-webhook-secret')
-    ?? new URL(req.url).searchParams.get('secret')
+  const providedSecret =
+    req.headers.get("x-webhook-secret") ??
+    new URL(req.url).searchParams.get("secret");
   if (providedSecret !== expectedSecret) {
-    return new Response(JSON.stringify({ error: 'Unauthorized' }), {
-      status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-    })
+    return new Response(JSON.stringify({ error: "Unauthorized" }), {
+      status: 401,
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
   }
 
   try {
-    
-    const supabaseUrl = Deno.env.get('SUPABASE_URL')!
-    const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
-    const supabase = createClient(supabaseUrl, supabaseKey)
+    const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
+    const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+    const supabase = createClient(supabaseUrl, supabaseKey);
 
     // Parse incoming data
-    const payload: TaskPayload = await req.json()
+    const payload: TaskPayload = await req.json();
 
-    const action = payload.action || 'create'
+    const action = payload.action || "create";
 
     // Handle UPDATE action
-    if (action === 'update') {
+    if (action === "update") {
       if (!payload.task_id) {
         return new Response(
-          JSON.stringify({ 
-            success: false, 
-            error: 'Missing required field for update: task_id',
+          JSON.stringify({
+            success: false,
+            error: "Missing required field for update: task_id",
           }),
-          { 
-            status: 400, 
-            headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
-          }
-        )
+          {
+            status: 400,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          },
+        );
       }
 
       // Resolve tenant scope for the update (prevents cross-tenant modification)
-      let updateTenantId: string | null = payload.tenant_id || null
+      let updateTenantId: string | null = payload.tenant_id || null;
       if (!updateTenantId && payload.tenant_slug) {
         const { data: tenantRow } = await supabase
-          .from('tenants').select('id').eq('slug', payload.tenant_slug).maybeSingle()
-        updateTenantId = tenantRow?.id ?? null
+          .from("tenants")
+          .select("id")
+          .eq("slug", payload.tenant_slug)
+          .maybeSingle();
+        updateTenantId = tenantRow?.id ?? null;
       }
       if (!updateTenantId) {
         // Look up the task's tenant first; require caller to confirm by providing matching tenant
         const { data: existing } = await supabase
-          .from('tasks').select('tenant_id').eq('id', payload.task_id).maybeSingle()
+          .from("tasks")
+          .select("tenant_id")
+          .eq("id", payload.task_id)
+          .maybeSingle();
         if (!existing) {
-          return new Response(JSON.stringify({ success: false, error: 'Task not found' }),
-            { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
+          return new Response(
+            JSON.stringify({ success: false, error: "Task not found" }),
+            {
+              status: 404,
+              headers: { ...corsHeaders, "Content-Type": "application/json" },
+            },
+          );
         }
-        return new Response(JSON.stringify({
-          success: false,
-          error: 'Missing tenant identification. Provide tenant_slug or tenant_id matching the task tenant.',
-        }), { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
+        return new Response(
+          JSON.stringify({
+            success: false,
+            error:
+              "Missing tenant identification. Provide tenant_slug or tenant_id matching the task tenant.",
+          }),
+          {
+            status: 400,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          },
+        );
       }
 
       // Build update object with only provided fields
-      const updateData: Record<string, any> = {}
-      if (payload.status !== undefined) updateData.status = payload.status
-      if (payload.title !== undefined) updateData.title = payload.title
-      if (payload.notes !== undefined) updateData.notes = payload.notes
-      if (payload.due_date !== undefined) updateData.due_date = payload.due_date
-      if (payload.due_time !== undefined) updateData.due_time = payload.due_time
-      if (payload.priority !== undefined) updateData.priority = payload.priority
-      if (payload.campaigner_id !== undefined) updateData.campaigner_id = payload.campaigner_id
-      if (payload.client_id !== undefined) updateData.client_id = payload.client_id
-      if (payload.lead_id !== undefined) updateData.lead_id = payload.lead_id
-      if (payload.sales_person_id !== undefined) updateData.sales_person_id = payload.sales_person_id
+      const updateData: Record<string, any> = {};
+      if (payload.status !== undefined) updateData.status = payload.status;
+      if (payload.title !== undefined) updateData.title = payload.title;
+      if (payload.notes !== undefined) updateData.notes = payload.notes;
+      if (payload.due_date !== undefined)
+        updateData.due_date = payload.due_date;
+      if (payload.due_time !== undefined)
+        updateData.due_time = payload.due_time;
+      if (payload.priority !== undefined)
+        updateData.priority = payload.priority;
+      if (payload.campaigner_id !== undefined)
+        updateData.campaigner_id = payload.campaigner_id;
+      if (payload.client_id !== undefined)
+        updateData.client_id = payload.client_id;
+      if (payload.lead_id !== undefined) updateData.lead_id = payload.lead_id;
+      if (payload.sales_person_id !== undefined)
+        updateData.sales_person_id = payload.sales_person_id;
 
       if (Object.keys(updateData).length === 0) {
         return new Response(
-          JSON.stringify({ 
-            success: false, 
-            error: 'No fields to update provided',
+          JSON.stringify({
+            success: false,
+            error: "No fields to update provided",
           }),
-          { 
-            status: 400, 
-            headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
-          }
-        )
+          {
+            status: 400,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          },
+        );
       }
-
 
       const { data: updatedTask, error: updateError } = await supabase
-        .from('tasks')
+        .from("tasks")
         .update(updateData)
-        .eq('id', payload.task_id)
-        .eq('tenant_id', updateTenantId)
+        .eq("id", payload.task_id)
+        .eq("tenant_id", updateTenantId)
         .select()
-        .single()
+        .single();
 
       if (updateError) {
-        console.error('❌ Error updating task:', updateError)
+        console.error("❌ Error updating task:", updateError);
         return new Response(
-          JSON.stringify({ 
-            success: false, 
-            error: 'Failed to update task',
+          JSON.stringify({
+            success: false,
+            error: "Failed to update task",
             details: updateError.message,
-            code: updateError.code
+            code: updateError.code,
           }),
-          { 
-            status: 500, 
-            headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
-          }
-        )
+          {
+            status: 500,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          },
+        );
       }
-
 
       // Trigger task_status_changed automation if status was updated
       if (payload.status && updatedTask.tenant_id) {
         try {
-          const supabaseUrl = Deno.env.get('SUPABASE_URL')!
-          const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
-          
-          const automationResponse = await fetch(`${supabaseUrl}/functions/v1/trigger-automation`, {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'Authorization': `Bearer ${supabaseKey}`,
-            },
-            body: JSON.stringify({
-              trigger_type: 'task_status_changed',
-              data: {
-                id: updatedTask.id,
-                task_id: updatedTask.id,
-                title: updatedTask.title,
-                status: updatedTask.status,
-                previous_status: 'unknown', // We don't track previous status
-                campaigner_id: updatedTask.campaigner_id,
-                client_id: updatedTask.client_id,
-                lead_id: updatedTask.lead_id,
+          const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
+          const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+
+          const automationResponse = await fetch(
+            `${supabaseUrl}/functions/v1/trigger-automation`,
+            {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+                Authorization: `Bearer ${supabaseKey}`,
               },
-              tenant_id: updatedTask.tenant_id,
-            }),
-          });
-          
+              body: JSON.stringify({
+                trigger_type: "task_status_changed",
+                data: {
+                  id: updatedTask.id,
+                  task_id: updatedTask.id,
+                  title: updatedTask.title,
+                  status: updatedTask.status,
+                  previous_status: "unknown", // We don't track previous status
+                  campaigner_id: updatedTask.campaigner_id,
+                  client_id: updatedTask.client_id,
+                  lead_id: updatedTask.lead_id,
+                },
+                tenant_id: updatedTask.tenant_id,
+              }),
+            },
+          );
+
           if (automationResponse.ok) {
           } else {
-            console.error('⚠️ Failed to trigger automation:', await automationResponse.text());
+            console.error(
+              "⚠️ Failed to trigger automation:",
+              await automationResponse.text(),
+            );
           }
         } catch (automationError) {
-          console.error('⚠️ Error triggering automation:', automationError);
+          console.error("⚠️ Error triggering automation:", automationError);
         }
       }
 
       return new Response(
-        JSON.stringify({ 
-          success: true, 
+        JSON.stringify({
+          success: true,
           task_id: updatedTask.id,
-          message: 'Task updated successfully',
+          message: "Task updated successfully",
           updated_fields: Object.keys(updateData),
         }),
-        { 
-          status: 200, 
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
-        }
-      )
+        {
+          status: 200,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        },
+      );
     }
 
     // === CREATE action (existing logic) ===
-    
+
     // Validate required field for create
     if (!payload.title) {
       return new Response(
-        JSON.stringify({ 
-          success: false, 
-          error: 'Missing required field: title',
+        JSON.stringify({
+          success: false,
+          error: "Missing required field: title",
         }),
-        { 
-          status: 400, 
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
-        }
-      )
+        {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        },
+      );
     }
 
-    let tenantId: string | null = payload.tenant_id || null
-    let agencyId: string | null = payload.agency_id || null
-    
+    let tenantId: string | null = payload.tenant_id || null;
+    let agencyId: string | null = payload.agency_id || null;
+
     // Resolve tenant from tenant_slug if provided
     if (!tenantId && payload.tenant_slug) {
       const { data: tenantData, error: tenantError } = await supabase
-        .from('tenants')
-        .select('id')
-        .eq('slug', payload.tenant_slug)
-        .single()
-      
+        .from("tenants")
+        .select("id")
+        .eq("slug", payload.tenant_slug)
+        .single();
+
       if (tenantError || !tenantData) {
-        console.error('❌ Tenant not found for slug:', payload.tenant_slug)
+        console.error("❌ Tenant not found for slug:", payload.tenant_slug);
         return new Response(
-          JSON.stringify({ 
-            success: false, 
+          JSON.stringify({
+            success: false,
             error: `Tenant not found for slug: ${payload.tenant_slug}`,
           }),
-          { 
-            status: 400, 
-            headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
-          }
-        )
+          {
+            status: 400,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          },
+        );
       }
-      tenantId = tenantData.id
+      tenantId = tenantData.id;
     }
 
     // Validate tenant identification
     if (!tenantId) {
       return new Response(
-        JSON.stringify({ 
-          success: false, 
-          error: 'Missing tenant identification. Please provide tenant_slug or tenant_id in the payload.',
+        JSON.stringify({
+          success: false,
+          error:
+            "Missing tenant identification. Please provide tenant_slug or tenant_id in the payload.",
         }),
-        { 
-          status: 400, 
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
-        }
-      )
+        {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        },
+      );
     }
 
     // Find agency if not provided: owned default → first owned → shared-in
     if (!agencyId) {
-      agencyId = await resolveTenantHomeAgencyId(supabase, tenantId)
+      agencyId = await resolveTenantHomeAgencyId(supabase, tenantId);
     }
 
     // Resolve campaigner by name if provided
-    let campaignerId: string | null = payload.campaigner_id || null
+    let campaignerId: string | null = payload.campaigner_id || null;
     if (!campaignerId && payload.campaigner_name && tenantId) {
       const { data: campaignerData } = await supabase
-        .from('campaigners')
-        .select('id, full_name')
-        .eq('tenant_id', tenantId)
-        .ilike('full_name', `%${payload.campaigner_name}%`)
+        .from("campaigners")
+        .select("id, full_name")
+        .eq("tenant_id", tenantId)
+        .ilike("full_name", `%${payload.campaigner_name}%`)
         .limit(1)
-        .maybeSingle()
-      
+        .maybeSingle();
+
       if (campaignerData) {
-        campaignerId = campaignerData.id
+        campaignerId = campaignerData.id;
       } else {
       }
     }
 
     // Resolve client by name if provided
-    let clientId: string | null = payload.client_id || null
+    let clientId: string | null = payload.client_id || null;
     if (!clientId && payload.client_name && tenantId) {
       const { data: clientData } = await supabase
-        .from('clients')
-        .select('id, name')
-        .eq('tenant_id', tenantId)
-        .ilike('name', `%${payload.client_name}%`)
+        .from("clients")
+        .select("id, name")
+        .eq("tenant_id", tenantId)
+        .ilike("name", `%${payload.client_name}%`)
         .limit(1)
-        .maybeSingle()
-      
+        .maybeSingle();
+
       if (clientData) {
-        clientId = clientData.id
+        clientId = clientData.id;
       } else {
       }
     }
 
     // Resolve lead by name if provided
-    let leadId: string | null = payload.lead_id || null
+    let leadId: string | null = payload.lead_id || null;
     if (!leadId && payload.lead_name && tenantId) {
       const { data: leadData } = await supabase
-        .from('leads')
-        .select('id, company_name')
-        .eq('tenant_id', tenantId)
-        .ilike('company_name', `%${payload.lead_name}%`)
+        .from("leads")
+        .select("id, company_name")
+        .eq("tenant_id", tenantId)
+        .ilike("company_name", `%${payload.lead_name}%`)
         .limit(1)
-        .maybeSingle()
-      
+        .maybeSingle();
+
       if (leadData) {
-        leadId = leadData.id
+        leadId = leadData.id;
       } else {
       }
     }
 
     // Resolve sales person by name if provided
-    let salesPersonId: string | null = payload.sales_person_id || null
+    let salesPersonId: string | null = payload.sales_person_id || null;
     if (!salesPersonId && payload.sales_person_name && tenantId) {
       const { data: salesPersonData } = await supabase
-        .from('sales_people')
-        .select('id, full_name')
-        .eq('tenant_id', tenantId)
-        .ilike('full_name', `%${payload.sales_person_name}%`)
+        .from("sales_people")
+        .select("id, full_name")
+        .eq("tenant_id", tenantId)
+        .ilike("full_name", `%${payload.sales_person_name}%`)
         .limit(1)
-        .maybeSingle()
-      
+        .maybeSingle();
+
       if (salesPersonData) {
-        salesPersonId = salesPersonData.id
+        salesPersonId = salesPersonData.id;
       } else {
       }
     }
@@ -341,81 +376,88 @@ Deno.serve(async (req) => {
       due_date: payload.due_date || null,
       due_time: payload.due_time || null,
       priority: payload.priority || 5,
-      status: payload.status || 'open',
+      status: payload.status || "open",
       tenant_id: tenantId,
       agency_id: agencyId,
       campaigner_id: campaignerId,
       client_id: clientId,
       lead_id: leadId,
       sales_person_id: salesPersonId,
-    }
-
+    };
 
     // Insert task
     const { data: task, error } = await supabase
-      .from('tasks')
+      .from("tasks")
       .insert(taskRecord)
       .select()
-      .single()
+      .single();
 
     if (error) {
-      console.error('❌ Error inserting task:', error)
+      console.error("❌ Error inserting task:", error);
       return new Response(
-        JSON.stringify({ 
-          success: false, 
-          error: 'Failed to create task',
+        JSON.stringify({
+          success: false,
+          error: "Failed to create task",
           details: error.message,
-          code: error.code
+          code: error.code,
         }),
-        { 
-          status: 500, 
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
-        }
-      )
+        {
+          status: 500,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        },
+      );
     }
-
 
     // Trigger inbound_webhook_task automation
     if (tenantId) {
       try {
-        const automationResponse = await fetch(`${supabaseUrl}/functions/v1/trigger-automation`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${supabaseKey}`,
-          },
-          body: JSON.stringify({
-            trigger_type: 'inbound_webhook_task',
-            data: {
-              id: task.id,
-              task_id: task.id,
-              title: task.title,
-              notes: task.notes,
-              due_date: task.due_date,
-              due_time: task.due_time,
-              priority: task.priority,
-              status: task.status,
-              campaigner_id: campaignerId,
-              campaigner_name: payload.campaigner_name,
-              client_id: clientId,
-              client_name: payload.client_name,
-              lead_id: leadId,
-              lead_name: payload.lead_name,
-              sales_person_id: salesPersonId,
-              sales_person_name: payload.sales_person_name,
-              agency_id: agencyId,
+        const automationResponse = await fetch(
+          `${supabaseUrl}/functions/v1/trigger-automation`,
+          {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${supabaseKey}`,
             },
-            tenant_id: tenantId,
-          }),
-        });
-        
+            body: JSON.stringify({
+              trigger_type: "inbound_webhook_task",
+              data: {
+                id: task.id,
+                task_id: task.id,
+                title: task.title,
+                notes: task.notes,
+                due_date: task.due_date,
+                due_time: task.due_time,
+                priority: task.priority,
+                status: task.status,
+                campaigner_id: campaignerId,
+                campaigner_name: payload.campaigner_name,
+                client_id: clientId,
+                client_name: payload.client_name,
+                lead_id: leadId,
+                lead_name: payload.lead_name,
+                sales_person_id: salesPersonId,
+                sales_person_name: payload.sales_person_name,
+                agency_id: agencyId,
+              },
+              tenant_id: tenantId,
+            }),
+          },
+        );
+
         if (automationResponse.ok) {
           const automationResult = await automationResponse.json();
         } else {
-          console.error('⚠️ Failed to trigger inbound_webhook_task automation:', await automationResponse.text());
+          console.error(
+            "⚠️ Failed to trigger inbound_webhook_task automation:",
+            await automationResponse.text(),
+          );
         }
       } catch (automationError) {
-        console.error('⚠️ Error triggering inbound_webhook_task automation:', automationError);
+        console.error(
+          "⚠️ Error triggering inbound_webhook_task automation:",
+          automationError,
+        );
       }
     }
 
@@ -423,40 +465,39 @@ Deno.serve(async (req) => {
     // on public.tasks (AFTER INSERT OR UPDATE OF campaigner_id). Do not invoke it
     // from here to avoid duplicate notifications.
 
-
     return new Response(
-      JSON.stringify({ 
-        success: true, 
+      JSON.stringify({
+        success: true,
         task_id: task.id,
-        message: 'Task created successfully',
+        message: "Task created successfully",
         matched: {
           campaigner: campaignerId ? true : false,
           client: clientId ? true : false,
           lead: leadId ? true : false,
           sales_person: salesPersonId ? true : false,
-        }
+        },
       }),
-      { 
-        status: 200, 
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
-      }
-    )
-
+      {
+        status: 200,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      },
+    );
   } catch (error) {
-    console.error('💥 Webhook error:', error)
-    const errorMessage = error instanceof Error ? error.message : 'Internal server error'
-    const errorStack = error instanceof Error ? error.stack : undefined
-    
+    console.error("💥 Webhook error:", error);
+    const errorMessage =
+      error instanceof Error ? error.message : "Internal server error";
+    const errorStack = error instanceof Error ? error.stack : undefined;
+
     return new Response(
-      JSON.stringify({ 
-        success: false, 
+      JSON.stringify({
+        success: false,
         error: errorMessage,
-        stack: errorStack
+        stack: errorStack,
       }),
-      { 
-        status: 500, 
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
-      }
-    )
+      {
+        status: 500,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      },
+    );
   }
-})
+});
