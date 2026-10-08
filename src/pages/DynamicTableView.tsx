@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { CarmenLoadingScreen } from "@/components/shared/CarmenLoadingScreen";
-import { ArrowRight, Plus, Trash2, Send, Pencil, Check, X, MoreVertical, Calendar as CalendarIcon, RefreshCw, Facebook, Settings, Link, BarChart3, Search, TrendingUp, Bell, SearchIcon, Sparkles, Info, Copy, Loader2, AlertCircle, Play, ShoppingCart } from "lucide-react";
+import { ArrowRight, Plus, Trash2, Send, Pencil, Check, X, MoreVertical, Calendar as CalendarIcon, RefreshCw, Facebook, Settings, Link, BarChart3, Search, TrendingUp, Bell, SearchIcon, Sparkles, Info, Copy, Loader2, AlertCircle, Play, ShoppingCart, ExternalLink, User } from "lucide-react";
 import { AIAnalysisDialog } from "@/components/dynamic-tables/AIAnalysisDialog";
 import { format, subDays } from "date-fns";
 import { he } from "date-fns/locale";
@@ -68,6 +68,7 @@ import { fetchWooReportAttribution, getDynamicTableDateRangeIso } from "@/lib/wo
 import { reportRecordsQuery } from "@/lib/reportRecords";
 import { shouldUseGoogleWooAttributionOverlay } from "@/lib/wooAttribution";
 import { reportQueryOptions, getReportLastSyncAt } from "@/lib/reportQueryOptions";
+import { getAdAccountUrl } from "@/lib/adAccountUrl";
 import { ReportDataFreshness } from "@/components/reports/ReportDataFreshness";
 import { AdsEntityLevelTabs } from "@/components/reports/AdsEntityLevelTabs";
 import { WeeklyCampaignComparison } from "@/components/reports/WeeklyCampaignComparison";
@@ -279,6 +280,7 @@ export default function DynamicTableView({ embedTableSlug, embedMode, summaryOnl
     || table?.integration_settings?.clientId
     || table?.integration_settings?.client_id
     || null;
+  const adAccountUrl = getAdAccountUrl(table);
 
   const isGoogleAdsEcommerceReport = table?.integration_type === 'google_ads'
     && table?.integration_settings?.campaign_type === 'ecommerce';
@@ -1782,6 +1784,28 @@ export default function DynamicTableView({ embedTableSlug, embedMode, summaryOnl
               <ArrowRight className="ml-2 h-4 w-4" />
               חזור
             </Button>
+            {reportClientId && (
+              <Button
+                variant="outline"
+                size="sm"
+                className="gap-2 flex-1 md:flex-none"
+                onClick={() => navigate(buildPath(`/clients?clientId=${reportClientId}&tab=report`))}
+              >
+                <User className="h-4 w-4" />
+                כרטיס לקוח
+              </Button>
+            )}
+            {adAccountUrl && (
+              <Button
+                variant="outline"
+                size="sm"
+                className="gap-2 flex-1 md:flex-none"
+                onClick={() => window.open(adAccountUrl, "_blank", "noopener,noreferrer")}
+              >
+                <ExternalLink className="h-4 w-4" />
+                פתח חשבון מודעות
+              </Button>
+            )}
             {!table.client_id && (
               <Button
                 variant="outline"

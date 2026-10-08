@@ -64,10 +64,14 @@ feature/* or fix/*
 
 | Git | Deploy | Data |
 | --- | --- | --- |
-| local | `pnpm dev` | Cloud Agent `.env` still talks to Production — do not write test data |
+| local | `pnpm dev` | [Local development](#local-development) uses AIOS Staging |
 | `feature/*` | Vercel Preview | AIOS Staging (every Preview deploy) |
 | `develop` | Persistent Staging | AIOS Staging Supabase |
 | `main` | Production | Production Supabase |
+
+### Local development
+
+Local `pnpm dev` is frontend-only and talks to the remote Supabase project selected by the active Vite environment. The tracked `.env` points to Production, so override `VITE_SUPABASE_URL`, `VITE_SUPABASE_PUBLISHABLE_KEY`, and `VITE_SUPABASE_PROJECT_ID` with AIOS Staging values through `.env.local` or an exported `.envrc`, and set `VITE_APP_ENV=staging`. Restart `pnpm dev`, confirm the effective Supabase URL is the Staging project and the amber environment frame is visible, then create test data.
 
 `APP_ENV`: `development` | `preview` | `staging` | `production`. Unset is treated as **production** so existing deploys stay unchanged.
 
@@ -153,8 +157,6 @@ How we keep them working:
 2. **Copy from Production, do not re-type.** The gated function `copy-edge-secrets-to-staging` runs on Production, reads allowlisted agent secrets from `Deno.env`, and writes them to Staging. WhatsApp / Meta / project keys stay out. David is not asked to paste keys.
 3. **Health probe.** Command Center calls `agent-channel-send` `action=channel_health`. If the key is rejected, the HUD shows a banner. After a copy, hashes of the allowlist should match Production; no function redeploy is required.
 4. **After a copy:** from Preview → Command Center, send a one-word ping on Cursor Direct or the table. Expect `agent_channel_sessions.external_url` and no 401.
-
-Local `pnpm dev` in this Cloud Agent workspace still reads Production `.env`. That is not the development environment — use the Vercel Preview URL.
 
 ## Report loading
 

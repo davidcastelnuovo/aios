@@ -115,16 +115,7 @@ verify_jwt = false
 [functions.auto-sync-new-lead]
 verify_jwt = false
 
-[functions.create-invitation-link]
-verify_jwt = true
-
 [functions.signup-tenant]
-verify_jwt = false
-
-[functions.signup-with-invitation]
-verify_jwt = false
-
-[functions.link-google-user-to-invitation]
 verify_jwt = false
 
 [functions.delete-user]
@@ -388,9 +379,6 @@ verify_jwt = true
 verify_jwt = false
 
 [functions.resend-webhook]
-verify_jwt = false
-
-[functions.run-migration-visibility]
 verify_jwt = false
 
 # Chrome-extension recording ingest — requires the user's session JWT.
