@@ -15,6 +15,14 @@
         "Authorization": "Bearer ${GROK_MCP_BEARER}"
       },
       "timeout": 120000
+    },
+    "AIOS Collaboration": {
+      "type": "http",
+      "url": "https://zvoijyneresvkadpprel.supabase.co/functions/v1/collaboration-mcp/mcp",
+      "headers": {
+        "Authorization": "Bearer ${AIOS_COLLABORATION_MCP_BEARER}"
+      },
+      "timeout": 120000
     }
   }
 }
