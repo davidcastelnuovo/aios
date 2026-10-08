@@ -53,6 +53,59 @@ export function keywordTop20Rank(kw: {
   return resolveTop20Rank({ ahrefsPosition, gscPosition });
 }
 
+/**
+ * Rank shown for a tracked phrase. Any real rank counts, including outside
+ * the top 20. When Ahrefs and Search Console disagree, the better (lower) rank wins.
+ */
+export function betterDisplayRank(input: {
+  ahrefsPosition?: unknown;
+  gscPosition?: unknown;
+}): { position: number; source: RankSource } | null {
+  const ahrefs = displayRank(input.ahrefsPosition);
+  const gsc = displayRank(input.gscPosition);
+  if (ahrefs != null && (gsc == null || ahrefs <= gsc)) {
+    return { position: ahrefs, source: "ahrefs" };
+  }
+  if (gsc != null) return { position: gsc, source: "gsc" };
+  return null;
+}
+
+/**
+ * A later sync can return the keyword list without ranks (management keywords).
+ * Keep the rank, previous rank, and traffic already stored on an earlier report.
+ */
+export function mergeTrackedKeywordRows(previous: unknown, next: unknown): Array<Record<string, unknown>> {
+  const prevRows = Array.isArray(previous) ? previous : [];
+  const nextRows = Array.isArray(next) ? next : [];
+  if (nextRows.length === 0) return prevRows as Array<Record<string, unknown>>;
+  const prevByKey = new Map<string, Record<string, unknown>>();
+  for (const row of prevRows) {
+    if (!row || typeof row !== "object") continue;
+    const key = normalizeGscQuery((row as { keyword?: unknown }).keyword);
+    if (!key || prevByKey.has(key)) continue;
+    prevByKey.set(key, row as Record<string, unknown>);
+  }
+  return nextRows.map((row) => {
+    const current = (row && typeof row === "object" ? row : {}) as Record<string, unknown>;
+    const prev = prevByKey.get(normalizeGscQuery(current.keyword));
+    if (!prev) return current;
+    const position = displayRank(current.position) ?? displayRank(prev.position);
+    const positionPrev = displayRank(current.position_prev_month) ?? displayRank(prev.position_prev_month);
+    const nextTraffic = Number(current.traffic);
+    const prevTraffic = Number(prev.traffic);
+    const traffic = Number.isFinite(nextTraffic) && nextTraffic > 0
+      ? nextTraffic
+      : (Number.isFinite(prevTraffic) && prevTraffic > 0 ? prevTraffic : (Number.isFinite(nextTraffic) ? nextTraffic : 0));
+    return {
+      ...prev,
+      ...current,
+      position: position ?? null,
+      position_prev_month: positionPrev ?? current.position_prev_month ?? null,
+      traffic,
+    };
+  });
+}
+
 export function normalizeGscQuery(value: unknown): string {
   return String(value ?? "")
     .toLowerCase()

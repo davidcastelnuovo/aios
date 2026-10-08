@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { formatGscCtrPercent } from "@/lib/gscFormat";
-import { gscQueriesMatch, top20DisplayPosition, trackedQueryPosition } from "@/lib/gscPosition";
+import { gscQueriesMatch, normalizeGscQuery, top20DisplayPosition, trackedPhraseRank } from "@/lib/gscPosition";
 import { useSeoKeywordRelevance } from "@/hooks/useSeoKeywordRelevance";
 import {
   Select,
@@ -32,6 +32,8 @@ interface SearchConsoleDashboardProps {
   onLangFilterChange?: (lang: LangFilter) => void;
   /** Ahrefs (or other) tracked phrases — seed the GSC "במעקב" list. */
   seedTrackedKeywords?: string[];
+  /** Ahrefs ranks stored on the SEO reports, including an earlier snapshot. */
+  trackedAhrefsPositions?: Record<string, number>;
   /** Client id, so manual "לא רלוונטי" marks hide the same phrases as Top 20. */
   relevancePersistKey?: string;
   /**
@@ -80,6 +82,7 @@ export function SearchConsoleDashboard({
   initialLangFilter,
   onLangFilterChange,
   seedTrackedKeywords = [],
+  trackedAhrefsPositions = {},
   relevancePersistKey,
   onTop20Queries,
 }: SearchConsoleDashboardProps) {
@@ -99,10 +102,11 @@ export function SearchConsoleDashboard({
     () => ({
       tracked: trackedKeywords.length > 0 ? trackedKeywords : seedTrackedKeywords,
       forceIrrelevant,
+      ahrefsPositions: trackedAhrefsPositions,
     }),
     // trackedKeywords is filled from the seed list after mount.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [seedKey, trackedKeywords, forceIrrelevant],
+    [seedKey, trackedKeywords, forceIrrelevant, trackedAhrefsPositions],
   );
 
   // Sync if parent changes saved value
@@ -216,8 +220,8 @@ export function SearchConsoleDashboard({
     }
     rows.sort((a, b) => {
       if (sortBy === "position") {
-        const aShown = trackedQueryPosition(a.query, a.position, rankOpts);
-        const bShown = trackedQueryPosition(b.query, b.position, rankOpts);
+        const aShown = trackedPhraseRank(a.query, a.position, rankOpts)?.position ?? null;
+        const bShown = trackedPhraseRank(b.query, b.position, rankOpts)?.position ?? null;
         if (aShown == null && bShown == null) return 0;
         if (aShown == null) return 1;
         if (bShown == null) return -1;
@@ -336,10 +340,36 @@ export function SearchConsoleDashboard({
   }
 
   if (!aggregatedData || aggregatedData.totalRecords === 0) {
+    const stored = (trackedKeywords.length > 0 ? trackedKeywords : seedTrackedKeywords)
+      .map((keyword) => ({
+        keyword,
+        position: trackedAhrefsPositions[normalizeGscQuery(keyword)] ?? null,
+      }))
+      .filter((row) => row.position != null);
     return (
-      <div className="text-center py-12 text-muted-foreground">
-        <Search className="h-12 w-12 mx-auto mb-4 opacity-50" />
-        <p>אין נתונים להצגה. לחץ על "סנכרון" כדי למשוך נתונים מ-Google Search Console.</p>
+      <div className="space-y-4" dir="rtl">
+        <div className="text-center py-8 text-muted-foreground">
+          <Search className="h-12 w-12 mx-auto mb-4 opacity-50" />
+          <p>אין נתוני Search Console מסונכרנים לאינטגרציה. המיקומים נמשכים מהדוחות השמורים.</p>
+        </div>
+        {stored.length > 0 && (
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-lg flex items-center gap-2">
+                <Target className="h-5 w-5" />
+                מעקב ביטויים
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-2">
+              {stored.map((row) => (
+                <div key={row.keyword} className="flex items-center justify-between gap-3 rounded-lg bg-muted/30 p-3">
+                  <span className="text-sm truncate">{row.keyword}</span>
+                  <Badge variant="outline" className="font-mono">{row.position}</Badge>
+                </div>
+              ))}
+            </CardContent>
+          </Card>
+        )}
       </div>
     );
   }
@@ -515,6 +545,7 @@ export function SearchConsoleDashboard({
                           position={item.data.position}
                           tracked={rankOpts.tracked}
                           forceIrrelevant={rankOpts.forceIrrelevant}
+                          ahrefsPositions={rankOpts.ahrefsPositions}
                         />
                       </div>
                     ) : (
@@ -645,6 +676,7 @@ export function SearchConsoleDashboard({
                         position={query.position}
                         tracked={rankOpts.tracked}
                         forceIrrelevant={rankOpts.forceIrrelevant}
+                        ahrefsPositions={rankOpts.ahrefsPositions}
                       />
                     </td>
                     <td className="text-center py-2 px-3">{formatNumber(query.clicks)}</td>
@@ -666,13 +698,15 @@ function GscRankBadge({
   position,
   tracked,
   forceIrrelevant,
+  ahrefsPositions,
 }: {
   query: string;
   position: number;
   tracked?: Array<{ keyword?: string } | string>;
   forceIrrelevant?: string[];
+  ahrefsPositions?: Record<string, number>;
 }) {
-  const shown = trackedQueryPosition(query, position, { tracked, forceIrrelevant });
+  const shown = trackedPhraseRank(query, position, { tracked, forceIrrelevant, ahrefsPositions })?.position ?? null;
   if (shown == null) {
     return <span className="text-xs text-muted-foreground" title="לא בטופ 20">—</span>;
   }

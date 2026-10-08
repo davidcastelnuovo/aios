@@ -648,16 +648,13 @@ export function SeoKeywordsTable({
       return !applyRelevanceFilter || !irrelevantSet.has(key);
     });
     return [...filtered].sort((a, b) => {
-      const aPos = a.position ?? Number.POSITIVE_INFINITY;
-      const bPos = b.position ?? Number.POSITIVE_INFINITY;
+      const aPos = keywordDisplayPosition(a)?.position ?? Number.POSITIVE_INFINITY;
+      const bPos = keywordDisplayPosition(b)?.position ?? Number.POSITIVE_INFINITY;
       return aPos - bPos;
     });
   }, [effectiveTracked, langFilter, applyRelevanceFilter, irrelevantSet, forceIrrelevantSet]);
 
-  const keywordRank = (k: any): number | null => {
-    const rank = k?.position ?? k?.gsc_position ?? null;
-    return typeof rank === "number" && Number.isFinite(rank) ? rank : null;
-  };
+  const keywordRank = (k: any): number | null => keywordDisplayPosition(k)?.position ?? null;
 
   const sortByPosition = (arr: any[]) =>
     [...arr].sort((a, b) => {

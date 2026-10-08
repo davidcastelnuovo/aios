@@ -14,7 +14,7 @@ import { Link2, RefreshCw, Search, MousePointerClick, Eye, Target, ChevronsUpDow
 import { cn } from "@/lib/utils";
 import { normalizeSeoDomain, seoDomainsMatch } from "@/lib/seoDomain";
 import { formatGscCtrPercent, gscCtrAsPercent } from "@/lib/gscFormat";
-import { trackedQueryPosition } from "@/lib/gscPosition";
+import { trackedPhraseRank } from "@/lib/gscPosition";
 import { useSeoKeywordRelevance } from "@/hooks/useSeoKeywordRelevance";
 
 export type GscDateRange = '28d' | '3m' | '12m';
@@ -75,6 +75,8 @@ interface GscIntegrationProps {
   } | null;
   /** Tracked phrases used to decide which ranks belong in Top 20. */
   trackedKeywords?: string[];
+  /** Ahrefs ranks stored on the SEO reports. */
+  trackedAhrefsPositions?: Record<string, number>;
   /** Client id for the same manual relevance marks as the Top 20 tab. */
   relevancePersistKey?: string;
 }
@@ -137,6 +139,7 @@ export function GscIntegration({
   onLangFilterChange,
   resolvedFallback,
   trackedKeywords,
+  trackedAhrefsPositions,
   relevancePersistKey,
 }: GscIntegrationProps) {
   const queryClient = useQueryClient();
@@ -860,6 +863,7 @@ export function GscIntegration({
             initialLangFilter={initialLangFilter}
             onLangFilterChange={onLangFilterChange}
             trackedKeywords={trackedKeywords}
+            trackedAhrefsPositions={trackedAhrefsPositions}
             relevancePersistKey={relevancePersistKey}
           />
         </CardContent>
@@ -884,18 +888,20 @@ function GscQueriesTable({
   initialLangFilter,
   onLangFilterChange,
   trackedKeywords = [],
+  trackedAhrefsPositions,
   relevancePersistKey,
 }: {
   data: GscKeywordData[];
   initialLangFilter?: LangFilter;
   onLangFilterChange?: (lang: LangFilter) => void;
   trackedKeywords?: string[];
+  trackedAhrefsPositions?: Record<string, number>;
   relevancePersistKey?: string;
 }) {
   const { forceIrrelevant } = useSeoKeywordRelevance(relevancePersistKey);
   const rankOpts = useMemo(
-    () => ({ tracked: trackedKeywords, forceIrrelevant }),
-    [trackedKeywords, forceIrrelevant],
+    () => ({ tracked: trackedKeywords, forceIrrelevant, ahrefsPositions: trackedAhrefsPositions }),
+    [trackedKeywords, forceIrrelevant, trackedAhrefsPositions],
   );
   const [sortBy, setSortBy] = useState<keyof GscKeywordData>("position");
   const [sortOrder, setSortOrder] = useState<"asc" | "desc">("asc");
@@ -942,8 +948,8 @@ function GscQueriesTable({
     }
     return filtered.slice().sort((a, b) => {
       if (sortBy === "position") {
-        const aShown = trackedQueryPosition(a.keyword, a.position, rankOpts);
-        const bShown = trackedQueryPosition(b.keyword, b.position, rankOpts);
+        const aShown = trackedPhraseRank(a.keyword, a.position, rankOpts)?.position ?? null;
+        const bShown = trackedPhraseRank(b.keyword, b.position, rankOpts)?.position ?? null;
         if (aShown == null && bShown == null) return 0;
         if (aShown == null) return 1;
         if (bShown == null) return -1;
@@ -1064,7 +1070,7 @@ function GscQueriesTable({
                 </td>
                 <td className="text-center py-1.5 px-3">
                   {(() => {
-                    const shown = trackedQueryPosition(row.keyword, row.position, rankOpts);
+                    const shown = trackedPhraseRank(row.keyword, row.position, rankOpts)?.position ?? null;
                     if (shown == null) {
                       return <span className="text-xs text-muted-foreground" title="לא בטופ 20">—</span>;
                     }
