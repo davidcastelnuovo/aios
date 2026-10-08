@@ -62,7 +62,7 @@ TIMESTAMP=$(date -u +"%Y-%m-%d %H:%M:%S UTC")
   fi
 } > body.md
 
-EXISTING=$(gh api "repos/$REPO/issues/$PR/comments" --jq ".[] | select(.body | contains(\"$MARKER\")) | .id" | head -n1)
+EXISTING=$(gh api "repos/$REPO/issues/$PR/comments" --paginate --jq ".[] | select(.body | contains(\"$MARKER\")) | .id" | head -n1)
 
 if [[ -n "$EXISTING" ]]; then
   gh api -X PATCH "repos/$REPO/issues/comments/$EXISTING" -F body=@body.md

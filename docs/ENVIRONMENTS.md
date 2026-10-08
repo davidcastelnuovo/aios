@@ -172,7 +172,7 @@ Workflow files define automation triggers; this document defines the environment
 
 Migrations in `supabase/migrations/**` are applied with `supabase db push`; the legacy `supabase/ops/*.sql` workflows (`apply-sql-migration*.yml`) remain only until the migration history is reconciled.
 
-- **PR into `develop` (or a hotfix into `main`) that changes `supabase/migrations/**` or `supabase/functions/**`:** must hold the `staging` label (`Deploy Staging` → `Require staging label` fails otherwise). Only one open PR can hold the label (`staging-lock.yml`). The label deploys the PR's migrations and edge functions to Staging and checks `src/integrations/supabase/types.ts` against the staging schema (check-only — regenerate with `scripts/gen-types.sh` and commit).
+- **PR into `develop` (or a hotfix into `main`) that changes `supabase/migrations/**`, `supabase/functions/**`, `supabase/config.toml`, `scripts/*edge*` or `scripts/staging-only-functions.json`:** must hold the `staging` label (`Deploy Staging` → `Require staging label` fails otherwise). Only one open PR can hold the label (`staging-lock.yml`). The label deploys the PR's migrations and edge functions to Staging and checks `src/integrations/supabase/types.ts` against the staging schema (check-only — regenerate with `scripts/gen-types.sh` and commit).
 - **`develop` → `main` release PRs** are exempt: Staging already runs `develop`.
 - **Push to `develop`:** `deploy-staging-develop.yml` re-applies migrations (idempotent) and redeploys functions.
 - **Push to `main`:** `deploy-prod.yml` pushes migrations to Production, then deploys functions. The `production` GitHub environment's required reviewer is the `מאשר לפרודקשן` gate.
