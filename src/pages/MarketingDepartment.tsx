@@ -17,6 +17,8 @@ import {
   Megaphone,
   BarChart3,
   Sparkles,
+  Share2,
+  Globe,
 } from "lucide-react";
 
 const CopyDepartment = lazy(() =>
@@ -28,8 +30,14 @@ const CreativeDepartment = lazy(() =>
 const SeoGeoDepartment = lazy(() =>
   import("@/components/marketing/departments/SeoGeoDepartment").then((module) => ({ default: module.SeoGeoDepartment })),
 );
+const SocialDepartment = lazy(() =>
+  import("@/components/marketing/departments/SocialDepartment").then((module) => ({ default: module.SocialDepartment })),
+);
+const WebDesignDepartment = lazy(() =>
+  import("@/components/marketing/departments/WebDesignDepartment").then((module) => ({ default: module.WebDesignDepartment })),
+);
 
-type DepartmentId = "copy" | "creative" | "seo" | "campaigns" | "analytics";
+type DepartmentId = "copy" | "creative" | "web" | "seo" | "social" | "campaigns" | "analytics";
 
 const DEPARTMENTS: Array<{
   id: DepartmentId;
@@ -65,6 +73,24 @@ const DEPARTMENTS: Array<{
     description: "מחקר ביטויים, תוכנית תוכן, מאמרים ונראות במנועי AI",
     icon: Search,
     gradient: "from-emerald-500 to-teal-700",
+    status: "active",
+  },
+  {
+    id: "social",
+    label: "מחלק סושיאל",
+    tab: "סושיאל",
+    description: "גאנט תוכן, תזמון ופרסום אורגני לרשתות",
+    icon: Share2,
+    gradient: "from-violet-500 to-purple-700",
+    status: "active",
+  },
+  {
+    id: "web",
+    label: "מחלקת עיצוב ובניית אתרים",
+    tab: "עיצוב ואתרים",
+    description: "בריף, מפרט ומעקב פרויקטי אתר ללקוח",
+    icon: Globe,
+    gradient: "from-cyan-500 to-blue-700",
     status: "active",
   },
   {
@@ -207,6 +233,22 @@ export default function MarketingDepartment() {
       ) : department === "seo" && tenantId ? (
         <Suspense fallback={<CarmenLoadingScreen variant="card" className="flex-1" />}>
           <SeoGeoDepartment clientFilter={clientFilter} tenantId={tenantId} />
+        </Suspense>
+      ) : department === "social" && tenantId ? (
+        <Suspense fallback={<CarmenLoadingScreen variant="card" className="flex-1" />}>
+          <SocialDepartment
+            clientFilter={clientFilter}
+            tenantId={tenantId}
+            onClientChange={selectClient}
+          />
+        </Suspense>
+      ) : department === "web" && tenantId ? (
+        <Suspense fallback={<CarmenLoadingScreen variant="card" className="flex-1" />}>
+          <WebDesignDepartment
+            clientFilter={clientFilter}
+            tenantId={tenantId}
+            onClientChange={selectClient}
+          />
         </Suspense>
       ) : (
         <ComingSoon department={department} onBack={() => navigate(`/t/${tenantSlug}/marketing`)} />

@@ -1,0 +1,6 @@
+{
+  "name": "aios-landing-studio",
+  "private": true,
+  "version": "1.0.0",
+  "description": "Single Vercel project — serves all tenant landing pages from AIOS web design department"
+}

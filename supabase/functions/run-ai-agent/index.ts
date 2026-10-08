@@ -777,6 +777,9 @@ const ALL_TOOLS = [
   { name: 'create_marketing_work_item', description: 'יצירת בריף/עבודה חדשה במחלקת שיווק (copy/creative/seo). יוצר pipeline ללקוח אם חסר וממקם בשלב המתאים.', parameters: { type: 'object', properties: { client_id: { type: 'string' }, title: { type: 'string' }, brief: { type: 'string', description: 'בריף / חומר גלם' }, department: { type: 'string', enum: ['copy', 'creative', 'seo'], description: 'ברירת מחדל copy' }, content_type: { type: 'string' }, channel: { type: 'string' }, instructions: { type: 'string' } }, required: ['client_id', 'title', 'brief'] } },
   { name: 'handoff_marketing_work_item', description: 'העברת עבודת שיווק לשלב הבא בפייפליין (למשל מ-copy ל-creative, מ-creative ל-target_paid).', parameters: { type: 'object', properties: { item_id: { type: 'string' }, to_stage_type: { type: 'string', enum: ['strategy', 'copy', 'creative', 'target_paid', 'target_seo', 'target_organic', 'measurement'] } }, required: ['item_id', 'to_stage_type'] } },
   { name: 'update_marketing_work_item', description: 'עדכון כותרת/סטטוס/payload של עבודת שיווק.', parameters: { type: 'object', properties: { item_id: { type: 'string' }, title: { type: 'string' }, status: { type: 'string', enum: ['draft', 'in_progress', 'review', 'approved', 'archived'] }, payload_patch: { type: 'object', description: 'מיזוג לתוך payload הקיים' } }, required: ['item_id'] } },
+  { name: 'create_web_design_project', description: 'יצירת פרויקט במחלקת עיצוב ובניית אתרים (דף נחיתה / מיני־אתר).', parameters: { type: 'object', properties: { client_id: { type: 'string' }, title: { type: 'string' }, kind: { type: 'string', enum: ['landing', 'minisite'] }, reference_url: { type: 'string' }, copy_text: { type: 'string' }, copy_work_item_id: { type: 'string' }, intake_notes: { type: 'string' } }, required: ['client_id', 'title'] } },
+  { name: 'request_web_design_build', description: 'שליחת פרויקט אתר לסוכן Cursor לבניית דף נחיתה סטטי (מחלקת עיצוב ובניית אתרים).', parameters: { type: 'object', properties: { project_id: { type: 'string' } }, required: ['project_id'] } },
+  { name: 'publish_web_design_project', description: 'פרסום דף נחיתה שנבנה (אחרי preview) — מפעיל URL ציבורי בפרויקט landing-studio.', parameters: { type: 'object', properties: { project_id: { type: 'string' } }, required: ['project_id'] } },
   { name: 'generate_ad_image', description: 'יצירת תמונה למודעה/פוסט באמצעות AI. מחזיר URL של התמונה שנוצרה. השתמש בכלי הזה כדי ליצור ויזואל למודעות ופוסטים ואז השתמש ב-create_social_post כדי לשמור את הפוסט.', parameters: { type: 'object', properties: { prompt: { type: 'string', description: 'תיאור מפורט של התמונה הרצויה באנגלית' }, aspect_ratio: { type: 'string', enum: ['1:1', '16:9', '9:16', '4:5'], description: 'יחס גובה-רוחב' } }, required: ['prompt'] } },
   // MEMORY
   { name: 'save_memory', description: 'שמירת מידע לזיכרון מתמשך (העדפות, פרויקטים, הוראות)', parameters: { type: 'object', properties: { key: { type: 'string', description: 'מפתח זיהוי' }, content: { type: 'string', description: 'התוכן לשמירה' }, category: { type: 'string', enum: ['preferences', 'projects', 'clients', 'workflows', 'personal', 'instructions'] } }, required: ['key', 'content'] } },
@@ -3610,6 +3613,64 @@ async function executeTool(name: string, args: Record<string, any>, supabase: an
       const { data: updated, error } = await supabase.from('marketing_work_items').update(patch).eq('id', args.item_id).select('id, title, status').single()
       if (error) throw error
       return { success: true, item: updated }
+    }
+    case 'create_web_design_project': {
+      const client_id = String(args.client_id || '').trim()
+      const title = String(args.title || '').trim()
+      if (!client_id || !title) return { error: 'client_id ו-title נדרשים' }
+      await assertCallerCanAccessClient(supabase, client_id, callerScope)
+      const kind = args.kind === 'minisite' ? 'minisite' : 'landing'
+      const slugBase = title.toLowerCase().replace(/[^\w\u0590-\u05FF\s-]+/g, '').replace(/\s+/g, '-').slice(0, 40) || 'landing'
+      const slug = `${slugBase}-${Date.now().toString(36).slice(-4)}`
+      const copyText = String(args.copy_text || '').trim()
+      const copyWorkId = args.copy_work_item_id ? String(args.copy_work_item_id) : null
+      const { data: row, error } = await supabase.from('web_design_projects').insert({
+        tenant_id: tenantId,
+        client_id,
+        slug,
+        title,
+        kind,
+        status: 'draft',
+        reference_url: args.reference_url ? String(args.reference_url).trim() : null,
+        copy_snapshot: copyText || null,
+        copy_source: copyWorkId ? 'copy_department' : copyText ? 'manual' : 'manual',
+        copy_work_item_id: copyWorkId,
+        intake_notes: args.intake_notes ? String(args.intake_notes).trim() : null,
+      }).select('id, slug, title, kind, status').single()
+      if (error) throw error
+      return { success: true, project_id: row.id, slug: row.slug, title: row.title, kind: row.kind, status: row.status }
+    }
+    case 'request_web_design_build': {
+      const project_id = String(args.project_id || '').trim()
+      if (!project_id) return { error: 'project_id נדרש' }
+      const { data: project } = await supabase.from('web_design_projects').select('id').eq('id', project_id).eq('tenant_id', tenantId).maybeSingle()
+      if (!project) return { error: 'פרויקט לא נמצא' }
+      const supabaseUrl = Deno.env.get('SUPABASE_URL') || ''
+      const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || ''
+      const resp = await fetch(`${supabaseUrl}/functions/v1/cursor-build-web`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${serviceKey}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'build', tenant_id: tenantId, project_id }),
+      })
+      const data = await resp.json().catch(() => ({}))
+      if (!resp.ok || data?.error) return { error: data?.error || `build failed ${resp.status}` }
+      return { success: true, ...data }
+    }
+    case 'publish_web_design_project': {
+      const project_id = String(args.project_id || '').trim()
+      if (!project_id) return { error: 'project_id נדרש' }
+      const { data: project } = await supabase.from('web_design_projects').select('id,status').eq('id', project_id).eq('tenant_id', tenantId).maybeSingle()
+      if (!project) return { error: 'פרויקט לא נמצא' }
+      const supabaseUrl = Deno.env.get('SUPABASE_URL') || ''
+      const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || ''
+      const resp = await fetch(`${supabaseUrl}/functions/v1/cursor-build-web`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${serviceKey}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'publish', tenant_id: tenantId, project_id }),
+      })
+      const data = await resp.json().catch(() => ({}))
+      if (!resp.ok || data?.error) return { error: data?.error || `publish failed ${resp.status}` }
+      return { success: true, public_url: data?.public_url }
     }
 
     case 'generate_ad_image': {
