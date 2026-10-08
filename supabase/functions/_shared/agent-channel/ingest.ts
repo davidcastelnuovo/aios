@@ -81,10 +81,34 @@ export async function ingestChannelReply(payload: CallbackPayload): Promise<{ du
   }
 
   if (!duplicate && eventType === "message" && session) {
+    let delivered: boolean | null;
+    let error: string | null = null;
     try {
-      await deliverWhatsAppReply(session.metadata, tenantId, origin, content);
+      delivered = await deliverWhatsAppReply(session.metadata, tenantId, origin, content);
     } catch (e) {
-      console.warn("[agent-channel] whatsapp reply:", (e as Error)?.message ?? e);
+      delivered = false;
+      error = String((e as Error)?.message ?? e);
+    }
+    if (delivered === false) {
+      console.error("[agent-channel] whatsapp reply not delivered:", error ?? "send-manus-wa-message rejected");
+      await logChannelAction(sb, {
+        tenantId,
+        agentId: null,
+        action: "whatsapp_reply_failed",
+        status: "error",
+        details: { conversation_id: payload.conversation_id, session_id: session.id, origin, error },
+      });
+      await insertMessage(sb, {
+        tenant_id: tenantId,
+        conversation_id: payload.conversation_id,
+        role: "system",
+        speaker: "system",
+        channel: origin,
+        content: "⚠️ התשובה נשמרה כאן אבל לא נשלחה לוואטסאפ.",
+        event_type: "system",
+        correlation_id: session.id,
+        metadata: { whatsapp_delivery: "failed" },
+      });
     }
   }
 
