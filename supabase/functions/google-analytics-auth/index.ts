@@ -196,6 +196,9 @@ serve(async (req) => {
 
       const integrationData = {
         is_active: true,
+        // Analytics connections are for the whole tenant (SEO reports), not only
+        // the person who completed Google OAuth.
+        connection_visibility: 'org',
         api_key: tokens.access_token,
         settings: {
           ...existingSettings,
