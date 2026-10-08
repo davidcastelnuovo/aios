@@ -319,7 +319,9 @@ serve(async (req) => {
         await refreshAccessToken();
       }
 
-      // accountSummaries defaults to 50 accounts per page; agencies have more.
+      // accountSummaries returns 50 accounts when pageSize is omitted.
+      // Ask for the API maximum (200) and follow nextPageToken so a login
+      // with 100+ accounts is not cut off after the first page.
       const fetchAccounts = async () => {
         const accountSummaries: any[] = [];
         let pageToken = '';
