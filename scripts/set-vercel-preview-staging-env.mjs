@@ -26,7 +26,6 @@ const stagingAnon = required("SUPABASE_STAGING_ANON_KEY");
 const stagingService = required("SUPABASE_STAGING_SERVICE_ROLE_KEY");
 const gitBranch = process.env.PREVIEW_GIT_BRANCH || "develop";
 const teamId = process.env.VERCEL_ORG_ID || process.env.VERCEL_TEAM_ID || "";
-const stagingProjectId = process.env.SUPABASE_STAGING_PROJECT_ID || "";
 
 const desired = [
   ["VITE_SUPABASE_URL", stagingUrl],
@@ -39,9 +38,7 @@ const desired = [
   ["VITE_APP_ENV", "staging"],
   ["STAGING_SAFE_MODE", "true"],
 ];
-if (stagingProjectId) {
-  desired.push(["VITE_SUPABASE_PROJECT_ID", stagingProjectId]);
-}
+
 
 function apiUrl(path) {
   const u = new URL(`https://api.vercel.com${path}`);

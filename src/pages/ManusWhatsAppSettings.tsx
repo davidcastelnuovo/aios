@@ -23,7 +23,7 @@ import {
 import { ShareIntegrationTenantsDialog } from "@/components/forms/ShareIntegrationTenantsDialog";
 import { IntegrationVisibilitySelector } from "@/components/forms/IntegrationVisibilitySelector";
 
-const PROJECT_REF = (import.meta.env.VITE_SUPABASE_PROJECT_ID as string) || "";
+const SUPABASE_URL = (import.meta.env.VITE_SUPABASE_URL as string) || "";
 
 function genSecret() {
   const arr = new Uint8Array(24);
@@ -49,7 +49,7 @@ export default function ManusWhatsAppSettings() {
   const queryClient = useQueryClient();
   const [sharingIntegration, setSharingIntegration] = useState<Integration | null>(null);
 
-  const webhookUrl = `https://${PROJECT_REF}.supabase.co/functions/v1/manus-wa-webhook`;
+  const webhookUrl = `${SUPABASE_URL}/functions/v1/manus-wa-webhook`;
 
   const { data: integrations = [], isLoading } = useQuery({
     queryKey: ["manus-wa-integrations", tenantId, userId],

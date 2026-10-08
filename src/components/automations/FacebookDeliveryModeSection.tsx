@@ -14,7 +14,7 @@ interface Props {
   tenantId?: string;
 }
 
-const CALLBACK_URL = `https://${import.meta.env.VITE_SUPABASE_PROJECT_ID}.supabase.co/functions/v1/facebook-lead-webhook`;
+const CALLBACK_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/facebook-lead-webhook`;
 
 export function FacebookDeliveryModeSection({ integrationId, pageId, pageName }: Props) {
   const { toast } = useToast();

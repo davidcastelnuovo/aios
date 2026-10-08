@@ -37,7 +37,7 @@ export function EmailWebhookMappingPanel({
 
   const webhookUrl =
     triggerType === "inbound_webhook_task" && automationId
-      ? `https://${import.meta.env.VITE_SUPABASE_PROJECT_ID}.supabase.co/functions/v1/automation-flow-webhook?automation_id=${automationId}`
+      ? `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/automation-flow-webhook?automation_id=${automationId}`
       : null;
 
   const copy = async (text: string, label: string) => {

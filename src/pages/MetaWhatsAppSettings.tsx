@@ -99,8 +99,8 @@ type Integration = {
   } | null;
 };
 
-const PROJECT_REF = import.meta.env.VITE_SUPABASE_PROJECT_ID as string;
-const webhookUrl = `https://${PROJECT_REF}.supabase.co/functions/v1/meta-whatsapp-webhook`;
+const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL as string;
+const webhookUrl = `${SUPABASE_URL}/functions/v1/meta-whatsapp-webhook`;
 
 /** Cloud API registration is required when Meta still reports On-Premise. */
 function needsCloudRegistration(phone: {
