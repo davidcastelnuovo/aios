@@ -8,6 +8,7 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.75.0'
 import { resolveModelId } from '../_shared/models.ts'
 import { isCachedPulseRequest } from '../_shared/pulse-request.mjs'
+import { classifyDirectTool, directToolPool } from '../_shared/carmen-direct-tools.mjs'
 import { assertCallerCanAccessClient, assertCallerCanAccessEntityClient } from '../_shared/auth-helpers.ts'
 import { asUuidOrNull } from '../_shared/uuid.ts'
 import { summarizeAndStoreAgentMemory, recallAgentMemory, recallAgentMemoryFTS, saveAgentMemory } from '../_shared/agent-memory.ts'
@@ -8356,6 +8357,118 @@ ${relevantLongTermMemory.map((item: any) => `• [${item.label}] ${item.text}`).
   }
 }
 
+// ===========================
+// DIRECT TOOL MODE (carmen-tools-mcp)
+// ===========================
+// Coding agents (Claude Direct / Cursor Direct) call Carmen's tools without her LLM.
+// Same executeTool, same role scoping and per-tool approval gates; tools that would
+// act immediately but are sensitive are queued for approval instead (see
+// _shared/carmen-direct-tools.mjs). Service-role callers only.
+async function handleDirectTool(bodyJson: any): Promise<Response> {
+  const json = (body: unknown, status = 200) =>
+    new Response(JSON.stringify(body), { status, headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
+  const req = bodyJson.direct_tool || {}
+  const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY)
+  const caller = String(req.caller || 'agent').replace(/[^a-z0-9_-]/gi, '').slice(0, 40) || 'agent'
+
+  if (req.action === 'execute_approved') {
+    const { data: row } = await supabase.from('agent_approval_queue').select('*').eq('id', req.approval_id).maybeSingle()
+    if (!row || row.action_type !== 'agent_direct_tool') return json({ error: 'approval_not_found' }, 404)
+    if (row.status === 'executed' || row.status === 'rejected') return json({ error: `approval_${row.status}` }, 409)
+    const scope = await resolveDirectCaller(supabase, row.requested_by)
+    let result: any
+    let failed = false
+    try {
+      result = await executeTool(row.tool_name, row.tool_input || {}, supabase, row.tenant_id, scope.userId, scope.campaignerId, row.agent_id, scope.role, scope.managedAgencyIds, null, null, 'agent_direct', null)
+      failed = !!result?.error
+    } catch (e: any) {
+      failed = true
+      result = { error: String(e?.message ?? e) }
+    }
+    await supabase.from('agent_approval_queue').update({
+      status: failed ? 'failed' : 'executed',
+      approved_by: asUuidOrNull(req.approved_by) || row.requested_by,
+      approved_at: row.approved_at || new Date().toISOString(),
+      executed_at: new Date().toISOString(),
+      execution_result: result,
+    }).eq('id', row.id)
+    return json({ success: !failed, result }, failed ? 400 : 200)
+  }
+
+  const tenantId = String(bodyJson.tenant_id || '')
+  const userId = asUuidOrNull(bodyJson.user_id)
+  if (!tenantId || !userId) return json({ error: 'tenant_id and user_id are required' }, 400)
+  const { data: agent } = await supabase.from('ai_agents').select('id, allowed_tools, disabled_tools')
+    .eq('tenant_id', tenantId).or('name.ilike.%carmen%,name.ilike.%כרמן%').eq('active', true)
+    .order('created_at', { ascending: true }).limit(1).maybeSingle()
+  if (!agent) return json({ error: 'No active Carmen agent for tenant' }, 404)
+  const scope = await resolveDirectCaller(supabase, userId)
+  const pool = directToolPool(ALL_TOOLS as any[], {
+    allowedTools: agent.allowed_tools || [],
+    disabledTools: agent.disabled_tools || [],
+    isManager: !!scope.role && ['owner', 'agency_owner', 'agency_manager', 'super_admin'].includes(scope.role),
+  })
+
+  if (req.action === 'list') {
+    return json({
+      tools: pool.map((t: any) => ({ ...t, requires_approval: classifyDirectTool(t.name) === 'approval' })),
+    })
+  }
+  if (req.action !== 'call') return json({ error: 'unknown direct_tool action' }, 400)
+
+  const name = String(req.name || '')
+  const args = (req.args && typeof req.args === 'object') ? req.args : {}
+  if (!pool.some((t: any) => t.name === name)) return json({ error: `tool_not_available: ${name}` }, 403)
+
+  if (classifyDirectTool(name) === 'approval') {
+    const { data: aq, error: aqErr } = await supabase.from('agent_approval_queue').insert({
+      tenant_id: tenantId,
+      agent_id: agent.id,
+      requested_by: userId,
+      action_type: 'agent_direct_tool',
+      title: `${caller} → ${name}`,
+      description: `${caller} ביקש להפעיל את ${name} ישירות — דורש אישור`,
+      tool_name: name,
+      tool_input: args,
+      context: { caller, caller_role: scope.role },
+      status: 'pending',
+      expires_at: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
+    }).select('id').single()
+    if (aqErr) return json({ error: aqErr.message }, 500)
+    return json({
+      result: {
+        pending_approval: true,
+        approval_id: aq.id,
+        message: 'Queued for David\'s approval (AIOS approvals). Do not retry or work around it; tell David what you queued.',
+      },
+    })
+  }
+
+  try {
+    const result = await executeTool(name, args, supabase, tenantId, userId, scope.campaignerId, agent.id, scope.role, scope.managedAgencyIds, null, null, 'agent_direct', null)
+    return json({ result })
+  } catch (e: any) {
+    return json({ result: { error: String(e?.message ?? e) } })
+  }
+}
+
+async function resolveDirectCaller(supabase: any, userId: string | null) {
+  if (!userId) return { userId: null, role: null, campaignerId: null, managedAgencyIds: [] as string[] }
+  const [{ data: roles }, { data: prof }] = await Promise.all([
+    supabase.from('user_roles').select('role').eq('user_id', userId),
+    supabase.from('profiles').select('campaigner_id').eq('id', userId).maybeSingle(),
+  ])
+  const roleList = (roles || []).map((r: any) => r.role)
+  const order = ['super_admin', 'owner', 'agency_owner', 'agency_manager', 'team_manager', 'campaigner', 'sales_person', 'seo', 'viewer']
+  const role = order.find((r) => roleList.includes(r)) || null
+  let managedAgencyIds: string[] = []
+  if (role === 'team_manager' || role === 'agency_manager') {
+    const { data: mng } = await supabase.from('user_managed_agencies').select('agency_id').eq('user_id', userId)
+    managedAgencyIds = (mng || []).map((m: any) => m.agency_id)
+  }
+  return { userId, role, campaignerId: (prof?.campaigner_id as string | null) || null, managedAgencyIds }
+}
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response(null, { headers: corsHeaders })
 
@@ -8371,6 +8484,15 @@ Deno.serve(async (req) => {
   // Never trust a browser-supplied user id. Bind interactive requests to the
   // verified JWT identity; service-to-service calls keep their explicit user.
   if (auth.kind === 'user') bodyJson.user_id = auth.userId
+
+  if (bodyJson.direct_tool) {
+    if (auth.kind !== 'service') {
+      return new Response(JSON.stringify({ error: 'direct_tool is service-only' }), {
+        status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      })
+    }
+    return await handleDirectTool(bodyJson)
+  }
 
   const wantStream = bodyJson.stream === true
   const surface: Surface = bodyJson.surface === 'aios' ? 'aios'
