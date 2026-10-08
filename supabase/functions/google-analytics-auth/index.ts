@@ -319,11 +319,28 @@ serve(async (req) => {
         await refreshAccessToken();
       }
 
-      // Fetch GA4 properties using Admin API
-      const fetchAccounts = () =>
-        fetch('https://analyticsadmin.googleapis.com/v1beta/accountSummaries', {
-          headers: { Authorization: `Bearer ${accessToken}` },
+      // accountSummaries defaults to 50 accounts per page; agencies have more.
+      const fetchAccounts = async () => {
+        const accountSummaries: any[] = [];
+        let pageToken = '';
+        for (let page = 0; page < 20; page++) {
+          const url = new URL('https://analyticsadmin.googleapis.com/v1beta/accountSummaries');
+          url.searchParams.set('pageSize', '200');
+          if (pageToken) url.searchParams.set('pageToken', pageToken);
+          const response = await fetch(url.toString(), {
+            headers: { Authorization: `Bearer ${accessToken}` },
+          });
+          const data: any = await response.clone().json().catch(() => ({}));
+          if (!response.ok || data?.error) return response;
+          accountSummaries.push(...(data.accountSummaries || []));
+          pageToken = data.nextPageToken || '';
+          if (!pageToken) break;
+        }
+        return new Response(JSON.stringify({ accountSummaries }), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
         });
+      };
 
       let accountsResponse = await fetchAccounts();
       let accountsData: any = await accountsResponse.json().catch(() => ({}));
