@@ -21,6 +21,10 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     environment: ${{ inputs.target }}
+    # Serialize `db push` per target across every caller (PR runs, develop pushes).
+    concurrency:
+      group: db-migrate-${{ inputs.target }}
+      cancel-in-progress: false
     outputs:
       migrate_status: ${{ steps.push.outcome }}
 
@@ -44,8 +48,22 @@ jobs:
         id: push
         env:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.BASE_ACCESS_TOKEN }}
-          PROJECT_REF: ${{ inputs.target == 'production' && vars.PROD_PROJECT_REF || vars.STAGING_PROJECT_REF }}
-          DB_PASSWORD: ${{ inputs.target == 'production' && secrets.PROD_DB_PASSWORD || secrets.STAGING_DB_PASSWORD }}
+          TARGET: ${{ inputs.target }}
+          PROD_REF: ${{ vars.PROD_PROJECT_REF }}
+          STAGING_REF: ${{ vars.STAGING_PROJECT_REF }}
+          PROD_PASSWORD: ${{ secrets.PROD_DB_PASSWORD }}
+          STAGING_PASSWORD: ${{ secrets.STAGING_DB_PASSWORD }}
         run: |
+          set -euo pipefail
+          # Pick the target's own settings; never fall back to the other project.
+          if [ "$TARGET" = production ]; then
+            PROJECT_REF="$PROD_REF"; DB_PASSWORD="$PROD_PASSWORD"
+          else
+            PROJECT_REF="$STAGING_REF"; DB_PASSWORD="$STAGING_PASSWORD"
+          fi
+          if [ -z "$PROJECT_REF" ] || [ -z "$DB_PASSWORD" ]; then
+            echo "::error::Missing project ref or database password for $TARGET."
+            exit 1
+          fi
           supabase link --project-ref "$PROJECT_REF" --password "$DB_PASSWORD"
           supabase db push --password "$DB_PASSWORD"

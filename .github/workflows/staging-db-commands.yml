@@ -43,7 +43,7 @@ jobs:
           LEVEL=$(gh api "repos/$REPO/collaborators/$ACTOR/permission" --jq .permission)
           echo "@$ACTOR has permission: $LEVEL"
           case "$LEVEL" in
-            admin|write) ;;
+            admin|maintain|write) ;;
             *)
               echo "::error::@$ACTOR does not have write access to $REPO; refusing to run ${{ steps.resolve.outputs.command }}."
               exit 1

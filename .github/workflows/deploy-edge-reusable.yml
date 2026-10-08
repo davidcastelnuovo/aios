@@ -99,14 +99,12 @@ jobs:
             if git merge-base --is-ancestor "$RECOVERED" HEAD; then
               echo "DEPLOY_BEFORE=$RECOVERED" >> "$GITHUB_ENV"
               echo "Resuming from deployed sources; containment verification remains required."
-            elif [ "$DEPLOY_MODE" = pr ]; then
-              # Staging runs another (e.g. closed, unmerged) PR's functions; an
-              # empty base makes the planner redeploy every function.
-              echo "DEPLOY_BEFORE=" >> "$GITHUB_ENV"
-              echo "Staging runs sources outside this PR's history; redeploying all functions."
             else
-              echo "::error::Recorded Staging revision is not an ancestor of this revision."
-              exit 1
+              # The recorded source is outside this revision's history (a closed or
+              # squash/rebase-merged PR, or another PR's functions). An empty base makes
+              # the planner redeploy every function; containment is verified afterwards.
+              echo "DEPLOY_BEFORE=" >> "$GITHUB_ENV"
+              echo "Recorded revision is outside this revision's history; redeploying all functions."
             fi
           fi
       - name: Deploy complete source bundles

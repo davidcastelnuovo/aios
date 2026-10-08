@@ -122,7 +122,7 @@ jobs:
 
   comment:
     name: Update PR comment
-    needs: [resolve, migrate, types, functions]
+    needs: [resolve, gate, check-lock, migrate, types, functions]
     if: >
       always() &&
       needs.resolve.result == 'success' &&
@@ -141,4 +141,9 @@ jobs:
           MIGRATE_RESULT: ${{ needs.migrate.outputs.migrate_status || needs.migrate.result }}
           FUNCTIONS_RESULT: ${{ needs.functions.result }}
           TYPES_RESULT: ${{ needs.types.result }}
+          MIGRATIONS_CHANGED: ${{ needs.resolve.outputs.migrations }}
+          FUNCTIONS_CHANGED: ${{ needs.resolve.outputs.functions }}
+          GATE_RESULT: ${{ needs.gate.result }}
+          LOCK_RESULT: ${{ needs.check-lock.result }}
+          LOCK_IS_HOLDER: ${{ needs.check-lock.outputs.is_holder }}
         run: .github/scripts/post-deploy-comment.sh

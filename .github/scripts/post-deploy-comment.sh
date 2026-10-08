@@ -9,16 +9,33 @@ set -euo pipefail
 : "${MIGRATE_RESULT:?required}"
 : "${FUNCTIONS_RESULT:?required}"
 : "${TYPES_RESULT:?required}"
+MIGRATIONS_CHANGED="${MIGRATIONS_CHANGED:-false}"
+FUNCTIONS_CHANGED="${FUNCTIONS_CHANGED:-false}"
+GATE_RESULT="${GATE_RESULT:-}"
+LOCK_RESULT="${LOCK_RESULT:-}"
+LOCK_IS_HOLDER="${LOCK_IS_HOLDER:-}"
 
 MARKER="<!-- deploy-status -->"
 
+# line <name> <result> <changed: true|false>
+# `skipped` has three causes: nothing changed, the label/lock gate blocked the
+# deploy, or an upstream job did not succeed.
 line() {
-  local name="$1" result="$2"
+  local name="$1" result="$2" changed="$3"
   case "$result" in
     success)    echo "- ✅ **$name** succeeded" ;;
     failure)    echo "- ❌ **$name** failed" ;;
     cancelled)  echo "- ⚪ **$name** cancelled" ;;
-    skipped|"") echo "- ⏭️ **$name** skipped (no changes)" ;;
+    skipped|"")
+      if [[ "$changed" != "true" ]]; then
+        echo "- ⏭️ **$name** skipped (no changes)"
+      elif [[ "$GATE_RESULT" == "failure" ]]; then
+        echo "- ⛔ **$name** not run (this PR needs the \`staging\` label)"
+      elif [[ "$LOCK_RESULT" == "failure" || "$LOCK_IS_HOLDER" == "false" ]]; then
+        echo "- ⛔ **$name** not run (another PR holds the staging lock)"
+      else
+        echo "- ⏭️ **$name** not run (an upstream job did not succeed)"
+      fi ;;
     *)          echo "- ❔ **$name**: $result" ;;
   esac
 }
@@ -30,9 +47,9 @@ TIMESTAMP=$(date -u +"%Y-%m-%d %H:%M:%S UTC")
   echo "**Deploy → \`$TARGET\`** — [workflow run]($RUN_URL)"
   echo "_Last updated: ${TIMESTAMP}_"
   echo ""
-  line "DB migrations" "$MIGRATE_RESULT"
-  line "Edge functions" "$FUNCTIONS_RESULT"
-  line "Types in sync with schema" "$TYPES_RESULT"
+  line "DB migrations" "$MIGRATE_RESULT" "$MIGRATIONS_CHANGED"
+  line "Edge functions" "$FUNCTIONS_RESULT" "$FUNCTIONS_CHANGED"
+  line "Types in sync with schema" "$TYPES_RESULT" "$MIGRATIONS_CHANGED"
 
   if [[ "$MIGRATE_RESULT" == "failure" && "$TARGET" == "staging" ]]; then
     echo ""
