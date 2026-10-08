@@ -51,6 +51,11 @@ We use the org's own connected models. Standardized helper: `supabase/functions/
 - In a private Manus chat, a message from the tenant owner's own phone (profile or linked campaigner phone, role `owner`/`super_admin`) that starts with **"קלוד"/"Claude"** or **"קרסר"/"Cursor"** skips Carmen and goes straight to Claude Direct / Cursor Direct (`_shared/agent-channel/whatsapp-direct.ts`). Groups and other senders are unchanged.
 - Each provider has one sticky AIOS conversation (`WhatsApp · <route label>`). The agent's callback reply is stored there and sent back to the same WhatsApp chat (`session.metadata.reply_whatsapp`).
 
+## Carmen's tools for coding agents (`carmen-tools-mcp`)
+- Claude Direct / Cursor Direct operate AIOS through Carmen's own tools, without her LLM: `carmen-tools-mcp` (`…/functions/v1/carmen-tools-mcp/mcp?agent=claude|cursor`, bearer or `?key=` = `CARMEN_TOOLS_MCP_BEARER`) forwards to `run-ai-agent` `direct_tool` mode (service-role only), which runs `executeTool` as `CARMEN_MCP_USER_ID` with the same role scoping.
+- Policy lives in `_shared/carmen-direct-tools.mjs`: agent spawning, dev escalation and self-approval tools are hidden; external sends, deletions, access and money changes are queued in `agent_approval_queue` (`action_type='agent_direct_tool'`) and run only after David approves (`resume-agent-run` / `carmen-approval-execute` → `execute_approved`). Tools that already queue themselves keep their own gate.
+- Prefer these tools over raw SQL for business actions (tasks, automations, leads, clients); raw SQL bypasses scoping and approvals.
+
 ## Carmen → Claude bridge (legacy / alternate)
 - Carmen talks to Claude over MCP via the `claude-mcp` edge function (an MCP server). It exposes `request_dev_task` + `ask_claude`, and each call fires a real Claude Code on the web session via the Routines `/fire` API. See `supabase/functions/claude-mcp/README.md`.
 - When Carmen can't do something herself, she can escalate to Claude (always-on instruction in `ai_memory` + the `claude_escalation` skin) or to Cursor (`cursor_escalation`). The request also asks the coding agent to **teach Carmen**: write a reusable skin into `ai_skills` (`scope='tenant'`, `created_by_agent=true`) so she's independent next time.
