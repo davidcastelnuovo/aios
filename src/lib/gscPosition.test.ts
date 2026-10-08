@@ -6,7 +6,7 @@ import {
   keywordTop20Rank,
   top20DisplayPosition,
 } from "../../supabase/functions/_shared/gscPosition.ts";
-import { visibleGscPosition } from "./gscPosition.ts";
+import { keywordDisplayPosition, trackedQueryPosition, visibleGscPosition } from "./gscPosition.ts";
 
 test("top20DisplayPosition hides ranks outside the top 20 and blank zeros", () => {
   assert.equal(top20DisplayPosition(8.24), 8.2);
@@ -79,5 +79,34 @@ test("visibleGscPosition blanks a rank the Top 20 list would hide", () => {
   assert.equal(
     visibleGscPosition("עורך דין נופר זומר", 9, { tracked: ["נופר זומר"] }),
     9,
+  );
+});
+
+test("tracked phrases keep a position outside the top 20 when they have Search Console data", () => {
+  assert.equal(
+    trackedQueryPosition("נופר זומר", 33.2, { tracked: ["נופר זומר"] }),
+    33.2,
+  );
+  assert.equal(
+    trackedQueryPosition("ביטוי אחר", 33, { tracked: ["נופר זומר"] }),
+    null,
+  );
+  assert.equal(
+    trackedQueryPosition("נופר זומר", 33, {
+      tracked: ["נופר זומר"],
+      forceIrrelevant: ["נופר זומר"],
+    }),
+    null,
+  );
+});
+
+test("keyword rows with clicks fall back to the Search Console rank", () => {
+  assert.deepEqual(
+    keywordDisplayPosition({ position: null, gsc_position: 27.4 }),
+    { position: 27.4, source: "gsc" },
+  );
+  assert.deepEqual(
+    keywordDisplayPosition({ position: 6, gsc_position: 27 }),
+    { position: 6, source: "ahrefs" },
   );
 });

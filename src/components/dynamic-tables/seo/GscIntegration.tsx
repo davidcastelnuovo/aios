@@ -14,7 +14,7 @@ import { Link2, RefreshCw, Search, MousePointerClick, Eye, Target, ChevronsUpDow
 import { cn } from "@/lib/utils";
 import { normalizeSeoDomain, seoDomainsMatch } from "@/lib/seoDomain";
 import { formatGscCtrPercent, gscCtrAsPercent } from "@/lib/gscFormat";
-import { visibleGscPosition } from "@/lib/gscPosition";
+import { trackedQueryPosition } from "@/lib/gscPosition";
 import { useSeoKeywordRelevance } from "@/hooks/useSeoKeywordRelevance";
 
 export type GscDateRange = '28d' | '3m' | '12m';
@@ -942,8 +942,8 @@ function GscQueriesTable({
     }
     return filtered.slice().sort((a, b) => {
       if (sortBy === "position") {
-        const aShown = visibleGscPosition(a.keyword, a.position, rankOpts);
-        const bShown = visibleGscPosition(b.keyword, b.position, rankOpts);
+        const aShown = trackedQueryPosition(a.keyword, a.position, rankOpts);
+        const bShown = trackedQueryPosition(b.keyword, b.position, rankOpts);
         if (aShown == null && bShown == null) return 0;
         if (aShown == null) return 1;
         if (bShown == null) return -1;
@@ -1064,7 +1064,7 @@ function GscQueriesTable({
                 </td>
                 <td className="text-center py-1.5 px-3">
                   {(() => {
-                    const shown = visibleGscPosition(row.keyword, row.position, rankOpts);
+                    const shown = trackedQueryPosition(row.keyword, row.position, rankOpts);
                     if (shown == null) {
                       return <span className="text-xs text-muted-foreground" title="לא בטופ 20">—</span>;
                     }
