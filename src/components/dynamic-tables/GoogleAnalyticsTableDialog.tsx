@@ -12,6 +12,7 @@ import { useTenant } from "@/contexts/TenantContext";
 import { useTableDialogAgencies } from "@/hooks/useAgencyClients";
 import { useUserIntegrations } from "@/hooks/useUserIntegrations";
 import { Loader2, BarChart3, ExternalLink, Search, AlertCircle, Check, ChevronsUpDown } from "lucide-react";
+import { GaDomainSearch } from "@/components/dynamic-tables/GaDomainSearch";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { cn } from "@/lib/utils";
 
@@ -42,6 +43,7 @@ export function GoogleAnalyticsTableDialog({ open, onOpenChange, assignedClientI
   const [clientSearch, setClientSearch] = useState("");
   const [clientPopoverOpen, setClientPopoverOpen] = useState(false);
   const [selectedIntegrationId, setSelectedIntegrationId] = useState("");
+  const [pickedProperty, setPickedProperty] = useState<GAProperty | null>(null);
 
   // Fetch user's own + shared GA integrations
   const { data: allIntegrations = [], isLoading: integrationLoading } = useUserIntegrations(
@@ -150,7 +152,8 @@ export function GoogleAnalyticsTableDialog({ open, onOpenChange, assignedClientI
     try {
       const slug = tableName.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '');
       
-      const selectedProp = properties?.find(p => p.id === selectedProperty);
+      const selectedProp = properties?.find(p => p.id === selectedProperty)
+        || (pickedProperty?.id === selectedProperty ? pickedProperty : undefined);
       const integrationSettings: Record<string, unknown> = {
         integrationId: integration?.id,
         propertyId: selectedProperty,
@@ -196,6 +199,7 @@ export function GoogleAnalyticsTableDialog({ open, onOpenChange, assignedClientI
     setSelectedAgency("");
     setSelectedClient("");
     setPropertySearch("");
+    setPickedProperty(null);
     setClientSearch("");
     setClientPopoverOpen(false);
   };
@@ -298,6 +302,24 @@ export function GoogleAnalyticsTableDialog({ open, onOpenChange, assignedClientI
                     placeholder="לדוגמה: נתוני GA - אתר ראשי"
                   />
                 </div>
+
+                <GaDomainSearch
+                  connections={allIntegrations.map((integ) => {
+                    const s = integ.settings as Record<string, unknown> | null;
+                    return { id: integ.id, label: (s?.google_email as string) || "חשבון לא ידוע" };
+                  })}
+                  preferredIntegrationId={integration?.id}
+                  onFound={(found) => {
+                    setSelectedIntegrationId(found.integrationId);
+                    setSelectedProperty(found.propertyId);
+                    setPickedProperty({
+                      id: found.propertyId,
+                      name: found.propertyName,
+                      accountName: found.accountName,
+                    });
+                    setPropertySearch("");
+                  }}
+                />
 
                 <div className="space-y-2">
                   <Label>נכס (Property) *</Label>

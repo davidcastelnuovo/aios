@@ -12,6 +12,7 @@ import { useAgencyClients, useTableDialogAgencies } from "@/hooks/useAgencyClien
 import { getIntegrationIcon } from "@/lib/integrationIcons";
 import { toast } from "sonner";
 import { Loader2, AlertCircle, Search } from "lucide-react";
+import { GaDomainSearch } from "@/components/dynamic-tables/GaDomainSearch";
 import { invalidateClientCrmTablesQueries } from "@/lib/reportQueryCache";
 
 interface EditTableDialogProps {
@@ -59,6 +60,7 @@ export function EditTableDialog({ open, onOpenChange, table, tenantId, onSaved }
   const [agencyId, setAgencyId] = useState("");
   const [clientId, setClientId] = useState("");
   const [propertySearch, setPropertySearch] = useState("");
+  const [pickedProperty, setPickedProperty] = useState<GAProperty | null>(null);
   const [isSaving, setIsSaving] = useState(false);
 
   useEffect(() => {
@@ -75,6 +77,7 @@ export function EditTableDialog({ open, onOpenChange, table, tenantId, onSaved }
     setAgencyId(table.agency_id || "");
     setClientId(table.client_id || "");
     setPropertySearch("");
+    setPickedProperty(null);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, table?.id]);
 
@@ -124,7 +127,8 @@ export function EditTableDialog({ open, onOpenChange, table, tenantId, onSaved }
       if (usesIntegrationId && integrationId) integrationSettings.integrationId = integrationId;
       if (type === "google_analytics" && propertyId) {
         integrationSettings.propertyId = propertyId;
-        const prop = gaProperties.find((p) => p.id === propertyId);
+        const prop = gaProperties.find((p) => p.id === propertyId)
+          || (pickedProperty?.id === propertyId ? pickedProperty : undefined);
         if (prop) {
           integrationSettings.propertyName = prop.name;
           integrationSettings.accountName = prop.accountName;
@@ -228,6 +232,26 @@ export function EditTableDialog({ open, onOpenChange, table, tenantId, onSaved }
                 </p>
               )}
             </div>
+          )}
+
+          {type === "google_analytics" && connections.length > 0 && (
+            <GaDomainSearch
+              connections={connections.map((integ: any) => {
+                const s = integ.settings as Record<string, unknown> | null;
+                return { id: integ.id, label: (s?.google_email as string) || "חשבון לא ידוע" };
+              })}
+              preferredIntegrationId={integrationId}
+              onFound={(found) => {
+                setIntegrationId(found.integrationId);
+                setPropertyId(found.propertyId);
+                setPickedProperty({
+                  id: found.propertyId,
+                  name: found.propertyName,
+                  accountName: found.accountName,
+                });
+                setPropertySearch("");
+              }}
+            />
           )}
 
           {type === "google_analytics" && integrationId && (

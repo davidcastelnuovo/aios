@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { gaHostsMatch, listedPropertyMatchesDomain, normalizeGaHost } from "../_shared/gaDomain.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -265,7 +266,8 @@ serve(async (req) => {
     }
 
     try {
-      const { integrationId } = await req.json();
+      const { integrationId, matchDomain } = await req.json();
+      const domainQuery = typeof matchDomain === "string" ? matchDomain.trim() : "";
       
       const supabase = createClient(
         Deno.env.get('SUPABASE_URL') ?? '',
@@ -439,6 +441,33 @@ serve(async (req) => {
               });
             }
           }
+        }
+      }
+
+      // A domain that is not the property title lives on the web stream URL.
+      // Only scan streams when the caller is resolving a domain and the
+      // account/property names did not already match.
+      if (domainQuery && !properties.some((property) => listedPropertyMatchesDomain(property, domainQuery))) {
+        const wantedHost = normalizeGaHost(domainQuery);
+        let exact = false;
+        for (let index = 0; index < properties.length && !exact; index += 8) {
+          const batch = properties.slice(index, index + 8);
+          await Promise.all(batch.map(async (property) => {
+            try {
+              const response = await fetch(
+                `https://analyticsadmin.googleapis.com/v1beta/${property.id}/dataStreams?pageSize=20`,
+                { headers: { Authorization: `Bearer ${accessToken}` } },
+              );
+              if (!response.ok) return;
+              const data = await response.json().catch(() => ({}));
+              for (const stream of data.dataStreams || []) {
+                const uri = stream?.webStreamData?.defaultUri;
+                if (!uri || !gaHostsMatch(uri, domainQuery)) continue;
+                property.websiteUrl = uri;
+                if (normalizeGaHost(uri) === wantedHost) exact = true;
+              }
+            } catch (_e) { /* this property has no readable stream */ }
+          }));
         }
       }
 
