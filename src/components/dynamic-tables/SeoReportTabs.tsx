@@ -23,7 +23,8 @@ import { useAhrefsReports } from "@/hooks/useAhrefsReports";
 import { filterValidSeoReports } from "./seo/reportValidity";
 import { useSeoScope } from "@/hooks/useSeoScope";
 import { useResolvedGscIntegration } from "@/hooks/useResolvedGscIntegration";
-import { filterSeoReportsByDomain, resolveLinkedCrmTableId, resolveSeoLinkedGscSiteUrl } from "@/lib/seoDomain";
+import { filterSeoReportsByDomain, resolveLinkedCrmTableId, resolveSeoLinkedGscSiteUrl, sortSeoReportsByRecency } from "@/lib/seoDomain";
+import { ahrefsPositionsFromReports } from "@/lib/gscPosition";
 
 interface SeoReportTabsProps {
   /**
@@ -95,6 +96,11 @@ export function SeoReportTabs({ tenantId, clientId }: SeoReportTabsProps) {
       }
     }
     return [] as string[];
+  }, [ownDomainReports]);
+
+  const trackedAhrefsPositions = useMemo(() => {
+    const map = ahrefsPositionsFromReports(sortSeoReportsByRecency(ownDomainReports));
+    return Object.fromEntries(map);
   }, [ownDomainReports]);
 
   // Fetch the client's own website as a fallback for GSC domain auto-match
@@ -412,6 +418,7 @@ export function SeoReportTabs({ tenantId, clientId }: SeoReportTabsProps) {
                   initialLangFilter={savedGscLangFilter}
                   onLangFilterChange={(v) => saveLinkMutation.mutate({ key: 'linkedGscLangFilter', value: v })}
                   seedTrackedKeywords={ahrefsTrackedKeywords}
+                  trackedAhrefsPositions={trackedAhrefsPositions}
                   relevancePersistKey={clientId}
                   onTop20Queries={handleTop20Queries}
                 />
@@ -440,6 +447,7 @@ export function SeoReportTabs({ tenantId, clientId }: SeoReportTabsProps) {
                   initialLangFilter={savedGscLangFilter}
                   resolvedFallback={resolvedGsc}
                   trackedKeywords={ahrefsTrackedKeywords}
+                  trackedAhrefsPositions={trackedAhrefsPositions}
                   relevancePersistKey={clientId}
                   onLangFilterChange={(v) => saveLinkMutation.mutate({ key: 'linkedGscLangFilter', value: v })}
                   onSiteSelected={(siteUrl) => {

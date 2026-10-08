@@ -16,7 +16,7 @@ import { SeoSnapshotCards } from "./seo/SeoSnapshotCards";
 // MaskyooSiblingCard moved to SeoReportTabs as a separate tab
 import { SeoKeywordsTable } from "./seo/SeoKeywordsTable";
 import { GscIntegration, type GscKeywordData, type GscMultiPeriodData } from "./seo/GscIntegration";
-import { finiteRank } from "@/lib/gscPosition";
+import { ahrefsPositionsFromReports, displayRank, finiteRank, normalizeGscQuery } from "@/lib/gscPosition";
 import { useAhrefsEnrichment, type AhrefsKeyword } from "@/hooks/useAhrefsEnrichment";
 import { useAhrefsReports } from "@/hooks/useAhrefsReports";
 import { useResolvedGscIntegration } from "@/hooks/useResolvedGscIntegration";
@@ -471,7 +471,20 @@ export function SeoDashboardView({ tenantId, clientId, accessibleTenantIds, gaRe
     }
     return enriched;
   }, [rawOrganic, rawTracked, prevMonthMap, gscMap, gscPrevMonthMap, gscThreeMonthMap, gscYearlyMap, effectiveComparison]);
-  const trackedKeywords = useMemo(() => rawTracked.map(kw => enrichKeyword(kw, effectiveComparison)), [rawTracked, prevMonthMap, gscMap, gscPrevMonthMap, gscThreeMonthMap, gscYearlyMap, effectiveComparison]);
+  // Latest sync can store the tracked list with no ranks. Earlier reports in the
+  // same series still have the Ahrefs position, including on Staging where the
+  // Search Console integration is not connected.
+  const trackedAhrefsPositions = useMemo(
+    () => ahrefsPositionsFromReports(sortSeoReportsByRecency(validReports)),
+    [validReports],
+  );
+  const trackedKeywords = useMemo(() => rawTracked.map(kw => {
+    const enriched = enrichKeyword(kw, effectiveComparison);
+    if (displayRank(enriched.position) != null) return enriched;
+    const stored = trackedAhrefsPositions.get(normalizeGscQuery(enriched.keyword));
+    if (stored == null) return enriched;
+    return { ...enriched, position: stored, ahrefs_position: stored };
+  }), [rawTracked, prevMonthMap, gscMap, gscPrevMonthMap, gscThreeMonthMap, gscYearlyMap, effectiveComparison, trackedAhrefsPositions]);
 
   // Build GSC-only keywords: keywords in GSC that don't exist in Ahrefs data
   const gscOnlyKeywords = useMemo(() => {

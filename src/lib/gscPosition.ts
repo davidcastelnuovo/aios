@@ -6,10 +6,12 @@ import {
 
 export {
   aggregateGscQueryRows,
+  betterDisplayRank,
   displayRank,
   finiteRank,
   gscQueriesMatch,
   keywordTop20Rank,
+  mergeTrackedKeywordRows,
   normalizeGscQuery,
   resolveTop20Rank,
   top20DisplayPosition,
@@ -18,7 +20,13 @@ export {
   type RankSource,
 } from "../../supabase/functions/_shared/gscPosition.ts";
 
-import { displayRank, gscQueriesMatch, top20DisplayPosition } from "../../supabase/functions/_shared/gscPosition.ts";
+import {
+  betterDisplayRank,
+  displayRank,
+  gscQueriesMatch,
+  normalizeGscQuery,
+  top20DisplayPosition,
+} from "../../supabase/functions/_shared/gscPosition.ts";
 
 /**
  * Position shown on the Search Console tab: a real top-20 rank for a phrase
@@ -73,18 +81,61 @@ export function trackedQueryPosition(
   return visibleGscPosition(query, position, opts);
 }
 
-/** Ahrefs rank when the row has one, otherwise the Search Console rank beside the clicks. */
+/** Tracked phrase: better of the stored Ahrefs rank and the Search Console rank. */
+export function trackedPhraseRank(
+  query: string,
+  gscPosition: unknown,
+  opts?: {
+    tracked?: Array<{ keyword?: string } | string>;
+    forceIrrelevant?: string[];
+    ahrefsPositions?: Record<string, number>;
+  },
+): { position: number; source: "ahrefs" | "gsc" } | null {
+  const phrase = normalizeKeywordPhrase(query);
+  const blocked = new Set(
+    (opts?.forceIrrelevant || []).map((item) => normalizeKeywordPhrase(item)),
+  );
+  if (phrase && blocked.has(phrase)) return null;
+  const tracked = opts?.tracked || [];
+  const exact = tracked.some((item) =>
+    gscQueriesMatch(query, typeof item === "string" ? item : item?.keyword),
+  );
+  const gsc = exact ? displayRank(gscPosition) : visibleGscPosition(query, gscPosition, opts);
+  const ahrefs = exact ? opts?.ahrefsPositions?.[normalizeGscQuery(query)] : null;
+  return betterDisplayRank({ ahrefsPosition: ahrefs, gscPosition: gsc });
+}
+
+/**
+ * Tracked phrases show a position whenever Ahrefs or Search Console has one.
+ * A gap between the two sources shows the better rank.
+ */
 export function keywordDisplayPosition(kw: {
   position?: unknown;
   gsc_position?: unknown;
+  ahrefs_position?: unknown;
+  _source?: string;
   _position_source?: string;
 } | null | undefined): { position: number; source: "ahrefs" | "gsc" } | null {
   if (!kw) return null;
-  const primary = displayRank(kw.position);
-  if (primary != null) {
-    return { position: primary, source: kw._position_source === "gsc" ? "gsc" : "ahrefs" };
+  const rankIsGsc = kw._source === "gsc" || kw._position_source === "gsc";
+  const gscPosition = kw.gsc_position ?? (rankIsGsc ? kw.position : null);
+  const ahrefsPosition = kw.ahrefs_position ?? (rankIsGsc ? null : kw.position);
+  return betterDisplayRank({ ahrefsPosition, gscPosition });
+}
+
+/** Newest report wins. A later list without ranks keeps the last stored Ahrefs rank. */
+export function ahrefsPositionsFromReports(
+  reports: Array<{ report_data?: { tracked_keywords?: Array<{ keyword?: unknown; position?: unknown; best_position?: unknown }> } } | null | undefined>,
+): Map<string, number> {
+  const map = new Map<string, number>();
+  for (const report of reports || []) {
+    const rows = report?.report_data?.tracked_keywords || [];
+    for (const row of rows) {
+      const key = normalizeGscQuery(row?.keyword);
+      if (!key || map.has(key)) continue;
+      const rank = displayRank(row?.position ?? row?.best_position);
+      if (rank != null) map.set(key, rank);
+    }
   }
-  const gsc = displayRank(kw.gsc_position);
-  if (gsc != null) return { position: gsc, source: "gsc" };
-  return null;
+  return map;
 }
