@@ -9,6 +9,7 @@ import { Loader2 } from "lucide-react";
 type GaConnection = {
   id: string;
   label: string;
+  own?: boolean;
 };
 
 type FoundProperty = {
@@ -43,7 +44,7 @@ export function GaDomainSearch({
         async (integrationId, matchDomain) => {
           const { data, error } = await supabase.functions.invoke(
             "google-analytics-auth?action=get_properties",
-            { body: { integrationId, ...(matchDomain ? { matchDomain } : {}) } },
+            { body: { integrationId, probe: true, ...(matchDomain ? { matchDomain } : {}) } },
           );
           if (error || data?.needs_reconnect) return null;
           return (data?.properties || []) as GaPropertyRef[];
@@ -95,7 +96,7 @@ export function GaDomainSearch({
         </Button>
       </div>
       <p className="text-xs text-muted-foreground">
-        {status || "מדביקים דומיין והמערכת מוצאת את הנכס בכל חשבונות Google Analytics המחוברים"}
+        {status || "מדביקים דומיין. החיפוש רץ על החשבון שלך ועל חשבונות ששותפו איתך"}
       </p>
     </div>
   );

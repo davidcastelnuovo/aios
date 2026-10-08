@@ -266,18 +266,50 @@ serve(async (req) => {
     }
 
     try {
-      const { integrationId, matchDomain } = await req.json();
+      const body = await req.json();
+      const integrationId = body?.integrationId;
+      const matchDomain = body?.matchDomain;
       const domainQuery = typeof matchDomain === "string" ? matchDomain.trim() : "";
+      // A domain search looks at several logins. It must not flip their
+      // reconnect flag or overwrite the stored token metadata.
+      const probe = body?.probe === true;
       
       const supabase = createClient(
         Deno.env.get('SUPABASE_URL') ?? '',
         Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
       );
 
+      const supabaseUser = createClient(
+        Deno.env.get('SUPABASE_URL') ?? '',
+        Deno.env.get('SUPABASE_ANON_KEY') ?? '',
+        { global: { headers: { Authorization: authHeader } } },
+      );
+      const { data: userData, error: userError } = await supabaseUser.auth.getUser();
+      const user = userData?.user;
+      if (userError || !user) {
+        return new Response(
+          JSON.stringify({ error: 'Unauthorized' }),
+          { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+
+      const { data: allowed, error: permissionError } = await supabase.rpc(
+        'user_has_integration_permission',
+        { p_user_id: user.id, p_integration_id: integrationId },
+      );
+      if (permissionError || !allowed) {
+        return new Response(
+          JSON.stringify({ error: 'Integration not found or access denied', properties: [] }),
+          { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+
       const { data: integration, error: integrationError } = await supabase
         .from('tenant_integrations')
         .select('*')
         .eq('id', integrationId)
+        .eq('integration_type', 'google_analytics')
+        .eq('is_active', true)
         .single();
 
       if (integrationError || !integration) {
@@ -285,7 +317,7 @@ serve(async (req) => {
       }
 
       let accessToken = integration.api_key;
-      const settings = integration.settings as any;
+      let settings = integration.settings as any;
       const ownerEmail = settings?.google_email || null;
 
       const refreshAccessToken = async (): Promise<{ ok: boolean; reason?: string }> => {
@@ -304,11 +336,12 @@ serve(async (req) => {
         if (refreshData.access_token) {
           accessToken = refreshData.access_token;
           const newExpiresAt = new Date(Date.now() + (refreshData.expires_in * 1000)).toISOString();
+          settings = { ...settings, expires_at: newExpiresAt };
           await supabase
             .from('tenant_integrations')
             .update({
               api_key: accessToken,
-              settings: { ...settings, expires_at: newExpiresAt },
+              settings,
             })
             .eq('id', integrationId);
           return { ok: true };
@@ -358,6 +391,7 @@ serve(async (req) => {
       // Persist the broken state so the settings page shows the red
       // "reconnect needed" state — not only when a data sync fails.
       const markNeedsReauth = async (reason: string) => {
+        if (probe) return;
         try {
           await supabase
             .from('tenant_integrations')
@@ -473,19 +507,22 @@ serve(async (req) => {
 
       // Cache the fresh list so the UI can fall back to it if a future call
       // fails, and clear any stale reconnect flag — this call just succeeded.
-      try {
-        await supabase
-          .from('tenant_integrations')
-          .update({
-            settings: {
-              ...settings,
-              available_properties: properties,
-              needs_reauth: false,
-              reauth_reason: null,
-            },
-          })
-          .eq('id', integrationId);
-      } catch (_e) { /* non-fatal */ }
+      // Domain search (probe) only reads; it leaves each login's settings alone.
+      if (!probe) {
+        try {
+          await supabase
+            .from('tenant_integrations')
+            .update({
+              settings: {
+                ...settings,
+                available_properties: properties,
+                needs_reauth: false,
+                reauth_reason: null,
+              },
+            })
+            .eq('id', integrationId);
+        } catch (_e) { /* non-fatal */ }
+      }
 
       return new Response(
         JSON.stringify({ properties, owner_email: ownerEmail }),

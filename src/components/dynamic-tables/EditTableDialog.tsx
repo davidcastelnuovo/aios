@@ -238,7 +238,11 @@ export function EditTableDialog({ open, onOpenChange, table, tenantId, onSaved }
             <GaDomainSearch
               connections={connections.map((integ: any) => {
                 const s = integ.settings as Record<string, unknown> | null;
-                return { id: integ.id, label: (s?.google_email as string) || "חשבון לא ידוע" };
+                return {
+                  id: integ.id,
+                  label: (s?.google_email as string) || "חשבון לא ידוע",
+                  own: !!integ._isOwn,
+                };
               })}
               preferredIntegrationId={integrationId}
               onFound={(found) => {

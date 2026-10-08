@@ -53,6 +53,8 @@ export function pickGaPropertyForDomain(
 export type GaPropertyGroup = {
   integrationId: string;
   properties: GaPropertyRef[];
+  /** The signed-in user's own Google login, not a shared one. */
+  own?: boolean;
 };
 
 export function bestGaPropertyMatch(
@@ -67,8 +69,7 @@ export function bestGaPropertyMatch(
     integrationId: string;
     propertyId: string;
     property: GaPropertyRef;
-    score: number;
-    preferred: boolean;
+    rank: number;
   } | null = null;
 
   for (const group of groups) {
@@ -77,12 +78,11 @@ export function bestGaPropertyMatch(
       const propertyId = String(property.id || "").trim();
       const score = scoreGaProperty(property, host);
       if (!propertyId || score <= 0) continue;
-      if (
-        !best ||
-        score > best.score ||
-        (score === best.score && preferred && !best.preferred)
-      ) {
-        best = { integrationId: group.integrationId, propertyId, property, score, preferred };
+      // The account the user picked wins a tie. Otherwise their own login
+      // wins over a shared login. A higher domain score always wins.
+      const rank = score * 4 + (preferred ? 2 : 0) + (group.own ? 1 : 0);
+      if (!best || rank > best.rank) {
+        best = { integrationId: group.integrationId, propertyId, property, rank };
       }
     }
   }
@@ -97,7 +97,7 @@ export function bestGaPropertyMatch(
  * `loadProperties(..., domain)` is the slower pass that can attach the site URL.
  */
 export async function findGaIntegrationForDomain(
-  integrations: Array<{ id: string }>,
+  integrations: Array<{ id: string; own?: boolean }>,
   domain: string,
   loadProperties: (integrationId: string, matchDomain: string | null) => Promise<GaPropertyRef[] | null>,
   preferredIntegrationId?: string,
@@ -108,11 +108,12 @@ export async function findGaIntegrationForDomain(
   const loaded = await Promise.all(
     integrations.map(async (integration) => ({
       integrationId: integration.id,
+      own: integration.own,
       properties: await loadProperties(integration.id, null),
     })),
   );
   const reachable = loaded.filter(
-    (group): group is { integrationId: string; properties: GaPropertyRef[] } =>
+    (group): group is { integrationId: string; own?: boolean; properties: GaPropertyRef[] } =>
       Array.isArray(group.properties),
   );
 
@@ -124,7 +125,7 @@ export async function findGaIntegrationForDomain(
     if (group.properties.length === 0) continue;
     const properties = await loadProperties(group.integrationId, host);
     if (!properties?.length) continue;
-    withUrls.push({ integrationId: group.integrationId, properties });
+    withUrls.push({ integrationId: group.integrationId, own: group.own, properties });
     const found = bestGaPropertyMatch(withUrls, host, preferredIntegrationId);
     if (found && scoreGaProperty(found.property, host) >= 4) return found;
   }

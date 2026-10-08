@@ -306,9 +306,13 @@ export function GoogleAnalyticsTableDialog({ open, onOpenChange, assignedClientI
                 <GaDomainSearch
                   connections={allIntegrations.map((integ) => {
                     const s = integ.settings as Record<string, unknown> | null;
-                    return { id: integ.id, label: (s?.google_email as string) || "חשבון לא ידוע" };
+                    return {
+                      id: integ.id,
+                      label: (s?.google_email as string) || "חשבון לא ידוע",
+                      own: !!integ._isOwn,
+                    };
                   })}
-                  preferredIntegrationId={integration?.id}
+                  preferredIntegrationId={selectedIntegrationId || undefined}
                   onFound={(found) => {
                     setSelectedIntegrationId(found.integrationId);
                     setSelectedProperty(found.propertyId);

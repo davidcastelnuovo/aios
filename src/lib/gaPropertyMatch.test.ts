@@ -47,6 +47,41 @@ test("does not match a different site", () => {
   assert.equal(id, null);
 });
 
+test("uses the user's own login when a shared login has the same domain", () => {
+  const found = bestGaPropertyMatch(
+    [
+      { integrationId: "anna", own: false, properties: [{ id: "properties/517439257", name: "ggh-law.co.il" }] },
+      { integrationId: "yuval", own: true, properties: [{ id: "properties/9", name: "ggh-law.co.il" }] },
+    ],
+    "ggh-law.co.il",
+  );
+  assert.equal(found?.integrationId, "yuval");
+});
+
+test("keeps a shared login when it is the only match", () => {
+  const found = bestGaPropertyMatch(
+    [
+      { integrationId: "yuval", own: true, properties: [{ id: "properties/1", name: "Other" }] },
+      { integrationId: "anna", own: false, properties: [{ id: "properties/517439257", name: "ggh-law.co.il" }] },
+    ],
+    "ggh-law.co.il",
+  );
+  assert.equal(found?.integrationId, "anna");
+  assert.equal(found?.propertyId, "properties/517439257");
+});
+
+test("an explicitly selected shared login wins a tie with the user's own login", () => {
+  const found = bestGaPropertyMatch(
+    [
+      { integrationId: "yuval", own: true, properties: [{ id: "properties/9", name: "ggh-law.co.il" }] },
+      { integrationId: "anna", own: false, properties: [{ id: "properties/517439257", name: "ggh-law.co.il" }] },
+    ],
+    "ggh-law.co.il",
+    "anna",
+  );
+  assert.equal(found?.integrationId, "anna");
+});
+
 test("searches every Google login and keeps the current one on a tie", () => {
   const found = bestGaPropertyMatch(
     [
