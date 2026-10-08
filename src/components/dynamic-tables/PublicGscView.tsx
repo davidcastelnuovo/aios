@@ -1,6 +1,5 @@
 import { useMemo, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import {
   Select,
@@ -11,6 +10,8 @@ import {
 } from "@/components/ui/select";
 import { Search, MousePointerClick, Eye, Target, Award, ArrowUpDown, ArrowUp, ArrowDown } from "lucide-react";
 import { formatGscCtrPercent } from "@/lib/gscFormat";
+import { aggregateGscQueryRows, visibleGscPosition } from "@/lib/gscPosition";
+import { cn } from "@/lib/utils";
 
 interface PublicGscViewProps {
   records: Array<{ id: string; data: Record<string, any> }>;
@@ -43,37 +44,22 @@ export function PublicGscView({ records }: PublicGscViewProps) {
   const [searchFilter, setSearchFilter] = useState("");
   const [dateFilter, setDateFilter] = useState<GscDateFilter>("last_7_days");
 
-  // Aggregate per query, weighted by impressions for position/CTR
+  // Aggregate per query. Position 0 is not a rank and must not pull the average down.
   const aggregated = useMemo(() => {
     const cutoff = getCutoffDate(dateFilter);
-    const map = new Map<string, { clicks: number; impressions: number; posSum: number; ctrSum: number; n: number }>();
-
+    const samples = [];
     for (const r of records) {
       const d = r.data || {};
       const date = d.date || d.day || d.report_date;
       if (cutoff && date && date < cutoff) continue;
-      const query = String(d.query || d.keyword || "").trim();
-      if (!query) continue;
-      const clicks = Number(d.clicks) || 0;
-      const impressions = Number(d.impressions) || 0;
-      const position = Number(d.position) || 0;
-      const ctr = impressions > 0 ? clicks / impressions : 0;
-      const cur = map.get(query) || { clicks: 0, impressions: 0, posSum: 0, ctrSum: 0, n: 0 };
-      cur.clicks += clicks;
-      cur.impressions += impressions;
-      cur.posSum += position * (impressions || 1);
-      cur.ctrSum += ctr * (impressions || 1);
-      cur.n += impressions || 1;
-      map.set(query, cur);
+      samples.push({
+        query: String(d.query || d.keyword || "").trim(),
+        clicks: d.clicks,
+        impressions: d.impressions,
+        position: d.position,
+      });
     }
-
-    const queries = Array.from(map.entries()).map(([query, v]) => ({
-      query,
-      clicks: v.clicks,
-      impressions: v.impressions,
-      position: v.n > 0 ? v.posSum / v.n : 0,
-      ctr: v.n > 0 ? v.ctrSum / v.n : 0,
-    }));
+    const queries = aggregateGscQueryRows(samples);
 
     const totals = {
       clicks: queries.reduce((s, q) => s + q.clicks, 0),
@@ -94,6 +80,14 @@ export function PublicGscView({ records }: PublicGscViewProps) {
       rows = rows.filter((r) => r.query.toLowerCase().includes(q));
     }
     rows.sort((a, b) => {
+      if (sortBy === "position") {
+        const aShown = visibleGscPosition(a.query, a.position);
+        const bShown = visibleGscPosition(b.query, b.position);
+        if (aShown == null && bShown == null) return 0;
+        if (aShown == null) return 1;
+        if (bShown == null) return -1;
+        return sortOrder === "desc" ? bShown - aShown : aShown - bShown;
+      }
       const aVal = a[sortBy as keyof typeof a] as number;
       const bVal = b[sortBy as keyof typeof b] as number;
       return sortOrder === "desc" ? bVal - aVal : aVal - bVal;
@@ -229,12 +223,22 @@ export function PublicGscView({ records }: PublicGscViewProps) {
                   <tr key={row.query} className="border-b last:border-0 hover:bg-muted/30">
                     <td className="p-3 text-right font-medium truncate">{row.query}</td>
                     <td className="p-3 text-center">
-                      <Badge
-                        variant={row.position <= 3 ? "default" : row.position <= 10 ? "secondary" : "outline"}
-                        className="font-mono"
-                      >
-                        {row.position.toFixed(1)}
-                      </Badge>
+                      {(() => {
+                        const shown = visibleGscPosition(row.query, row.position);
+                        if (shown == null) {
+                          return <span className="text-xs text-muted-foreground" title="לא בטופ 20">—</span>;
+                        }
+                        return (
+                          <span className={cn(
+                            "inline-flex items-center justify-center px-2 py-0.5 rounded-full text-xs font-medium font-mono",
+                            shown <= 3 ? "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400" :
+                            shown <= 10 ? "bg-primary/10 text-primary" :
+                            "bg-muted text-muted-foreground",
+                          )}>
+                            {shown.toFixed(1)}
+                          </span>
+                        );
+                      })()}
                     </td>
                     <td className="p-3 text-center tabular-nums">{formatNumber(row.clicks)}</td>
                     <td className="p-3 text-center tabular-nums">{formatNumber(row.impressions)}</td>
